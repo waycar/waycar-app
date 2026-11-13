@@ -2360,6 +2360,7 @@ home, port, username, seed, model_port = sys.argv[1:]
 codex_home = pathlib.Path(home) / '.codex'
 (codex_home / 'config.toml').write_text('''model = "mock-model"
 model_provider = "e2e"
+check_for_update_on_startup = false
 approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "read-only"

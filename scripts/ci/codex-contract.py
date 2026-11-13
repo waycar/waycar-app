@@ -400,6 +400,7 @@ class Scratch:
         until(healthy, 'local model stand-in')
         (self.root / 'c/config.toml').write_text('''model = "mock-model"
 model_provider = "contract"
+check_for_update_on_startup = false
 approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "read-only"
