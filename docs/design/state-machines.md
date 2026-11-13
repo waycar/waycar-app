@@ -3168,9 +3168,10 @@ stateDiagram-v2
 - **Tests:** `TerminalInputOwnershipMachineTests`,
   `TerminalInputOwnershipOwnerTests` (existing controller API, no new seam),
   `TerminalInputControllerTests`, `TmuxPaneHistoryTests`.
-- **Catalogue:** ATTACH-09. ATTACH-11/13/14/15 remain deferred for a Mac pass;
-  `TerminalKeyboardLifecycleOwnerTests` adds existing-API stage, inset-token,
-  queued-reload and resize-fence safety nets without changing UIKit ordering.
+- **Catalogue:** ATTACH-09. `TerminalKeyboardLifecycleOwnerTests` adds
+  existing-API stage, inset-token, queued-reload and resize-fence safety nets
+  for ATTACH-11/13/14/15, since converted (`DirectKeyboardHandoffMachine`,
+  `KeyboardInsetMachine`, `SurfaceKeyboardFreezeMachine`, `GridReportMachine`).
 
 ```mermaid
 stateDiagram-v2
