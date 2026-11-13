@@ -931,6 +931,70 @@ fn each_tick_refreshes_the_lock_a_tick_whose_lock_was_taken_over_stops() {
     );
 }
 
+#[test]
+fn a_lock_taken_over_between_two_agents_stops_before_the_second_read() {
+    let sb = sandbox();
+    write_config(&sb, None, json!({}));
+    sb.write_last_state(&json!({ "statuses": { PANE: "working" }, "ended": false }));
+    let mut second = herdr_agent("working");
+    second["pane_id"] = json!("w1:p9");
+    let herdr = FakeHerdr::new(vec![herdr_agent("working"), second]);
+    let run = FakeRun::new(None, Some(&herdr));
+    let ppid = std::os::unix::process::parent_id();
+    let reads: Mutex<Vec<String>> = Mutex::default();
+    let sends = Cell::new(0);
+    let reason = tick(
+        &sb,
+        &run,
+        &plan(|request| {
+            reads.lock().unwrap().push(request.pane_id.to_string());
+            write_lock(&sb, ppid, SystemClock.now_ms());
+            steps(1, 2)
+        }),
+        &|_: &ProgressRequest<'_>, _: &ActivityDeps<'_>| {
+            sends.set(sends.get() + 1);
+            Ok(true)
+        },
+    );
+    assert_eq!(reason, TickStop::Locked);
+    assert_eq!(*reads.lock().unwrap(), [PANE]);
+    assert_eq!(sends.get(), 0);
+    // The first read's steps were still written.
+    assert_eq!(
+        read_plan_steps_file(&sb)[PANE],
+        json!({ "done": 1, "total": 2 })
+    );
+}
+
+#[test]
+fn a_lock_taken_over_during_the_push_stops_after_it() {
+    let sb = sandbox();
+    write_config(&sb, None, json!({}));
+    sb.write_last_state(&json!({ "statuses": { PANE: "working" }, "ended": false }));
+    write_record(&sb, "working", None);
+    let herdr = FakeHerdr::new(vec![herdr_agent("working")]);
+    let run = FakeRun::new(None, Some(&herdr));
+    let ppid = std::os::unix::process::parent_id();
+    let reads = Cell::new(0);
+    let sends = Cell::new(0);
+    let reason = tick(
+        &sb,
+        &run,
+        &plan(|_| {
+            reads.set(reads.get() + 1);
+            steps(1, 2)
+        }),
+        &|_: &ProgressRequest<'_>, _: &ActivityDeps<'_>| {
+            sends.set(sends.get() + 1);
+            write_lock(&sb, ppid, SystemClock.now_ms());
+            Ok(true)
+        },
+    );
+    assert_eq!(reason, TickStop::Locked);
+    assert_eq!((reads.get(), sends.get()), (1, 1));
+    assert_eq!(read_lock_json(&sb)["pid"], ppid);
+}
+
 // JS: "a live pid with an old heartbeat (pid reused after a crash) is taken over"
 #[test]
 fn a_live_pid_with_an_old_heartbeat_pid_reused_after_a_crash_is_taken_over() {
