@@ -11,11 +11,12 @@ import PickUp from '../components/b/PickUp.astro';
 import StartAnywhere from '../components/b/StartAnywhere.astro';
 import StepAway from '../components/b/StepAway.astro';
 import YourSetup from '../components/b/YourSetup.astro';
+import WorksWith from '../components/WorksWith.astro';
 import Layout from '../layouts/Layout.astro';
 
-const title = 'Waycar: talk to the coding agents on your own computer (Android coming soon)';
+const title = 'Waycar: your coding agents on every machine, from your iPhone';
 const description =
-  'Talk to your phone (iOS 26+) and the coding agents on your own Mac or Linux box keep building. Step away, then come back and pick right up. iPhone and iPad.';
+  'A native iPhone and iPad app for the coding agents you run in herdr or tmux on your own machines. See who is blocked, answer, and open the terminal over SSH or mosh.';
 const faqExtra = [
   {
     q: 'What happens to the terminal I already have open at my desk?',
@@ -29,23 +30,26 @@ const faqExtra = [
 ---
 
 <Layout title={title} description={description} markdown="/index.md" canonicalPath="/" homePage>
+  {/* Proof first: what it is and what it works with, the list of agents, how
+      it connects, how it is secured and what setup costs. Then the depth. */}
   <OutcomeHero />
+  <WorksWith />
+  <div class="wrap"><div class="divider"></div></div>
+  <StepAway />
+  <div class="wrap"><div class="divider"></div></div>
+  <YourSetup />
+  <Security />
+  <Setup />
   <div class="wrap"><div class="divider"></div></div>
   <JustTalk />
   <div class="wrap"><div class="divider"></div></div>
   <OnTheDrive />
-  <div class="wrap"><div class="divider"></div></div>
-  <YourSetup />
-  <div class="wrap"><div class="divider"></div></div>
-  <StepAway />
   <div class="wrap"><div class="divider"></div></div>
   <StartAnywhere />
   <div class="wrap"><div class="divider"></div></div>
   <PickUp />
   <div class="wrap"><div class="divider"></div></div>
   <Features compact />
-  <Security />
-  <Setup />
   <Faq extra={faqExtra} />
   <OutcomeClosing />
 </Layout>

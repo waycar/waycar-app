@@ -1,0 +1,42 @@
+---
+// The strip right under the home page hero: the runtimes and agents Waycar
+// works with, exact versions included, so a visitor can tell in one glance
+// whether their setup is covered. Data: src/data/supported.ts.
+import { leadAgents, moreAgents, runtimes } from '../data/supported';
+---
+
+<section class="works" aria-labelledby="works-title">
+  <div class="wrap">
+    <h2 id="works-title" class="visually-hidden">What Waycar works with</h2>
+    <dl>
+      <div>
+        <dt>Runs with</dt>
+        <dd>
+          <ul>
+            {
+              runtimes.map((runtime) => (
+                <li>
+                  {runtime.name} <span class="min">{runtime.min}+</span>
+                  {runtime.next && <span class="next">next update</span>}
+                </li>
+              ))
+            }
+          </ul>
+        </dd>
+      </div>
+      <div>
+        <dt>Agents</dt>
+        <dd>
+          <ul>
+            {leadAgents.map((cli) => <li><code>{cli}</code></li>)}
+            <li><a href="/help/supported-agents">+ {moreAgents.length} more</a></li>
+          </ul>
+        </dd>
+      </div>
+      <div>
+        <dt>Hosts</dt>
+        <dd>macOS and Linux, over the SSH you already have</dd>
+      </div>
+    </dl>
+  </div>
+</section>
