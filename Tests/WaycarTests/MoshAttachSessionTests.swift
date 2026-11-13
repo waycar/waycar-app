@@ -306,7 +306,7 @@ private final class LoopbackMoshServer: @unchecked Sendable {
     private var client: sockaddr_in?
 
     init() throws {
-        descriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        let descriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard descriptor >= 0 else { throw POSIXError(.EIO) }
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
@@ -331,9 +331,10 @@ private final class LoopbackMoshServer: @unchecked Sendable {
             close(descriptor)
             throw POSIXError(.EADDRNOTAVAIL)
         }
-        port = UInt16(bigEndian: address.sin_port)
         var limit = timeval(tv_sec: 0, tv_usec: 100_000)
         setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
+        self.descriptor = descriptor
+        port = UInt16(bigEndian: address.sin_port)
     }
 
     deinit {
