@@ -21,7 +21,7 @@ Run one command on each machine you want to use with Waycar. It finds herdr or t
 3. The first time, it asks whether to install the host tools or pair this computer only. Press Return to install, or type `2` to pair without installing anything (see [Pair without installing](#pair-without-installing)). Invalid answers ask again; Ctrl-D cancels without installing.
 4. When it asks to show a pairing QR code, press Return (or type `y`); the code draws right in the terminal. Then [pair with the Pairing Code](/help/pairing).
 
-You can also copy the command from the **Add Your First Host** steps in the app. Tap it to copy; a Mac signed in to the same Apple Account can paste it.
+You can also copy the command from **Set up by hand** on the **Add Your First Host** screen in the app. Tap it to copy; a Mac signed in to the same Apple Account can paste it.
 
 ## What does it install?
 

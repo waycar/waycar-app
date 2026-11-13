@@ -30,6 +30,9 @@ struct HostSetupGuide: View {
 
     private static let readableWidth: CGFloat = 560
 
+    /// "Set up by hand" starts folded whenever rows sit above it.
+    @State private var showsManualSteps = false
+
     private var hasRowsAboveSteps: Bool {
         sampleHostRow != nil || findComputersRow != nil
     }
@@ -65,47 +68,12 @@ struct HostSetupGuide: View {
                         if let findComputersRow { findComputersRow }
                         if let sampleHostRow { sampleHostRow }
                     }
-                    Text("Set up by hand")
-                        .font(.title3.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityAddTraits(.isHeader)
+                    setUpByHandToggle
                 }
-                VStack(alignment: .leading, spacing: 22) {
-                    // Each detail is a single literal, so Text parses its
-                    // Markdown links.
-                    HostSetupStep(
-                        number: 1, title: "Install herdr or tmux on your first Host",
-                        detail: Text("""
-                            Get herdr at [herdr.dev](https://herdr.dev), \
-                            or use tmux 3.2 or later.
-                            """))
-                    HostSetupStep(
-                        number: 2, title: "Turn on SSH",
-                        detail: Text("""
-                            On a Mac, turn on [Remote Login](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac). \
-                            On Linux, install and start the OpenSSH server.
-                            """))
-                    HostSetupStep(
-                        number: 3, title: "Install Mosh (optional)",
-                        detail: Text("""
-                            Steadier terminals on spotty networks. \
-                            See how at [mosh.org](https://mosh.org/#getting).
-                            """))
-                    // The installer's prompts ([Y/n], then the address
-                    // checklist) both accept Return, and both run in the
-                    // terminal that ran the installer, on a herdr and a tmux
-                    // Host alike, so the step says only "on your Host".
-                    // Pairing is optional, so the step names the manual path
-                    // too.
-                    HostSetupStep(
-                        number: 4, title: "Get a Pairing Code",
-                        detail: Text("""
-                            Run this on your Host, then tap Scan to Pair. \
-                            Or skip it and tap Add Manually to type the address.
-                            """),
-                        command: WaycarPluginRequirement.installCommand)
+                if showsManualSteps || !hasRowsAboveSteps {
+                    manualSteps
+                    HelpLink(.install, action: showHelp)
                 }
-                HelpLink(.install, action: showHelp)
             }
             .frame(maxWidth: Self.readableWidth, alignment: .leading)
             .padding(.horizontal, 24)
@@ -122,15 +90,79 @@ struct HostSetupGuide: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
+    /// The manual steps fold away under the rows above them: with a scan on
+    /// top, most people never need them.
+    private var setUpByHandToggle: some View {
+        Button {
+            withAnimation(.snappy) { showsManualSteps.toggle() }
+        } label: {
+            HStack(spacing: 12) {
+                Text("Set up by hand")
+                    .font(.title3.weight(.semibold))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(showsManualSteps ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(showsManualSteps ? "Expanded" : "Collapsed")
+        .accessibilityIdentifier("setup.by-hand")
+    }
+
+    private var manualSteps: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            // Each detail is a single literal, so Text parses its
+            // Markdown links.
+            HostSetupStep(
+                number: 1, title: "Install herdr or tmux on your first Host",
+                detail: Text("""
+                    Get herdr at [herdr.dev](https://herdr.dev), \
+                    or use tmux 3.2 or later.
+                    """))
+            HostSetupStep(
+                number: 2, title: "Turn on SSH",
+                detail: Text("""
+                    On a Mac, turn on [Remote Login](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac). \
+                    On Linux, install and start the OpenSSH server.
+                    """))
+            HostSetupStep(
+                number: 3, title: "Install Mosh (optional)",
+                detail: Text("""
+                    Steadier terminals on spotty networks. \
+                    See how at [mosh.org](https://mosh.org/#getting).
+                    """))
+            // The installer's prompts ([Y/n], then the address
+            // checklist) both accept Return, and both run in the
+            // terminal that ran the installer, on a herdr and a tmux
+            // Host alike, so the step says only "on your Host".
+            // Pairing is optional, so the step names the manual path
+            // too.
+            HostSetupStep(
+                number: 4, title: "Get a Pairing Code",
+                detail: Text("""
+                    Run this on your Host, then tap Scan to Pair. \
+                    Or skip it and tap Add Manually to type the address.
+                    """),
+                command: WaycarPluginRequirement.installCommand)
+        }
+    }
+
     private var actions: some View {
         VStack(spacing: 4) {
-            Button(action: scan) {
-                Label("Scan to Pair", systemImage: "qrcode.viewfinder")
-                    .frame(maxWidth: .infinity)
+            // Outlined, not filled, when a scan for computers sits above:
+            // that is the path most people should take.
+            if hasRowsAboveSteps {
+                scanToPair.buttonStyle(.bordered)
+            } else {
+                scanToPair.buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .hoverEffect(.highlight)
             Button(action: addManually) {
                 Text("Add Manually")
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -145,6 +177,15 @@ struct HostSetupGuide: View {
         .frame(maxWidth: .infinity)
         .background(Color(uiColor: .systemGroupedBackground))
         .overlay(alignment: .top) { Divider() }
+    }
+
+    private var scanToPair: some View {
+        Button(action: scan) {
+            Label("Scan to Pair", systemImage: "qrcode.viewfinder")
+                .frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .hoverEffect(.highlight)
     }
 }
 

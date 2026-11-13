@@ -60,8 +60,10 @@ struct FindComputersView: View {
         ContentUnavailableView {
             Label("Waycar Can't See Your Network", systemImage: "wifi.slash")
         } description: {
+            // iOS asks for Local Network once per install; after Don't Allow,
+            // only the switch on Waycar's page in Settings turns it back on.
             Text(
-                "Turn on Local Network for Waycar in Settings, or add a computer by its address."
+                "iOS asks only once. Turn on Local Network for Waycar in Settings, or add a computer by its address."
             )
         } actions: {
             Button("Open Settings") {

@@ -12,7 +12,7 @@ Find Computers lists computers on your Wi-Fi that have SSH on. Pick one to add i
 ## Find and sign in
 
 1. Join the same Wi-Fi as your computer and turn on SSH. On a Mac, turn on **Remote Login** in System Settings.
-2. In Waycar, tap **Scan** under **Find computers on your network** at the top of **Add Your First Host**. You can also open **Hosts**, tap **Add Host**, then **Find Computers**, or use the Sample's **Connect your machine** sheet.
+2. In Waycar, tap **Scan Computers on My Network** at the top of **Add Your First Host**. You can also open **Hosts**, tap **Add Host**, then **Find Computers**, or use the Sample's **Connect your machine** sheet.
 3. Allow Local Network access when iOS asks. The search starts as soon as you tap.
 4. Tap your computer under **Computers with SSH on**. Under **Sign In**, enter **User** and **Password**, then tap **Add**.
 
@@ -28,4 +28,4 @@ If no computers appear, check SSH and Wi-Fi, then tap **Search Again**. A comput
 
 ## If Local Network access is off
 
-On **Waycar Can't See Your Network**, tap **Open Settings** and turn on Local Network for Waycar. Return to Waycar to search again. You can also tap **Add Manually** and enter an address without searching.
+iOS asks for Local Network access only once. If you tapped **Don't Allow**, Waycar shows **Waycar Can't See Your Network**: tap **Open Settings** and turn on Local Network for Waycar. Return to Waycar to search again. You can also tap **Add Manually** and enter an address without searching.

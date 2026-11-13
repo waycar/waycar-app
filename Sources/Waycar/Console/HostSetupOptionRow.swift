@@ -46,21 +46,16 @@ struct FindComputersSetupCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Image(systemName: "wifi")
-                    .font(.title2)
                     .foregroundStyle(Color.accentColor)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Find computers on your network")
-                        .font(.headline)
-                    Text("Waycar looks on this Wi-Fi for computers with SSH on.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Waycar looks on this Wi-Fi for computers with SSH on.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             Button(action: scan) {
-                Text("Scan")
+                Text("Scan Computers on My Network")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

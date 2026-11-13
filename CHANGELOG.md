@@ -13,10 +13,10 @@ Entries reference the issue that motivated them.
 
 ### Added
 
-- **Find Computers**: Add Your First Host now starts with Find computers on
-  your network. Tap Scan (or Hosts › + › Find Computers) to list the
-  computers on your Wi-Fi that have SSH on, such as a Mac with Remote Login
-  on. Tap one, sign in with its username and password (or a key), and confirm
+- **Find Computers**: Add Your First Host now starts with Scan Computers on
+  My Network (also in Hosts › + › Find Computers), and Set up by hand folds
+  away until you open it. The scan lists the computers on your Wi-Fi that have
+  SSH on, such as a Mac with Remote Login on. Tap one, sign in with its username and password (or a key), and confirm
   its host key. Check Every Address also finds computers that don't announce
   themselves, only when you tap it. If Local Network access is off, Find
   Computers says so and opens Settings.
