@@ -1091,6 +1091,85 @@ fn an_activity_dismissed_mid_episode_is_not_started_again_until_the_episode_ends
     );
 }
 
+#[test]
+fn the_start_state_records_a_dismissal_by_device_an_end_by_token_and_an_episode_end_resets_starts()
+{
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock;
+        FakeRelay::answering(|body, _| if body["event"] == "update" {
+            (410, json!({ "reason": "Unregistered" }))
+        } else {
+            (200, json!({ "apnsId": "x" }))
+        });
+        vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[with_extra(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    // Dismissed mid-episode: the device is marked started, keyed by its
+    // alert token, and no token is marked ended.
+    let state = sb.read_state_file("start-state.json");
+    assert_eq!(state["ended_tokens"], json!([]));
+    assert_eq!(
+        state["started"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        [ALERT_TOKEN]
+    );
+    // The inventory empties: the episode ends and its guards reset.
+    herdr.set_agents(vec![]);
+    hook.herdr(&event("idle"));
+    assert_eq!(
+        sb.read_state_file("start-state.json"),
+        json!({ "ended_tokens": [], "started": {} })
+    );
+}
+
+#[test]
+fn a_delivered_end_marks_its_update_token_ended_so_the_next_episode_starts_instead() {
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[with_extra(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    herdr.set_agents(vec![]);
+    hook.herdr(&event("idle"));
+    assert_eq!(
+        sb.read_state_file("start-state.json")["ended_tokens"],
+        json!([ACTIVITY_TOKEN_A])
+    );
+    herdr.set_agents(vec![default_agent()]);
+    hook.herdr(&event("working"));
+    assert_eq!(
+        relay.sent(),
+        [
+            pair("update", ACTIVITY_TOKEN_A),
+            pair("end", ACTIVITY_TOKEN_A),
+            pair("start", START_TOKEN)
+        ]
+    );
+    let state = sb.read_state_file("start-state.json");
+    assert_eq!(
+        state["started"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        [ALERT_TOKEN]
+    );
+}
+
 // ---- activity-hook: tmux Agents ------------------------------------------------
 
 // JS: "the herdr hook counts and lists herdr and tmux Agents together, and a pin matches a tmux id"
