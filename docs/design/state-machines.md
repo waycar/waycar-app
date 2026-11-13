@@ -4359,6 +4359,61 @@ stateDiagram-v2
     bootstrappingBesidePreparation --> preparing: finish last
 ```
 
+### MoshEligibilityMachine
+
+- **File:** `Sources/Waycar/Console/MoshEligibilityMachine.swift`
+- **Owner:** `ConsoleStore` (`ConsoleStore+Mosh.swift`, `sendMosh`) keeps
+  the probe Tasks per Host, the projections the probes run over and the
+  network's memory (`MoshAvailabilityStore`, read only for a generation
+  not settled yet); it starts the probe a `startProbe` names, upgrades SSH
+  terminals, cancels probes, reconciles every Host, and mirrors the
+  outcomes and re-probing Hosts into the tracked `moshStates` and
+  `moshReprobingHosts` the capsule renders, only when they change.
+- **States:** per Host four facets: known (`outcome` by generation),
+  invalidated (automatic for a generation, or the user's SSH choice),
+  settled (the generation probed or answered from memory), re-probing (the
+  capsule re-probe's token).
+- **Events:** `invalidate`, `recordOutcome`, `reprobe`,
+  `reconcile(remembered, canProbe)`, `connectProbeFinished(available?,
+  cancelled)`, `reprobeEnded(token, available?)`, `networkChanged(hasPath)`,
+  `hostChanged(keepsTarget)`, `primaryProjectionEnded`.
+- **Effects:** `startProbe(connect | reprobe(token))`,
+  `upgrade(connectingOnly)`, `cancelProbe`, `cancelAllProbes`,
+  `reconcileAll`. Newest generation wins and an invalidation outlasts its
+  generation's probe; a discarded connect answer gives its generation back
+  unless cancelled; the user's SSH choice survives networks and new
+  connections until the capsule's re-probe; a re-probe cancelled by a new
+  network shows testing until its task ends. Connect probes are fenced by
+  generation, not token, as before (one still running when the herdr
+  projection ends may record its answer).
+- **Tests:** `MoshEligibilityMachineTests`, `ConsoleMoshProbeTests`,
+  `MoshAvailabilityPerNetworkTests`, `MoshFastPathEdgeTests`
+  (`moshTransport`, `MoshAvailabilityStore` and `MoshTransportChoice`
+  unchanged).
+- **Catalogue:** MOSH-02.
+
+```mermaid
+stateDiagram-v2
+    state Known {
+        [*] --> unknown
+        unknown --> known: probe, proof or memory
+        known --> known: newer generation / invalidate (unavailable)
+        known --> unknown: network change, Host change
+    }
+    state Settled {
+        [*] --> unsettled
+        unsettled --> settled: reconcile probes or answers from memory / reprobe
+        settled --> unsettled: discarded connect answer, not cancelled
+        settled --> unsettled: network change, Host change
+    }
+    state Reprobing {
+        [*] --> idle
+        idle --> testing: reprobe / startProbe(token)
+        testing --> idle: reprobeEnded(token)
+        testing --> idle: Host change
+    }
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4725,7 +4780,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-20 | Session activity watches | `Packages/WaycarSSH/Sources/WaycarSSH/SessionActivity.swift` | implicit | L/M | leave: generation-checked | — |
 | SSH-21 | Happy Eyeballs race | `Packages/WaycarSSH/Sources/WaycarSSH/SocketConnector.swift` | partial | M/M | leave: generation-checked | — |
 | MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | convert | P3c |
-| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | convert | P3c |
+| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | converted → `MoshEligibilityMachine` | P3c |
 | MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | converted → `StandbyMoshMachine`; the claim-window overlap with a preparation kept | P3c |
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
 | MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert unless the risk is huge | P3c |
