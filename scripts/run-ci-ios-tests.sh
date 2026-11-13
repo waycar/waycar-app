@@ -3567,9 +3567,9 @@ done
 
 if grep -q 'Suite "Session driver resource e2e" skipped' "$package_e2e_log" \
     || grep -q 'skipped:' "$package_e2e_log" \
-    || ! grep -q 'Test run with 111 tests in 7 suites passed' "$package_e2e_log" \
+    || ! grep -q 'Test run with 136 tests in 10 suites passed' "$package_e2e_log" \
     || [[ "$package_e2e_proven" != "1" ]]; then
-    echo "The mandatory WaycarSSH package suites did not execute all one hundred eleven tests" >&2
+    echo "The mandatory WaycarSSH package suites did not execute all one hundred thirty-six tests" >&2
     exit 1
 fi
 exit 0
