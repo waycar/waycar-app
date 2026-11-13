@@ -37,9 +37,14 @@ struct NotificationKeyStore: Sendable {
     /// to the app and the service extension by their entitlements. It follows
     /// the bundle ID, so each bundle's Info.plist carries it (`WaycarAppGroup`,
     /// project.yml): a self-build under another bundle ID gets its own group.
-    static let sharedAccessGroup =
-        Bundle.main.object(forInfoDictionaryKey: "WaycarAppGroup") as? String
-        ?? "group.com.otreva.waycar.shared"
+    static let sharedAccessGroup: String = {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "WaycarAppGroup") as? String
+        else {
+            assertionFailure("Info.plist has no WaycarAppGroup")
+            return ""
+        }
+        return group
+    }()
 
     private static let service = "com.otreva.waycar.notifications"
     private static let keyBytes = 32

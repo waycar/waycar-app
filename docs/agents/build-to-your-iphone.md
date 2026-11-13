@@ -120,7 +120,8 @@ It must read `Enabled`.
 make install TEAM=<Team ID> DEVICE=<UDID>
 ```
 
-This one command:
+Pass `TEAM` on make's command line, as here: an exported `TEAM` environment
+variable is ignored. This one command:
 
 - regenerates `Waycar.xcodeproj` from `project.yml` (`git status` may then
   show it changed: expected, never commit it);
@@ -184,7 +185,7 @@ own team and entitlements, and only the `TEAM` path swaps in yours.
 | Notifications (Blocked, Done) | No. Waycar's Push Relay delivers only to Waycar's own bundle ID, and a free account has no push at all. |
 | Live Activities | No: they are updated by push. |
 | CarPlay | No. Apple turns its voice-conversation capability on per team, and only Waycar's team has it. |
-| iCloud Sync | Only between copies of your build signed by the same team with the same bundle ID; never with the App Store app. |
+| iCloud Sync | Only between copies of your build signed by the same team with the same bundle ID; never with the App Store app. Not tried yet. |
 | Apple Watch app | Built and embedded; to run it, the watch needs pairing in Device Hub with Developer Mode on, like the iPhone. Not tried with a build of your own. |
 | Everything else | Works: the Console, terminals, the Composer, Chat Mode, pairing, mosh, Jump Hosts, Dictation. |
 
@@ -196,10 +197,11 @@ own team and entitlements, and only the `TEAM` path swaps in yours.
   Delete one to make room.
 - **10 App IDs per 7 days:** Waycar uses four (the app, its two extensions
   and the Watch app). Each new `BUNDLE_ID` spends four more, so keep one.
-- **Capabilities:** free teams get App Groups and Keychain Sharing, which
-  your build keeps, but not Push Notifications, Time Sensitive
-  Notifications or iCloud containers
+- **Capabilities:** Apple's table lists App Groups and Keychain Sharing
+  for free teams, which your build keeps, but not Push Notifications, Time
+  Sensitive Notifications or iCloud containers
   ([Apple's table](https://developer.apple.com/help/account/reference/supported-capabilities-ios)).
+  A free team's App Groups have not been tried with this build yet.
 
 ## Troubleshooting
 
@@ -228,3 +230,9 @@ every target's bundle ID and the app group from it), and
 `WAYCAR_APP_ENTITLEMENTS=Sources/Waycar/WaycarSelfBuild.entitlements`, which
 keeps only the app group. Without `TEAM` nothing changes. The Makefile's
 self-build block and `project.yml`'s `WAYCAR_BUNDLE_ID` are the code.
+
+Last checked 2026-11-13 with Xcode 27.2 on macOS 27.2: the default build
+signs and validates unchanged, and `TEAM` gives every target its own bundle
+ID, the app group follows and push and CarPlay are gone. Signing, installing
+and opening a build under a free team are not checked end to end yet: the
+build Mac had no Apple Account signed in to Xcode.

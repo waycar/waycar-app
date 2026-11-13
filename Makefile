@@ -40,8 +40,11 @@ DEVICE_IPAD ?= $(shell python3 scripts/find-ios-device.py iPad)
 # own team, a free personal team included, under your own bundle IDs
 # (BUNDLE_ID, default com.<team id>.waycar; the extensions and the app group
 # follow it), and leaves out the push and CarPlay entitlements, which only
-# Waycar's own team can use (docs/agents/build-to-your-iphone.md).
-TEAM ?=
+# Waycar's own team can use (docs/agents/build-to-your-iphone.md). Only make's
+# command line sets it: a TEAM exported for another tool switches nothing.
+ifneq ($(origin TEAM),command line)
+TEAM :=
+endif
 BUNDLE_ID ?= com.$(shell printf '%s' '$(TEAM)' | tr '[:upper:]' '[:lower:]').waycar
 SIGNING_FLAGS = $(if $(TEAM),DEVELOPMENT_TEAM='$(TEAM)' WAYCAR_BUNDLE_ID='$(BUNDLE_ID)' \
 	WAYCAR_APP_ENTITLEMENTS=Sources/Waycar/WaycarSelfBuild.entitlements)
