@@ -27,5 +27,7 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
 	</dict>
+	<key>WaycarAppGroup</key>
+	<string>group.$(WAYCAR_BUNDLE_ID).shared</string>
 </dict>
 </plist>

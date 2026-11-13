@@ -39,6 +39,9 @@ with any `project.yml` change.
   the app suite, `make test` adds the `Packages/WaycarSSH` suites (through
   `scripts/run-waycarssh-package-tests.sh`, not `-only-testing`) and the
   SwiftMosh suite.
+- `make install TEAM=<your Team ID>` installs it on your own iPhone, signed
+  with your own Apple Account:
+  [`docs/agents/build-to-your-iphone.md`](docs/agents/build-to-your-iphone.md).
 - One suite:
   `make test-app TEST_FLAGS='-only-testing:WaycarTests/<SuiteTypeName>'`.
   Use these entrypoints rather than plain `xcodebuild`: they prepare the

@@ -1,14 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The app's entitlements (CODE_SIGN_ENTITLEMENTS through WAYCAR_APP_ENTITLEMENTS
+  in project.yml). A self-build signs with WaycarSelfBuild.entitlements, which
+  keeps only the app group: CarPlay is a managed capability of Waycar's own
+  team, and push reaches only Waycar's own bundle ID.
+-->
 <plist version="1.0">
 <dict>
+	<!-- Development covers Debug and local device builds (sandbox APNs);
+	     TestFlight and App Store re-signing flips it to production, so the
+	     APNs environment follows the build configuration (#71). -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Waycar in CarPlay as a voice-based conversational app
+	     (docs/design/carplay.md), a managed capability. -->
 	<key>com.apple.developer.carplay-voice-based-conversation</key>
 	<true/>
+	<!-- Shared with the extensions; doubles as the Keychain access group
+	     holding the Notification Keys (NotificationKeyStore.sharedAccessGroup,
+	     which reads it from Info.plist's WaycarAppGroup). -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.otreva.waycar.shared</string>
+		<string>group.$(WAYCAR_BUNDLE_ID).shared</string>
 	</array>
 </dict>
 </plist>

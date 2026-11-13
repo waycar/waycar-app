@@ -40,7 +40,7 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.otreva.waycar</string>
+	<string>$(WAYCAR_BUNDLE_ID)</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<false/>
 	<key>WKSupportsLiveActivityLaunchAttributeTypes</key>

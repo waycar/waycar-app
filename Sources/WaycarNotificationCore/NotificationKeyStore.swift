@@ -34,8 +34,17 @@ enum NotificationKeyStoreError: Error, Equatable {
 struct NotificationKeyStore: Sendable {
     /// The app-group id doubling as the Keychain access group (iOS accepts
     /// app groups in `kSecAttrAccessGroup` without the team prefix), granted
-    /// to the app and the service extension by their entitlements.
-    static let sharedAccessGroup = "group.com.otreva.waycar.shared"
+    /// to the app and the service extension by their entitlements. It follows
+    /// the bundle ID, so each bundle's Info.plist carries it (`WaycarAppGroup`,
+    /// project.yml): a self-build under another bundle ID gets its own group.
+    static let sharedAccessGroup: String = {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "WaycarAppGroup") as? String
+        else {
+            assertionFailure("Info.plist has no WaycarAppGroup")
+            return ""
+        }
+        return group
+    }()
 
     private static let service = "com.otreva.waycar.notifications"
     private static let keyBytes = 32
