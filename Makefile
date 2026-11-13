@@ -2,6 +2,7 @@
 #   make install                 # build Debug and run it on the connected iPhone
 #   make install-ipad            # same, on the connected iPad
 #   make install NOTES=notes.txt # same, with a local What's New (or NOTES=auto)
+#   make install TEAM=<team id>  # same, signed with your own Apple ID (docs/agents/build-to-your-iphone.md)
 #   make bump && make testflight # interim TestFlight build, no version cut
 #   make publish                 # cut a release: see docs/guides/releasing.md
 
@@ -35,6 +36,16 @@ actor_isolation_soft_gate = { scripts/check-actor-isolated-calls.sh --touch $(1)
 DEVICE ?= $(shell python3 scripts/find-ios-device.py iPhone)
 DEVICE_IPAD ?= $(shell python3 scripts/find-ios-device.py iPad)
 
+# Self-build: `make install TEAM=<your Team ID>` signs device builds with your
+# own team, a free personal team included, under your own bundle IDs
+# (BUNDLE_ID, default com.<team id>.waycar; the extensions and the app group
+# follow it), and leaves out the push and CarPlay entitlements, which only
+# Waycar's own team can use (docs/agents/build-to-your-iphone.md).
+TEAM ?=
+BUNDLE_ID ?= com.$(shell printf '%s' '$(TEAM)' | tr '[:upper:]' '[:lower:]').waycar
+SIGNING_FLAGS = $(if $(TEAM),DEVELOPMENT_TEAM='$(TEAM)' WAYCAR_BUNDLE_ID='$(BUNDLE_ID)' \
+	WAYCAR_APP_ENTITLEMENTS=Sources/Waycar/WaycarSelfBuild.entitlements)
+
 .PHONY: help generate resolve build test test-app test-swiftmosh test-ipad test-ci-app build-device install install-device install-ipad watch-ios-device sim sim-ipad build-sim sim-id sim-status sim-release sim-pool sim-doctor archive check-deployed-installer upload distribute testflight bump publish review-smoke clean check-device check-device-ipad ssh-artifacts verify-ssh-artifacts test-libssh2-patches screenshots
 
 help: ## Show available targets
@@ -60,7 +71,7 @@ build: SHELL := /bin/bash
 build: generate ## Build Debug for a physical device without installing
 	@mkdir -p $(DERIVED)
 	set -o pipefail; xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug \
-		-destination 'generic/platform=iOS' -derivedDataPath $(DERIVED) \
+		-destination 'generic/platform=iOS' -derivedDataPath $(DERIVED) $(SIGNING_FLAGS) \
 		-allowProvisioningUpdates build 2>&1 | tee $(DERIVED)/build.log; build_status=$$?; \
 		$(call actor_isolation_soft_gate,$(DERIVED)/build.log); exit $$build_status
 
@@ -167,7 +178,7 @@ build-device: SHELL := /bin/bash
 build-device: check-device generate
 	@mkdir -p $(DERIVED)
 	set -o pipefail; xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug \
-		-destination 'platform=iOS,id=$(DEVICE)' -derivedDataPath $(DERIVED) \
+		-destination 'platform=iOS,id=$(DEVICE)' -derivedDataPath $(DERIVED) $(SIGNING_FLAGS) \
 		$(if $(BUILD_NUMBER),CURRENT_PROJECT_VERSION=$(BUILD_NUMBER)) \
 		-allowProvisioningUpdates -allowProvisioningDeviceRegistration build \
 		2>&1 | tee $(DERIVED)/build-device.log; build_status=$$?; \
@@ -175,7 +186,7 @@ build-device: check-device generate
 
 # `NOTES=<file|auto>` bundles a local What's New for this install
 # (scripts/write-local-whats-new.sh) and always restores the committed seed.
-install: check-device ## Build Debug, install on the iPhone, and relaunch it (NOTES=<file|auto> for What's New)
+install: check-device ## Build Debug, install on the iPhone, and relaunch it (NOTES=<file|auto> for What's New, TEAM=<id> for your own Apple ID)
 	@if [ -z "$(NOTES)" ]; then exec $(MAKE) install-device DEVICE="$(DEVICE)"; fi; \
 	trap 'git checkout -- Sources/Waycar/Resources/WhatsNew.json' EXIT; \
 	head=$$(git rev-parse HEAD) \
@@ -185,7 +196,7 @@ install: check-device ## Build Debug, install on the iPhone, and relaunch it (NO
 install-device: build-device
 	xcrun devicectl device install app --device $(DEVICE) \
 		$(DERIVED)/Build/Products/Debug-iphoneos/Waycar.app
-	xcrun devicectl device process launch --terminate-existing --device $(DEVICE) $(APP_ID) \
+	xcrun devicectl device process launch --terminate-existing --device $(DEVICE) $(if $(TEAM),$(BUNDLE_ID),$(APP_ID)) \
 		|| echo "Installed, but the launch was refused (device locked?). Unlock it and open Waycar."
 	$(if $(LOCAL_INSTALL_SHA),mkdir -p build/local-installs && echo $(LOCAL_INSTALL_SHA) > "build/local-installs/$(DEVICE)")
 

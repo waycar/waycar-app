@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.otreva.waycar.shared</string>
+		<string>group.$(WAYCAR_BUNDLE_ID).shared</string>
 	</array>
 </dict>
 </plist>

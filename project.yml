@@ -14,6 +14,11 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: 5NWMRTN5BA
     CODE_SIGN_STYLE: Automatic
+    # The app's bundle ID; every other target's is this plus a suffix, and
+    # the shared app group is group.<it>.shared. `make install TEAM=…`
+    # overrides it and DEVELOPMENT_TEAM to sign with your own Apple ID
+    # (docs/agents/build-to-your-iphone.md).
+    WAYCAR_BUNDLE_ID: com.otreva.waycar
 
 packages:
   # Repository-local package owning the libssh2/OpenSSL implementation and
@@ -134,24 +139,18 @@ targets:
               - UISceneConfigurationName: CarPlay
                 UISceneClassName: CPTemplateApplicationScene
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
-    entitlements:
-      path: Sources/Waycar/Waycar.entitlements
-      properties:
-        # Waycar in CarPlay as a voice-based conversational app
-        # (docs/design/carplay.md), granted by Apple as a managed capability.
-        com.apple.developer.carplay-voice-based-conversation: true
-        # Development here covers Debug/local device builds (sandbox APNs);
-        # App Store / TestFlight re-signing flips it to production, so the
-        # APNs environment follows the build configuration (#71).
-        aps-environment: development
-        # Shared with the Notification Service Extension; doubles as the
-        # Keychain access group holding the Notification Keys.
-        com.apple.security.application-groups:
-          - group.com.otreva.waycar.shared
+        # The shared app group, read by NotificationKeyStore.sharedAccessGroup.
+        WaycarAppGroup: group.$(WAYCAR_BUNDLE_ID).shared
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID)
+        # Waycar.entitlements (CarPlay, push and the app group; what each is
+        # for is noted there). A self-build (`make install TEAM=…`) signs with
+        # WaycarSelfBuild.entitlements instead, so this is a setting, not
+        # XcodeGen's `entitlements:`, which would pin the path.
+        WAYCAR_APP_ENTITLEMENTS: Sources/Waycar/Waycar.entitlements
+        CODE_SIGN_ENTITLEMENTS: $(WAYCAR_APP_ENTITLEMENTS)
         # Home-screen name; the App Store listing is "Waycar".
         INFOPLIST_KEY_CFBundleDisplayName: Waycar
         # Settings › App Icon (AppIconOption). Every name is an .icon bundle
@@ -277,7 +276,7 @@ targets:
       path: Sources/WaycarNotificationService/WaycarNotificationService.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.otreva.waycar.shared
+          - group.$(WAYCAR_BUNDLE_ID).shared
     info:
       path: Sources/WaycarNotificationService/Info.plist
       properties:
@@ -293,9 +292,10 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+        WaycarAppGroup: group.$(WAYCAR_BUNDLE_ID).shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.NotificationService
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).NotificationService
         MARKETING_VERSION: "1.3.0"
         CURRENT_PROJECT_VERSION: "167"
         # Match the containing app's iPhone and iPad device family.
@@ -329,7 +329,7 @@ targets:
       path: Sources/WaycarWidgets/WaycarWidgets.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.otreva.waycar.shared
+          - group.$(WAYCAR_BUNDLE_ID).shared
     info:
       path: Sources/WaycarWidgets/Info.plist
       properties:
@@ -344,9 +344,10 @@ targets:
         CFBundleDisplayName: Waycar
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        WaycarAppGroup: group.$(WAYCAR_BUNDLE_ID).shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.Widgets
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).Widgets
         MARKETING_VERSION: "1.3.0"
         CURRENT_PROJECT_VERSION: "167"
         # Match the containing app's iPhone and iPad device family.
@@ -388,7 +389,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Waycar
         WKApplication: true
-        WKCompanionAppBundleIdentifier: com.otreva.waycar
+        WKCompanionAppBundleIdentifier: $(WAYCAR_BUNDLE_ID)
         # Everything goes through the iPhone, so it ships with the iOS app.
         WKRunsIndependentlyOfCompanionApp: false
         # Voice messages record on the watch; the iPhone transcribes them.
@@ -409,7 +410,7 @@ targets:
               - waycar
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).watchkitapp
         MARKETING_VERSION: "1.3.0"
         CURRENT_PROJECT_VERSION: "167"
         TARGETED_DEVICE_FAMILY: "4"
@@ -462,7 +463,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).tests
     dependencies:
       - target: Waycar
       - package: WaycarSSH
@@ -481,7 +482,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.screenshots
+        PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).screenshots
         TARGETED_DEVICE_FAMILY: "1,2"
     dependencies:
       - target: Waycar
