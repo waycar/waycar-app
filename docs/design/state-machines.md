@@ -3253,6 +3253,51 @@ stateDiagram-v2
     failed --> failed: close viewer or gallery
 ```
 
+### PaneHistoryScrollMachine
+
+- **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
+- **Owner:** `TmuxPaneHistory` runs the pump loop and the leave Task, keeps
+  their handles (a joining leave awaits the running one), calls the scroll
+  and copy-mode-leave actions, and mirrors the observed `position`.
+- **States:** the pump (`idle`, `running(token, none/reading/moving)`) and
+  the leave (`none`, `leaving(token, onlyIfEntered)`), beside the position,
+  this history's own copy-mode entry and the pending rows and read.
+- **Events:** `scroll`, `refresh`, `pumpNext`, `answered(token, answer?)`,
+  `leaveRequested(onlyIfEntered)`, `leaveStarted`, `pumpDrained`,
+  `copyModeLeft`, `leaveEnded`, `joinedLeaveEnded`.
+- **Effects:** `startPump`, `request(rows)`, `pumpEnded`, `startLeave`,
+  `joinLeave`, `leaveCopyMode`, `leaveAgain`, `publishPosition`,
+  `availabilityChanged`. One request at a time takes everything pending; a
+  failed one drops the rest. A leave refuses scrolls at once, drops pending
+  rows in its own first step, waits out the request in flight, then leaves
+  copy mode only from copy mode, and a departure only from copy mode its
+  own scroll entered (AGENTS.md copy-mode facts); a failed leave still
+  reads live. A joining departure never stands in for input's leave.
+- **Tests:** `PaneHistoryScrollMachineTests`, `PaneHistoryDeferredOwnerTests`,
+  `TmuxPaneHistoryTests`, `TerminalInputControllerTests`.
+- **Catalogue:** ATTACH-18.
+
+```mermaid
+stateDiagram-v2
+    state Pump {
+        [*] --> idle
+        idle --> running: scroll or refresh, no leave / startPump(token)
+        running --> requesting: pumpNext, something pending / request
+        requesting --> running: answered
+        requesting --> idle: answered failure / pumpEnded
+        running --> idle: pumpNext, nothing pending / pumpEnded
+    }
+    state Leave {
+        [*] --> none
+        none --> leaving: leaveRequested / startLeave(token)
+        leaving --> leaving: leaveRequested / joinLeave
+        leaving --> leaving: leaveStarted / drop pending
+        leaving --> leaving: pumpDrained, in copy mode it may leave / leaveCopyMode
+        leaving --> leaving: copyModeLeft / position live
+        leaving --> none: leaveEnded
+    }
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5489,7 +5534,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
-| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
+| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
 | ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | convert (deferred: private View creation/inventory state crosses awaits and token-scoped UIKit keyboard handoff; requires hosted Mac visibility/handoff tests); existing-API failure safety net `ShellOpeningDeferredOwnerTests` does not cover that private lifecycle | P2c |
