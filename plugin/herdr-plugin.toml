@@ -1,6 +1,6 @@
 id = "waycar"
 name = "waycar"
-version = "2.6.0"
+version = "2.6.1"
 min_herdr_version = "0.7.5"
 description = "Pair a Waycar device by scanning a QR Pairing Code"
 platforms = ["linux", "macos"]

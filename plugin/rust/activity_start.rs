@@ -7,8 +7,10 @@
 //! running activity on that device can take updates: at most once per
 //! episode (an episode ends when the eligible inventory empties).
 //!
-//! The decisions are pure; [`read_start_state`] and [`save_start_state`] are
-//! the file around them (`activity/start-state.json` in the state dir):
+//! The decisions are [`ActivityEpisodeMachine`] (HT-08); [`read_start_state`]
+//! and [`save_start_state`] are the file around it
+//! (`activity/start-state.json` in the state dir), and the Live Activity hook
+//! feeds it each run's devices and each push's answer:
 //!
 //! * `ended_tokens`: update tokens whose activity this plugin ended with an
 //!   `end` push; such a token can never take an update again.
@@ -23,6 +25,7 @@ use serde_json::{Map, Value, json};
 use crate::atomic::write_atomic;
 use crate::js_compat::{cmp_utf16, locale_compare, read_json};
 use crate::jsx;
+use crate::state_machine::StateMachine;
 
 /// The Swift `ActivityAttributes` type name; APNs `attributes-type`.
 pub const ACTIVITY_ATTRIBUTES_TYPE: &str = "AgentActivityAttributes";
@@ -76,14 +79,14 @@ impl StartState {
     }
 
     /// `endedTokens.add(token)`.
-    pub fn mark_ended(&mut self, token: &str) {
+    fn mark_ended(&mut self, token: &str) {
         if !self.is_ended(token) {
             self.ended_tokens.push(token.to_string());
         }
     }
 
     /// `started.delete(id)`.
-    pub fn forget_started(&mut self, id: &str) {
+    fn forget_started(&mut self, id: &str) {
         self.started.retain(|(started, _)| started != id);
     }
 
@@ -93,7 +96,7 @@ impl StartState {
     }
 
     /// `started.set(id, sent_at_ms)`.
-    pub fn mark_started(&mut self, id: &str, sent_at_ms: i64) {
+    fn mark_started(&mut self, id: &str, sent_at_ms: i64) {
         let at = sent_at_ms as f64;
         match self.started.iter_mut().find(|(started, _)| started == id) {
             Some(entry) => entry.1 = at,
@@ -169,6 +172,150 @@ fn number_value(at: f64) -> Value {
     }
 }
 
+/// The per-device episode bookkeeping (HT-08): which devices take updates,
+/// which may be started, and what each push's answer means for the next run.
+/// Its state is the persisted [`StartState`].
+///
+/// * An update token is live unless this plugin ended its activity. A device
+///   with a live update token receives updates, and its start guard resets.
+/// * A device without a start registration keeps the pre-push-to-start
+///   behavior: its update token keeps receiving pushes, ended or not.
+/// * A device with a start registration and no live update token is a start
+///   candidate while the inventory is non-empty and it has not started this
+///   episode.
+/// * An empty inventory ends the episode: every start guard resets.
+/// * Ended tokens no device still registers are forgotten.
+/// * A delivered `end` (APNs) ends its token; an update APNs no longer takes
+///   (the user dismissed the activity) mid-episode counts as started, so no
+///   push-to-start brings it back before the episode ends; a delivered start
+///   marks its device started.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ActivityEpisodeMachine {
+    state: StartState,
+}
+
+/// One registration as the plan sees it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceView {
+    pub id: Option<String>,
+    pub update_token: Option<String>,
+    pub has_start: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EpisodeEvent {
+    /// One run's devices, in registration order, and whether the eligible
+    /// inventory is empty.
+    Plan {
+        devices: Vec<DeviceView>,
+        empty: bool,
+    },
+    /// The relay's answer to an update or end push to `token`: `delivered`,
+    /// or not taken (gone). `fcm`: an FCM entry, which has no activity token.
+    UpdateAnswered {
+        id: Option<String>,
+        token: String,
+        fcm: bool,
+        ending: bool,
+        delivered: bool,
+        at_ms: i64,
+    },
+    /// A push-to-start was delivered.
+    StartDelivered { id: Option<String>, at_ms: i64 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EpisodeEffect {
+    /// The plan's device at this index takes updates.
+    Update(usize),
+    /// The plan's device at this index may be started.
+    StartCandidate(usize),
+}
+
+impl ActivityEpisodeMachine {
+    pub fn new(state: StartState) -> Self {
+        Self { state }
+    }
+}
+
+impl StateMachine for ActivityEpisodeMachine {
+    type State = StartState;
+    type Event = EpisodeEvent;
+    type Effect = EpisodeEffect;
+
+    fn state(&self) -> &StartState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: EpisodeEvent) -> Vec<EpisodeEffect> {
+        let state = &mut self.state;
+        match event {
+            EpisodeEvent::Plan { devices, empty } => {
+                state.ended_tokens.retain(|token| {
+                    devices.iter().any(|device| {
+                        device.update_token.as_deref() == Some(token.as_str()) && !token.is_empty()
+                    })
+                });
+                if empty {
+                    state.started.clear();
+                }
+                let mut updates = Vec::new();
+                let mut starts = Vec::new();
+                for (index, device) in devices.iter().enumerate() {
+                    let update_live = device
+                        .update_token
+                        .as_deref()
+                        .is_some_and(|token| !device.has_start || !state.is_ended(token));
+                    if update_live {
+                        updates.push(EpisodeEffect::Update(index));
+                        if let Some(id) = &device.id {
+                            state.forget_started(id);
+                        }
+                        continue;
+                    }
+                    if device.has_start
+                        && !empty
+                        && !device.id.as_deref().is_some_and(|id| state.has_started(id))
+                    {
+                        starts.push(EpisodeEffect::StartCandidate(index));
+                    }
+                }
+                updates.extend(starts);
+                updates
+            }
+            EpisodeEvent::UpdateAnswered {
+                id,
+                token,
+                fcm,
+                ending,
+                delivered,
+                at_ms,
+            } => {
+                if fcm {
+                    return Vec::new();
+                }
+                if delivered && ending {
+                    // That activity is over: its token can never take an
+                    // update again.
+                    state.mark_ended(&token);
+                } else if !delivered
+                    && !ending
+                    && let Some(id) = id
+                {
+                    state.mark_started(&id, at_ms);
+                }
+                Vec::new()
+            }
+            EpisodeEvent::StartDelivered { id, at_ms } => {
+                if let Some(id) = id {
+                    state.mark_started(&id, at_ms);
+                }
+                Vec::new()
+            }
+        }
+    }
+}
+
 /// A device the push decision looks at: the hook's view of one registration.
 pub trait ActivityDevice {
     /// The alert token, the device's stable identity across activity tokens.
@@ -186,48 +333,33 @@ pub struct DevicePlan<'a, D> {
     pub start_candidates: Vec<&'a D>,
 }
 
-/// Split devices into update targets and start candidates, applying the
-/// episode resets to `state` in place.
-///
-/// * An update token is live unless this plugin ended its activity. A device
-///   with a live update token receives updates, and its start guard resets.
-/// * A device without a start registration keeps the pre-push-to-start
-///   behavior: its update token keeps receiving pushes, ended or not.
-/// * A device with a start registration and no live update token is a start
-///   candidate while the inventory is non-empty and it has not started this
-///   episode.
-/// * An empty inventory ends the episode: every start guard resets.
-/// * Ended tokens no device still registers are forgotten.
+/// Split devices into update targets and start candidates through
+/// `episodes` (see [`ActivityEpisodeMachine`]), which applies the episode
+/// resets.
 pub fn plan_devices<'a, D: ActivityDevice>(
     devices: &'a [D],
-    state: &mut StartState,
+    episodes: &mut ActivityEpisodeMachine,
     empty: bool,
 ) -> DevicePlan<'a, D> {
-    state.ended_tokens.retain(|token| {
-        devices
-            .iter()
-            .any(|device| device.update_token() == Some(token.as_str()) && !token.is_empty())
-    });
-    if empty {
-        state.started.clear();
-    }
+    let views = devices
+        .iter()
+        .map(|device| DeviceView {
+            id: device.id().map(str::to_string),
+            update_token: device.update_token().map(str::to_string),
+            has_start: device.has_start(),
+        })
+        .collect();
     let mut plan = DevicePlan {
         update_devices: Vec::new(),
         start_candidates: Vec::new(),
     };
-    for device in devices {
-        let update_live = device
-            .update_token()
-            .is_some_and(|token| !device.has_start() || !state.is_ended(token));
-        if update_live {
-            plan.update_devices.push(device);
-            if let Some(id) = device.id() {
-                state.forget_started(id);
-            }
-            continue;
-        }
-        if device.has_start() && !empty && !device.id().is_some_and(|id| state.has_started(id)) {
-            plan.start_candidates.push(device);
+    for effect in episodes.handle(EpisodeEvent::Plan {
+        devices: views,
+        empty,
+    }) {
+        match effect {
+            EpisodeEffect::Update(index) => plan.update_devices.push(&devices[index]),
+            EpisodeEffect::StartCandidate(index) => plan.start_candidates.push(&devices[index]),
         }
     }
     plan
@@ -241,7 +373,7 @@ fn start_state_path(state_dir: &Path) -> PathBuf {
 /// when the serialization changed.
 #[derive(Debug, Clone)]
 pub struct StoredStartState {
-    pub state: StartState,
+    pub episodes: ActivityEpisodeMachine,
     pub stored: String,
 }
 
@@ -249,12 +381,15 @@ pub struct StoredStartState {
 pub fn read_start_state(state_dir: &Path) -> StoredStartState {
     let state = parse_start_state(read_json(&start_state_path(state_dir)).as_ref());
     let stored = jsx::stringify(&serialize_start_state(&state));
-    StoredStartState { state, stored }
+    StoredStartState {
+        episodes: ActivityEpisodeMachine::new(state),
+        stored,
+    }
 }
 
 /// Write the state back unless it serializes as it was read.
 pub fn save_start_state(state_dir: &Path, read: &StoredStartState) -> io::Result<()> {
-    let serialized = jsx::stringify(&serialize_start_state(&read.state));
+    let serialized = jsx::stringify(&serialize_start_state(read.episodes.state()));
     if serialized == read.stored {
         return Ok(());
     }
@@ -350,17 +485,17 @@ mod tests {
             update: None,
             start: true,
         }];
-        let mut state = StartState::default();
+        let mut state = ActivityEpisodeMachine::default();
         let plan = plan_devices(&devices, &mut state, false);
         assert_eq!(ids(&plan.start_candidates), [Some("a")]);
         assert!(plan.update_devices.is_empty());
-        state.mark_started("a", 1000);
+        state.state.mark_started("a", 1000);
         let plan = plan_devices(&devices, &mut state, false);
         assert!(plan.start_candidates.is_empty());
         // The inventory emptied: the episode is over and the guard resets.
         let plan = plan_devices(&devices, &mut state, true);
         assert!(plan.start_candidates.is_empty());
-        assert!(!state.has_started("a"));
+        assert!(!state.state().has_started("a"));
         let plan = plan_devices(&devices, &mut state, false);
         assert_eq!(ids(&plan.start_candidates), [Some("a")]);
     }
@@ -373,12 +508,12 @@ mod tests {
             update: Some("u1"),
             start: true,
         }];
-        let mut state = StartState::default();
-        state.mark_started("a", 1);
+        let mut state = ActivityEpisodeMachine::default();
+        state.state.mark_started("a", 1);
         let plan = plan_devices(&devices, &mut state, false);
         assert_eq!(ids(&plan.update_devices), [Some("a")]);
         assert!(plan.start_candidates.is_empty());
-        assert!(!state.has_started("a"));
+        assert!(!state.state().has_started("a"));
     }
 
     // activity-hook push-to-start: an ended token is not live for a start device but stays live without one
@@ -401,15 +536,18 @@ mod tests {
                 start: false,
             },
         ];
-        let mut state = StartState::default();
-        state.mark_ended("u1");
-        state.mark_ended("u2");
-        state.mark_ended("gone");
+        let mut state = ActivityEpisodeMachine::default();
+        state.state.mark_ended("u1");
+        state.state.mark_ended("u2");
+        state.state.mark_ended("gone");
         let plan = plan_devices(&devices, &mut state, false);
         assert_eq!(ids(&plan.update_devices), [Some("b")]);
         assert_eq!(ids(&plan.start_candidates), [Some("a")]);
         // Ended tokens no device still registers are forgotten.
-        assert_eq!(state.ended_tokens().collect::<Vec<_>>(), ["u1", "u2"]);
+        assert_eq!(
+            state.state().ended_tokens().collect::<Vec<_>>(),
+            ["u1", "u2"]
+        );
     }
 
     // activity-hook push-to-start: an empty inventory starts nobody
@@ -420,7 +558,7 @@ mod tests {
             update: None,
             start: true,
         }];
-        let mut state = StartState::default();
+        let mut state = ActivityEpisodeMachine::default();
         let plan = plan_devices(&devices, &mut state, true);
         assert!(plan.start_candidates.is_empty());
     }
@@ -471,8 +609,8 @@ mod tests {
         save_start_state(dir.path(), &read).unwrap();
         assert!(!dir.path().join("activity").exists());
 
-        read.state.mark_ended("tok");
-        read.state.mark_started("dev", 1760000000000);
+        read.episodes.state.mark_ended("tok");
+        read.episodes.state.mark_started("dev", 1760000000000);
         save_start_state(dir.path(), &read).unwrap();
         let path = dir.path().join("activity/start-state.json");
         assert_eq!(
@@ -480,7 +618,86 @@ mod tests {
             r#"{"ended_tokens":["tok"],"started":{"dev":1760000000000}}"#
         );
         let again = read_start_state(dir.path());
-        assert_eq!(again.state, read.state);
+        assert_eq!(again.episodes, read.episodes);
         assert_eq!(again.stored, fs::read_to_string(&path).unwrap());
+    }
+
+    // ActivityEpisodeMachine: what each push's answer leaves for the next run.
+
+    fn answered(fcm: bool, ending: bool, delivered: bool) -> EpisodeEvent {
+        EpisodeEvent::UpdateAnswered {
+            id: Some("dev".into()),
+            token: "tok".into(),
+            fcm,
+            ending,
+            delivered,
+            at_ms: 42,
+        }
+    }
+
+    #[test]
+    fn a_delivered_end_ends_its_token_and_a_delivered_update_changes_nothing() {
+        let mut episodes = ActivityEpisodeMachine::default();
+        assert_eq!(episodes.handle(answered(false, false, true)), []);
+        assert_eq!(episodes.state(), &StartState::default());
+        assert_eq!(episodes.handle(answered(false, true, true)), []);
+        assert!(episodes.state().is_ended("tok"));
+        assert!(!episodes.state().has_started("dev"));
+    }
+
+    #[test]
+    fn an_update_apns_no_longer_takes_mid_episode_counts_as_started() {
+        let mut episodes = ActivityEpisodeMachine::default();
+        let _ = episodes.handle(answered(false, false, false));
+        assert!(episodes.state().has_started("dev"));
+        assert!(!episodes.state().is_ended("tok"));
+        // At the episode's end it does not.
+        let mut episodes = ActivityEpisodeMachine::default();
+        let _ = episodes.handle(answered(false, true, false));
+        assert_eq!(episodes.state(), &StartState::default());
+    }
+
+    #[test]
+    fn an_fcm_answer_never_touches_the_episode() {
+        for (ending, delivered) in [(true, true), (false, false)] {
+            let mut episodes = ActivityEpisodeMachine::default();
+            let _ = episodes.handle(answered(true, ending, delivered));
+            assert_eq!(episodes.state(), &StartState::default());
+        }
+    }
+
+    #[test]
+    fn a_delivered_start_marks_its_device_and_one_without_an_id_nothing() {
+        let mut episodes = ActivityEpisodeMachine::default();
+        let _ = episodes.handle(EpisodeEvent::StartDelivered {
+            id: Some("dev".into()),
+            at_ms: 7,
+        });
+        assert!(episodes.state().has_started("dev"));
+        let mut episodes = ActivityEpisodeMachine::default();
+        let _ = episodes.handle(EpisodeEvent::StartDelivered { id: None, at_ms: 7 });
+        assert_eq!(episodes.state(), &StartState::default());
+    }
+
+    #[test]
+    fn the_plan_lists_updates_then_start_candidates_by_index() {
+        let view = |id: &str, update: Option<&str>, start: bool| DeviceView {
+            id: Some(id.into()),
+            update_token: update.map(str::to_string),
+            has_start: start,
+        };
+        let mut episodes = ActivityEpisodeMachine::default();
+        let effects = episodes.handle(EpisodeEvent::Plan {
+            devices: vec![
+                view("a", None, true),
+                view("b", Some("u"), false),
+                view("c", None, false),
+            ],
+            empty: false,
+        });
+        assert_eq!(
+            effects,
+            [EpisodeEffect::Update(1), EpisodeEffect::StartCandidate(0)]
+        );
     }
 }

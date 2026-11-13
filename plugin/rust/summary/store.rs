@@ -41,6 +41,7 @@ use serde_json::{Map, Number, Value};
 use crate::atomic::{pane_file_name, write_atomic};
 use crate::jspath;
 use crate::jsx;
+use crate::state_machine::StateMachine;
 
 pub const SUMMARY_STORE_VERSION: i64 = 1;
 pub const SUMMARIES_DIR: &str = "summaries";
@@ -280,6 +281,253 @@ fn rewrite_progress(
     Ok(true)
 }
 
+/// What one store call does to a pane's record (HT-11): it reads the record
+/// once, decides by the header's rules, and writes at most once. A summary
+/// write replaces the record unless a newer `ts` is stored; a progress write
+/// or a clear rewrites it only while it is still the record read (another
+/// writer's Done or Blocked summary in between wins). The owner
+/// ([`write_summary`], [`write_progress`], [`clear_progress`]) reads and
+/// writes the file.
+#[derive(Debug)]
+pub struct SummaryRecordMachine {
+    state: RecordState,
+    op: RecordOp,
+}
+
+/// The store call.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordOp {
+    Summary {
+        pane_id: String,
+        status: String,
+        summary: Option<String>,
+        ts: i64,
+        hash: Option<String>,
+        progress: Value,
+    },
+    Progress {
+        status: String,
+        progress: Value,
+        ts: i64,
+    },
+    Clear,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordState {
+    /// Waiting for the stored record.
+    Reading,
+    /// The new record is being written.
+    Writing,
+    /// The record read is being rewritten; `changed`: its progress changes.
+    Rewriting { changed: bool },
+    /// Done; `result` is what the call returns.
+    Finished { result: bool },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordEvent {
+    /// The stored record ([`read_summary`]).
+    Read(Option<Value>),
+    Wrote,
+    /// Whether the rewrite landed (the record was still the one read).
+    Rewrote(bool),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordEffect {
+    /// Write this line over the record.
+    Write(String),
+    /// Rewrite `seen` with this progress, unless the stored record is no
+    /// longer `seen` ([`rewrite_progress`]).
+    RewriteProgress {
+        seen: Value,
+        progress: Option<Map<String, Value>>,
+        progress_ts: Option<f64>,
+    },
+}
+
+impl SummaryRecordMachine {
+    pub fn new(op: RecordOp) -> Self {
+        Self {
+            state: RecordState::Reading,
+            op,
+        }
+    }
+
+    /// What the call returns, once finished.
+    pub fn result(&self) -> Option<bool> {
+        match self.state {
+            RecordState::Finished { result } => Some(result),
+            _ => None,
+        }
+    }
+
+    fn finish(&mut self, result: bool) -> Vec<RecordEffect> {
+        self.state = RecordState::Finished { result };
+        Vec::new()
+    }
+
+    fn on_read(&mut self, stored: Option<Value>) -> Vec<RecordEffect> {
+        match &self.op {
+            RecordOp::Summary {
+                pane_id,
+                status,
+                summary,
+                ts,
+                hash,
+                progress,
+            } => {
+                let ts = *ts as f64;
+                if let Some(stored_ts) = stored
+                    .as_ref()
+                    .and_then(|stored| integer_of(jsx::field(stored, "ts")))
+                    && stored_ts > ts
+                {
+                    return self.finish(false);
+                }
+                let kept = record_progress(status, summary.as_deref(), progress, stored.as_ref());
+                let line = record_line(&Line {
+                    pane_id,
+                    status: Some(Value::String(status.clone())),
+                    summary: summary.clone().map_or(Value::Null, Value::String),
+                    ts: Some(num(ts)),
+                    hash: hash.clone().map_or(Value::Null, Value::String),
+                    progress: kept,
+                    progress_ts: Some(ts),
+                });
+                self.state = RecordState::Writing;
+                vec![RecordEffect::Write(line)]
+            }
+            RecordOp::Progress {
+                status,
+                progress,
+                ts,
+            } => {
+                let Some(stored) = stored else {
+                    return self.finish(false);
+                };
+                if !has_text(Some(&stored))
+                    || jsx::field(&stored, "status").as_str() != Some(status.as_str())
+                {
+                    return self.finish(false);
+                }
+                let current = normalize_progress(jsx::field(&stored, "progress"));
+                let mut steps = Map::new();
+                steps.insert("done".into(), jsx::field(progress, "done").clone());
+                steps.insert("total".into(), jsx::field(progress, "total").clone());
+                let mut only_phase = Map::new();
+                only_phase.insert("phase".into(), jsx::field(progress, "phase").clone());
+                let given = normalize_progress(&Value::Object(only_phase));
+                let phase = later_phase(phase_of(&given), phase_of(&current));
+                steps.insert(
+                    "phase".into(),
+                    phase.map_or(Value::Null, |phase| Value::String(phase.into())),
+                );
+                let next = normalize_progress(&Value::Object(steps));
+                let text = |progress: &Option<Map<String, Value>>| {
+                    progress
+                        .clone()
+                        .map_or_else(|| "null".to_string(), |m| jsx::stringify(&Value::Object(m)))
+                };
+                let changed = text(&next) != text(&current);
+                let stored_ts = integer_of(jsx::field(&stored, "progress_ts"));
+                let ts = *ts as f64;
+                let progress_ts = if has_steps(&current) || has_steps(&next) {
+                    Some(stored_ts.unwrap_or(ts).max(ts))
+                } else {
+                    stored_ts
+                };
+                if !changed && progress_ts == stored_ts {
+                    return self.finish(false);
+                }
+                self.state = RecordState::Rewriting { changed };
+                vec![RecordEffect::RewriteProgress {
+                    seen: stored,
+                    progress: next,
+                    progress_ts,
+                }]
+            }
+            RecordOp::Clear => {
+                let Some(stored) = stored else {
+                    return self.finish(false);
+                };
+                if !has_text(Some(&stored))
+                    || (normalize_progress(jsx::field(&stored, "progress")).is_none()
+                        && jsx::get(&stored, "progress_ts").is_none())
+                {
+                    return self.finish(false);
+                }
+                self.state = RecordState::Rewriting { changed: true };
+                vec![RecordEffect::RewriteProgress {
+                    seen: stored,
+                    progress: None,
+                    progress_ts: None,
+                }]
+            }
+        }
+    }
+}
+
+impl StateMachine for SummaryRecordMachine {
+    type State = RecordState;
+    type Event = RecordEvent;
+    type Effect = RecordEffect;
+
+    fn state(&self) -> &RecordState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: RecordEvent) -> Vec<RecordEffect> {
+        match (&self.state, event) {
+            (RecordState::Reading, RecordEvent::Read(stored)) => self.on_read(stored),
+            (RecordState::Writing, RecordEvent::Wrote) => self.finish(true),
+            (&RecordState::Rewriting { changed }, RecordEvent::Rewrote(landed)) => {
+                self.finish(landed && changed)
+            }
+            (
+                RecordState::Reading
+                | RecordState::Writing
+                | RecordState::Rewriting { .. }
+                | RecordState::Finished { .. },
+                _,
+            ) => Vec::new(),
+        }
+    }
+}
+
+/// Run `machine` over the pane's record: read it, then perform what it asks.
+fn run_record(
+    config_dir: &str,
+    pane_id: &str,
+    mut machine: SummaryRecordMachine,
+) -> io::Result<bool> {
+    let mut events = vec![RecordEvent::Read(read_summary(config_dir, pane_id))];
+    while let Some(event) = events.pop() {
+        for effect in machine.handle(event) {
+            events.push(match effect {
+                RecordEffect::Write(line) => {
+                    let path = summary_path(config_dir, pane_id);
+                    write_atomic(std::path::Path::new(&path), line.as_bytes(), 0o600)?;
+                    RecordEvent::Wrote
+                }
+                RecordEffect::RewriteProgress {
+                    seen,
+                    progress,
+                    progress_ts,
+                } => RecordEvent::Rewrote(rewrite_progress(
+                    config_dir,
+                    pane_id,
+                    &seen,
+                    progress,
+                    progress_ts,
+                )?),
+            });
+        }
+    }
+    Ok(machine.result().unwrap_or(false))
+}
+
 /// `summaryPath(configDir, paneId)`.
 pub fn summary_path(config_dir: &str, pane_id: &str) -> String {
     jspath::join(&[config_dir, SUMMARIES_DIR, &pane_file_name(pane_id)])
@@ -316,32 +564,15 @@ fn make_dir(path: &str) -> io::Result<()> {
 /// `ts`. Returns whether the entry was written.
 pub fn write_summary(config_dir: &str, write: &SummaryWrite<'_>) -> io::Result<bool> {
     make_dir(&jspath::join(&[config_dir, SUMMARIES_DIR]))?;
-    let path = summary_path(config_dir, write.pane_id);
-    let stored = read_summary(config_dir, write.pane_id);
-    let ts = write.ts as f64;
-    if let Some(stored_ts) = stored
-        .as_ref()
-        .and_then(|stored| integer_of(jsx::field(stored, "ts")))
-        && stored_ts > ts
-    {
-        return Ok(false);
-    }
-    let kept = record_progress(write.status, write.summary, write.progress, stored.as_ref());
-    let line = record_line(&Line {
-        pane_id: write.pane_id,
-        status: Some(Value::String(write.status.into())),
-        summary: write
-            .summary
-            .map_or(Value::Null, |summary| Value::String(summary.into())),
-        ts: Some(num(ts)),
-        hash: write
-            .hash
-            .map_or(Value::Null, |hash| Value::String(hash.into())),
-        progress: kept,
-        progress_ts: Some(ts),
+    let machine = SummaryRecordMachine::new(RecordOp::Summary {
+        pane_id: write.pane_id.into(),
+        status: write.status.into(),
+        summary: write.summary.map(str::to_string),
+        ts: write.ts,
+        hash: write.hash.map(str::to_string),
+        progress: write.progress.clone(),
     });
-    write_atomic(std::path::Path::new(&path), line.as_bytes(), 0o600)?;
-    Ok(true)
+    run_record(config_dir, write.pane_id, machine)
 }
 
 /// `writeProgress`'s options (`progress`: `Value::Null` or `{done?, total?, phase?}`).
@@ -362,42 +593,12 @@ pub struct ProgressWrite<'a> {
 /// phase-only progress keeps the age of the model answer that named the
 /// phase. Returns whether the stored progress changed.
 pub fn write_progress(config_dir: &str, write: &ProgressWrite<'_>) -> io::Result<bool> {
-    let Some(stored) = read_summary(config_dir, write.pane_id) else {
-        return Ok(false);
-    };
-    if !has_text(Some(&stored)) || jsx::field(&stored, "status").as_str() != Some(write.status) {
-        return Ok(false);
-    }
-    let current = normalize_progress(jsx::field(&stored, "progress"));
-    let mut steps = Map::new();
-    steps.insert("done".into(), jsx::field(write.progress, "done").clone());
-    steps.insert("total".into(), jsx::field(write.progress, "total").clone());
-    let mut only_phase = Map::new();
-    only_phase.insert("phase".into(), jsx::field(write.progress, "phase").clone());
-    let given = normalize_progress(&Value::Object(only_phase));
-    let phase = later_phase(phase_of(&given), phase_of(&current));
-    steps.insert(
-        "phase".into(),
-        phase.map_or(Value::Null, |phase| Value::String(phase.into())),
-    );
-    let next = normalize_progress(&Value::Object(steps));
-    let text = |progress: &Option<Map<String, Value>>| {
-        progress
-            .clone()
-            .map_or_else(|| "null".to_string(), |m| jsx::stringify(&Value::Object(m)))
-    };
-    let changed = text(&next) != text(&current);
-    let stored_ts = integer_of(jsx::field(&stored, "progress_ts"));
-    let ts = write.ts as f64;
-    let progress_ts = if has_steps(&current) || has_steps(&next) {
-        Some(stored_ts.unwrap_or(ts).max(ts))
-    } else {
-        stored_ts
-    };
-    if !changed && progress_ts == stored_ts {
-        return Ok(false);
-    }
-    Ok(rewrite_progress(config_dir, write.pane_id, &stored, next, progress_ts)? && changed)
+    let machine = SummaryRecordMachine::new(RecordOp::Progress {
+        status: write.status.into(),
+        progress: write.progress.clone(),
+        ts: write.ts,
+    });
+    run_record(config_dir, write.pane_id, machine)
 }
 
 /// `clearProgress`: drop the pane's stored progress (`progress` becomes null,
@@ -405,16 +606,11 @@ pub fn write_progress(config_dir: &str, write: &ProgressWrite<'_>) -> io::Result
 /// turn ended, and the next one must not inherit its steps or phase. Returns
 /// whether the entry was rewritten.
 pub fn clear_progress(config_dir: &str, pane_id: &str) -> io::Result<bool> {
-    let Some(stored) = read_summary(config_dir, pane_id) else {
-        return Ok(false);
-    };
-    if !has_text(Some(&stored))
-        || (normalize_progress(jsx::field(&stored, "progress")).is_none()
-            && jsx::get(&stored, "progress_ts").is_none())
-    {
-        return Ok(false);
-    }
-    rewrite_progress(config_dir, pane_id, &stored, None, None)
+    run_record(
+        config_dir,
+        pane_id,
+        SummaryRecordMachine::new(RecordOp::Clear),
+    )
 }
 
 /// `removeSummaries`: delete the whole store (summaries were switched off on

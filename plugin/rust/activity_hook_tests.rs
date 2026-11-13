@@ -565,6 +565,125 @@ fn an_invocation_that_starts_while_another_is_sending_does_not_send_it_again() {
     assert_eq!(left, Vec::<String>::new());
 }
 
+/// A fake clock that runs `on_sleep(n)` at its n-th sleep (1-based), as
+/// another hook process acting meanwhile.
+struct ActingClock<'a> {
+    clock: FakeClock,
+    count: std::sync::atomic::AtomicUsize,
+    on_sleep: Box<dyn Fn(usize) + Sync + 'a>,
+}
+
+impl Clock for ActingClock<'_> {
+    fn now_ms(&self) -> u64 {
+        self.clock.now_ms()
+    }
+
+    fn sleep(&self, duration: Duration) {
+        self.clock.sleep(duration);
+        let n = self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        (self.on_sleep)(n);
+    }
+}
+
+fn newer_claim(sb: &Sandbox) {
+    fs::write(
+        sb.activity_dir().join("claim.json"),
+        json!({ "pid": 1, "claimed_at_ms": 9_000_000_000_000u64 }).to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_newer_claim_during_the_debounce_sends_nothing() {
+    let sb = Sandbox::new("activity-hook");
+    let clock = ActingClock {
+        clock: FakeClock::new(),
+        count: Default::default(),
+        on_sleep: Box::new(|n| {
+            if n == 1 {
+                newer_claim(&sb);
+            }
+        }),
+    };
+    let herdr = FakeHerdr::new(vec![default_agent()]);
+    let relay = FakeRelay::ok();
+    let run = FakeRun::new(None, Some(&herdr));
+    let hook = Hook {
+        sb: &sb,
+        run: &run,
+        relay: &relay,
+        clock: &clock,
+    };
+    sb.write_config(Some(RELAY_URL), json!({}));
+    sb.write_registration(&[device()], Value::Null);
+    hook.herdr(&event("working"));
+    assert_eq!(relay.count(), 0);
+    assert_eq!(*clock.clock.sleeps.lock().unwrap(), [DEBOUNCE_MS]);
+}
+
+#[test]
+fn a_newer_claim_during_the_start_grace_takes_the_start_over() {
+    let sb = Sandbox::new("activity-hook");
+    let clock = ActingClock {
+        clock: FakeClock::new(),
+        count: Default::default(),
+        on_sleep: Box::new(|n| {
+            if n == 2 {
+                newer_claim(&sb);
+            }
+        }),
+    };
+    let herdr = FakeHerdr::new(vec![default_agent()]);
+    let relay = FakeRelay::ok();
+    let run = FakeRun::new(None, Some(&herdr));
+    let hook = Hook {
+        sb: &sb,
+        run: &run,
+        relay: &relay,
+        clock: &clock,
+    };
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[without_update_token(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    assert_eq!(relay.count(), 0, "the newer run decides the start");
+    assert_eq!(
+        *clock.clock.sleeps.lock().unwrap(),
+        [DEBOUNCE_MS, START_GRACE_MS]
+    );
+    assert!(!sb.activity_dir().join("start-state.json").exists());
+}
+
+#[test]
+fn a_start_after_an_undelivered_update_records_last_state_and_a_delivered_update_does_not_wait() {
+    // No live update token: nothing is delivered before the start, so the
+    // start writes last-state.
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[without_update_token(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    assert_eq!(relay.sent(), [pair("start", START_TOKEN)]);
+    assert_eq!(read_last(&sb)["statuses"][PANE_ID], "working");
+    // A delivered update with no start candidate sleeps only the debounce.
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(&[device()], Value::Null);
+    hook.herdr(&event("working"));
+    assert_eq!(relay.sent(), [pair("update", ACTIVITY_TOKEN_A)]);
+    assert_eq!(*clock.sleeps.lock().unwrap(), [DEBOUNCE_MS]);
+}
+
 // JS: "a send lock left by a dead process is broken"
 #[test]
 fn a_send_lock_left_by_a_dead_process_is_broken() {
@@ -1088,6 +1207,85 @@ fn an_activity_dismissed_mid_episode_is_not_started_again_until_the_episode_ends
     assert_eq!(
         relay.sent(),
         [pair("update", ACTIVITY_TOKEN_A), pair("start", START_TOKEN)]
+    );
+}
+
+#[test]
+fn the_start_state_records_a_dismissal_by_device_an_end_by_token_and_an_episode_end_resets_starts()
+{
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock;
+        FakeRelay::answering(|body, _| if body["event"] == "update" {
+            (410, json!({ "reason": "Unregistered" }))
+        } else {
+            (200, json!({ "apnsId": "x" }))
+        });
+        vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[with_extra(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    // Dismissed mid-episode: the device is marked started, keyed by its
+    // alert token, and no token is marked ended.
+    let state = sb.read_state_file("start-state.json");
+    assert_eq!(state["ended_tokens"], json!([]));
+    assert_eq!(
+        state["started"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        [ALERT_TOKEN]
+    );
+    // The inventory empties: the episode ends and its guards reset.
+    herdr.set_agents(vec![]);
+    hook.herdr(&event("idle"));
+    assert_eq!(
+        sb.read_state_file("start-state.json"),
+        json!({ "ended_tokens": [], "started": {} })
+    );
+}
+
+#[test]
+fn a_delivered_end_marks_its_update_token_ended_so_the_next_episode_starts_instead() {
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[with_extra(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    herdr.set_agents(vec![]);
+    hook.herdr(&event("idle"));
+    assert_eq!(
+        sb.read_state_file("start-state.json")["ended_tokens"],
+        json!([ACTIVITY_TOKEN_A])
+    );
+    herdr.set_agents(vec![default_agent()]);
+    hook.herdr(&event("working"));
+    assert_eq!(
+        relay.sent(),
+        [
+            pair("update", ACTIVITY_TOKEN_A),
+            pair("end", ACTIVITY_TOKEN_A),
+            pair("start", START_TOKEN)
+        ]
+    );
+    let state = sb.read_state_file("start-state.json");
+    assert_eq!(
+        state["started"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        [ALERT_TOKEN]
     );
 }
 
@@ -2752,4 +2950,127 @@ fn rust_a_real_core_terminal_hook_builds_the_content_from_the_real_ls_and_get_re
         read_last(&sb)["statuses"],
         json!({ "hc:t1": "working", "hc:t2": "blocked" })
     );
+}
+
+// ---- ActivityRunMachine transitions ------------------------------------------------
+
+mod activity_run_machine {
+    use super::super::*;
+    use crate::state_machine::testing::handle_all;
+
+    const CLAIM: Claim = Claim {
+        pid: 7,
+        claimed_at_ms: 1_000,
+    };
+
+    fn machine() -> ActivityRunMachine {
+        ActivityRunMachine {
+            state: RunState::Idle,
+            debounce_ms: 120,
+            grace_ms: 30,
+        }
+    }
+
+    fn requested(has_devices: bool, ended_and_ineligible: bool) -> RunEvent {
+        RunEvent::StatusRequested {
+            has_devices,
+            ended_and_ineligible,
+            claim: CLAIM,
+        }
+    }
+
+    #[test]
+    fn the_cheap_exits_finish_without_a_claim_or_a_tick() {
+        for event in [requested(false, false), requested(true, true)] {
+            let mut run = machine();
+            assert_eq!(run.handle(event), []);
+            assert_eq!(run.state(), &RunState::Finished);
+        }
+    }
+
+    #[test]
+    fn a_status_run_claims_debounces_then_sends_with_its_claim() {
+        let mut run = machine();
+        assert_eq!(
+            run.handle(requested(true, false)),
+            [RunEffect::WriteClaim(CLAIM), RunEffect::Debounce(120)]
+        );
+        assert_eq!(
+            run.handle(RunEvent::DebounceElapsed),
+            [RunEffect::SendUpdates {
+                claim: Some(CLAIM),
+                progress_only: false
+            }]
+        );
+    }
+
+    #[test]
+    fn no_start_candidate_or_a_superseded_update_settles_with_the_tick() {
+        for answer in [None, Some((0, true)), Some((0, false))] {
+            let mut run = machine();
+            let _ = handle_all(
+                &mut run,
+                [requested(true, false), RunEvent::DebounceElapsed],
+            );
+            assert_eq!(
+                run.handle(RunEvent::UpdatesAnswered(answer)),
+                [RunEffect::KeepTickAlive],
+                "{answer:?}"
+            );
+            assert_eq!(run.handle(RunEvent::TickChecked), []);
+            assert_eq!(run.state(), &RunState::Finished);
+        }
+    }
+
+    #[test]
+    fn a_start_candidate_waits_the_grace_then_starts_recording_last_state_only_if_undelivered() {
+        for (delivered, write_last) in [(true, false), (false, true)] {
+            let mut run = machine();
+            let _ = handle_all(
+                &mut run,
+                [requested(true, false), RunEvent::DebounceElapsed],
+            );
+            assert_eq!(
+                run.handle(RunEvent::UpdatesAnswered(Some((1, delivered)))),
+                [RunEffect::StartGrace(30)]
+            );
+            assert_eq!(
+                run.handle(RunEvent::GraceElapsed),
+                [RunEffect::StartActivities {
+                    claim: CLAIM,
+                    write_last
+                }]
+            );
+            assert_eq!(
+                run.handle(RunEvent::StartsAnswered),
+                [RunEffect::KeepTickAlive]
+            );
+        }
+    }
+
+    #[test]
+    fn a_progress_run_sends_without_a_claim_and_never_starts_or_ticks() {
+        let mut run = machine();
+        assert_eq!(
+            run.handle(RunEvent::ProgressRequested),
+            [RunEffect::SendUpdates {
+                claim: None,
+                progress_only: true
+            }]
+        );
+        assert_eq!(run.handle(RunEvent::UpdatesAnswered(Some((3, true)))), []);
+        assert_eq!(run.state(), &RunState::Finished);
+    }
+
+    #[test]
+    fn events_a_state_never_asked_for_are_ignored() {
+        let mut run = machine();
+        assert_eq!(run.handle(RunEvent::GraceElapsed), []);
+        assert_eq!(run.handle(RunEvent::UpdatesAnswered(None)), []);
+        assert_eq!(run.state(), &RunState::Idle);
+        let _ = run.handle(requested(true, false));
+        assert_eq!(run.handle(RunEvent::StartsAnswered), []);
+        assert_eq!(run.handle(RunEvent::ProgressRequested), []);
+        assert_eq!(run.state(), &RunState::Debouncing(CLAIM));
+    }
 }

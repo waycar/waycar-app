@@ -62,9 +62,11 @@ use crate::hook_session::parse_hook_input;
 use crate::jsx;
 use crate::notification_config::{NotificationConfig, read_notification_config};
 use crate::notification_envelope::{NotificationPayload, encrypt_notification_envelope};
+use crate::notify_delivery::{DeliveryEffect, DeliveryEvent, NotificationDeliveryMachine};
 use crate::notify_seams::{SystemChat, SystemSummaries};
 use crate::paths::resolve_host_config;
 use crate::seal::KEY_BYTES;
+use crate::state_machine::StateMachine;
 use crate::summary::store::{
     SUMMARY_MAX_AGE_MS, SummaryWrite, prune_summaries, remove_summaries, write_summary,
 };
@@ -768,20 +770,9 @@ pub struct Flow<'a> {
     pub clock: &'a dyn Clock,
 }
 
-/// What the held half of the flow needs of the first half.
-struct Held {
-    timestamp: i64,
-    event_at: u64,
-    notify_worthy: bool,
-    push_worthy: bool,
-    summary_worthy: bool,
-    /// A Chat Mode marker whose reply replaces the summary (the summary is
-    /// deferred until the reader comes up empty).
-    chat_marker: Option<Marker>,
-}
-
-/// Run one status change through the shared flow. `event_at` is the change's
-/// time in epoch milliseconds.
+/// Run one status change through the shared flow, as
+/// [`NotificationDeliveryMachine`] decides. `event_at` is the change's time
+/// in epoch milliseconds.
 ///
 /// `Err` is what the JS promise rejects with: an unreadable re-check, a seal
 /// that failed, or a delivery that conclusively failed for some device.
@@ -792,202 +783,198 @@ pub fn run_notification<B: Backend>(
     backend: &B,
     stderr: &mut String,
 ) -> Result<()> {
-    let notify_worthy = notify_flag(&event.status).is_some();
-
-    // Cheap exits before burning a 5 s hold on a no-op. The push and the Agent
-    // Summary are gated separately: a deduped or device-less transition still
-    // refreshes the summary the app's agent list shows.
+    let mut machine = NotificationDeliveryMachine::new(
+        &event.status,
+        event.agent_kind.as_deref(),
+        notify_flag(&event.status).is_some(),
+    );
+    // Cheap exits before burning a 5 s hold on a no-op.
     let last_notified = read_last_notified(flow.state_dir, &event.pane_id);
-    let push_worthy = notify_worthy
-        && last_notified.as_deref() != Some(event.status.as_str())
-        && !read_eligible_devices(flow.config_dir, &event.status).is_empty();
-    let summary_worthy = notify_worthy && flow.config.summary_enabled;
-    if notify_worthy && !push_worthy && !summary_worthy {
-        return Ok(());
-    }
-    if !notify_worthy && last_notified.is_none() {
-        return Ok(()); // nothing to send or re-arm
-    }
+    let has_devices = !read_eligible_devices(flow.config_dir, &event.status).is_empty();
+    let mut pending: std::collections::VecDeque<DeliveryEffect> = machine
+        .handle(DeliveryEvent::Begin {
+            last_notified,
+            has_devices,
+            summary_enabled: flow.config.summary_enabled,
+        })
+        .into();
 
-    // A Done push for a Chat Mode pane carries the Agent's reply instead of a
-    // summary, so the summary is deferred: it is generated only if the reader
-    // comes up empty. A marker for another kind cannot apply, and a plain
-    // launch's marker (`chat_mode: false`, a pinned session only) is no Chat
-    // Mode pane, so neither defers anything.
-    let chat_marker = (push_worthy && event.status == "done")
-        .then(|| backend.read_chat_marker())
-        .flatten()
-        .filter(|marker| {
-            marker.chat_mode
-                && event
+    // What the effects leave for the later ones.
+    let mut marker: Option<Marker> = None;
+    let mut generated = Summary::default();
+    let mut current: Option<Current<B::Detail>> = None;
+    let mut reply: Option<String> = None;
+    let mut devices: Vec<Device> = Vec::new();
+    let mut envelopes: Vec<String> = Vec::new();
+    let mut pruned: Vec<String> = Vec::new();
+    let mut failures: Vec<String> = Vec::new();
+
+    while let Some(effect) = pending.pop_front() {
+        let answer = match effect {
+            // A Done push for a Chat Mode pane carries the Agent's reply
+            // instead of a summary, so the summary is deferred: it is
+            // generated only if the reader comes up empty.
+            DeliveryEffect::ReadChatMarker => {
+                marker = backend.read_chat_marker();
+                Some(DeliveryEvent::MarkerRead(
+                    marker
+                        .as_ref()
+                        .map(|marker| (marker.chat_mode, marker.kind.clone())),
+                ))
+            }
+            // The hold: only a status that still holds after the sleep
+            // notifies (or re-arms), so detection flapping never reaches the
+            // user. The summary is generated within the hold, so the re-check
+            // also covers the time the model took: pushing (and marking) a
+            // status that moved on meanwhile would dedupe the pane's next
+            // real one.
+            DeliveryEffect::Hold { summarize } => {
+                let held_from = flow.clock.now_ms();
+                if summarize {
+                    generated = backend.summarize(flow.config.summary_timeout_ms);
+                }
+                let spent = i128::from(flow.clock.now_ms()) - i128::from(held_from);
+                let left = i128::from(flow.config.debounce_ms) - spent.max(0);
+                flow.clock.sleep(Duration::from_millis(left.max(0) as u64));
+                Some(DeliveryEvent::Held)
+            }
+            DeliveryEffect::Recheck => {
+                current = backend.recheck()?;
+                Some(DeliveryEvent::Rechecked(
+                    current.as_ref().map(|current| current.status.clone()),
+                ))
+            }
+            DeliveryEffect::ClearLastNotified => {
+                clear_last_notified(flow.state_dir, &event.pane_id);
+                None
+            }
+            // Chat Mode: the reply replaces the summary for this push.
+            DeliveryEffect::Reply { chat } => {
+                reply = backend.reply();
+                if chat && let (Some(marker), Some(current)) = (&marker, &current) {
+                    reply = backend.chat_reply(marker, current, stderr);
+                }
+                Some(DeliveryEvent::Replied {
+                    has_reply: reply.is_some(),
+                })
+            }
+            // Without a reply the push falls back to the deferred summary,
+            // bounded by what is left of its budget from the event.
+            DeliveryEffect::Resummarize => {
+                let elapsed = i128::from(flow.clock.now_ms()) - i128::from(event_at);
+                let remaining = i128::from(flow.config.summary_timeout_ms) - elapsed;
+                if remaining > 0 {
+                    generated = backend.summarize(remaining as u64);
+                }
+                Some(DeliveryEvent::Resummarized)
+            }
+            // The status held, so the summary describes this turn: store it
+            // before pushing, so an app opened from the push already finds
+            // it. A turn with no summary (a reply push included) still
+            // retires the previous turn's.
+            DeliveryEffect::PersistSummary => {
+                persist_summary(
+                    flow.config_dir,
+                    &event.pane_id,
+                    &event.status,
+                    &generated,
+                    event_at,
+                    stderr,
+                );
+                None
+            }
+            // Re-read both after the sleep: a concurrent invocation may have
+            // delivered, and the app may have rewritten the registration file
+            // meanwhile.
+            DeliveryEffect::CheckDedupe => {
+                let already_notified = read_last_notified(flow.state_dir, &event.pane_id)
+                    .as_deref()
+                    == Some(event.status.as_str());
+                if !already_notified {
+                    devices = read_eligible_devices(flow.config_dir, &event.status);
+                }
+                Some(DeliveryEvent::DedupeChecked {
+                    already_notified,
+                    devices: devices.len(),
+                })
+            }
+            // Seal before claiming so a local error cannot leave an
+            // undeliverable marker.
+            DeliveryEffect::Seal => {
+                let Some(current) = &current else {
+                    continue;
+                };
+                let labels = backend.describe(current);
+                let attention = backend.attention();
+                let agent_kind = event
                     .agent_kind
                     .as_deref()
-                    .is_none_or(|kind| kind == marker.kind)
-        });
-
-    // The hold: only a status that still holds after the sleep notifies (or
-    // re-arms), so detection flapping never reaches the user. The summary is
-    // generated within the hold, so the re-check also covers the time the
-    // model took: pushing (and marking) a status that moved on meanwhile would
-    // dedupe the pane's next real one.
-    let held_from = flow.clock.now_ms();
-    let generated = if summary_worthy && chat_marker.is_none() {
-        backend.summarize(flow.config.summary_timeout_ms)
-    } else {
-        Summary::default()
-    };
-    let spent = i128::from(flow.clock.now_ms()) - i128::from(held_from);
-    let left = i128::from(flow.config.debounce_ms) - spent.max(0);
-    flow.clock.sleep(Duration::from_millis(left.max(0) as u64));
-
-    deliver(
-        flow,
-        event,
-        &Held {
-            timestamp: (event_at / 1000) as i64,
-            event_at,
-            notify_worthy,
-            push_worthy,
-            summary_worthy,
-            chat_marker,
-        },
-        generated,
-        backend,
-        stderr,
-    )
-}
-
-/// The held half of the flow: re-check, store the summary, push.
-fn deliver<B: Backend>(
-    flow: &Flow<'_>,
-    event: &Event,
-    held: &Held,
-    mut generated: Summary,
-    backend: &B,
-    stderr: &mut String,
-) -> Result<()> {
-    let Some(mut current) = backend.recheck()? else {
-        clear_last_notified(flow.state_dir, &event.pane_id); // agent gone; state is stale
-        return Ok(());
-    };
-    if current.status != event.status {
-        return Ok(()); // moved on; a newer event owns it
-    }
-
-    if !held.notify_worthy {
-        clear_last_notified(flow.state_dir, &event.pane_id); // confirmed departure re-arms the pane
-        return Ok(());
-    }
-
-    // Chat Mode: the reply replaces the summary for this push. Without one the
-    // push falls back to the deferred summary, bounded by what is left of its
-    // budget from the event, and the status is re-checked once more because
-    // the model took time.
-    let mut reply = backend.reply();
-    if let Some(marker) = &held.chat_marker {
-        reply = backend.chat_reply(marker, &current, stderr);
-        if reply.is_none() && held.summary_worthy {
-            let elapsed = i128::from(flow.clock.now_ms()) - i128::from(held.event_at);
-            let remaining = i128::from(flow.config.summary_timeout_ms) - elapsed;
-            if remaining > 0 {
-                generated = backend.summarize(remaining as u64);
+                    .or(current.agent_kind.as_deref())
+                    .unwrap_or("unknown");
+                let payload = NotificationPayload {
+                    pane_id: &event.pane_id,
+                    agent_kind,
+                    status: &event.status,
+                    timestamp: (event_at / 1000) as i64,
+                    project: labels.project.as_deref(),
+                    title: labels.title.as_deref(),
+                    summary: generated.summary.as_deref(),
+                    reply: reply.as_deref(),
+                    attention,
+                };
+                envelopes = devices
+                    .iter()
+                    .map(|device| {
+                        encrypt_notification_envelope(&payload, &device.key, None)
+                            .map_err(|error| CliError::failure(error.message))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Some(DeliveryEvent::Sealed)
             }
-            let Some(rechecked) = backend.recheck()? else {
-                clear_last_notified(flow.state_dir, &event.pane_id);
-                return Ok(());
-            };
-            current = rechecked;
-            if current.status != event.status {
-                return Ok(());
+            // Claim atomically before any POST: a Working notifier must see
+            // it even while the relay is slow, and duplicate Done notifiers
+            // must lose.
+            DeliveryEffect::Claim => Some(DeliveryEvent::Claimed(claim_notification(
+                flow.state_dir,
+                &event.pane_id,
+                &event.status,
+            )?)),
+            DeliveryEffect::Post => {
+                let mut delivered = false;
+                for (device, envelope) in devices.iter().zip(std::mem::take(&mut envelopes)) {
+                    let collapse = collapse_key_for(&device.key, &event.pane_id);
+                    match post_push(
+                        flow.fetch,
+                        flow.clock,
+                        &flow.config.relay_url,
+                        device,
+                        &envelope,
+                        &collapse,
+                        flow.config.retry_delay_ms,
+                    ) {
+                        Ok(PushOutcome::Delivered) => delivered = true,
+                        Ok(PushOutcome::Pruned) => pruned.push(device.token.clone()),
+                        Err(message) => failures.push(message),
+                    }
+                }
+                Some(DeliveryEvent::Posted { delivered })
             }
+            // Failure must not erase a newer turn's claim.
+            DeliveryEffect::ReleaseClaim(claim) => {
+                clear_notification_claim(flow.state_dir, &event.pane_id, Some(&claim))?;
+                None
+            }
+            DeliveryEffect::PruneTokens => {
+                if !pruned.is_empty() {
+                    let tokens: Vec<&str> = pruned.iter().map(String::as_str).collect();
+                    prune_tokens(flow.config_dir, &tokens)?;
+                }
+                None
+            }
+        };
+        if let Some(answer) = answer {
+            pending.extend(machine.handle(answer));
         }
-    }
-
-    // The status held, so the summary describes this turn: store it before
-    // pushing, so an app opened from the push already finds it. A turn with no
-    // summary (a reply push included) still retires the previous turn's.
-    if held.summary_worthy {
-        persist_summary(
-            flow.config_dir,
-            &event.pane_id,
-            &event.status,
-            &generated,
-            held.event_at,
-            stderr,
-        );
-    }
-    if !held.push_worthy {
-        return Ok(());
-    }
-
-    // Re-read both after the sleep: a concurrent invocation may have delivered,
-    // and the app may have rewritten the registration file meanwhile.
-    if read_last_notified(flow.state_dir, &event.pane_id).as_deref() == Some(event.status.as_str())
-    {
-        return Ok(());
-    }
-    let devices = read_eligible_devices(flow.config_dir, &event.status);
-    if devices.is_empty() {
-        return Ok(());
-    }
-
-    let labels = backend.describe(&current);
-    let attention = backend.attention();
-    let agent_kind = event
-        .agent_kind
-        .as_deref()
-        .or(current.agent_kind.as_deref())
-        .unwrap_or("unknown");
-    let payload = NotificationPayload {
-        pane_id: &event.pane_id,
-        agent_kind,
-        status: &event.status,
-        timestamp: held.timestamp,
-        project: labels.project.as_deref(),
-        title: labels.title.as_deref(),
-        summary: generated.summary.as_deref(),
-        reply: reply.as_deref(),
-        attention,
-    };
-    // Seal before claiming so a local error cannot leave an undeliverable
-    // marker. Claim atomically before any POST: a Working notifier must see
-    // it even while the relay is slow, and duplicate Done notifiers must lose.
-    let envelopes = devices
-        .iter()
-        .map(|device| {
-            encrypt_notification_envelope(&payload, &device.key, None)
-                .map_err(|error| CliError::failure(error.message))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let Some(claim) = claim_notification(flow.state_dir, &event.pane_id, &event.status)? else {
-        return Ok(());
-    };
-    let mut pruned: Vec<&str> = Vec::new();
-    let mut failures: Vec<String> = Vec::new();
-    let mut delivered = false;
-    for (device, envelope) in devices.iter().zip(envelopes) {
-        let collapse = collapse_key_for(&device.key, &event.pane_id);
-        match post_push(
-            flow.fetch,
-            flow.clock,
-            &flow.config.relay_url,
-            device,
-            &envelope,
-            &collapse,
-            flow.config.retry_delay_ms,
-        ) {
-            Ok(PushOutcome::Delivered) => delivered = true,
-            Ok(PushOutcome::Pruned) => pruned.push(&device.token),
-            Err(message) => failures.push(message),
-        }
-    }
-    // Success leaves the claim alone, even if another notifier re-armed the
-    // pane during the POST. Failure must not erase a newer turn's claim.
-    if !delivered {
-        clear_notification_claim(flow.state_dir, &event.pane_id, Some(&claim))?;
-    }
-    if !pruned.is_empty() {
-        prune_tokens(flow.config_dir, &pruned)?;
     }
     if failures.is_empty() {
         Ok(())
@@ -1594,6 +1581,79 @@ mod tests {
         for index in 0..2 {
             assert_eq!(rig.payload(index, &key_a()).1["status"], "done");
         }
+    }
+
+    #[test]
+    fn a_failed_post_releases_its_own_claim_so_the_same_status_tries_again() {
+        let mut rig = tmux_rig("done");
+        rig.relay_answers(|_, index| {
+            if index == 0 {
+                Ok(answer(400, "bad"))
+            } else {
+                Ok(answer(200, r#"{"apnsId":"x"}"#))
+            }
+        });
+        let (result, _) = rig.notify("tmux:%3", "done");
+        assert!(result.is_err());
+        assert_eq!(read_last_notified(&rig.state_dir, "tmux:%3"), None);
+        notified(&rig, "tmux:%3", "done");
+        assert_eq!(rig.relay.posts().len(), 2);
+        assert_eq!(
+            read_last_notified(&rig.state_dir, "tmux:%3").as_deref(),
+            Some("done")
+        );
+    }
+
+    #[test]
+    fn a_failed_post_never_releases_the_claim_a_newer_turn_made_meanwhile() {
+        let rig = Rc::new_cyclic(|weak: &std::rc::Weak<Rig>| {
+            let mut rig = tmux_rig("done");
+            let weak = weak.clone();
+            let first = std::cell::Cell::new(true);
+            rig.relay_answers(move |_, _| {
+                if first.replace(false) {
+                    // The pane worked and blocked again while this Done
+                    // POST was in flight; that Blocked push claimed the pane.
+                    let rig = weak.upgrade().unwrap();
+                    set_status(&rig, "working");
+                    notified(&rig, "tmux:%3", "working");
+                    set_status(&rig, "blocked");
+                    notified(&rig, "tmux:%3", "blocked");
+                    return Ok(answer(400, "bad"));
+                }
+                Ok(answer(200, r#"{"apnsId":"x"}"#))
+            });
+            rig
+        });
+        let (result, _) = rig.notify("tmux:%3", "done");
+        assert!(result.is_err());
+        assert_eq!(
+            read_last_notified(&rig.state_dir, "tmux:%3").as_deref(),
+            Some("blocked")
+        );
+        // The Blocked push is still deduped.
+        notified(&rig, "tmux:%3", "blocked");
+        assert_eq!(rig.relay.posts().len(), 2);
+    }
+
+    #[test]
+    fn a_deduped_change_still_refreshes_its_summary_and_a_410_prunes_the_token() {
+        let rig = tmux_rig("blocked");
+        rig.write_config(json!({"summary_enabled": true}));
+        notified(&rig, "tmux:%3", "blocked");
+        notified(&rig, "tmux:%3", "blocked");
+        assert_eq!(rig.relay.posts().len(), 1);
+        assert!(
+            crate::summary::store::read_summary(&rig.config_dir.to_string_lossy(), "tmux:%3")
+                .is_some()
+        );
+        let mut rig = tmux_rig("done");
+        rig.relay_answers(|_, _| Ok(answer(410, r#"{"reason":"Unregistered"}"#)));
+        notified(&rig, "tmux:%3", "done");
+        assert_eq!(rig.relay.posts().len(), 1);
+        assert!(read_eligible_devices(&rig.config_dir, "done").is_empty());
+        // Nothing was delivered: the claim was released.
+        assert_eq!(read_last_notified(&rig.state_dir, "tmux:%3"), None);
     }
 
     // test("release re-arms the pane for the next agent in it")

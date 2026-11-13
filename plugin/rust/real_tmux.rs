@@ -3,6 +3,7 @@
 //! binary to use instead of the one on `PATH`; `start` is `None` when no
 //! tmux runs, and the test skips.
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,6 +11,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::env::Env;
 
 static SERVERS: AtomicUsize = AtomicUsize::new(0);
+
+/// Where each server's private `TMUX_TMPDIR` (and `bin`) lives.
+const PRIVATE_PREFIX: &str = "/tmp/wc-real-tmux-";
 
 pub struct RealTmux {
     binary: PathBuf,
@@ -19,11 +23,33 @@ pub struct RealTmux {
     pub env: Env,
 }
 
+/// The first executable `tmux` on `PATH`, as an absolute path: the private
+/// `bin` links to it, so a bare name there would be a link to itself. A
+/// private `bin` of another server is never the answer.
+fn tmux_on_path() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .filter(|dir| dir.is_absolute() && !dir.to_string_lossy().starts_with(PRIVATE_PREFIX))
+        .map(|dir| dir.join("tmux"))
+        .find(|candidate| {
+            std::fs::metadata(candidate)
+                .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        })
+        .and_then(|candidate| std::fs::canonicalize(candidate).ok())
+}
+
 impl RealTmux {
     pub fn start() -> Option<Self> {
-        let binary = std::env::var_os("WAYCAR_TEST_TMUX")
-            .map(|binary| std::fs::canonicalize(binary).expect("WAYCAR_TEST_TMUX"))
-            .unwrap_or_else(|| "tmux".into());
+        let binary = match std::env::var_os("WAYCAR_TEST_TMUX") {
+            Some(binary) => std::fs::canonicalize(binary).expect("WAYCAR_TEST_TMUX"),
+            None => {
+                let Some(binary) = tmux_on_path() else {
+                    eprintln!("skipped: tmux not installed");
+                    return None;
+                };
+                binary
+            }
+        };
         let runs = Command::new(&binary)
             .arg("-V")
             .output()
@@ -33,7 +59,7 @@ impl RealTmux {
             return None;
         }
         let dir = PathBuf::from(format!(
-            "/tmp/wc-real-tmux-{}-{}",
+            "{PRIVATE_PREFIX}{}-{}",
             std::process::id(),
             SERVERS.fetch_add(1, Ordering::Relaxed)
         ));

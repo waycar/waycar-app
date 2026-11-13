@@ -7,8 +7,10 @@
 //! long as this popup and its 2-minute TTL, whichever ends first; Enrollment
 //! itself happens in `pair_accept`, run by sshd as the forced command.
 //!
-//! What the user sees is a pure function of the state ([`Machine`] and the
-//! `*_screen` functions); [`Popup`] is the thin terminal loop around them.
+//! What the user sees is a pure function of the state ([`PairPopupMachine`]
+//! and the `*_screen` functions); [`Popup`] is the thin terminal loop around
+//! them: it owns the terminal, the timers and the ceremony's files, and feeds
+//! the machine keys, timer expiries and the results of what it asked for.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -31,6 +33,7 @@ use crate::pairing_session::{
 };
 use crate::paths::resolve_host_config;
 use crate::select_list::Selection;
+use crate::state_machine::StateMachine;
 use crate::tty::{self, STDIN, STDOUT, Signals};
 
 const DEFAULT_SSH_PORT: u32 = 22;
@@ -166,21 +169,72 @@ enum Phase {
     Fatal,
 }
 
-/// What a key asks the terminal loop to do.
+/// What an event asks the terminal loop to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Effect {
     None,
     /// Repaint the checklist as this key left it. Each key of one read
     /// repaints, so a burst of keys draws every step, as the JS popup does.
+    /// Also any other finished screen (revoked, revoke failed).
     Paint(String),
     Close(i32),
     /// Mint a Bootstrap Key and show its QR.
     StartCeremony,
     Copy,
     Revoke,
+    /// Stop the TTL clock and the Enrollment poll.
+    StopCeremonyTimers,
+    /// Stop the Enrollment poll only.
+    StopPoll,
+    /// The start failed: show this message until a key.
+    ShowStartFailure(String),
+    /// Look for the ceremony's Enrollment record.
+    ReadEnrollment,
+    /// Keep this Enrollment and show it with its one-key revoke.
+    ShowEnrolled(Enrollment),
+    /// Expire the ceremony inside the authorized_keys lock.
+    Expire,
+    /// Forget the expired ceremony's session and code, show the expired screen.
+    ShowExpired,
+    /// Redraw the QR as it is (a resize).
+    RedrawQr,
+    /// Redraw the QR without the "copied" notice.
+    ClearCopied,
+    /// End the popup with exit 1, printing this after the terminal is restored.
+    Fail(String),
 }
 
-struct Machine {
+/// What the terminal loop tells the machine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PopupEvent {
+    Key(Key),
+    /// A closing signal (SIGINT, SIGTERM, SIGHUP) with the handlers in place.
+    CloseRequested,
+    /// A startup check failed; its screen is on show.
+    StartupFailed,
+    CeremonyFailed(String),
+    /// A QR screen drew with this layout.
+    QrDrawn(Layout),
+    PollDue,
+    EnrollmentFound(Enrollment),
+    ExpiryDue,
+    /// `expire_pairing`: the Enrollment that won, none, or its failure.
+    ExpireAnswered(std::result::Result<Option<Enrollment>, String>),
+    /// The revoke's screen, or none when there was no Enrollment to revoke.
+    RevokeAnswered(Option<String>),
+    /// SIGWINCH; whether a payload is on show.
+    Resized {
+        has_payload: bool,
+    },
+    CopiedNoticeElapsed {
+        has_payload: bool,
+    },
+}
+
+/// The popup's screens and what moves between them (HT-06). `phase` is the
+/// state; the selection, the confirmed addresses and the last QR layout are
+/// its data, and `closing` stops every later event once a close began.
+struct PairPopupMachine {
     phase: Phase,
     selection: Selection,
     confirmed: Vec<String>,
@@ -190,7 +244,105 @@ struct Machine {
     closing: bool,
 }
 
-impl Machine {
+impl StateMachine for PairPopupMachine {
+    type State = Phase;
+    type Event = PopupEvent;
+    type Effect = Effect;
+
+    fn state(&self) -> &Phase {
+        &self.phase
+    }
+
+    fn handle(&mut self, event: PopupEvent) -> Vec<Effect> {
+        use Phase::{Enrolled, Expired, Expiring, Fatal, Qr, Revoked, Revoking, Select};
+        match (self.phase, event) {
+            // Keys and closing signals reach every phase; `on_key` and
+            // `closing` sort them out.
+            (_, PopupEvent::Key(key)) => match self.on_key(key) {
+                Effect::None => Vec::new(),
+                effect => vec![effect],
+            },
+            (_, PopupEvent::CloseRequested) => {
+                if self.begin_close() {
+                    vec![Effect::Close(0)]
+                } else {
+                    Vec::new()
+                }
+            }
+            (Select, PopupEvent::StartupFailed) => {
+                self.phase = Fatal;
+                Vec::new()
+            }
+            (Qr, PopupEvent::CeremonyFailed(message)) => {
+                self.phase = Fatal;
+                vec![
+                    Effect::StopCeremonyTimers,
+                    Effect::ShowStartFailure(message),
+                ]
+            }
+            (Qr, PopupEvent::QrDrawn(layout)) => {
+                self.qr_layout = Some(layout);
+                Vec::new()
+            }
+            (Qr, PopupEvent::PollDue) if !self.closing => vec![Effect::ReadEnrollment],
+            (Qr, PopupEvent::EnrollmentFound(record))
+            | (Expiring, PopupEvent::ExpireAnswered(Ok(Some(record)))) => {
+                self.phase = Enrolled;
+                vec![Effect::StopCeremonyTimers, Effect::ShowEnrolled(record)]
+            }
+            (Qr, PopupEvent::ExpiryDue) if !self.closing => {
+                self.phase = Expiring;
+                vec![Effect::StopPoll, Effect::Expire]
+            }
+            (Expiring, PopupEvent::ExpireAnswered(Ok(None))) => {
+                // So a resize while the next ceremony starts cannot redraw
+                // this code.
+                self.qr_layout = None;
+                self.phase = Expired;
+                vec![Effect::ShowExpired]
+            }
+            (Expiring, PopupEvent::ExpireAnswered(Err(message))) => {
+                self.begin_close();
+                vec![Effect::Fail(message)]
+            }
+            (Revoking, PopupEvent::RevokeAnswered(Some(screen))) => {
+                self.phase = Revoked;
+                vec![Effect::Paint(screen)]
+            }
+            (Revoking, PopupEvent::RevokeAnswered(None)) => vec![self.close(0)],
+            (Qr, PopupEvent::Resized { has_payload: true }) if !self.closing => {
+                vec![Effect::RedrawQr]
+            }
+            (Qr, PopupEvent::CopiedNoticeElapsed { has_payload: true }) if !self.closing => {
+                vec![Effect::ClearCopied]
+            }
+            // A guard that failed above (closing, no payload) ignores the event.
+            (
+                Qr,
+                PopupEvent::PollDue
+                | PopupEvent::ExpiryDue
+                | PopupEvent::Resized { .. }
+                | PopupEvent::CopiedNoticeElapsed { .. },
+            ) => Vec::new(),
+            // Every other event outside the phase that asks for it is ignored.
+            (
+                Select | Qr | Expiring | Expired | Enrolled | Revoking | Revoked | Fatal,
+                PopupEvent::StartupFailed
+                | PopupEvent::CeremonyFailed(_)
+                | PopupEvent::QrDrawn(_)
+                | PopupEvent::PollDue
+                | PopupEvent::EnrollmentFound(_)
+                | PopupEvent::ExpiryDue
+                | PopupEvent::ExpireAnswered(_)
+                | PopupEvent::RevokeAnswered(_)
+                | PopupEvent::Resized { .. }
+                | PopupEvent::CopiedNoticeElapsed { .. },
+            ) => Vec::new(),
+        }
+    }
+}
+
+impl PairPopupMachine {
     fn new(selection: Selection) -> Self {
         Self {
             phase: Phase::Select,
@@ -293,7 +445,7 @@ struct Popup<'a> {
     state_dir: &'a Path,
     out: &'a mut dyn Write,
     signals: Signals,
-    machine: Machine,
+    machine: PairPopupMachine,
     decoder: Decoder,
     /// The fingerprint the Pairing Code pins.
     host_fingerprint: String,
@@ -371,8 +523,15 @@ impl Popup<'_> {
             tty::restore(STDIN);
             self.paint(SHOW_CURSOR);
             tty::die_by(signal);
-        } else if self.machine.begin_close() {
-            self.finish(0);
+        } else {
+            self.send(PopupEvent::CloseRequested);
+        }
+    }
+
+    /// Feed the machine one event and run what it asks for at once.
+    fn send(&mut self, event: PopupEvent) {
+        for effect in self.machine.handle(event) {
+            self.run_effect(effect);
         }
     }
 
@@ -381,9 +540,9 @@ impl Popup<'_> {
         self.escape_at = None;
         let machine = &mut self.machine;
         let mut effects = Vec::new();
-        let ends_in_escape = self
-            .decoder
-            .feed(bytes, &mut |key| effects.push(machine.on_key(key)));
+        let ends_in_escape = self.decoder.feed(bytes, &mut |key| {
+            effects.extend(machine.handle(PopupEvent::Key(key)));
+        });
         if ends_in_escape {
             self.escape_at = Some(Instant::now() + ESCAPE_CODE_TIMEOUT);
         }
@@ -395,25 +554,23 @@ impl Popup<'_> {
             self.escape_at = None;
             let machine = &mut self.machine;
             let mut effects = Vec::new();
-            self.decoder
-                .flush(&mut |key| effects.push(machine.on_key(key)));
+            self.decoder.flush(&mut |key| {
+                effects.extend(machine.handle(PopupEvent::Key(key)));
+            });
             self.run_effects(effects);
         }
         if self.expiry_at.is_some_and(|at| at <= now) {
             self.expiry_at = None;
-            if !self.machine.closing && self.machine.phase == Phase::Qr {
-                self.expire_ceremony();
-            }
+            self.send(PopupEvent::ExpiryDue);
         }
         if self.next_poll.is_some_and(|at| at <= now) {
             self.next_poll = Some(now + ENROLL_POLL);
-            self.on_enrollment_poll();
+            self.send(PopupEvent::PollDue);
         }
         if self.copied_until.is_some_and(|at| at <= now) {
             self.copied_until = None;
-            if !self.machine.closing && self.machine.phase == Phase::Qr && self.payload.is_some() {
-                self.show_qr(QrView::default());
-            }
+            let has_payload = self.payload.is_some();
+            self.send(PopupEvent::CopiedNoticeElapsed { has_payload });
         }
     }
 
@@ -442,6 +599,33 @@ impl Popup<'_> {
             Effect::StartCeremony => self.start_ceremony_or_die(),
             Effect::Copy => self.copy_displayed_code(),
             Effect::Revoke => self.revoke_enrolled_device(),
+            Effect::StopCeremonyTimers => self.stop_ceremony_timers(),
+            Effect::StopPoll => self.next_poll = None,
+            Effect::ShowStartFailure(message) => {
+                self.paint(&fatal_screen(&pairing_start_failed(&message)));
+            }
+            Effect::ReadEnrollment => self.on_enrollment_poll(),
+            Effect::ShowEnrolled(record) => self.show_enrolled(record),
+            Effect::Expire => self.expire_ceremony(),
+            Effect::ShowExpired => {
+                // expire_pairing already dropped the bootstrap line and
+                // pending state.
+                self.session = None;
+                // So a resize while the next ceremony starts cannot redraw
+                // this code.
+                self.payload = None;
+                self.paint(&expired_screen());
+            }
+            Effect::RedrawQr => {
+                self.show_qr(self.view.clone());
+            }
+            Effect::ClearCopied => {
+                self.show_qr(QrView::default());
+            }
+            Effect::Fail(message) => {
+                self.failure = Some(message);
+                self.finish(EXIT_FAILURE);
+            }
         }
     }
 
@@ -475,7 +659,7 @@ impl Popup<'_> {
         )
         .ok()?;
         self.view = view;
-        self.machine.qr_layout = Some(screen.layout);
+        self.send(PopupEvent::QrDrawn(screen.layout));
         self.paint(&format!("{CLEAR}{}", screen.lines.join("\n")));
         Some(screen.code)
     }
@@ -483,16 +667,13 @@ impl Popup<'_> {
     /// A font zoom or pane resize redraws the same payload, never a fresh
     /// Bootstrap Key.
     fn on_resize(&mut self) {
-        if !self.machine.closing && self.machine.phase == Phase::Qr && self.payload.is_some() {
-            self.show_qr(self.view.clone());
-        }
+        let has_payload = self.payload.is_some();
+        self.send(PopupEvent::Resized { has_payload });
     }
 
     fn start_ceremony_or_die(&mut self) {
         if let Err(message) = self.start_ceremony() {
-            self.machine.phase = Phase::Fatal;
-            self.stop_ceremony_timers();
-            self.paint(&fatal_screen(&pairing_start_failed(&message)));
+            self.send(PopupEvent::CeremonyFailed(message));
         }
     }
 
@@ -521,28 +702,23 @@ impl Popup<'_> {
         Ok(())
     }
 
-    /// A device enrolled: the Bootstrap Key has already self-revoked, so stop
-    /// the TTL clock and the poll and show the enrolled device with a one-key
-    /// revoke.
-    fn enter_enrolled(&mut self, record: Enrollment) {
-        self.stop_ceremony_timers();
-        self.machine.phase = Phase::Enrolled;
+    /// A device enrolled: the Bootstrap Key has already self-revoked, so the
+    /// machine stopped the TTL clock and the poll; show the enrolled device
+    /// with a one-key revoke.
+    fn show_enrolled(&mut self, record: Enrollment) {
         let text = enrolled_screen(&record);
         self.enrolled = Some(record);
         self.paint(&text);
     }
 
     /// Enrollment happens server-side and leaves a record in the state dir.
-    /// Poll for it while the QR is up.
+    /// Polled for while the QR is up.
     fn on_enrollment_poll(&mut self) {
-        if self.machine.closing || self.machine.phase != Phase::Qr {
-            return;
-        }
         let Some(session) = self.session.as_ref() else {
             return;
         };
         if let Some(record) = read_enrollment(self.state_dir, &session.pairing_id) {
-            self.enter_enrolled(record);
+            self.send(PopupEvent::EnrollmentFound(record));
         }
     }
 
@@ -553,44 +729,23 @@ impl Popup<'_> {
     /// rejects. Anything else could delete an enrolled device's record and
     /// never offer the revoke (ADR 0007's compensating control).
     fn expire_ceremony(&mut self) {
-        self.machine.phase = Phase::Expiring;
-        self.next_poll = None;
         let Some(pairing_id) = self.session.as_ref().map(|s| s.pairing_id.clone()) else {
             return;
         };
-        match expire_pairing(self.home, self.state_dir, &pairing_id) {
-            Ok(Some(record)) => self.enter_enrolled(record),
-            Ok(None) => {
-                // expire_pairing already dropped the bootstrap line and
-                // pending state.
-                self.session = None;
-                // So a resize while the next ceremony starts cannot redraw
-                // this code.
-                self.payload = None;
-                self.machine.qr_layout = None;
-                self.machine.phase = Phase::Expired;
-                self.paint(&expired_screen());
-            }
-            Err(error) => {
-                self.failure = Some(error.message().to_string());
-                self.machine.begin_close();
-                self.finish(EXIT_FAILURE);
-            }
-        }
+        let answer = expire_pairing(self.home, self.state_dir, &pairing_id)
+            .map_err(|error| error.message().to_string());
+        self.send(PopupEvent::ExpireAnswered(answer));
     }
 
     fn revoke_enrolled_device(&mut self) {
-        let Some(record) = self.enrolled.clone() else {
-            self.machine.begin_close();
-            self.finish(0);
-            return;
-        };
-        let text = match remove_key_line(self.home, &record.line) {
-            Ok(_) => revoked_screen(&record),
-            Err(error) => revoke_failed_screen(error.message()),
-        };
-        self.machine.phase = Phase::Revoked;
-        self.paint(&text);
+        let screen =
+            self.enrolled
+                .clone()
+                .map(|record| match remove_key_line(self.home, &record.line) {
+                    Ok(_) => revoked_screen(&record),
+                    Err(error) => revoke_failed_screen(error.message()),
+                });
+        self.send(PopupEvent::RevokeAnswered(screen));
     }
 
     /// Copy the code on screen; where there is no clipboard, print it on the
@@ -693,7 +848,7 @@ pub fn run(ctx: &Ctx, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         state_dir: &state_dir,
         out,
         signals,
-        machine: Machine::new(Selection::new(Vec::new())),
+        machine: PairPopupMachine::new(Selection::new(Vec::new())),
         decoder: Decoder::default(),
         host_fingerprint: String::new(),
         session: None,
@@ -743,7 +898,7 @@ impl Popup<'_> {
         sweep_expired_state_files(self.state_dir, now_seconds())?;
 
         self.host_fingerprint = host_key.fingerprint;
-        self.machine = Machine::new(Selection::new(candidates));
+        self.machine = PairPopupMachine::new(Selection::new(candidates));
         self.handlers = true;
         let text = checklist_screen(&self.machine.selection, None);
         self.paint(&text);
@@ -751,7 +906,7 @@ impl Popup<'_> {
     }
 
     fn hold_fatal(&mut self, message: &str) -> Result<()> {
-        self.machine.phase = Phase::Fatal;
+        self.send(PopupEvent::StartupFailed);
         self.paint(&fatal_screen(message));
         self.enter_raw()
     }
@@ -775,18 +930,18 @@ mod tests {
         }
     }
 
-    fn machine() -> Machine {
-        Machine::new(Selection::new(vec![
+    fn machine() -> PairPopupMachine {
+        PairPopupMachine::new(Selection::new(vec![
             candidate("192.168.1.42", "en0", Family::V4, true),
             candidate("fd7a::1", "utun3", Family::V6, false),
         ]))
     }
 
-    fn press(machine: &mut Machine, name: Name) -> Effect {
+    fn press(machine: &mut PairPopupMachine, name: Name) -> Effect {
         machine.on_key(Key::plain(name))
     }
 
-    fn repaint(state: &Machine) -> Effect {
+    fn repaint(state: &PairPopupMachine) -> Effect {
         Effect::Paint(checklist_screen(&state.selection, None))
     }
 
@@ -995,6 +1150,414 @@ mod tests {
         let mut state = machine();
         state.phase = Phase::Fatal;
         assert_eq!(press(&mut state, ch('x')), Effect::Close(1));
+    }
+
+    // The machine's non-key events.
+
+    fn in_phase(phase: Phase) -> PairPopupMachine {
+        let mut state = machine();
+        state.phase = phase;
+        state
+    }
+
+    fn record() -> Enrollment {
+        Enrollment {
+            pairing_id: "p".into(),
+            expires_at: None,
+            fingerprint: "SHA256:device".into(),
+            line: "ssh-ed25519 AAAA".into(),
+        }
+    }
+
+    #[test]
+    fn a_close_request_closes_once() {
+        let mut state = in_phase(Phase::Qr);
+        assert_eq!(state.handle(PopupEvent::CloseRequested), [Effect::Close(0)]);
+        assert_eq!(state.handle(PopupEvent::CloseRequested), []);
+        assert_eq!(state.handle(PopupEvent::Key(Key::plain(ch('q')))), []);
+    }
+
+    #[test]
+    fn a_failed_start_or_startup_is_fatal() {
+        let mut state = in_phase(Phase::Qr);
+        assert_eq!(
+            state.handle(PopupEvent::CeremonyFailed("boom".into())),
+            [
+                Effect::StopCeremonyTimers,
+                Effect::ShowStartFailure("boom".into())
+            ]
+        );
+        assert_eq!(state.state(), &Phase::Fatal);
+        let mut state = machine();
+        assert_eq!(state.handle(PopupEvent::StartupFailed), []);
+        assert_eq!(state.state(), &Phase::Fatal);
+    }
+
+    #[test]
+    fn the_poll_and_the_expiry_act_only_on_a_live_qr() {
+        for (phase, closing) in [
+            (Phase::Select, false),
+            (Phase::Expired, false),
+            (Phase::Enrolled, false),
+            (Phase::Qr, true),
+        ] {
+            let mut state = in_phase(phase);
+            state.closing = closing;
+            assert_eq!(state.handle(PopupEvent::PollDue), [], "{phase:?}");
+            assert_eq!(state.handle(PopupEvent::ExpiryDue), [], "{phase:?}");
+            assert_eq!(state.phase, phase);
+        }
+        let mut state = in_phase(Phase::Qr);
+        assert_eq!(state.handle(PopupEvent::PollDue), [Effect::ReadEnrollment]);
+        assert_eq!(
+            state.handle(PopupEvent::ExpiryDue),
+            [Effect::StopPoll, Effect::Expire]
+        );
+        assert_eq!(state.state(), &Phase::Expiring);
+    }
+
+    #[test]
+    fn an_enrollment_from_the_poll_or_the_expiry_shows_the_device() {
+        for (phase, event) in [
+            (Phase::Qr, PopupEvent::EnrollmentFound(record())),
+            (
+                Phase::Expiring,
+                PopupEvent::ExpireAnswered(Ok(Some(record()))),
+            ),
+        ] {
+            let mut state = in_phase(phase);
+            assert_eq!(
+                state.handle(event),
+                [Effect::StopCeremonyTimers, Effect::ShowEnrolled(record())]
+            );
+            assert_eq!(state.state(), &Phase::Enrolled);
+        }
+    }
+
+    const PHASES: [Phase; 8] = [
+        Phase::Select,
+        Phase::Qr,
+        Phase::Expiring,
+        Phase::Expired,
+        Phase::Enrolled,
+        Phase::Revoking,
+        Phase::Revoked,
+        Phase::Fatal,
+    ];
+
+    /// `event` changes nothing in every phase but `allowed`.
+    fn ignored_outside(allowed: Phase, event: impl Fn() -> PopupEvent) {
+        for phase in PHASES.into_iter().filter(|phase| *phase != allowed) {
+            let mut state = in_phase(phase);
+            state.qr_layout = Some(Layout::Sextant);
+            assert_eq!(state.handle(event()), [], "{phase:?}");
+            assert_eq!(state.state(), &phase, "{phase:?}");
+            assert_eq!(state.qr_layout, Some(Layout::Sextant), "{phase:?}");
+            assert!(!state.closing, "{phase:?}");
+        }
+    }
+
+    #[test]
+    fn each_answer_is_ignored_outside_the_phase_that_asks_for_it() {
+        ignored_outside(Phase::Qr, || PopupEvent::EnrollmentFound(record()));
+        ignored_outside(Phase::Revoking, || {
+            PopupEvent::RevokeAnswered(Some("done".into()))
+        });
+        ignored_outside(Phase::Revoking, || PopupEvent::RevokeAnswered(None));
+        ignored_outside(Phase::Qr, || PopupEvent::CeremonyFailed("boom".into()));
+        ignored_outside(Phase::Select, || PopupEvent::StartupFailed);
+        ignored_outside(Phase::Qr, || PopupEvent::QrDrawn(Layout::HalfBlock));
+        ignored_outside(Phase::Expiring, || {
+            PopupEvent::ExpireAnswered(Ok(Some(record())))
+        });
+        ignored_outside(Phase::Expiring, || PopupEvent::ExpireAnswered(Ok(None)));
+        ignored_outside(Phase::Expiring, || {
+            PopupEvent::ExpireAnswered(Err("locked".into()))
+        });
+        ignored_outside(Phase::Qr, || PopupEvent::PollDue);
+        ignored_outside(Phase::Qr, || PopupEvent::ExpiryDue);
+    }
+
+    #[test]
+    fn an_expiry_with_no_enrollment_forgets_the_layout_and_one_that_failed_ends() {
+        let mut state = in_phase(Phase::Expiring);
+        state.qr_layout = Some(Layout::HalfBlock);
+        assert_eq!(
+            state.handle(PopupEvent::ExpireAnswered(Ok(None))),
+            [Effect::ShowExpired]
+        );
+        assert_eq!((state.phase, state.qr_layout), (Phase::Expired, None));
+        let mut state = in_phase(Phase::Expiring);
+        assert_eq!(
+            state.handle(PopupEvent::ExpireAnswered(Err("locked".into()))),
+            [Effect::Fail("locked".into())]
+        );
+        assert!(state.closing);
+    }
+
+    #[test]
+    fn a_revoke_shows_its_screen_or_closes_without_a_record() {
+        let mut state = in_phase(Phase::Revoking);
+        assert_eq!(
+            state.handle(PopupEvent::RevokeAnswered(Some("done".into()))),
+            [Effect::Paint("done".into())]
+        );
+        assert_eq!(state.state(), &Phase::Revoked);
+        let mut state = in_phase(Phase::Revoking);
+        assert_eq!(
+            state.handle(PopupEvent::RevokeAnswered(None)),
+            [Effect::Close(0)]
+        );
+        assert!(state.closing);
+    }
+
+    #[test]
+    fn resize_and_the_copied_notice_redraw_only_a_live_qr_with_a_payload() {
+        let mut state = in_phase(Phase::Qr);
+        assert_eq!(
+            state.handle(PopupEvent::Resized { has_payload: true }),
+            [Effect::RedrawQr]
+        );
+        assert_eq!(
+            state.handle(PopupEvent::CopiedNoticeElapsed { has_payload: true }),
+            [Effect::ClearCopied]
+        );
+        assert_eq!(state.handle(PopupEvent::Resized { has_payload: false }), []);
+        let mut state = in_phase(Phase::Expired);
+        assert_eq!(state.handle(PopupEvent::Resized { has_payload: true }), []);
+        assert_eq!(
+            state.handle(PopupEvent::CopiedNoticeElapsed { has_payload: true }),
+            []
+        );
+    }
+
+    #[test]
+    fn a_drawn_qr_sets_the_layout_keys_use() {
+        let mut state = in_phase(Phase::Qr);
+        assert_eq!(state.handle(PopupEvent::QrDrawn(Layout::Sextant)), []);
+        assert_eq!(state.handle(PopupEvent::Key(Key::plain(Name::Other))), []);
+    }
+
+    // The popup around the machine, with a private home and state dir and
+    // the terminal output in a buffer.
+
+    use crate::authorized_keys::{self, parse_bootstrap_line};
+    use crate::pairing_session::{enrolled_path, pending_path, record_enrollment};
+    use crate::test_support::TempDir;
+
+    struct Stage {
+        home: TempDir,
+        out: Vec<u8>,
+    }
+
+    impl Stage {
+        fn new() -> Self {
+            Self {
+                home: TempDir::new("pair-popup"),
+                out: Vec::new(),
+            }
+        }
+
+        fn state(&self) -> PathBuf {
+            self.home.path().join("state")
+        }
+
+        fn bootstrap_lines(&self) -> usize {
+            std::fs::read_to_string(authorized_keys::path(self.home.path()))
+                .unwrap_or_default()
+                .lines()
+                .filter(|line| parse_bootstrap_line(line).is_some())
+                .count()
+        }
+    }
+
+    fn popup<'a>(home: &'a Path, state: &'a Path, out: &'a mut Vec<u8>) -> Popup<'a> {
+        Popup {
+            home,
+            state_dir: state,
+            out,
+            signals: Signals::install(&[]).unwrap(),
+            machine: machine(),
+            decoder: Decoder::default(),
+            host_fingerprint: "SHA256:ef+f9Jda6ZPkcW5GiL7pQZXJ57mCFnFAGkir3AcfTIM".into(),
+            session: None,
+            payload: None,
+            displayed_code: None,
+            enrolled: None,
+            view: QrView::default(),
+            stdin_open: true,
+            handlers: true,
+            escape_at: None,
+            expiry_at: None,
+            next_poll: None,
+            copied_until: None,
+            exit: None,
+            failure: None,
+        }
+    }
+
+    const DEVICE_LINE: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMYSCTemrZWEXptQyehHLI9kbqjHxNUGtQN2lF1ucCce waycar";
+
+    fn enroll(state: &Path, pairing_id: &str) {
+        record_enrollment(
+            state,
+            &Enrollment {
+                pairing_id: pairing_id.into(),
+                expires_at: None,
+                fingerprint: "SHA256:device".into(),
+                line: DEVICE_LINE.into(),
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn enter_starts_a_ceremony_with_its_ttl_and_poll_and_draws_the_qr() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        assert!(pending_path(&state, &id).exists());
+        assert!(popup.payload.is_some() && popup.displayed_code.is_some());
+        assert!(popup.expiry_at.is_some() && popup.next_poll.is_some());
+        assert!(popup.machine.qr_layout.is_some());
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 1);
+    }
+
+    #[test]
+    fn a_close_in_the_same_read_as_enter_starts_no_ceremony() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\rq");
+        assert_eq!(popup.exit, Some(0));
+        assert!(popup.session.is_none());
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 0);
+    }
+
+    #[test]
+    fn the_poll_finds_an_enrollment_and_stops_the_ceremony_timers() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        // Nothing enrolled: the poll re-arms.
+        let first = popup.next_poll.unwrap();
+        popup.fire_timers(first);
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        assert_eq!(popup.next_poll, Some(first + ENROLL_POLL));
+        enroll(&state, &id);
+        popup.fire_timers(first + ENROLL_POLL);
+        assert_eq!(popup.machine.phase, Phase::Enrolled);
+        assert_eq!((popup.expiry_at, popup.next_poll), (None, None));
+        assert_eq!(
+            popup.enrolled.as_ref().unwrap().fingerprint,
+            "SHA256:device"
+        );
+        // r revokes the device's line.
+        authorized_keys::edit_authorized_keys(&home, |mut lines| {
+            lines.push(DEVICE_LINE.into());
+            Ok(Some(lines))
+        })
+        .unwrap();
+        popup.on_input(b"r");
+        assert_eq!(popup.machine.phase, Phase::Revoked);
+        let keys = std::fs::read_to_string(authorized_keys::path(&home)).unwrap();
+        assert!(!keys.contains(DEVICE_LINE));
+        // Any key closes, and closing ends the ceremony's state.
+        popup.on_input(b"x");
+        assert_eq!(popup.exit, Some(0));
+        assert!(!enrolled_path(&state, &id).exists());
+    }
+
+    #[test]
+    fn the_ttl_expires_the_ceremony_and_enter_starts_a_fresh_one() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        popup.fire_timers(popup.expiry_at.unwrap());
+        assert_eq!(popup.machine.phase, Phase::Expired);
+        assert!(popup.session.is_none() && popup.payload.is_none());
+        assert!(popup.machine.qr_layout.is_none());
+        assert!(popup.next_poll.is_none());
+        assert!(!pending_path(&state, &id).exists());
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        assert_ne!(popup.session.as_ref().unwrap().pairing_id, id);
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 1);
+    }
+
+    #[test]
+    fn an_enrollment_at_the_deadline_wins_over_the_expiry() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        enroll(&state, &id);
+        // The expiry fires before the poll sees the record.
+        popup.next_poll = None;
+        popup.fire_timers(popup.expiry_at.unwrap());
+        assert_eq!(popup.machine.phase, Phase::Enrolled);
+        assert!(enrolled_path(&state, &id).exists());
+    }
+
+    #[test]
+    fn a_signal_closes_once_and_ends_the_ceremony() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        popup.on_signal(libc::SIGTERM);
+        assert_eq!(popup.exit, Some(0));
+        assert!(popup.machine.closing);
+        assert!(!pending_path(&state, &id).exists());
+        popup.exit = None;
+        popup.on_signal(libc::SIGTERM);
+        assert_eq!(popup.exit, None, "a second close does nothing");
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 0);
+    }
+
+    #[test]
+    fn copy_without_a_clipboard_prints_the_code_on_the_qr_screen() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        popup.on_input(b"c");
+        if cfg!(target_os = "macos") {
+            return;
+        }
+        assert_eq!(popup.view.printed_code, popup.displayed_code);
+        assert!(popup.copied_until.is_none());
+        assert_eq!(popup.machine.phase, Phase::Qr);
+    }
+
+    #[test]
+    fn a_ceremony_that_cannot_start_holds_the_failure_until_a_key_exits_one() {
+        let mut stage = Stage::new();
+        // A home that is a file: no authorized_keys can be written.
+        let home = stage.home.path().join("not-a-dir");
+        std::fs::write(&home, "").unwrap();
+        let state = stage.state();
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Fatal);
+        assert!(popup.session.is_none());
+        assert_eq!((popup.expiry_at, popup.next_poll), (None, None));
+        popup.on_input(b"x");
+        assert_eq!(popup.exit, Some(1));
     }
 
     #[test]
