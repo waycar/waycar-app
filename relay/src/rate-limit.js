@@ -50,7 +50,9 @@ export function createFixedWindowLimiter({ windowMs = WINDOW_MS, maxEntries = MA
         return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) };
       }
       entry.count += 1;
-      if (entry.count > limit) {
+      // Let one request through over the limit so a retry after a dropped
+      // response is not refused.
+      if (entry.count > limit + 1) {
         const retryAfterSeconds = Math.max(1, Math.ceil((entry.start + windowMs - nowMs) / 1000));
         return { allowed: false, retryAfterSeconds };
       }
