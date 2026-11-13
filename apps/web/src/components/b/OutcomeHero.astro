@@ -63,7 +63,7 @@ const clipSizes = '(min-width: 1280px) 330px, (min-width: 1024px) 242px, (min-wi
       }
     </div>
 
-    <p class="what">A native iPhone and iPad app for agents in herdr or tmux on your own machines, over SSH or mosh.</p>
+    <p class="what">A native iPhone and iPad app for agents in herdr or tmux on your own machines, over SSH or mosh. Dictation needs iOS 26 or later.</p>
 
     <div class="stage">
       <figure class="list">
@@ -347,9 +347,11 @@ const clipSizes = '(min-width: 1280px) 330px, (min-width: 1024px) 242px, (min-wi
     border: 1px solid var(--line-2);
     border-top: 0;
     border-radius: 0 0 calc(var(--screen-r) + var(--bezel)) calc(var(--screen-r) + var(--bezel));
+    /* The drop and underglow of `--shadow-device`, without its rings: the
+       frame is open at the top. */
     box-shadow:
-      0 40px 80px -30px rgb(var(--black-rgb) / 0.9),
-      0 24px 48px -28px rgb(var(--violet-rgb) / 0.35);
+      0 60px 120px -30px rgb(var(--black-rgb) / 0.9),
+      0 30px 60px -30px rgb(var(--violet-rgb) / 0.35);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgb(var(--black-rgb) / 0.6) 6%, var(--black) 16%);
     mask-image: linear-gradient(to bottom, transparent 0, rgb(var(--black-rgb) / 0.6) 6%, var(--black) 16%);
   }
