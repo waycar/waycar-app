@@ -2310,6 +2310,7 @@ stateDiagram-v2
     settled --> denied: browse or sweep denial / cancelSearch
     denied --> searching: searchAgain or appActive
     searching --> searching: appActive with no rows / replace tokens
+    settled --> searching: appActive with no rows
     settled --> searching: searchAgain
     searching --> searching: searchAgain / replace tokens
     searching --> stopped: stop / cancelSearch

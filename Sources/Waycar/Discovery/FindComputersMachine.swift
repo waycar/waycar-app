@@ -84,7 +84,9 @@ struct FindComputersMachine: StateMachine {
         switch (state, event) {
         case (.idle, .start(let subnet)), (.stopped, .start(let subnet)),
             (_, .searchAgain(let subnet)):
-            return [.milestone(.lanScanStarted)] + begin(subnet)
+            var effects = begin(subnet)
+            effects.insert(.milestone(.lanScanStarted), at: 1)
+            return effects
 
         case (_, .appInactive):
             isAppActive = false
