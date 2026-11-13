@@ -1,13 +1,14 @@
 import SwiftUI
 
 /// What stands in for the Agents before any Host exists. Top to bottom: the
-/// Sample Host row, the Find computers row, then the manual steps under "Set
+/// Find computers card, the Sample Host row, then the manual steps under "Set
 /// up by hand", with Scan to Pair (the default) and Add Manually docked
 /// under them.
 ///
 /// The two rows above the manual steps are slots, each empty until its
-/// owner fills it: `sampleHostRow` (the Sample Host) and `findComputersRow`
-/// (the scan for computers with SSH on). Rows stack in that order with 12 pt
+/// owner fills it: `findComputersRow` (the offer to scan for computers with
+/// SSH on, first because it is the quickest way to a Host) and
+/// `sampleHostRow` (the Sample Host). Rows stack in that order with 12 pt
 /// between them, and "Set up by hand" heads the steps whenever either slot is
 /// filled; with both empty the steps stand alone under the title.
 struct HostSetupGuide: View {
@@ -19,9 +20,9 @@ struct HostSetupGuide: View {
     /// The Console passes it so its own sheet shows the install page and
     /// counts as covering its keyboard commands; the Hosts sheet passes none.
     var showHelp: (() -> Void)? = nil
-    /// Slot, first: the Sample Host row.
+    /// Slot, second: the Sample Host row.
     var sampleHostRow: AnyView? = nil
-    /// Slot, second: the Find computers row.
+    /// Slot, first: the Find computers card.
     var findComputersRow: AnyView? = nil
     /// The heading over everything; the Sample Host's own "connect" page
     /// replaces it.
@@ -61,8 +62,8 @@ struct HostSetupGuide: View {
                 }
                 if hasRowsAboveSteps {
                     VStack(spacing: 12) {
-                        if let sampleHostRow { sampleHostRow }
                         if let findComputersRow { findComputersRow }
+                        if let sampleHostRow { sampleHostRow }
                     }
                     Text("Set up by hand")
                         .font(.title3.weight(.semibold))

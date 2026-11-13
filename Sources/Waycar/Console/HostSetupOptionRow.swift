@@ -36,13 +36,41 @@ struct HostSetupOptionRow: View {
     }
 }
 
-struct FindComputersSetupRow: View {
-    let action: () -> Void
+/// The first thing a new user sees: an offer to look for their computers.
+/// Scan opens Find Computers, whose browse brings up the Local Network
+/// prompt. It is a feature card among the other paths on the screen, not a
+/// pre-permission alert, and it stays until a Host exists, so a user who
+/// declined iOS's prompt can come back to it.
+struct FindComputersSetupCard: View {
+    let scan: () -> Void
 
     var body: some View {
-        HostSetupOptionRow(
-            title: "Find Computers", subtitle: "On this Wi-Fi, with SSH on",
-            symbol: "wifi", action: action)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "wifi")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Find computers on your network")
+                        .font(.headline)
+                    Text("Waycar looks on this Wi-Fi for computers with SSH on.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button(action: scan) {
+                Text("Scan")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .accessibilityIdentifier("setup.find-computers")
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: .rect(cornerRadius: Brand.Radius.control))
     }
 }

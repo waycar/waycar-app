@@ -149,7 +149,7 @@ struct FindComputersView: View {
                     .foregroundStyle(.secondary)
             }
         case .idle, .finished, .unavailable:
-            Button("Scan Network") { store.scanNetwork() }
+            Button("Check Every Address") { store.scanNetwork() }
                 .disabled(store.sweep == .unavailable)
         }
     }
@@ -159,14 +159,14 @@ struct FindComputersView: View {
         switch store.sweep {
         case .idle:
             Text(
-                "Finds computers that don't announce themselves by trying port 22 on this Wi-Fi's other addresses."
+                "Finds computers that don't announce themselves by trying port 22 on every address on this Wi-Fi."
             )
         case .running:
             EmptyView()
         case .finished:
-            Text("Scan done.")
+            Text("Checked every address.")
         case .unavailable:
-            Text("Join a home or office Wi-Fi to scan.")
+            Text("Join a home or office Wi-Fi to check every address.")
         }
     }
 }

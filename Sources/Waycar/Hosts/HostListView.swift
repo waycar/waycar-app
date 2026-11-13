@@ -128,7 +128,7 @@ struct HostListView: View {
                     HostSetupGuide(
                         scan: { addition = .scan },
                         addManually: { addition = .manual },
-                        findComputersRow: AnyView(FindComputersSetupRow { addition = .find }))
+                        findComputersRow: AnyView(FindComputersSetupCard { addition = .find }))
                 } else {
                     // The Console's card list: each Host is its own card on
                     // the grouped backdrop.

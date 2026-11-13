@@ -128,7 +128,7 @@ struct SampleConsoleView: View {
                 HostSetupGuide(
                     scan: { addHost(.scan) },
                     addManually: { addHost(.manual) },
-                    findComputersRow: AnyView(FindComputersSetupRow { addHost(.find) }),
+                    findComputersRow: AnyView(FindComputersSetupCard { addHost(.find) }),
                     title: "Connect your machine")
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {

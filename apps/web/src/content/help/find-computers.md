@@ -12,15 +12,17 @@ Find Computers lists computers on your Wi-Fi that have SSH on. Pick one to add i
 ## Find and sign in
 
 1. Join the same Wi-Fi as your computer and turn on SSH. On a Mac, turn on **Remote Login** in System Settings.
-2. In Waycar, tap **Find Computers** on **Add Your First Host**. You can also open **Hosts**, tap **Add Host**, then **Find Computers**, or use the Sample's **Connect your machine** sheet.
-3. Allow Local Network access when iOS asks. The search starts as soon as you open the sheet.
+2. In Waycar, tap **Scan** under **Find computers on your network** at the top of **Add Your First Host**. You can also open **Hosts**, tap **Add Host**, then **Find Computers**, or use the Sample's **Connect your machine** sheet.
+3. Allow Local Network access when iOS asks. The search starts as soon as you tap.
 4. Tap your computer under **Computers with SSH on**. Under **Sign In**, enter **User** and **Password**, then tap **Add**.
 
 To sign in with a key, tap **Use a Key Instead**. The form keeps the computer's address and your user. See [SSH keys and passwords](/help/ssh-keys). After saving, check and trust the Host's fingerprint on its page. See [Host keys and fingerprints](/help/host-keys).
 
+If the computer accepts only keys, its Host page says so and shows one command to run in Terminal on it. Run it, then tap **Check Again**.
+
 ## If your computer is missing
 
-Some computers do not announce themselves. Tap **Scan Network** to try port 22 on the other addresses on this Wi-Fi. This runs only when you tap, only on private home or office networks, and checks at most the small address range around your phone. A scan can appear in your network's logs.
+Some computers do not announce themselves. Tap **Check Every Address** to try port 22 on the other addresses on this Wi-Fi. This runs only when you tap, only on private home or office networks, and checks at most the small address range around your phone. A scan can appear in your network's logs.
 
 If no computers appear, check SSH and Wi-Fi, then tap **Search Again**. A computer using a different SSH port can be [added by hand](/help/add-host-manually).
 

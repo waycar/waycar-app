@@ -866,7 +866,7 @@ struct ConsoleView: View {
                     }
                 },
                 sampleHostRow: hosts.sampleHost.map { _ in AnyView(sampleHostRow) },
-                findComputersRow: AnyView(FindComputersSetupRow { hostAddition = .find }))
+                findComputersRow: AnyView(FindComputersSetupCard { hostAddition = .find }))
         }
     }
 
