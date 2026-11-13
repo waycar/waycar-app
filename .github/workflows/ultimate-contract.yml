@@ -1,0 +1,60 @@
+# Ultimate is an unversioned upstream API. The pin lives only in the script.
+# A real scratch server + local model stand-in exercise Waycar's HTTP contract;
+# no account, credentials, model tokens, simulator or retained artifacts.
+name: Ultimate contract
+
+on:
+  pull_request:
+    paths:
+      - scripts/ci/ultimate-contract.py
+      - .github/workflows/ultimate-contract.yml
+      - Sources/Waycar/Transport/Ultimate/**
+      - docs/design/ultimate-backend.md
+      - docs/research/ultimate/**
+  workflow_dispatch:
+  schedule:
+    - cron: "37 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ultimate-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned:
+    name: Pinned Ultimate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "26"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.8.0"
+      - name: Check the pinned Ultimate
+        run: python3 scripts/ci/ultimate-contract.py
+
+  latest:
+    name: Latest Ultimate (warn only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "26"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.8.0"
+      - name: Check upstream HEAD
+        run: python3 scripts/ci/ultimate-contract.py --latest --warn

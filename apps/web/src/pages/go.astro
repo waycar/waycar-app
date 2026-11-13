@@ -1,0 +1,25 @@
+---
+// The hop for a `store` ad link (see src/lib/ad-links.mjs): the Worker sends an
+// Apple device here instead of straight to the App Store, so the Reddit and X
+// pixels get a page to run on. The Layout script loads them where the visitor
+// allows it, sends the click conversion, then forwards to the listing with the
+// campaign (`ct`) from `?c=`. No page content to speak of, never indexed.
+import Layout from '../layouts/Layout.astro';
+import { APP_STORE_LISTING_URL } from '../data/links';
+---
+
+<Layout title="Opening the App Store · Waycar" description="Taking you to Waycar on the App Store." noindex>
+  <section class="section hop" aria-live="polite">
+    <div class="wrap">
+      <p class="sec-lede" data-ad-hop={APP_STORE_LISTING_URL}>
+        Opening the App Store. <a href={APP_STORE_LISTING_URL}>Tap here if nothing happens.</a>
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .hop {
+    min-height: 40vh;
+  }
+</style>

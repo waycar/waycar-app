@@ -1,0 +1,102 @@
+---
+// Renders the repo-root PRIVACY.md at build time, so the policy on the site
+// and the one in the repository can never drift apart.
+import { Content } from '../../../../PRIVACY.md';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="Privacy Policy · Waycar"
+  description="How Waycar handles your data. The app has no accounts, ads, or cross-app tracking. The website's Reddit and X ad pixels load only where the law allows, never under Global Privacy Control, and not after Decline."
+>
+  <article class="section privacy">
+    <div class="wrap">
+      <div class="glass prose">
+        <Content />
+      </div>
+    </div>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: 80ch;
+    margin-inline: auto;
+    padding: clamp(24px, 5vw, 56px);
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--text-2);
+  }
+
+  .prose :global(h1) {
+    font-size: clamp(32px, 4.4vw, 48px);
+    font-weight: 620;
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+
+  .prose :global(h2) {
+    margin-top: 48px;
+    padding-top: 24px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    border-top: 1px solid var(--line);
+  }
+
+  .prose :global(h3) {
+    margin-top: 32px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin-top: 16px;
+  }
+
+  .prose :global(h1 + p) {
+    margin-top: 12px;
+    font: 500 13px / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .prose :global(ul),
+  .prose :global(ol) {
+    display: grid;
+    gap: 10px;
+    padding-left: 20px;
+  }
+
+  .prose :global(ul) {
+    list-style: disc;
+  }
+
+  .prose :global(ol) {
+    list-style: decimal;
+  }
+
+  .prose :global(li::marker) {
+    color: var(--violet-soft);
+  }
+
+  .prose :global(strong) {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .prose :global(a) {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .prose :global(code) {
+    padding: 1px 6px;
+    font-size: 0.88em;
+    color: var(--text);
+    background: rgb(var(--white-rgb) / 0.06);
+    border-radius: var(--radius-code);
+  }
+</style>

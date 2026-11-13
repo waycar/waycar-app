@@ -1,0 +1,105 @@
+# Weekly iPad tests (refs #66).
+#
+# CI's iOS lane (ci.yml) tests on the iPhone only, so failures only the iPad
+# shows (its keyboard, terminal geometry and tools dock) reached main unseen.
+# This runs `make test-ipad` (the app, WaycarSSH and SwiftMosh suites on the
+# iPad simulator) on main once a week, and by hand with
+# `gh workflow run ipad-weekly.yml --ref main`. It is not a required check: a
+# failure shows as a red run with the failing tests in its summary, and never
+# blocks a merge. A scheduled start that comes after Sunday (UTC) is skipped,
+# so a late run never lands in a working week.
+#
+# It runs on GitHub's Xcode 27 image, as ci.yml does, and stays out of
+# ci.yml's concurrency group: in one group a newly queued run cancels the one
+# already pending, which could be main's push run.
+
+name: iPad tests (weekly)
+
+on:
+  schedule:
+    - cron: "0 8 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: ipad-weekly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # The Makefile's SIM_IPAD.
+  SIM_IPAD: iPad Pro 13-inch (M5)
+
+jobs:
+  test-ipad:
+    name: make test-ipad (iPad simulator)
+    # GitHub's Xcode 27 image, as in ci.yml.
+    runs-on: xcode-27
+    # A cold build, the three suites, and a wait for an iPad slot.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select the newest Xcode 27
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+
+      # make test-ipad regenerates the project, and its SwiftMosh suite
+      # resolves mosh-server on PATH; the image has neither.
+      - name: Install XcodeGen and mosh
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: brew install xcodegen mosh
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # The OS of the runtime that holds the shared iPad pool (the model and
+      # its copy `<model> 2`), else the newest with the model: a destination
+      # without an OS resolves to the newest runtime, which may not have it.
+      - name: Run make test-ipad
+        run: |
+          set -o pipefail
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ "$(date -u +%u)" != 7 ]; then
+            echo "::warning title=Weekly iPad run skipped::The scheduled start came after Sunday (UTC). Start it by hand: gh workflow run ipad-weekly.yml --ref main"
+            exit 0
+          fi
+          os=$(xcrun simctl list devices -j | python3 -c '
+          import json, re, sys
+          model = sys.argv[1]
+          pool, other = [], []
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              m = re.search(r"\.iOS-(\d+)-(\d+)$", runtime)
+              names = {d["name"] for d in devices if d.get("isAvailable", True)}
+              if m and model in names:
+                  (pool if model + " 2" in names else other).append((int(m.group(1)), int(m.group(2))))
+          found = pool or other
+          if not found:
+              sys.exit("no " + model + " simulator on any iOS runtime")
+          print("%d.%d" % max(found))
+          ' "$SIM_IPAD")
+          echo "Destination: $SIM_IPAD, iOS $os"
+          make test-ipad SIM_DESTINATION="platform=iOS Simulator,name=$SIM_IPAD,OS=$os" 2>&1 \
+            | tee "$RUNNER_TEMP/test-ipad.log"
+
+      - name: Summarize failures
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/test-ipad.log"
+          [ -f "$log" ] || exit 0
+          {
+            echo '### make test-ipad failed on main'
+            echo
+            echo '```'
+            grep -E 'Test run with [0-9]+ tests?|Executed [0-9]+ tests?, with' "$log" | tail -6 || true
+            awk '/^Failing tests:/ { on = 1; print; next } on && /^\t/ { print; next } { on = 0 }' "$log" | head -60
+            grep -E 'Waycar crash report|Crash report check|error:|make: \*\*\*' "$log" | head -20 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Frees the iPad slot whatever happened, and the 3-4 GB of build trees.
+      - name: Release the simulator
+        if: always()
+        run: |
+          make sim-release
+          rm -rf build Packages/SwiftMosh/.build

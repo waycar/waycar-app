@@ -1,0 +1,181 @@
+{
+  "info": {
+    "id": "ses_waycarFixture0001",
+    "title": "fixture",
+    "outcome": "interrupted",
+    "time": {"created": 1794434916308, "updated": 1794434944995},
+    "location": {"directory": "/home/waycar/proj"}
+  },
+  "messages": [
+    {
+      "id": "msg_1cca7dff9001nxML8t7SJGmNtS",
+      "time": {"created": 1794434916718},
+      "text": "hello fixture",
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca7e1780014OZXVGyc2jAqLp",
+      "time": {"created": 1794434916739},
+      "type": "assistant",
+      "content": [{"type": "text", "text": "waycar-mock-reply: fixture"}],
+      "finish": "stop"
+    },
+    {
+      "id": "msg_1cca7f90f001fxexPZivM1VmTB",
+      "time": {"created": 1794434922767},
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1cca7f9190011VC6GfMsbN803w",
+      "time": {"created": 1794434922783},
+      "text": "run it WAYCAR_TOOL",
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca7f922001b2CVCUiuCmp9Po",
+      "time": {"created": 1794434922789},
+      "type": "assistant",
+      "content": [{
+        "type": "tool",
+        "id": "call_waycar_2",
+        "name": "shell",
+        "executed": false,
+        "state": {
+          "status": "completed",
+          "input": {"command": "echo waycar-tool-ok"},
+          "content": [{"type": "text", "text": "waycar-tool-ok\n"}],
+          "metadata": {"status": "completed", "truncated": false, "exit": 0}
+        }
+      }],
+      "finish": "tool-calls"
+    },
+    {
+      "id": "msg_1cca808de001vNWV2M849aWsuL",
+      "time": {"created": 1794434926816},
+      "type": "assistant",
+      "content": [{"type": "text", "text": "waycar-tool-done: saw waycar-tool-ok"}],
+      "finish": "stop"
+    },
+    {
+      "id": "msg_1cca80ecb001jtJz3v3OqoLDsw",
+      "time": {"created": 1794434928331},
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1cca810be001Ne357kvzR3WKPy",
+      "time": {"created": 1794434928834},
+      "text": "run again WAYCAR_TOOL",
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca810c6001EjcVtOWfQUGO9E",
+      "time": {"created": 1794434928841},
+      "type": "assistant",
+      "content": [{
+        "type": "tool",
+        "id": "call_waycar_5",
+        "name": "shell",
+        "executed": false,
+        "state": {
+          "status": "error",
+          "input": {"command": "echo waycar-tool-ok"},
+          "error": {"type": "aborted", "message": "The user declined this tool call"}
+        }
+      }],
+      "finish": "error",
+      "error": {"type": "aborted", "message": "Step interrupted"}
+    },
+    {
+      "id": "msg_1cca82474001iqQwdwuox0jX12",
+      "time": {"created": 1794434933880},
+      "text": "ask WAYCAR_ASK",
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca8247d001CAtTcuLJs60o0x",
+      "time": {"created": 1794434933887},
+      "type": "assistant",
+      "content": [{
+        "type": "tool",
+        "id": "call_waycar_7",
+        "name": "question",
+        "executed": false,
+        "state": {
+          "status": "completed",
+          "input": {"questions": [{
+            "question": "Pick a color",
+            "header": "Color",
+            "options": [
+              {"label": "Red", "description": "warm"},
+              {"label": "Blue", "description": "cool"}
+            ],
+            "multiple": false
+          }]},
+          "content": [{"type": "text", "text": "User has answered your questions: \"Pick a color\"=\"Blue\". You can now continue with the user's answers in mind."}],
+          "metadata": {"answers": [["Blue"]], "truncated": false}
+        }
+      }],
+      "finish": "tool-calls"
+    },
+    {
+      "id": "msg_1cca83431001R6dvwAoL6Urqub",
+      "time": {"created": 1794434937908},
+      "type": "assistant",
+      "content": [{"type": "text", "text": "waycar-tool-done: tool output missing waycar-tool-ok"}],
+      "finish": "stop"
+    },
+    {
+      "id": "msg_1cca83a1f001GWX9iX6MMpojLV",
+      "time": {"created": 1794434939423},
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1cca83c21001oNEhmy6PGxcfqA",
+      "time": {"created": 1794434939969},
+      "text": "look at this image",
+      "files": [{
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==",
+        "mime": "image/png",
+        "source": {"type": "inline"},
+        "name": "red.png"
+      }],
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca83c44001mx1EtTIKyUWJQi",
+      "time": {"created": 1794434939975},
+      "type": "assistant",
+      "content": [{"type": "text", "text": "waycar-mock-reply: image"}],
+      "finish": "stop"
+    },
+    {
+      "id": "msg_1cca84231001qiREIsH7JITgTu",
+      "time": {"created": 1794434941489},
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1cca8441e001NcbVjcvvDSJ9A8",
+      "time": {"created": 1794434941987},
+      "text": "slow WAYCAR_SLOW",
+      "type": "user"
+    },
+    {
+      "id": "msg_1cca844270018robz36zLRWDzt",
+      "time": {"created": 1794434941994},
+      "type": "assistant",
+      "content": [],
+      "finish": "error",
+      "error": {"type": "aborted", "message": "Step interrupted"}
+    },
+    {
+      "id": "msg_1cca84fe4001yJAygqhcjzW5rY",
+      "time": {"created": 1794434944996},
+      "type": "idle",
+      "outcome": "interrupted"
+    }
+  ]
+}

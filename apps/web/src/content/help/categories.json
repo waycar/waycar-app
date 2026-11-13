@@ -1,0 +1,11 @@
+[
+  { "id": "get-started", "label": "Get started" },
+  { "id": "console", "label": "The Console" },
+  { "id": "agents", "label": "Start and talk to agents" },
+  { "id": "terminal", "label": "The terminal" },
+  { "id": "hosts", "label": "Hosts and connections" },
+  { "id": "alerts", "label": "Notifications" },
+  { "id": "devices", "label": "iPad and CarPlay" },
+  { "id": "account", "label": "Settings and account" },
+  { "id": "troubleshooting", "label": "Troubleshooting" }
+]

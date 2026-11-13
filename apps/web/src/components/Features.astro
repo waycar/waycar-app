@@ -1,0 +1,678 @@
+---
+import { Image } from 'astro:assets';
+import { ipad, iphone } from '../data/screens';
+
+interface Props {
+  /** Page B covers the console, prompting, workspaces and notifications cells in its own sections. */
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+
+// A decorative Pairing Code: 21×21 modules, '#' = dark.
+const qrRows = [
+  '#######.##.#..#######',
+  '#.....#.##.##.#.....#',
+  '#.###.#.###.#.#.###.#',
+  '#.###.#.#...#.#.###.#',
+  '#.###.#..#.##.#.###.#',
+  '#.....#.##.#..#.....#',
+  '#######.#.#.#.#######',
+  '.........#.##........',
+  '#.##.###..#....#.##.#',
+  '.#.....#...#..#.#....',
+  '##.######.###.##....#',
+  '##..##.##..####......',
+  '#....####.###########',
+  '..........#####..#.##',
+  '#######.##.##..#.#...',
+  '#.....#..###...##....',
+  '#.###.#...#.#####..#.',
+  '#.###.#...#####...#..',
+  '#.###.#.#....##.#..##',
+  '#.....#...###..#...#.',
+  '#######.##....#..####',
+];
+const qrPath = qrRows
+  .flatMap((row, y) => [...row].map((cell, x) => (cell === '#' ? `M${x} ${y}h1v1h-1z` : '')))
+  .join('');
+
+const moreAgents = [
+  'Amp',
+  'Antigravity',
+  'Cline',
+  'Cursor Agent',
+  'Devin CLI',
+  'Droid',
+  'GitHub Copilot CLI',
+  'Grok Build',
+  'Hermes Agent',
+  'Kilo Code',
+  'Kimi CLI',
+  'Kiro CLI',
+  'Maki',
+  'Mastra Code',
+  'Muse',
+  'Qoder CLI',
+  'Qwen Code',
+];
+
+// Swatches of terminal themes the app ships (Catppuccin, Dracula, Tokyo Night,
+// Solarized, Nord, ...). They show other people's palettes, so they are
+// content, not brand tokens.
+const themes = [
+  { bg: '#1e1e2e', fg: '#cba6f7' },
+  { bg: '#282a36', fg: '#ff79c6' },
+  { bg: '#1a1b26', fg: '#7aa2f7' },
+  { bg: '#fdf6e3', fg: '#586e75' },
+  { bg: '#2e3440', fg: '#88c0d0' },
+  { bg: '#0b0b0b', fg: '#9bd88f' },
+];
+---
+
+<section id="features" class="section" aria-labelledby="features-title">
+  <div class="wrap">
+    <div class="sec-head center">
+      <span class="kicker">Features</span>
+      <h2 id="features-title" class="sec-title">
+        Built for the moment an agent<br class="br-d" /> <span class="grad-text">needs you.</span>
+      </h2>
+      <p class="sec-lede">Every screen is native SwiftUI.</p>
+    </div>
+
+    <div class={compact ? 'bento compact' : 'bento'}>
+      {!compact && (
+      <article class="glass cell span-4 console-cell">
+        <div class="txt">
+          <p class="group"><i aria-hidden="true">◎</i>Agent console</p>
+          <h3>Every machine, sorted by who needs you first.</h3>
+          <p>Agents from every Host, blocked first. Filter, search, or pin.</p>
+          <p class="sort-order">
+            <span class="pill pill-blocked">Blocked</span><span aria-hidden="true">→</span>
+            <span class="pill pill-done">Done</span><span aria-hidden="true">→</span>
+            <span class="pill pill-working">Working</span><span aria-hidden="true">→</span>
+            <span class="pill pill-idle">Idle</span>
+          </p>
+        </div>
+        <div class="shot">
+          <div class="phone-crop">
+            <Image
+              src={iphone.console.image}
+              alt={iphone.console.alt}
+              widths={[320, 480, 720]}
+              sizes="(min-width: 1128px) 320px, (min-width: 561px) 34vw, 78vw"
+              format="webp"
+              quality={80}
+            />
+          </div>
+        </div>
+      </article>
+      )}
+
+      <article class="glass cell span-2">
+        <p class="group"><i aria-hidden="true">▍</i>Terminal</p>
+        <h3>A real, native terminal.</h3>
+        <p>Ghostty's engine: full-screen apps, momentum scrolling, selection, jump to live.</p>
+        <div class="term" aria-hidden="true">
+          <div class="pk">HERDR · CLAUDE CODE</div>
+          <div>● Ran CheckoutFlowTests</div>
+          <div class="ok">&nbsp;&nbsp;✓ tests passed</div>
+          <div class="dim">──────────────</div>
+          <div class="q">› Run the UI test before commit?</div>
+        </div>
+      </article>
+
+      {!compact && (
+      <article class="glass cell span-3">
+        <p class="group"><i aria-hidden="true">✎</i>Prompting</p>
+        <h3>Draft it first. Send once.</h3>
+        <p>Edit before you send. On-device dictation (iOS 26), snippets and Skills.</p>
+        <div class="composer" aria-hidden="true">
+          <div class="ph">Yes, run the UI test, then commit on green<span class="cur"></span></div>
+          <div class="cbar">
+            <span>+</span><span>···</span><span class="mic">●</span>
+            <span class="wave"><b style="height:6px"></b><b style="height:14px"></b><b style="height:9px"></b><b
+                style="height:17px"></b><b style="height:7px"></b><b style="height:12px"></b><b style="height:5px"
+              ></b></span>
+            <span class="send">↑</span>
+          </div>
+        </div>
+      </article>
+      )}
+
+      {!compact && (
+      <article class="glass cell span-3">
+        <p class="group"><i aria-hidden="true">⑂</i>Workspaces</p>
+        <h3>Start an agent on a clean worktree.</h3>
+        <p>A fresh git checkout on its own branch, or any folder.</p>
+        <div class="toggle-row" aria-hidden="true">
+          <div class="field"><span>Agent</span><code>claude</code></div>
+          <div class="field"><span>New Worktree</span><span class="switch"></span></div>
+          <div class="field"><span>Branch</span><code>worktree/checkout-retry</code></div>
+        </div>
+      </article>
+      )}
+
+      <article class="glass cell span-2">
+        <p class="group"><i aria-hidden="true">⌗</i>Connect</p>
+        <h3>Pair a machine with one QR.</h3>
+        <p>Keys made on device. The Pairing Code pins the host key. The Hosts sheet shows live CPU and memory.</p>
+        <div class="qr-row" aria-hidden="true">
+          <svg class="qr" viewBox="-2 -2 25 25" shape-rendering="crispEdges">
+            <rect x="-2" y="-2" width="25" height="25"></rect>
+            <path d={qrPath}></path>
+          </svg>
+          <p class="qr-meta"><b>Studio Mac</b><br />host key pinned ✓<br />ed25519 · on-device</p>
+        </div>
+      </article>
+
+      <article class="glass cell span-4 ipad-cell">
+        <p class="group"><i aria-hidden="true">▭</i>iPad</p>
+        <h3>A first-class iPad app, keyboard and all.</h3>
+        <p>Sidebar, Stage Manager, Take Over Here, drag and drop, shortcuts. <a class="more" href="/ipad">See the iPad gallery →</a></p>
+        <p class="kbds">
+          <span class="kbd">⌘1–9<small>agents</small></span>
+          <span class="kbd">⌘[ ⌘]<small>switch</small></span>
+          <span class="kbd">⌘F<small>search</small></span>
+          <span class="kbd">⌘N<small>new agent</small></span>
+          <span class="kbd">⌘E<small>input mode</small></span>
+          <span class="kbd">⌘↩<small>send</small></span>
+        </p>
+        <div class="ipad-crop">
+          <Image
+            src={ipad[2].image}
+            alt={ipad[2].alt}
+            widths={[480, 800, 1200]}
+            sizes="(min-width: 1128px) 700px, 90vw"
+            format="webp"
+            quality={80}
+          />
+        </div>
+      </article>
+
+      {!compact && (
+      <article class="glass cell span-2">
+        <p class="group"><i aria-hidden="true">◉</i>Notifications</p>
+        <h3>Know the moment an agent blocks.</h3>
+        <p>Encrypted pushes for Blocked and Done. A Live Activity for each Host.</p>
+        <div class="mini-list" aria-hidden="true">
+          <div><span>blocked</span><span class="pill pill-blocked">1</span></div>
+          <div><span>done</span><span class="pill pill-done">3</span></div>
+          <div><span>working</span><span class="pill pill-working">2</span></div>
+        </div>
+      </article>
+      )}
+
+      <article class="glass cell span-2">
+        <p class="group"><i aria-hidden="true">▤</i>Preview bar</p>
+        <h3>Everything it prints, one tap away.</h3>
+        <p>Images, PDFs, Markdown and links, in one bar under the terminal. Send it screenshots and files too, up to 64&nbsp;MB.</p>
+        <p class="kbds" aria-hidden="true">
+          <span class="kbd thumb"></span><span class="kbd">PDF</span><span class="kbd">MD</span><span class="kbd">↗ link</span>
+        </p>
+      </article>
+
+      <article class="glass cell span-2">
+        <p class="group"><i aria-hidden="true">⌥</i>Controls</p>
+        <h3>Every key an agent can ask for.</h3>
+        <p>Esc, Tab, arrows, Ctrl and F-keys, or type straight in. Make it your own.</p>
+        <p class="kbds" aria-hidden="true">
+          <span class="kbd">esc</span><span class="kbd">tab</span><span class="kbd">⇧tab</span><span class="kbd">↑</span
+          ><span class="kbd">↓</span><span class="kbd">ctrl</span><span class="kbd">alt</span><span class="kbd"
+            >F-keys</span
+          >
+        </p>
+      </article>
+
+      <article class="glass cell span-3">
+        <p class="group"><i aria-hidden="true">◐</i>Appearance</p>
+        <h3>30 terminal themes. One for light mode, one for dark.</h3>
+        <p>Two built-in fonts and pinch to zoom. Settings sync via iCloud Keychain.</p>
+        <p class="kbds" aria-hidden="true">
+          {themes.map((t) => <span class="kbd" style={`background:${t.bg};color:${t.fg}`}>Aa</span>)}
+          <span class="kbd">30 themes</span>
+        </p>
+      </article>
+
+      <article class="glass cell span-3">
+        <p class="group"><i aria-hidden="true">✦</i>Agents</p>
+        <h3>Bring the agents you already run.</h3>
+        <p>Waycar finds them on each Host. Shells show up too.</p>
+        <ul class="agent-list">
+          <li><code class="lead">claude</code></li>
+          <li><code class="lead">codex</code></li>
+          <li><code class="lead">omp</code></li>
+          <li><code class="lead">gemini</code></li>
+          <li><code class="lead">opencode</code></li>
+          <li><code class="lead">pi</code></li>
+          {moreAgents.map((name) => <li><code>{name}</code></li>)}
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 20px;
+  }
+
+  .bento.compact {
+    grid-auto-flow: dense;
+  }
+
+  .cell {
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+    overflow: hidden;
+  }
+
+  .cell:hover {
+    border-color: var(--line-2);
+  }
+
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font: 500 11.5px var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .group i {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+    font-style: normal;
+    color: var(--text);
+    background: rgb(var(--white-rgb) / 0.05);
+    border: 1px solid var(--line-2);
+    border-radius: 6px;
+  }
+
+  .cell h3 {
+    margin: 16px 0 10px;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .cell > p:not(.group, .kbds),
+  .txt > p:not(.group, .sort-order) {
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+  .more {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    white-space: nowrap;
+  }
+
+  .span-4 {
+    grid-column: span 4;
+  }
+
+  .span-3 {
+    grid-column: span 3;
+  }
+
+  .span-2 {
+    grid-column: span 2;
+  }
+
+  .console-cell {
+    flex-direction: row;
+    gap: 32px;
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+
+  .txt {
+    flex: 1;
+    padding-bottom: 30px;
+  }
+
+  .shot {
+    flex: none;
+    align-self: flex-end;
+    width: 42%;
+    margin-top: 10px;
+  }
+
+  .phone-crop {
+    padding: 8px 8px 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line-2);
+    border-bottom: 0;
+    border-radius: 34px 34px 0 0;
+    box-shadow: 0 -20px 60px -20px rgb(var(--violet-rgb) / 0.35);
+  }
+
+  .phone-crop :global(img) {
+    width: 100%;
+    aspect-ratio: 1320 / 1500;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 27px 27px 0 0;
+  }
+
+  .sort-order {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    font: 12.5px var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .term {
+    flex: 1;
+    margin-top: 22px;
+    padding: 16px 18px;
+    font: 12.5px / 1.7 var(--font-mono);
+    color: var(--term-text);
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+
+  .term .pk {
+    color: var(--term-accent);
+  }
+
+  .term .ok {
+    color: var(--done);
+  }
+
+  .term .q {
+    color: var(--term-flag);
+  }
+
+  .term .dim {
+    color: var(--text-3);
+  }
+
+  .composer {
+    margin-top: 22px;
+    padding: 14px;
+    background: var(--surface-3);
+    border: 1px solid var(--line-2);
+    border-radius: 16px;
+  }
+
+  .ph {
+    font-size: 14px;
+    color: var(--text-2);
+  }
+
+  .cur {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    margin-left: 2px;
+    vertical-align: -3px;
+    background: var(--cyan);
+  }
+
+  .cbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .cbar > span:not(.wave) {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+    color: var(--text-2);
+    background: rgb(var(--white-rgb) / 0.07);
+    border-radius: 50%;
+  }
+
+  .cbar .mic {
+    color: var(--violet-soft);
+    background: rgb(var(--violet-rgb) / 0.2);
+    box-shadow: 0 0 0 1px rgb(var(--violet-soft-rgb) / 0.4);
+  }
+
+  .cbar .send {
+    margin-left: auto;
+    color: var(--black);
+    background: var(--text);
+  }
+
+  .wave {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 18px;
+    margin-left: 6px;
+  }
+
+  .wave b {
+    width: 3px;
+    background: var(--grad);
+    border-radius: 2px;
+  }
+
+  .toggle-row {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--text-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+
+  .field code {
+    overflow: hidden;
+    font-size: 12.5px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .switch {
+    position: relative;
+    flex: none;
+    width: 38px;
+    height: 22px;
+    background: var(--grad);
+    border-radius: var(--radius-pill);
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--white);
+    border-radius: 50%;
+  }
+
+  .qr-row {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding-top: 26px;
+    text-align: center;
+  }
+
+  .qr {
+    flex: none;
+    width: 176px;
+    height: 176px;
+    border-radius: 12px;
+    box-shadow:
+      0 0 0 4px rgb(var(--white-rgb) / 0.05),
+      0 12px 40px -10px rgb(var(--cyan-rgb) / 0.35);
+  }
+
+  .qr rect {
+    fill: var(--paper);
+  }
+
+  .qr path {
+    fill: var(--ink);
+  }
+
+  .qr-meta {
+    font: 12px / 1.8 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .qr-meta b {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .kbds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .kbd.thumb {
+    width: 36px;
+    background: var(--grad);
+  }
+
+  .ipad-cell {
+    padding-bottom: 0;
+  }
+
+  .ipad-crop {
+    margin-top: 26px;
+    padding: 8px 8px 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line-2);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .ipad-crop :global(img) {
+    width: 100%;
+    aspect-ratio: 2752 / 1500;
+    object-fit: cover;
+    object-position: top left;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .mini-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    font: 13px var(--font-mono);
+    color: var(--text-2);
+  }
+
+  .mini-list div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .mini-list div > span:last-child {
+    color: var(--text);
+  }
+
+
+
+  .agent-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 22px;
+  }
+
+  .agent-list code {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: var(--text-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  .agent-list code.lead {
+    color: var(--text);
+    border-color: rgb(var(--violet-soft-rgb) / 0.4);
+    background: rgb(var(--violet-soft-rgb) / 0.06);
+  }
+
+  @media (max-width: 1080px) {
+    .br-d {
+      display: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .bento {
+      grid-template-columns: 1fr;
+    }
+
+    .span-4,
+    .span-3,
+    .span-2 {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .cell {
+      padding: 24px;
+    }
+
+    .console-cell {
+      flex-direction: column;
+      gap: 0;
+      padding: 24px 24px 0;
+    }
+
+    .txt {
+      padding-bottom: 0;
+    }
+
+    .shot {
+      align-self: center;
+      width: 78%;
+      margin-top: 28px;
+    }
+
+    .ipad-cell {
+      padding-bottom: 0;
+    }
+  }
+</style>

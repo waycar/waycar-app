@@ -1,0 +1,36 @@
+# Audited upstream sources for the checked-in native artifacts.
+LIBSSH2_VERSION="c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f"
+LIBSSH2_TAG="master-c755785"
+LIBSSH2_COMMIT="c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f"
+LIBSSH2_URL="https://github.com/libssh2/libssh2/archive/c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f.tar.gz"
+LIBSSH2_SHA256="196c135a399fa16beb245ac6bd6e6448419decc1499ab95deac5681300487b8d"
+
+# Reviewed Waycar patches in Patches/libssh2, applied in this order on top of
+# the libssh2 snapshot: "<file> <sha256>". The build refuses a patch file that
+# is missing, unlisted, or changed.
+LIBSSH2_PATCHES=(
+    "0001-userauth-publickey-skip-pk-ok-query.patch fe561687e186392d9b5adcacebd1cd6bcce0156cf3baae20982dab3d30bbe42d"
+    "0002-channel-pty-and-process-request-back-to-back.patch 53befb159f1110a495e317d2e9e73126bbd46a7943a519bfca3f1737fa3de2ed"
+    "0003-packet-requirev-skip-other-channel-replies.patch 994104e172c70c65c5a24be49697f93ad08223f80552e5f3375bcf3f86751638"
+    "0004-channel-pipelined-opens.patch 5d9180c37def00d54c7e9a8d6dfacadc37292a9fec89b9f6a50e52de9ff82f8c"
+)
+# Functions the patches export; verify-native.sh requires each to be defined
+# in every CLibSSH2 slice and, with the macros below, declared in its headers.
+LIBSSH2_PATCH_SYMBOLS=(
+    libssh2_channel_request_pty_process_startup
+    libssh2_channel_open_start
+    libssh2_channel_direct_tcpip_start
+    libssh2_channel_direct_streamlocal_start
+    libssh2_channel_open_finish
+)
+LIBSSH2_PATCH_MACROS=(
+    LIBSSH2_FLAG_PUBKEY_SKIP_QUERY
+    LIBSSH2_CHANNEL_DENIED_PTY
+    LIBSSH2_CHANNEL_DENIED_PROCESS
+)
+
+OPENSSL_VERSION="3.6.3"
+OPENSSL_TAG="openssl-3.6.3"
+OPENSSL_COMMIT="aae016bfd52fcad2bc9657c2c782cfdf73b1ed5f"
+OPENSSL_URL="https://github.com/openssl/openssl/releases/download/openssl-3.6.3/openssl-3.6.3.tar.gz"
+OPENSSL_SHA256="243a86649cf6f23eeb6a2ff2456e09e5d77dd9018a54d3d96b0c6bdd6ba6c7f1"

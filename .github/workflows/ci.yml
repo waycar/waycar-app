@@ -1,0 +1,284 @@
+# Headless iOS Simulator build + test (User Story 12, refs #23).
+#
+# Runs the XCTest suite on an iOS simulator. Kept deliberately minimal:
+# no signing certificates, no archive, no xcodegen. Simulator builds use free
+# ad-hoc signing ("Sign to Run Locally"), so no certificate or provisioning
+# profile is needed. We must NOT pass CODE_SIGNING_ALLOWED=NO: it strips the
+# app's signature and with it the keychain-access entitlement, which breaks the
+# tests that run against the real simulator keychain (errSecMissingEntitlement).
+#
+# The plugin's Rust suite, the push relay, and wire-type codegen live in ci-node.yml.
+# The marketing site (apps/web/) lives in web.yml.
+#
+# Notes:
+# - The committed Waycar.xcodeproj (project + shared Waycar scheme)
+#   is the source of truth for CI. project.yml/xcodegen is a local convenience
+#   only; CI never regenerates the project.
+# - The real-SSH suites are mandatory in CI. The test script provisions
+#   disposable high-port sshd instances that run unprivileged as the runner
+#   account, plus a Unix-socket fake herdr server, and asserts both the executed
+#   test count and the named test behind every mandatory behaviour. Only the
+#   real-password fixture needs sudo, because macOS cannot verify an account
+#   password without root.
+#
+# Positive `paths` (not paths-ignore): this workflow starts only when a
+# changed path can affect the simulator jobs. One matching path is enough, so
+# a commit that also edits markdown still runs. A change to this file always
+# runs: the old triggers decide the run that introduces the new ones.
+#
+# - Sources, Tests, the committed Xcode project, Packages/** (WaycarSSH and
+#   the vendored SwiftMosh), project.yml, and Makefile are the app.
+# - scripts/** is the CI gate, fixtures, and helpers. Broad on purpose so a
+#   new CI script cannot be missed; generate-wire-types.py and
+#   herdr-schema.json therefore start iOS as well as ci-node.yml.
+# - plugin/test-vectors/** is shared with the Rust plugin suite (cargo test in
+#   plugin/); both workflows must run.
+# - apps/web/src/content/help/** is bundled into the app as in-app Help, and
+#   the app tests load every page; both workflows must run.
+# - apps/web/src/content/changelog/** is bundled into the app as Settings ›
+#   About › Changelog; both workflows must run. CHANGELOG.md is not listed:
+#   an entry-only edit must not spend a macos-26 runner or cut a TestFlight
+#   build.
+# - The rest of apps/web/**, LICENSE, prose, the rest of plugin/ (the Rust
+#   crate in plugin/rust, install.sh, the hooks), and relay/** do not match,
+#   so they never spend a macos-26 runner.
+
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - Sources/**
+      - Tests/**
+      - Waycar.xcodeproj/**
+      - Packages/**
+      - project.yml
+      - Makefile
+      - scripts/**
+      - plugin/test-vectors/**
+      - apps/web/src/content/help/**
+      - apps/web/src/content/changelog/**
+      - .github/workflows/ci.yml
+  push:
+    branches: [main]
+    paths:
+      - Sources/**
+      - Tests/**
+      - Waycar.xcodeproj/**
+      - Packages/**
+      - project.yml
+      - Makefile
+      - scripts/**
+      - plugin/test-vectors/**
+      - apps/web/src/content/help/**
+      - apps/web/src/content/changelog/**
+      - .github/workflows/ci.yml
+  # Manual start (WAY-505): a fresh run of this workflow on a ref, normally
+  # main's HEAD, to count flake-free runs when no push is coming. It is a new
+  # run, not a re-run of a failed one. TestFlight ignores it, because that
+  # workflow ships only a CI run whose event is `push`. It joins the main
+  # concurrency group below, so a dispatch queued behind a pending push run
+  # replaces that run: start one only when no main run is queued or running.
+  workflow_dispatch:
+
+# Per-workflow group: sharing `ci-${{ github.ref }}` with ci-node.yml made
+# the two workflows cancel each other on the same SHA (plugin/test-vectors
+# and this file both start both workflows).
+# PRs cancel superseded runs; main never does, so every started main run
+# finishes (and can feed TestFlight) while only the newest push waits.
+concurrency:
+  group: ci-ios-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    name: Build & test (iOS Simulator)
+    # GitHub's Xcode 27 image (macOS 27): macos-26 carries only Xcode 26,
+    # which can't build the iOS 27 SDK project. Its jobs select the newest
+    # Xcode 27 on the image first.
+    runs-on: xcode-27
+    # The Build and test step's 85 plus the steps before it.
+    timeout-minutes: 90
+    steps:
+      # Full history: scripts/test-sim-slot.sh runs the sim-slot copy other
+      # worktrees still use (an older commit) against the current one when
+      # that commit is in the clone.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # libghostty-spm's prebuilt XCFramework dominates cold build-for-testing
+      # wall-clock (~3–4 minutes of "Checking out" on run 33488345559). Cache
+      # the cloned SourcePackages tree and the SwiftPM download cache keyed on
+      # Package.resolved so a pin change still misses and re-fetches.
+      - name: Cache SwiftPM checkouts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci/source-packages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Waycar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Test VPS SSH access scripts
+        run: scripts/test-vps-ssh-access-scripts.sh
+
+      # Binary supply-chain gate: artifact checksums, device and Simulator
+      # slices, and the algorithm policy (no OpenSSL legacy provider, no
+      # obsolete SSH methods) that ADR 0011 commits to.
+      - name: Verify WaycarSSH native artifacts
+        run: make verify-ssh-artifacts
+
+      # xcodebuild -version is enough to pin the image. Listing every
+      # simulator runtime cold-starts CoreSimulator on the critical path
+      # (~12–29s on hosted macOS-26); the gate's own simctl boot overlaps
+      # that work with the build instead.
+      - name: Select the newest Xcode 27
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Test CI watchdog
+        run: scripts/test-run-with-timeout.sh
+
+      # The first-launch self-heal, against stub xcodebuild and sudo.
+      - name: Test Xcode first-launch check
+        run: scripts/test-check-xcode-first-launch.sh
+
+      # The gate's wait for a Waycar CI Simulator a live run holds, against a
+      # scratch lock root and a stubbed clock.
+      - name: Test CI simulator wait
+        run: scripts/test-ci-simulator-wait.sh
+
+      - name: Test simulator slot queue
+        run: scripts/test-sim-slot.sh
+
+      # Pure pieces of the What's New summarizer the TestFlight workflow runs
+      # (tag selection, validation, history, failure policy); no network.
+      - name: Test What's New summarizer
+        run: python3 scripts/test-whats-new.py
+
+      # The App Store Connect client (retries, backoff, no blind POST replay)
+      # and the review watch's state diffing; stubs only, no network.
+      - name: Test App Store Connect scripts
+        run: python3 scripts/test-asc-scripts.py
+
+      # The crash-report gate every app lane ends with: real crashes fail,
+      # simulated reports (is_simulated) are notes.
+      - name: Test crash report check
+        run: python3 scripts/test-check-crash-reports.py
+
+      # The Pairing ceremony e2e runs the native `waycar pair-accept` as the
+      # sshd forced command; the Node accept script was removed in WAY-443.
+      - name: Build native waycar
+        run: echo "WAYCAR_PAIR_ACCEPT_BIN=$(scripts/ci/build-native-waycar.sh)" >> "$GITHUB_ENV"
+
+      # The tmux backend suite needs tmux 3.2 or later and the pinned releases
+      # scripts/build-ci-tmux.sh builds from source; both come from Homebrew
+      # here (already installed formulae are left alone).
+      - name: Install tmux and its build dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install tmux pkg-config libevent ncurses utf8proc
+
+      - name: Cache the pinned tmux builds
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/waycar-ci/tmux
+          key: tmux-${{ runner.os }}-${{ hashFiles('scripts/build-ci-tmux.sh') }}
+
+      # The script selects its own Waycar CI simulator (an iPhone 17 Pro Max),
+      # boots it, injects the fixture environment there, and targets that same
+      # device for every test action. The app deployment target is iOS 26.
+      - name: Build and test
+        # 40 for the lane, plus up to 45 waiting for the Waycar CI Simulator
+        # while another run (a local `make test-ci-app` on this Mac, or the
+        # other lane) holds it: WAYCAR_CI_SIM_WAIT_SECONDS, default 2700.
+        timeout-minutes: 85
+        # The fixture runs unprivileged; WAYCAR_CI_MANDATORY makes every
+        # suite a hard requirement, the real-password sshd included: hosted
+        # runners have passwordless sudo, so the script creates and removes a
+        # temporary macOS account for it and all thirteen mandatory behaviours
+        # run.
+        env:
+          WAYCAR_CI_LANE: app
+          WAYCAR_CI_MANDATORY: "1"
+          # Hosted runners are small: sshd can miss the idle-machine 5 s
+          # budgets. See Duration.sshdBudget.
+          WAYCAR_SSH_E2E_TIMEOUT_SCALE: "4"
+          # A small runner can push the full app lane past the script's
+          # 600 s default; the step and job deadlines above leave
+          # room for the script's own watchdog to fire first.
+          WAYCAR_XCODEBUILD_TEST_TIMEOUT_SECONDS: "900"
+        run: scripts/run-ci-ios-tests.sh
+
+      - name: Upload iOS CI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/waycar-ci-diagnostics-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+  waycarssh-package-e2e:
+    name: WaycarSSH package E2E (iOS Simulator)
+    runs-on: xcode-27
+    # The package step's 57 plus the steps before it.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # Same rationale as the app job: avoid a critical-path CoreSimulator
+      # cold-start; package-lane boot overlaps with build-for-testing.
+      - name: Select the newest Xcode 27
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Run package E2E
+        # 12 for the lane plus up to 45 waiting for the Waycar CI Simulator,
+        # as in the app job.
+        timeout-minutes: 57
+        env:
+          WAYCAR_CI_LANE: package
+          WAYCAR_CI_MANDATORY: "1"
+          # Same scaling as the app lane; see Duration.sshdBudget.
+          WAYCAR_SSH_E2E_TIMEOUT_SCALE: "4"
+        run: scripts/run-ci-ios-tests.sh
+
+      - name: Upload package CI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waycarssh-package-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/waycar-ci-diagnostics-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The vendored swift-mosh package suite (ADR 0021), including the tests
+  # pinning the Waycar patches. Its own job keeps build-test inside the
+  # deadline scripts/test-run-with-timeout.sh pins. It runs on the macOS host,
+  # not a simulator; the real-server tests skip unless SWIFTMOSH_REAL_E2E=1,
+  # which CI leaves unset because the runner has no mosh-server.
+  swiftmosh-package:
+    name: SwiftMosh package (macOS host)
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select the newest Xcode 27
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+      # MoshBootstrapTests resolve mosh-server on PATH (the Mac has it;
+      # the hosted image doesn't). The real-server suites still skip.
+      - name: Install mosh-server
+        run: brew install mosh
+      - name: Test SwiftMosh package
+        run: swift test --package-path Packages/SwiftMosh

@@ -1,0 +1,3 @@
+name: waycar-lab-approval
+version: "1.0"
+description: Harness lab only. Asks before a terminal command when the launch sets WAYCAR_LAB_HERMES_ASK=1.

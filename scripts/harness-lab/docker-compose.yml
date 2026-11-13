@@ -1,0 +1,51 @@
+# Waycar harness lab (project `waycar-harness-lab`). Use scripts/harness-lab/lab.sh
+# (or the Makefile's harness-lab-* targets): it picks the Colima Docker
+# context and passes VERSIONS as --env-file for the host build args.
+name: waycar-harness-lab
+
+services:
+  mock:
+    build: ./mock
+    ports:
+      - "127.0.0.1:18080:8080"
+    restart: unless-stopped
+
+  host:
+    build:
+      context: ./host
+      args:
+        NODE_MAJOR: ${NODE_MAJOR}
+        HERDR_VERSION: ${HERDR_VERSION}
+        HERDR_SHA256_AARCH64: ${HERDR_SHA256_AARCH64}
+        CLAUDE_VERSION: ${CLAUDE_VERSION}
+        CODEX_VERSION: ${CODEX_VERSION}
+        COPILOT_VERSION: ${COPILOT_VERSION}
+        OPENCODE_VERSION: ${OPENCODE_VERSION}
+        CURSOR_VERSION: ${CURSOR_VERSION}
+        PI_VERSION: ${PI_VERSION}
+        AGY_VERSION: ${AGY_VERSION}
+        GEMINI_VERSION: ${GEMINI_VERSION}
+        CLINE_VERSION: ${CLINE_VERSION}
+        OMP_VERSION: ${OMP_VERSION}
+        KILO_VERSION: ${KILO_VERSION}
+        KIRO_VERSION: ${KIRO_VERSION}
+        DEVIN_VERSION: ${DEVIN_VERSION}
+        HERMES_COMMIT: ${HERMES_COMMIT}
+        QWEN_VERSION: ${QWEN_VERSION}
+        GROK_VERSION: ${GROK_VERSION}
+        MUSE_VERSION: ${MUSE_VERSION}
+    image: waycar-harness-lab-host
+    hostname: harness-lab
+    platform: linux/arm64
+    depends_on:
+      mock:
+        condition: service_healthy
+    ports:
+      # SSH only: Colima's localhost port forwarding carries TCP, not mosh's
+      # UDP (a UDP probe on a published port got no reply, 2026-10-12).
+      - "127.0.0.1:22300:22"
+    volumes:
+      - ../../plugin:/opt/waycar-plugin:ro
+      - ${HOME}/.ssh/waycar_harness_lab.pub:/run/harness-lab/authorized_keys:ro
+    init: true
+    restart: unless-stopped

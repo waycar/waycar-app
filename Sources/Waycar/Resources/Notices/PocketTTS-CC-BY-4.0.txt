@@ -1,0 +1,29 @@
+Pocket TTS (https://huggingface.co/kyutai/pocket-tts, https://github.com/kyutai-labs/pocket-tts)
+Pocket TTS model © Kyutai, CC BY 4.0 — https://huggingface.co/kyutai/pocket-tts (Creative Commons Attribution 4.0 International License, https://creativecommons.org/licenses/by/4.0/). Code Copyright Kyutai, MIT License.
+
+Core ML conversion: FluidInference/pocket-tts-coreml (https://huggingface.co/FluidInference/pocket-tts-coreml), v2.1 English pack, CC BY 4.0. Changes from the original: converted to Core ML for on-device use.
+
+Voice presets offered by Waycar (19 English presets, default alba). Voice origins: Kyutai tts-voices (https://huggingface.co/kyutai/tts-voices), as mapped in pocket_tts/utils/utils.py.
+
+CC BY 4.0 voices (https://creativecommons.org/licenses/by/4.0/):
+Voice 'alba' derived from recordings by Alba MacKenna (via Kyutai tts-voices), CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Voice 'anna' derived from CSTR VCTK Corpus speaker p228 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'vera' derived from CSTR VCTK Corpus speaker p229 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'fantine' derived from CSTR VCTK Corpus speaker p244 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'charles' derived from CSTR VCTK Corpus speaker p254 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'paul' derived from CSTR VCTK Corpus speaker p259 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'eponine' derived from CSTR VCTK Corpus speaker p262 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'azelma' derived from CSTR VCTK Corpus speaker p303 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'george' derived from CSTR VCTK Corpus speaker p315 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'mary' derived from CSTR VCTK Corpus speaker p333 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'jane' derived from CSTR VCTK Corpus speaker p339 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'michael' derived from CSTR VCTK Corpus speaker p360 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+Voice 'eve' derived from CSTR VCTK Corpus speaker p361 (Yamagishi, Veaux, MacDonald, University of Edinburgh), enhanced by Kyutai, CC BY 4.0 — https://datashare.ed.ac.uk/handle/10283/3443
+
+CC0 voices (public domain dedication, no credit required):
+marius, javert — Unmute Voice Donation project (https://unmute.sh/voice-donation), CC0
+bill_boerst, peter_yearsley, stuart_bell, caro_davy — Voice-Zero, LibriVox readers (https://github.com/OwenTyme/voice-zero), CC0
+
+The presets cosette and jean cannot be selected in Waycar and are not kept on the device: their source recordings are licensed for non-commercial use only (CC BY-NC), so Waycar deletes them after the download. Presets recorded in languages other than English are not offered either.
+
+Waycar does not ship these files: Settings > CarPlay Voice downloads them to the device on request.

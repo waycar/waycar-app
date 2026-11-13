@@ -1,0 +1,27 @@
+Waycar
+Copyright 2026 OTREVA, LLC
+Licensed under the Apache License, Version 2.0.
+
+OTREVA, LLC modified files from the Heeler originals (docs/heeler-derived-files.md
+lists them) and wrote the other files not present in Heeler, except the
+vendored Packages/GhosttyTerminal and Packages/SwiftMosh (see their LICENSE
+and PROVENANCE.md). Waycar is derived from, and modified from, Heeler:
+
+Heeler (https://github.com/ZingerLittleBee/Heeler)
+Copyright 2026 ZingerLittleBee and Heeler contributors
+Licensed under the Apache License, Version 2.0.
+
+See the LICENSE file for the full license text.
+
+Waycar also includes third-party software under their own licenses. The app
+lists each component with its license text in Settings > About >
+Acknowledgements, built from Sources/Waycar/Resources/Notices/inventory.json.
+The herdr plugin carries its own notice in plugin/NOTICE.
+
+Waycar 1.0.1 and 1.0.2 statically linked GNU gettext 0.24's libintl
+(LGPL-2.1-or-later). Current builds do not contain libintl. To request the
+object files needed to relink either of those two versions with a modified
+libintl, email support@waycar.dev.
+Source: https://ftp.gnu.org/gnu/gettext/gettext-0.24.tar.gz
+The LGPL-2.1 text is included in the app's Acknowledgements and in
+Sources/Waycar/Resources/Notices/libintl-LGPL-2.1-or-later.txt.

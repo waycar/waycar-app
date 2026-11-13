@@ -1,0 +1,46 @@
+{
+ "info": {
+  "description": "Terminal runtime for coding agents. JSON-RPC 2.0, one message per line on the hc socket (or framed after `hello`). Protocol generation 1. Errors carry a stable `data.kind`.",
+  "license": {
+   "name": "Apache-2.0"
+  },
+  "title": "herdr-core",
+  "version": "0.1.14"
+ },
+ "methods": [
+  "hello",
+  "server.status",
+  "server.stop",
+  "server.restart",
+  "terminal.run",
+  "templates.list",
+  "terminal.list",
+  "terminal.get",
+  "terminal.kill",
+  "terminal.rm",
+  "terminal.keep",
+  "terminal.label",
+  "terminal.read",
+  "terminal.attach",
+  "terminal.send",
+  "terminal.wait",
+  "terminal.keys",
+  "terminal.interrupt",
+  "terminal.put",
+  "machine.exec",
+  "file.read",
+  "file.write",
+  "file.edit",
+  "doc.get",
+  "doc.set",
+  "events.subscribe",
+  "machine.add",
+  "machine.list",
+  "machine.connect",
+  "machine.rename",
+  "machine.rm",
+  "rpc.discover"
+ ],
+ "openrpc": "1.3.2",
+ "size_bytes": 67046
+}

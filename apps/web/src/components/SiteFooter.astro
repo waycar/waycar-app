@@ -1,0 +1,193 @@
+---
+import { Image } from 'astro:assets';
+import logo from '../assets/logo.png';
+import { ON_APP_STORE } from '../data/links';
+import AppStoreCta from './AppStoreCta.astro';
+import { comparePath, getComparisons } from '../lib/compare';
+import { getSolutions, solutionPath } from '../lib/solutions';
+
+interface Props {
+  /** The page is served at `/`, so section links are in-page anchors. */
+  homePage?: boolean;
+}
+
+const { homePage = false } = Astro.props;
+/** Link to a home page section: `#id` on a home page, `/#id` elsewhere. */
+const section = (id: string) => (homePage ? `#${id}` : `/#${id}`);
+
+const product = [
+  { href: section('mosh'), label: 'mosh + SSH' },
+  { href: section('how'), label: 'How it works' },
+  { href: section('features'), label: 'Features' },
+  { href: section('setup'), label: 'Setup' },
+  { href: '/pricing', label: 'Pricing' },
+];
+
+const more = [
+  { href: '/ipad', label: 'iPad gallery' },
+  { href: section('security'), label: 'Security' },
+  { href: '/help', label: 'Help' },
+  { href: '/articles', label: 'Articles' },
+  { href: '/changelog', label: 'Changelog' },
+  { href: '/support', label: 'Support' },
+  { href: '/privacy', label: 'Privacy policy' },
+  { href: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/', label: 'Terms of use ↗' },
+  { href: 'https://herdr.dev', label: 'herdr.dev ↗' },
+];
+
+// Every comparison and solution page, in index order, so a new page joins the
+// footer on its own. Each list ends with a link to its index.
+const compare = [
+  ...(await getComparisons()).map((entry) => ({ href: comparePath(entry.id), label: entry.data.name })),
+  { href: '/compare', label: 'All comparisons' },
+];
+const solutions = [
+  ...(await getSolutions()).map((entry) => ({ href: solutionPath(entry.id), label: entry.data.title })),
+  { href: '/solutions', label: 'All solutions' },
+];
+---
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <p class="brand">
+          <Image class="mark" src={logo} alt="" width={24} height={24} densities={[1, 2, 3]} />
+          Waycar
+        </p>
+        <p class="blurb">Your herdr and tmux agents on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions. Android app coming soon.</p>
+      </div>
+      <nav aria-labelledby="foot-product">
+        <h2 id="foot-product">Product</h2>
+        <ul>{product.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
+      </nav>
+      <nav aria-labelledby="foot-compare">
+        <h2 id="foot-compare">Compare</h2>
+        <ul>{compare.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
+      </nav>
+      <nav aria-labelledby="foot-solutions">
+        <h2 id="foot-solutions">Solutions</h2>
+        <ul>{solutions.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
+      </nav>
+      <nav aria-labelledby="foot-more">
+        <h2 id="foot-more">More</h2>
+        <ul>
+          {more.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+          {/* Unhidden by the Layout script (needs JavaScript). */}
+          <li><button type="button" class="consent-open" data-consent-open hidden>Cookie settings</button></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="foot-bottom">
+      {
+        ON_APP_STORE ? (
+          <span><AppStoreCta kind="text" ct="site-nav" class="store">Get Waycar</AppStoreCta></span>
+        ) : (
+          <span>Coming soon to the App Store for iPhone &amp; iPad</span>
+        )
+      }
+      <span>Android app coming soon. Android is a trademark of Google LLC.</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding: 48px 0 56px;
+    font-size: 14px;
+    color: var(--text-3);
+    border-top: 1px solid var(--line);
+  }
+
+  .foot {
+    display: grid;
+    grid-template-columns: 1.4fr repeat(4, 1fr);
+    gap: 32px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .brand :global(.mark) {
+    border-radius: 6px;
+  }
+
+  .blurb {
+    max-width: 380px;
+    color: var(--text-2);
+  }
+
+  h2 {
+    margin-bottom: 14px;
+    font: 500 11.5px var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  ul {
+    display: grid;
+    gap: 4px;
+  }
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--text-2);
+  }
+
+  a:hover,
+  .consent-open:hover {
+    color: var(--text);
+  }
+
+  .consent-open {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0;
+    font: inherit;
+    color: var(--text-2);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .consent-open[hidden] {
+    display: none;
+  }
+
+  .foot-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 40px;
+    padding-top: 24px;
+    font: 12px / 1.6 var(--font-mono);
+    border-top: 1px solid var(--line);
+  }
+
+  .foot-bottom span:last-child {
+    max-width: 62ch;
+  }
+
+  @media (max-width: 860px) {
+    .foot {
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+    }
+
+    .foot > div:first-child {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

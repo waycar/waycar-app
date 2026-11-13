@@ -1,0 +1,82 @@
+## final proof on image corelab:4 (fresh container)
+## 0. login PATH BEFORE the installer (no ~/.local/bin yet):
+Warning: Permanently added '127.0.0.1' (ED25519) to the list of known hosts.
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+## 1. installer over ssh exec (no tty)
+hc 0.1.14 installed into /home/waycar/.local/bin/herdr-core.
+Add /home/waycar/.local/bin to your PATH to use hc.
+Agents: hc --skill. People: hc --help.
+rc=0 time=0.725s
+## 1b. login PATH AFTER the installer:
+/home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+bash: line 1: herdr-core: command not found
+rc=127
+hc 0.1.14
+## 2. launch-lab-terminals.sh over ssh exec
+hc: no systemd user manager here: the core ends with whatever started it
+alpha    t1  /home/waycar/work/alpha
+bravo    t2  /home/waycar/work/bravo
+charlie  t3  /home/waycar/work/charlie
+delta    t4  /home/waycar/work/delta
+echo     t5  /home/waycar/work/echo
+shell    t6  /home/waycar/work/shell
+sp1-tb1  t7  /home/waycar/work/sp1-tb1
+sp1-tb2  t8  /home/waycar/work/sp1-tb2
+sp2-tb1  t9  /home/waycar/work/sp2-tb1
+## 3. herdr-core ls --json (summary)
+terminals: 9 hidden_finished: 0
+  t1  alpha    agent=alpha    live   status=idle     cwd=/home/waycar/work/alpha
+  t2  bravo    agent=bravo    live   status=working  cwd=/home/waycar/work/bravo
+  t3  charlie  agent=charlie  live   status=blocked  cwd=/home/waycar/work/charlie
+  t4  delta    agent=delta    live   status=done     cwd=/home/waycar/work/delta
+  t5  echo     agent=echo     live   status=error    cwd=/home/waycar/work/echo
+  t6  shell    agent=bash     live   status=-        cwd=/home/waycar/work/shell
+  t7  sp1-tb1  agent=sp1tb1   live   status=idle     cwd=/home/waycar/work/sp1-tb1
+  t8  sp1-tb2  agent=sp1tb2   live   status=idle     cwd=/home/waycar/work/sp1-tb2
+  t9  sp2-tb1  agent=sp2tb1   live   status=idle     cwd=/home/waycar/work/sp2-tb1
+label herdr.space=sp1 -> ['sp1-tb1', 'sp1-tb2']
+label herdr.space=sp2 -> ['sp2-tb1']
+## 4. fake agent turns
+{"started":true,"status":"idle","turn":0}
+[('alpha', 'working')]
+[('alpha', 'idle', 1)]
+{"error":{"hint":"typing would answer its dialog; read its screen first (hc read t3), or --force","kind":"blocked","mess
+{"status":"blocked","turn":0}
+[('charlie', 'done', 1)]
+## 5. policy (sshd -T) and user
+usepam yes
+maxsessions 10
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+printmotd yes
+allowtcpforwarding no
+allowusers waycar
+uid=1001(waycar) gid=1001(waycar) groups=1001(waycar)
+no sudo binary
+## 6. second container: LAB_AUTHORIZED_KEY path, distinct host keys, forwarding refused
+host key fingerprints c1: SHA256:Lk+W0Tuxviao5r6EMuKUH6Ukh0wVk6rBICQJIDzO0Ck
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey
+publickey  c2: SHA256:nOwT5+XEr/8qez6/58tvU4UFN3ojIW71al7SveYumcA
+waycar
+authorized_keys=1 line
+herdr-core not installed (as designed)
+channel 2: open failed: administratively prohibited: open failed
+through the forward, bytes received: 0
+sh: 5: kill: No such process
+
+waycar@172.17.0.3: Permission denied (publickey).

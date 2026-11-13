@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "dependencyCoverage": {
+    "packageResolved": {
+      "fluidaudio": ["FluidAudio", "FluidAudio-JapaneseG2P", "NemoTextProcessing", "fastcluster", "Kokoro-82M", "PocketTTS", "Paradee-8M"],
+      "msdisplaylink": ["MSDisplayLink"],
+      "posthog-ios": ["posthog-ios", "PLCrashReporter", "PLCrashReporter-PLCrashLogWriterEncoding", "protobuf-c", "libwebp"]
+    },
+    "waycarSSHBinaryTargets": {
+      "CLibSSH2": ["libssh2", "libssh2-bcrypt_pbkdf", "libssh2-cipher-chachapoly"],
+      "COpenSSL": ["OpenSSL"]
+    },
+    "projectPackages": {
+      "GhosttyTerminal": ["libghostty-spm", "Ghostty", "GhosttyTheme", "bash-preexec", "z2d", "libxev", "zig-objc", "uucode", "UnicodeData", "ZigStd", "Oniguruma", "simdutf", "Highway", "Wuffs", "SymbolsNerdFont", "FreeType", "libpng", "stb", "zlib"],
+      "WaycarSSH": ["libssh2", "libssh2-bcrypt_pbkdf", "libssh2-cipher-chachapoly", "OpenSSL"],
+      "SwiftMosh": ["swift-mosh"],
+      "PostHog": ["posthog-ios", "PLCrashReporter", "PLCrashReporter-PLCrashLogWriterEncoding", "protobuf-c", "libwebp"],
+      "FluidAudio": ["FluidAudio", "FluidAudio-JapaneseG2P", "NemoTextProcessing", "fastcluster", "Kokoro-82M", "PocketTTS", "Paradee-8M"]
+    },
+    "bundledFontFamilies": {
+      "IBMPlexMono": ["IBMPlexMono"],
+      "JetBrainsMono": ["JetBrainsMono"]
+    }
+  },
+  "components": [
+    {
+      "id": "Apple-SpeechAnalyzer",
+      "displayName": "Apple SpeechAnalyzer sample (Bringing advanced speech-to-text capabilities to your app)",
+      "version": "WWDC25 (e40c20fc5641)",
+      "source": "https://developer.apple.com/documentation/speech/bringing-advanced-speech-to-text-capabilities-to-your-app (WWDC25 session 277; BufferConversion.swift adapted for Waycar; LICENSE.txt from https://docs-assets.developer.apple.com/published/e40c20fc5641/BringingAdvancedSpeechToTextCapabilitiesToYourApp.zip, SHA-256 97980dd960affa9aebb17e637c49ac8439050acf15280aca391139cd67e885da)",
+      "spdx": "MIT",
+      "notice": "Apple-SpeechAnalyzer-MIT.txt"
+    },
+    {
+      "id": "FluidAudio",
+      "displayName": "FluidAudio",
+      "version": "0.17.7",
+      "source": "https://github.com/FluidInference/FluidAudio (503b4bd1bbf7220882de39fe8ae6716aae4132da; includes code adapted from BUTSpeechFIT/VBx)",
+      "spdx": "Apache-2.0",
+      "notice": "FluidAudio-Apache-2.0.txt"
+    },
+    {
+      "id": "FluidAudio-JapaneseG2P",
+      "displayName": "FluidAudio Japanese text frontend (Misaki cutlet and num2kana ports)",
+      "version": "0.17.7",
+      "source": "FluidAudio 0.17.7 Sources/FluidAudio/TTS/KokoroAne/G2P/Japanese (ports of hexgrad/misaki, polm/cutlet, Greatdane/Convert-Numbers-to-Japanese)",
+      "spdx": "Apache-2.0 AND MIT",
+      "notice": "FluidAudio-JapaneseG2P-Apache-2.0-MIT.txt"
+    },
+    {
+      "id": "FreeType",
+      "displayName": "FreeType (including BDF and PCF drivers)",
+      "version": "2.13.2",
+      "source": "https://freetype.org (linked into prebuilt libghostty; FTL and driver notices from https://github.com/otreva/ghosttykit/releases/download/1.6.20260909-82938b6-nointl.1/LICENSES.zip)",
+      "spdx": "FTL AND MIT",
+      "notice": "FreeType-FTL.txt"
+    },
+    {
+      "id": "Ghostty",
+      "displayName": "Ghostty",
+      "version": "82938b633ba646db38591d969c3c526332bd7e65",
+      "source": "https://github.com/ghostty-org/ghostty (libghostty built by Waycar without GNU gettext: https://github.com/otreva/ghosttykit)",
+      "spdx": "MIT",
+      "notice": "Ghostty-MIT.txt"
+    },
+    {
+      "id": "GhosttyTheme",
+      "displayName": "GhosttyTheme (iTerm2-Color-Schemes)",
+      "version": "1.6.20260909",
+      "source": "Packages/GhosttyTerminal (libghostty-spm product GhosttyTheme; color schemes © Mark Badolato)",
+      "spdx": "MIT",
+      "notice": "GhosttyTheme-MIT.txt"
+    },
+    {
+      "id": "Heeler",
+      "displayName": "Heeler",
+      "version": null,
+      "source": "https://github.com/ZingerLittleBee/Heeler",
+      "spdx": "Apache-2.0",
+      "notice": "Heeler-Apache-2.0.txt"
+    },
+    {
+      "id": "Highway",
+      "displayName": "Highway",
+      "version": "1.2.0",
+      "source": "https://github.com/google/highway 66486a10623fa0d72fe91260f96c892e41aceb06 (linked into prebuilt libghostty)",
+      "spdx": "Apache-2.0 OR BSD-3-Clause",
+      "notice": "Highway-BSD-3-Clause.txt"
+    },
+    {
+      "id": "IBMPlexMono",
+      "displayName": "IBM Plex Mono",
+      "version": null,
+      "source": "Sources/Waycar/Resources/Fonts",
+      "spdx": "OFL-1.1",
+      "notice": "IBMPlexMono-OFL-1.1.txt"
+    },
+    {
+      "id": "JetBrainsMono",
+      "displayName": "JetBrains Mono",
+      "version": null,
+      "source": "Sources/Waycar/Resources/Fonts",
+      "spdx": "OFL-1.1",
+      "notice": "JetBrainsMono-OFL-1.1.txt"
+    },
+    {
+      "id": "Kokoro-82M",
+      "displayName": "Kokoro-82M (Natural voice model, downloaded on request)",
+      "version": "1.0",
+      "source": "https://huggingface.co/hexgrad/Kokoro-82M via https://huggingface.co/FluidInference/kokoro-82m-coreml (ANE-v3 6c0750dd02ef9d981fb82f147d784a3f171755ee)",
+      "spdx": "Apache-2.0",
+      "notice": "Kokoro-82M-Apache-2.0.txt"
+    },
+    {
+      "id": "PocketTTS",
+      "displayName": "Pocket TTS by Kyutai (Natural voice model, downloaded on request)",
+      "version": "2.1",
+      "source": "https://huggingface.co/kyutai/pocket-tts via https://huggingface.co/FluidInference/pocket-tts-coreml (v2.1 english); voices from https://huggingface.co/kyutai/tts-voices",
+      "spdx": "CC-BY-4.0 AND MIT",
+      "notice": "PocketTTS-CC-BY-4.0.txt"
+    },
+    {
+      "id": "Paradee-8M",
+      "displayName": "Paradee-8M (Natural voice model, downloaded on request)",
+      "version": "1.0",
+      "source": "https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.0 via https://huggingface.co/FluidInference/paradee-8m-coreml",
+      "spdx": "Apache-2.0",
+      "notice": "Paradee-8M-Apache-2.0.txt"
+    },
+    {
+      "id": "MSDisplayLink",
+      "displayName": "MSDisplayLink",
+      "version": "2.2.0",
+      "source": "https://github.com/Lakr233/MSDisplayLink.git",
+      "spdx": "MIT",
+      "notice": "MSDisplayLink-MIT.txt"
+    },
+    {
+      "id": "NemoTextProcessing",
+      "displayName": "NemoTextProcessing (text-processing-rs)",
+      "version": "0.3.1",
+      "source": "https://github.com/FluidInference/text-processing-rs/tree/v0.3.1 (46ebddcea5e1ff673c2cb5256a1b6b0e6c4ff527; NemoTextProcessing.xcframework.zip SHA-256 5fa8c10d4ec26c1bb2413125f351a7222a4c68a23b74476680fbada7e26fc6aa; ffi,fst-engine; includes NVIDIA NeMo grammars, 30 linked registry crates and Rust 1.98.1 runtime; full inventory and source pins in notice)",
+      "spdx": "Apache-2.0 AND MIT AND Unicode-3.0 AND (Apache-2.0 WITH LLVM-exception)",
+      "notice": "NemoTextProcessing-Apache-2.0.txt"
+    },
+    {
+      "id": "Oniguruma",
+      "displayName": "Oniguruma",
+      "version": "6.9.9",
+      "source": "https://github.com/kkos/oniguruma (linked into prebuilt libghostty)",
+      "spdx": "BSD-2-Clause",
+      "notice": "Oniguruma-BSD-2-Clause.txt"
+    },
+    {
+      "id": "OpenSSL",
+      "displayName": "OpenSSL",
+      "version": "3.6.3",
+      "source": "Packages/WaycarSSH/Artifacts (tag openssl-3.6.3)",
+      "spdx": "Apache-2.0",
+      "notice": "OpenSSL-Apache-2.0.txt"
+    },
+    {
+      "id": "PLCrashReporter",
+      "displayName": "PLCrashReporter",
+      "version": "1.12.2",
+      "source": "posthog-ios 3.85.0 vendor/PHPLCrashReporter (https://github.com/microsoft/plcrashreporter 0254f941c646b1ed17b243654723d0f071e990d0, vendored with PostHog's patches)",
+      "spdx": "MIT",
+      "notice": "PLCrashReporter-MIT.txt"
+    },
+    {
+      "id": "PLCrashReporter-PLCrashLogWriterEncoding",
+      "displayName": "PLCrashReporter PLCrashLogWriterEncoding",
+      "version": "1.12.2",
+      "source": "posthog-ios 3.85.0 vendor/PHPLCrashReporter/Source/PLCrashLogWriterEncoding.c",
+      "spdx": "Apache-2.0",
+      "notice": "PLCrashLogWriterEncoding-Apache-2.0.txt"
+    },
+    {
+      "id": "SymbolsNerdFont",
+      "displayName": "Symbols Nerd Font",
+      "version": "3.4.0",
+      "source": "https://github.com/ryanoasis/nerd-fonts (embedded in prebuilt libghostty)",
+      "spdx": "MIT",
+      "notice": "SymbolsNerdFont-MIT.txt"
+    },
+    {
+      "id": "UnicodeData",
+      "displayName": "Unicode Data Files",
+      "version": null,
+      "source": "https://www.unicode.org/Public/ (Unicode Character Database tables built into uucode)",
+      "spdx": "Unicode-3.0",
+      "notice": "UnicodeData-Unicode-3.0.txt"
+    },
+    {
+      "id": "Wuffs",
+      "displayName": "Wuffs",
+      "version": "0.4.0-alpha.10",
+      "source": "https://github.com/google/wuffs 7411f488fe2e2c205c3d3b3d28638b7356522930 (linked into prebuilt libghostty)",
+      "spdx": "Apache-2.0 OR MIT",
+      "notice": "Wuffs-MIT.txt"
+    },
+    {
+      "id": "ZigStd",
+      "displayName": "Zig standard library and compiler_rt",
+      "version": "0.16.0",
+      "source": "https://ziglang.org (compiled into prebuilt libghostty)",
+      "spdx": "MIT",
+      "notice": "ZigStd-MIT.txt"
+    },
+    {
+      "id": "fastcluster",
+      "displayName": "fastcluster",
+      "version": null,
+      "source": "FluidAudio 0.17.7 Sources/FastClusterWrapper (https://danifold.net/fastcluster.html)",
+      "spdx": "BSD-2-Clause",
+      "notice": "fastcluster-BSD-2-Clause.txt"
+    },
+    {
+      "id": "herdr",
+      "displayName": "herdr API schema",
+      "version": "0.9.0 (protocol 22)",
+      "source": "https://github.com/herdrdev/herdr/tree/v0.9.0 (Apache-2.0 LICENSE; API schema exported into scripts/herdr-schema.json and transformed into Swift wire types by scripts/generate-wire-types.py)",
+      "spdx": "Apache-2.0",
+      "notice": "herdr-Apache-2.0.txt"
+    },
+    {
+      "id": "libghostty-spm",
+      "displayName": "libghostty-spm",
+      "version": "1.6.20260909",
+      "source": "Packages/GhosttyTerminal (https://github.com/Lakr233/libghostty-spm 7e45d27, vendored with Waycar's patches; see PROVENANCE.md)",
+      "spdx": "MIT",
+      "notice": "libghostty-spm-MIT.txt"
+    },
+    {
+      "id": "libintl-historical",
+      "displayName": "GNU libintl (Waycar 1.0.1 and 1.0.2 only)",
+      "version": "gettext 0.24",
+      "source": "https://ftp.gnu.org/gnu/gettext/gettext-0.24.tar.gz (former upstream Ghostty core; not included in current builds; relinking object files available on request at support@waycar.dev)",
+      "spdx": "LGPL-2.1-or-later",
+      "notice": "libintl-LGPL-2.1-or-later.txt"
+    },
+    {
+      "id": "libpng",
+      "displayName": "libpng",
+      "version": "1.6.43",
+      "source": "https://libpng.org (linked into prebuilt libghostty; libpng-LICENSE.txt from https://github.com/otreva/ghosttykit/releases/download/1.6.20260909-82938b6-nointl.1/LICENSES.zip)",
+      "spdx": "libpng-2.0",
+      "notice": "libpng-libpng-2.0.txt"
+    },
+    {
+      "id": "libssh2",
+      "displayName": "libssh2",
+      "version": "c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f",
+      "source": "Packages/WaycarSSH/Artifacts (snapshot c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f, built with Waycar's patches; see Packages/WaycarSSH/Artifacts/PROVENANCE.md)",
+      "spdx": "BSD-3-Clause",
+      "notice": "libssh2-BSD-3-Clause.txt"
+    },
+    {
+      "id": "libssh2-bcrypt_pbkdf",
+      "displayName": "libssh2 bcrypt_pbkdf",
+      "version": "c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f",
+      "source": "libssh2 c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f/src/bcrypt_pbkdf.c",
+      "spdx": "MIT",
+      "notice": "libssh2-bcrypt_pbkdf-MIT.txt"
+    },
+    {
+      "id": "libssh2-cipher-chachapoly",
+      "displayName": "libssh2 cipher-chachapoly",
+      "version": "c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f",
+      "source": "libssh2 c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f/src/cipher-chachapoly.c",
+      "spdx": "BSD-2-Clause",
+      "notice": "libssh2-cipher-chachapoly-BSD-2-Clause.txt"
+    },
+    {
+      "id": "libwebp",
+      "displayName": "libwebp",
+      "version": "1.5.0",
+      "source": "posthog-ios 3.85.0 vendor/libwebp (https://github.com/webmproject/libwebp v1.5.0, slimmed and vendored with PostHog's patches)",
+      "spdx": "BSD-3-Clause",
+      "notice": "libwebp-BSD-3-Clause.txt"
+    },
+    {
+      "id": "libxev",
+      "displayName": "libxev",
+      "version": "9ce8e8e6ff89e583258a7f8e7adeeeaeae8611bf",
+      "source": "https://github.com/mitchellh/libxev (linked into prebuilt libghostty)",
+      "spdx": "MIT",
+      "notice": "libxev-MIT.txt"
+    },
+    {
+      "id": "posthog-ios",
+      "displayName": "PostHog iOS SDK",
+      "version": "3.85.0",
+      "source": "https://github.com/PostHog/posthog-ios (3b6cd1f873cbcdfc654d93c53c69f61d8dde64d0; includes code from getsentry/sentry-cocoa)",
+      "spdx": "MIT",
+      "notice": "posthog-ios-MIT.txt"
+    },
+    {
+      "id": "protobuf-c",
+      "displayName": "protobuf-c",
+      "version": "1.4.0",
+      "source": "posthog-ios 3.85.0 vendor/PHPLCrashReporter/Source/protobuf-c.{h,c} (https://github.com/protobuf-c/protobuf-c v1.4.0)",
+      "spdx": "BSD-2-Clause",
+      "notice": "protobuf-c-BSD-2-Clause.txt"
+    },
+    {
+      "id": "simdutf",
+      "displayName": "simdutf",
+      "version": "9.0.0",
+      "source": "https://github.com/simdutf/simdutf (vendored in Ghostty pkg/simdutf/vendor) (linked into prebuilt libghostty)",
+      "spdx": "MIT OR Apache-2.0",
+      "notice": "simdutf-MIT.txt"
+    },
+    {
+      "id": "stb",
+      "displayName": "stb (stb_image)",
+      "version": "2.28",
+      "source": "https://github.com/ghostty-org/ghostty/blob/82938b633ba646db38591d969c3c526332bd7e65/src/stb/stb_image.h (linked into prebuilt libghostty; MIT option from stb-MIT-or-Unlicense.txt in https://github.com/otreva/ghosttykit/releases/download/1.6.20260909-82938b6-nointl.1/LICENSES.zip)",
+      "spdx": "MIT",
+      "notice": "stb-MIT.txt"
+    },
+    {
+      "id": "swift-mosh",
+      "displayName": "swift-mosh",
+      "version": "0.1.8",
+      "source": "Packages/SwiftMosh (https://github.com/wiedymi/swift-mosh v0.1.8, vendored with Waycar's patches; see PROVENANCE.md)",
+      "spdx": "MIT",
+      "notice": "swift-mosh-MIT.txt"
+    },
+    {
+      "id": "bash-preexec",
+      "displayName": "bash-preexec",
+      "version": "0.6.0",
+      "source": "https://github.com/rcaloras/bash-preexec (vendored by libghostty-spm in Packages/GhosttyTerminal shell-integration resources)",
+      "spdx": "MIT",
+      "notice": "bash-preexec-MIT.txt"
+    },
+    {
+      "id": "thinking-orbs",
+      "displayName": "thinking-orbs (solving animation)",
+      "version": "0.3.1",
+      "source": "https://github.com/Jakubantalik/thinking-orbs (MIT notice from commit de85557ca220332586d070d8788c0e1d6e877a0d; solving animation ported to Swift in SolvingOrbView.swift; original port's revision was not recorded)",
+      "spdx": "MIT",
+      "notice": "thinking-orbs-MIT.txt"
+    },
+    {
+      "id": "uucode",
+      "displayName": "uucode",
+      "version": "0.2.0",
+      "source": "https://github.com/jacobsandlund/uucode 2826a37a4562284fdacd8fa029d49509cc9bffcd (linked into prebuilt libghostty)",
+      "spdx": "MIT",
+      "notice": "uucode-MIT.txt"
+    },
+    {
+      "id": "z2d",
+      "displayName": "z2d",
+      "version": "0.12.1",
+      "source": "https://deps.files.ghostty.org/z2d-7dbae85c81784dba9988320bf9543ed9a81350c8.tar.gz (upstream https://github.com/vancluever/z2d)",
+      "spdx": "MPL-2.0",
+      "notice": "z2d-MPL-2.0.txt"
+    },
+    {
+      "id": "zig-objc",
+      "displayName": "zig-objc",
+      "version": "c8de82ff80281215ad92900866dab7103a8efa8b",
+      "source": "https://github.com/mitchellh/zig-objc (linked into prebuilt libghostty)",
+      "spdx": "MIT",
+      "notice": "zig-objc-MIT.txt"
+    },
+    {
+      "id": "zlib",
+      "displayName": "zlib",
+      "version": "1.3.1",
+      "source": "https://zlib.net (linked into prebuilt libghostty)",
+      "spdx": "Zlib",
+      "notice": "zlib-Zlib.txt"
+    }
+  ]
+}

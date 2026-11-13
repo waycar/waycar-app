@@ -1,0 +1,1344 @@
+import Foundation
+import XCTest
+@testable import MoshCompression
+@testable import MoshCore
+@testable import MoshCryptoOCB
+@testable import MoshProtoLite
+@testable import MoshTransport
+@testable import MoshWire
+
+final class CoreAndAdapterTests: XCTestCase {
+    func testConfigAndBasicCodableTypes() throws {
+        let endpoint = makeEndpoint()
+        XCTAssertEqual(endpoint.host, "127.0.0.1")
+        XCTAssertEqual(endpoint.port, 60001)
+
+        let config = MoshClientConfig(maxReceiveStates: 0, mtu: 64)
+        XCTAssertEqual(config.maxReceiveStates, 1)
+        XCTAssertEqual(config.mtu, 128)
+
+        let snapshot = MoshSnapshot(endpoint: endpoint, transportState: Data([1, 2]), createdAtMs: 3, schemaVersion: 4)
+        let roundTrip = try JSONDecoder().decode(MoshSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(roundTrip, snapshot)
+
+        let hostOp = MoshHostOp.resize(cols: 80, rows: 24)
+        let hostOpRoundTrip = try JSONDecoder().decode(MoshHostOp.self, from: JSONEncoder().encode(hostOp))
+        XCTAssertEqual(hostOpRoundTrip, hostOp)
+
+        let clientOp = MoshClientOp.keystrokes(Data([0x41]))
+        let clientOpRoundTrip = try JSONDecoder().decode(MoshClientOp.self, from: JSONEncoder().encode(clientOp))
+        XCTAssertEqual(clientOpRoundTrip, clientOp)
+    }
+
+    func testSessionInvalidEndpointAndNotStartedErrors() async throws {
+        let invalid = MoshClientSession(endpoint: MoshEndpoint(host: "", port: 0, keyBase64_22: makeEndpoint().keyBase64_22))
+        do {
+            try await invalid.start()
+            XCTFail("Expected invalidEndpoint")
+        } catch {
+            guard case .invalidEndpoint = error as? MoshSessionError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let (session, _) = await makeInMemorySession(config: .init())
+        do {
+            try await session.enqueue(.keystrokes(Data([0x41])))
+            XCTFail("Expected notStarted")
+        } catch {
+            guard case .notStarted = error as? MoshSessionError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        await session.stop()
+        let drainedAfterStop = await session.drainHostOps()
+        XCTAssertEqual(drainedAfterStop, [])
+    }
+
+    func testSessionRoundTripAndReceiveFiltersAndFallback() async throws {
+        setenv("SWIFTMOSH_DEBUG_REAL_E2E", "1", 1)
+        defer { unsetenv("SWIFTMOSH_DEBUG_REAL_E2E") }
+
+        var config = MoshClientConfig(maxReceiveStates: 2, mtu: 256, useNetworkCrypto: false)
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        // start called twice is a no-op branch
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("abc".utf8)))
+
+        let outbound = try await server.receivePayload()
+        let outboundInstruction = try decodeInstructionPayload(
+            outbound.payload,
+            compressed: true
+        )
+        let outboundUser = try UserMessage(decoding: outboundInstruction.diff ?? Data())
+        XCTAssertEqual(outboundUser.instructions.count, 1)
+        if case .keystroke(let bytes) = outboundUser.instructions[0] {
+            XCTAssertEqual(bytes, Data("abc".utf8))
+        } else {
+            XCTFail("Expected keystroke")
+        }
+
+        try await session.enqueue(.resize(cols: 90, rows: 31))
+        let resizeOutbound = try await server.receivePayload()
+        let resizeInstruction = try decodeInstructionPayload(
+            resizeOutbound.payload,
+            compressed: true
+        )
+        let resizeUser = try UserMessage(decoding: resizeInstruction.diff ?? Data())
+        XCTAssertEqual(resizeUser.instructions.count, 1)
+        if case .resize(let width, let height) = resizeUser.instructions[0] {
+            XCTAssertEqual(width, 90)
+            XCTAssertEqual(height, 31)
+        } else {
+            XCTFail("Expected resize")
+        }
+
+        let seqEmpty = await server.reserveOutgoingSequence()
+        try await server.sendPayload(Data(), sequence: seqEmpty)
+        let emptyDrain = await drainEventually(session: session)
+        XCTAssertEqual(emptyDrain, [])
+
+        let seq2 = await server.reserveOutgoingSequence()
+        let noDiff = TransportInstruction(protocolVersion: MoshWire.protocolVersion)
+        try await server.sendPayload(
+            try encodeInstructionPayload(noDiff, compressed: true),
+            sequence: seq2
+        )
+        _ = await drainEventually(session: session)
+
+        let seq3 = await server.reserveOutgoingSequence()
+        let invalidHostMessage = TransportInstruction(protocolVersion: MoshWire.protocolVersion, diff: Data([0xFF, 0x00, 0xAA]))
+        try await server.sendPayload(
+            try encodeInstructionPayload(invalidHostMessage, compressed: true),
+            sequence: seq3
+        )
+        let fallback = await drainEventually(session: session)
+        XCTAssertEqual(fallback, [.hostBytes(Data([0xFF, 0x00, 0xAA]))])
+
+        let seqRaw = await server.reserveOutgoingSequence()
+        let rawInstruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            diff: HostMessage(instructions: [.hostBytes(Data("B".utf8))]).encoded()
+        )
+        try await server.sendPayload(
+            try encodeInstructionPayload(rawInstruction, compressed: false),
+            sequence: seqRaw
+        )
+        let rawFallback = await drainEventually(session: session)
+        XCTAssertEqual(rawFallback, [.hostBytes(Data("B".utf8))])
+
+        let seq4 = await server.reserveOutgoingSequence()
+        let hostMessage = HostMessage(instructions: [
+            .hostBytes(Data("A".utf8)),
+            .resize(width: 120, height: 40),
+            .echoAck(55)
+        ])
+        let valid = TransportInstruction(protocolVersion: MoshWire.protocolVersion, diff: hostMessage.encoded())
+        try await server.sendPayload(
+            try encodeInstructionPayload(valid, compressed: true),
+            sequence: seq4
+        )
+
+        let drained = await drainEventually(session: session)
+        // maxReceiveStates=2 trimming branch
+        XCTAssertEqual(drained.count, 2)
+        guard drained.count == 2 else {
+            XCTFail("Expected two drained host ops")
+            await session.stop()
+            await server.stop()
+            return
+        }
+        XCTAssertEqual(drained[0], .resize(cols: 120, rows: 40))
+        XCTAssertEqual(drained[1], .echoAck(55))
+
+        let seqMismatch = await server.reserveOutgoingSequence()
+        let versionMismatch = TransportInstruction(
+            protocolVersion: 999,
+            diff: HostMessage(instructions: [.hostBytes(Data("x".utf8))]).encoded()
+        )
+        try await server.sendPayload(
+            try encodeInstructionPayload(versionMismatch, compressed: true),
+            sequence: seqMismatch
+        )
+
+        guard let failure = await waitForFailure(session: session, timeoutNs: 800_000_000) else {
+            XCTFail("Expected protocol mismatch to fail session")
+            await session.stop()
+            await server.stop()
+            return
+        }
+        guard case .protocolViolation(let message) = failure else {
+            XCTFail("Unexpected failure: \(failure)")
+            await session.stop()
+            await server.stop()
+            return
+        }
+        XCTAssertTrue(message.contains("protocol mismatch"))
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testSnapshotAndRestoreBranches() async throws {
+        let endpoint = makeEndpoint()
+        let baseConfig = MoshClientConfig(sendMinDelayMs: 5, maxReceiveStates: 9, ackIntervalMs: 7, ackDelayMs: 6, mtu: 300)
+        let session = MoshClientSession(endpoint: endpoint, config: baseConfig)
+
+        let snap1 = try await session.makeSnapshot()
+        XCTAssertEqual(snap1.schemaVersion, 2)
+
+        do {
+            _ = try await MoshClientSession.restore(from: MoshSnapshot(endpoint: endpoint, transportState: Data(), createdAtMs: 0, schemaVersion: 3))
+            XCTFail("Expected badSnapshotSchema")
+        } catch {
+            guard case .badSnapshotSchema(3) = error as? MoshSessionError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        do {
+            _ = try await MoshClientSession.restore(from: MoshSnapshot(endpoint: endpoint, transportState: Data([0xFF]), createdAtMs: 0, schemaVersion: 1))
+            XCTFail("Expected decodeFailure")
+        } catch {
+            guard case .decodeFailure = error as? MoshSessionError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let restoredDefault = try await MoshClientSession.restore(from: snap1)
+        let restoredDefaultConfig = await restoredDefault.config
+        XCTAssertEqual(restoredDefaultConfig, baseConfig)
+
+        let override = MoshClientConfig(sendMinDelayMs: 1, maxReceiveStates: 2, ackIntervalMs: 3, ackDelayMs: 4, mtu: 512)
+        let restoredOverride = try await MoshClientSession.restore(from: snap1, config: override)
+        let restoredOverrideConfig = await restoredOverride.config
+        XCTAssertEqual(restoredOverrideConfig, override)
+
+        // Cover pendingTransportSnapshot restoration in start().
+        try await restoredDefault.start()
+        await restoredDefault.stop()
+        await restoredOverride.stop()
+    }
+
+    func testApplicationBackgroundSuspendsAndResumesWithoutEndingSession() async throws {
+        let (clientEnd, _) = await InMemoryDatagramPair.makeLinked()
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: .init(),
+            endpointFactory: { _, _ in clientEnd },
+            snapshotEncoder: { blob in try JSONEncoder().encode(blob) }
+        )
+
+        try await session.start()
+        let snapshot = try await session.prepareForApplicationBackground()
+        let suspendedState = await session.state
+
+        XCTAssertEqual(suspendedState, .suspended)
+        XCTAssertEqual(snapshot.schemaVersion, 2)
+
+        try await session.resumeFromApplicationBackground()
+        let resumedState = await session.state
+        XCTAssertEqual(resumedState, .running)
+
+        await session.stop()
+    }
+
+    func testSnapshotEncodeFailureInjectedEncoder() async {
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: .init(),
+            endpointFactory: { _, _ in InMemoryDatagramEndpoint() },
+            snapshotEncoder: { _ in throw EncodeSentinel.failure }
+        )
+
+        do {
+            _ = try await session.makeSnapshot()
+            XCTFail("Expected encodeFailure")
+        } catch {
+            guard case .encodeFailure = error as? MoshSessionError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testSessionReceiveLoopIterationGuardAndNonCancelledCatch() async throws {
+        setenv("SWIFTMOSH_DEBUG_REAL_E2E", "1", 1)
+        defer { unsetenv("SWIFTMOSH_DEBUG_REAL_E2E") }
+
+        let guardSession = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: .init(),
+            endpointFactory: { _, _ in InMemoryDatagramEndpoint() },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+        let shouldContinue = await guardSession._testRunReceiveLoopIteration()
+        XCTAssertFalse(shouldContinue)
+
+        let failingEndpoint = AlwaysFailingReceiveEndpoint()
+        let failingSession = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: .init(),
+            endpointFactory: { _, _ in failingEndpoint },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+
+        try await failingSession.start()
+        let attempted = await waitUntil { await failingEndpoint.receiveAttempts() > 0 }
+        XCTAssertTrue(attempted)
+        await failingSession.stop()
+    }
+
+    func testRetransmitRetryThenAckClearsQueue() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 3,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 10_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("r".utf8)))
+        let queued = await waitForPendingOutboundCount(session: session, expected: 1, timeoutNs: 300_000_000)
+        XCTAssertTrue(queued)
+
+        let initialSend = try await receivePayloadEventually(engine: server)
+        let initialInstruction = try decodeInstructionPayload(initialSend.payload, compressed: true)
+        XCTAssertEqual(initialInstruction.newNum, 1)
+        XCTAssertNotNil(initialInstruction.diff)
+
+        let retrySend = try await receivePayloadEventually(engine: server)
+        let retryInstruction = try decodeInstructionPayload(retrySend.payload, compressed: true)
+        XCTAssertEqual(retryInstruction.newNum, 1)
+        XCTAssertEqual(retryInstruction.diff, initialInstruction.diff)
+
+        let ack = TransportInstruction(protocolVersion: MoshWire.protocolVersion, ackNum: 1)
+        let ackSeq = await server.reserveOutgoingSequence()
+        try await server.sendPayload(
+            try encodeInstructionPayload(ack, compressed: true),
+            sequence: ackSeq
+        )
+
+        let emptied = await waitForPendingOutboundCount(session: session, expected: 0, timeoutNs: 700_000_000)
+        XCTAssertTrue(emptied)
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testRetransmitLimitDoesNotEndSession() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 1,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 10_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("x".utf8)))
+        _ = try await receivePayloadEventually(engine: server) // initial send
+        _ = try await receivePayloadEventually(engine: server) // one retry
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let state = await session.state
+        let pendingCount = await session._testPendingOutboundCount()
+        XCTAssertEqual(state, .running)
+        XCTAssertEqual(pendingCount, 1)
+
+        await session.stop()
+        await server.stop()
+    }
+
+    /// (Waycar patch) Upstream never enforced `networkTimeoutMs`; this test
+    /// asserted the session outlived it.
+    func testNetworkSilenceEndsSessionWithTimeoutFailure() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 500,
+            maxRetransmitCount: 3,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 10_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        // The silence is measured on a clock only the test moves.
+        let clock = ManualClock()
+        let (session, server) = await makeInMemorySession(config: config, clock: clock)
+        try await server.start()
+        try await session.start()
+
+        clock.advance(byMs: 499)
+        let runsOn = await session._testRunMaintenanceLoopIteration()
+        let early = await session.state
+        XCTAssertTrue(runsOn)
+        XCTAssertEqual(early, .running, "the session must run until the timeout")
+
+        clock.advance(byMs: 1)
+        let timedOut = await waitUntil { await session.state != .running }
+        XCTAssertTrue(timedOut)
+        let state = await session.state
+        XCTAssertEqual(state, .failed(.timeout(timeoutMs: 500)))
+        let failure = await session.failure
+        XCTAssertEqual(failure, .timeout(timeoutMs: 500))
+        do {
+            try await session.enqueue(.keystrokes(Data("late".utf8)))
+            XCTFail("a timed-out session must refuse input")
+        } catch MoshSessionError.sessionFailed(.timeout(timeoutMs: 500)) {
+        }
+
+        // (Waycar patch) `abandon()` stops a failed session without
+        // overwriting its failure, as `stop()` would.
+        await session.abandon()
+        let abandoned = await session.state
+        XCTAssertEqual(abandoned, .failed(.timeout(timeoutMs: 500)), "abandoning a failed session keeps its failure")
+
+        await server.stop()
+    }
+
+    func testTransientReceiveFailuresRestartTransportWithoutEndingSession() async throws {
+        let recoveringEndpoint = RestartRecoveringEndpoint()
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: MoshClientConfig(
+                sendMinDelayMs: 0,
+                maxReceiveStates: 8,
+                ackIntervalMs: 1_000,
+                ackDelayMs: 100,
+                networkTimeoutMs: 8_000,
+                maxRetransmitCount: 3,
+                initialRtoMs: 100,
+                maxRtoMs: 100,
+                heartbeatIntervalMs: 10_000,
+                mtu: 256,
+                useNetworkCrypto: false
+            ),
+            endpointFactory: { _, _ in recoveringEndpoint },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+
+        try await session.start()
+        let restarted = await waitForEndpointStarts(
+            recoveringEndpoint,
+            expected: 2
+        )
+        XCTAssertTrue(restarted)
+
+        try await session.enqueue(.keystrokes(Data("after-restart".utf8)))
+        let sendCount = await recoveringEndpoint.sendCount()
+        let state = await session.state
+        XCTAssertGreaterThan(sendCount, 0)
+        XCTAssertEqual(state, .running)
+
+        await session.stop()
+    }
+
+    func testPacketLossSimulationConvergesViaRetransmit() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 5,
+            initialRtoMs: 80,
+            maxRtoMs: 80,
+            heartbeatIntervalMs: 10_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let (rawClient, rawServer) = await InMemoryDatagramPair.makeLinked()
+        let chaoticClient = ChaosDatagramEndpoint(
+            base: rawClient,
+            dropSendOrdinals: [1, 2]
+        )
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: config,
+            endpointFactory: { _, _ in chaoticClient },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+        let server = TransportEngine(endpoint: rawServer, outgoingDirection: .toClient, mtu: config.mtu)
+
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("loss".utf8)))
+        let converged = try await receivePayloadEventually(engine: server)
+        let convergedInstruction = try decodeInstructionPayload(converged.payload, compressed: true)
+        XCTAssertEqual(convergedInstruction.newNum, 1)
+        let user = try UserMessage(decoding: convergedInstruction.diff ?? Data())
+        XCTAssertEqual(user.instructions.count, 1)
+        if case .keystroke(let bytes) = user.instructions[0] {
+            XCTAssertEqual(bytes, Data("loss".utf8))
+        } else {
+            XCTFail("Expected keystroke after retransmit convergence")
+        }
+        let droppedCount = await chaoticClient.droppedSendCount()
+        XCTAssertEqual(droppedCount, 2)
+
+        let ack = TransportInstruction(protocolVersion: MoshWire.protocolVersion, ackNum: 1)
+        let ackSeq = await server.reserveOutgoingSequence()
+        try await server.sendPayload(
+            try encodeInstructionPayload(ack, compressed: true),
+            sequence: ackSeq
+        )
+        let queueCleared = await waitForPendingOutboundCount(session: session, expected: 0, timeoutNs: 1_000_000_000)
+        XCTAssertTrue(queueCleared)
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testJitterSimulationPreservesOrderingAndSessionHealth() async throws {
+        // No retransmission or heartbeat within the waits: the first two
+        // datagrams the server sees are the two states, once each.
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 4,
+            initialRtoMs: 60_000,
+            maxRtoMs: 60_000,
+            heartbeatIntervalMs: 60_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let (rawClient, rawServer) = await InMemoryDatagramPair.makeLinked()
+        let chaoticClient = ChaosDatagramEndpoint(
+            base: rawClient,
+            dropSendOrdinals: [],
+            sendDelayMsByOrdinal: [1: 40, 2: 10, 3: 30]
+        )
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: config,
+            endpointFactory: { _, _ in chaoticClient },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+        let server = TransportEngine(endpoint: rawServer, outgoingDirection: .toClient, mtu: config.mtu)
+
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("j1".utf8)))
+        try await session.enqueue(.keystrokes(Data("j2".utf8)))
+
+        let first = try await receivePayloadEventually(engine: server)
+        let second = try await receivePayloadEventually(engine: server)
+        let firstInstruction = try decodeInstructionPayload(first.payload, compressed: true)
+        let secondInstruction = try decodeInstructionPayload(second.payload, compressed: true)
+        XCTAssertEqual(firstInstruction.newNum, 1)
+        XCTAssertEqual(secondInstruction.newNum, 2)
+
+        let ack = TransportInstruction(protocolVersion: MoshWire.protocolVersion, ackNum: 2)
+        let ackSeq = await server.reserveOutgoingSequence()
+        try await server.sendPayload(
+            try encodeInstructionPayload(ack, compressed: true),
+            sequence: ackSeq
+        )
+        let queueCleared = await waitForPendingOutboundCount(session: session, expected: 0, timeoutNs: 1_000_000_000)
+        XCTAssertTrue(queueCleared)
+        let sessionState = await session.state
+        XCTAssertEqual(sessionState, .running)
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testRoamSimulationRebindsToNewPeerWithoutSessionRestart() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 1_000,
+            ackDelayMs: 100,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 5,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 10_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let client = InMemoryDatagramEndpoint()
+        let serverA = InMemoryDatagramEndpoint()
+        await client.link(serverA)
+        await serverA.link(client)
+
+        let session = MoshClientSession(
+            endpoint: makeEndpoint(),
+            config: config,
+            endpointFactory: { _, _ in client },
+            snapshotEncoder: defaultSnapshotEncoder
+        )
+        let serverEngineA = TransportEngine(endpoint: serverA, outgoingDirection: .toClient, mtu: config.mtu)
+        try await serverEngineA.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("before-roam".utf8)))
+        let beforeRoam = try await receivePayloadEventually(engine: serverEngineA)
+        let beforeRoamInstruction = try decodeInstructionPayload(beforeRoam.payload, compressed: true)
+        XCTAssertEqual(beforeRoamInstruction.newNum, 1)
+
+        let ack1 = TransportInstruction(protocolVersion: MoshWire.protocolVersion, ackNum: 1)
+        let ackSeq1 = await serverEngineA.reserveOutgoingSequence()
+        try await serverEngineA.sendPayload(
+            try encodeInstructionPayload(ack1, compressed: true),
+            sequence: ackSeq1
+        )
+        let clearedBeforeRoam = await waitForPendingOutboundCount(session: session, expected: 0, timeoutNs: 1_000_000_000)
+        XCTAssertTrue(clearedBeforeRoam)
+
+        let transportSnapshot = await serverEngineA.makeSnapshot()
+        await serverEngineA.stop()
+
+        let serverB = InMemoryDatagramEndpoint()
+        await client.link(serverB)
+        await serverB.link(client)
+        let serverEngineB = TransportEngine(endpoint: serverB, outgoingDirection: .toClient, mtu: config.mtu)
+        await serverEngineB.restore(from: transportSnapshot)
+        try await serverEngineB.start()
+
+        try await session.enqueue(.keystrokes(Data("after-roam".utf8)))
+        let afterRoam = try await receivePayloadEventually(engine: serverEngineB)
+        let afterRoamInstruction = try decodeInstructionPayload(afterRoam.payload, compressed: true)
+        XCTAssertEqual(afterRoamInstruction.newNum, 2)
+        let afterUser = try UserMessage(decoding: afterRoamInstruction.diff ?? Data())
+        XCTAssertEqual(afterUser.instructions.count, 1)
+        if case .keystroke(let bytes) = afterUser.instructions[0] {
+            XCTAssertEqual(bytes, Data("after-roam".utf8))
+        } else {
+            XCTFail("Expected keystroke after roam")
+        }
+
+        let ack2 = TransportInstruction(protocolVersion: MoshWire.protocolVersion, ackNum: 2)
+        let ackSeq2 = await serverEngineB.reserveOutgoingSequence()
+        try await serverEngineB.sendPayload(
+            try encodeInstructionPayload(ack2, compressed: true),
+            sequence: ackSeq2
+        )
+        let clearedAfterRoam = await waitForPendingOutboundCount(session: session, expected: 0, timeoutNs: 1_000_000_000)
+        XCTAssertTrue(clearedAfterRoam)
+        let sessionState = await session.state
+        XCTAssertEqual(sessionState, .running)
+
+        await session.stop()
+        await serverEngineB.stop()
+    }
+
+    func testHostOpStreamYieldsAndFinishesOnStop() async throws {
+        var config = MoshClientConfig(maxReceiveStates: 8, mtu: 256, useNetworkCrypto: false)
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        let stream = await session.hostOpStream()
+        let receivedTwo = expectation(description: "received two host ops")
+        let finished = expectation(description: "host op stream finished")
+        let collector = HostOpCollector()
+
+        let reader = Task {
+            for await op in stream {
+                let count = await collector.appendAndCount(op)
+                if count == 2 {
+                    receivedTwo.fulfill()
+                }
+            }
+            finished.fulfill()
+        }
+
+        let seq = await server.reserveOutgoingSequence()
+        let instruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            oldNum: 0,
+            newNum: 1,
+            diff: HostMessage(instructions: [.hostBytes(Data("x".utf8)), .echoAck(9)]).encoded()
+        )
+        try await server.sendPayload(
+            try encodeInstructionPayload(instruction, compressed: true),
+            sequence: seq
+        )
+
+        await fulfillment(of: [receivedTwo], timeout: waitCeilingSeconds)
+        let yielded = await collector.values()
+        XCTAssertEqual(yielded, [.hostBytes(Data("x".utf8)), .echoAck(9)])
+
+        await session.stop()
+        await fulfillment(of: [finished], timeout: waitCeilingSeconds)
+        _ = await reader.result
+        await server.stop()
+    }
+
+    func testAckDelayAndHeartbeatWiring() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 10_000,
+            ackDelayMs: 30,
+            networkTimeoutMs: 2_000,
+            maxRetransmitCount: 3,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 250,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        // The heartbeat interval is measured on a clock only the test moves.
+        let clock = ManualClock()
+        let (session, server) = await makeInMemorySession(config: config, clock: clock)
+        try await server.start()
+        try await session.start()
+
+        let inboundSeq = await server.reserveOutgoingSequence()
+        let inboundInstruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            oldNum: 0,
+            newNum: 1,
+            diff: HostMessage(instructions: [.hostBytes(Data("a".utf8))]).encoded()
+        )
+        try await server.sendPayload(
+            try encodeInstructionPayload(inboundInstruction, compressed: true),
+            sequence: inboundSeq
+        )
+
+        let ackPayload = try await receivePayloadEventually(engine: server)
+        let ackInstruction = try decodeInstructionPayload(ackPayload.payload, compressed: true)
+        XCTAssertNil(ackInstruction.diff)
+        XCTAssertEqual(ackInstruction.ackNum, 1)
+        XCTAssertEqual(ackInstruction.newNum, 0, "an ack carries no new client state")
+
+        // The heartbeat is a new client state, so it would show as pending.
+        clock.advance(byMs: 249)
+        _ = await session._testRunMaintenanceLoopIteration()
+        let pendingBeforeInterval = await session._testPendingOutboundCount()
+        XCTAssertEqual(pendingBeforeInterval, 0, "no heartbeat before its interval")
+
+        clock.advance(byMs: 1)
+        let heartbeatPayload = try await receivePayloadEventually(engine: server)
+        let heartbeatInstruction = try decodeInstructionPayload(heartbeatPayload.payload, compressed: true)
+        XCTAssertNil(heartbeatInstruction.diff)
+        XCTAssertEqual(heartbeatInstruction.ackNum, 1)
+        XCTAssertEqual(heartbeatInstruction.oldNum, 0)
+        XCTAssertEqual(heartbeatInstruction.newNum, 1, "the heartbeat is the first new client state")
+        let pendingHeartbeat = await session._testPendingOutboundCount()
+        XCTAssertEqual(pendingHeartbeat, 1, "the heartbeat waits for its ack")
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testAckIntervalWiringFlushesDirtyAckBeforeDelay() async throws {
+        var config = MoshClientConfig(
+            sendMinDelayMs: 0,
+            maxReceiveStates: 8,
+            ackIntervalMs: 40,
+            ackDelayMs: 60_000,
+            networkTimeoutMs: 60_000,
+            maxRetransmitCount: 3,
+            initialRtoMs: 100,
+            maxRtoMs: 100,
+            heartbeatIntervalMs: 60_000,
+            mtu: 256,
+            useNetworkCrypto: false
+        )
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        let inboundSeq = await server.reserveOutgoingSequence()
+        let inboundInstruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            oldNum: 0,
+            newNum: 1,
+            diff: HostMessage(instructions: [.hostBytes(Data("b".utf8))]).encoded()
+        )
+        try await server.sendPayload(
+            try encodeInstructionPayload(inboundInstruction, compressed: true),
+            sequence: inboundSeq
+        )
+
+        let ackPayload = try await receivePayloadEventually(engine: server)
+        let ackInstruction = try decodeInstructionPayload(ackPayload.payload, compressed: true)
+        XCTAssertNil(ackInstruction.diff)
+        XCTAssertEqual(ackInstruction.ackNum, 1)
+        XCTAssertEqual(ackInstruction.newNum, 0, "an ack carries no new client state")
+
+        await session.stop()
+        await server.stop()
+    }
+
+    func testNetworkCryptoInMemoryRoundTripAndEncryptedEndpointErrorPaths() async throws {
+        setenv("SWIFTMOSH_DEBUG_REAL_E2E", "1", 1)
+        defer { unsetenv("SWIFTMOSH_DEBUG_REAL_E2E") }
+
+        var config = MoshClientConfig(maxReceiveStates: 16, mtu: 256, useNetworkCrypto: true)
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("z".utf8)))
+        let outbound = try await server.receivePayload()
+        let outboundInstruction = try decodeInstructionPayload(outbound.payload, compressed: true)
+        let outboundUser = try UserMessage(decoding: outboundInstruction.diff ?? Data())
+        XCTAssertEqual(outboundUser.instructions.count, 1)
+
+        let hostInstruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            diff: HostMessage(instructions: [.hostBytes(Data("q".utf8))]).encoded()
+        )
+        let seq = await server.reserveOutgoingSequence()
+        try await server.sendPayload(
+            try encodeInstructionPayload(hostInstruction, compressed: true),
+            sequence: seq
+        )
+        let drained = await drainEventually(session: session)
+        XCTAssertEqual(drained, [.hostBytes(Data("q".utf8))])
+
+        await session.stop()
+        await server.stop()
+
+        let wrapped = BufferedDatagramEndpoint()
+        let key = try MoshBase64Key(printableKey: makeEndpoint().keyBase64_22).raw
+        let encrypted = try MoshEncryptedDatagramEndpoint(wrapping: wrapped, key: key)
+        try await encrypted.start()
+
+        let clearPacket = MoshPacket(
+            sequence: 9,
+            direction: .toServer,
+            timestamp: 123,
+            timestampReply: 456,
+            payload: Data([0x10, 0x11])
+        )
+        let clearBytes = MoshPacketCodec.encode(clearPacket)
+        try await encrypted.send(clearBytes)
+        let wireDatagram = await wrapped.takeSentData()
+        XCTAssertFalse(wireDatagram.isEmpty)
+
+        await wrapped.inject(TransportDatagram(data: wireDatagram))
+        let roundTripped = try await encrypted.receive()
+        XCTAssertEqual(roundTripped.data, clearBytes)
+
+        await wrapped.inject(TransportDatagram(data: Data([0x00, 0x01, 0x02])))
+        do {
+            _ = try await encrypted.receive()
+            XCTFail("Expected truncated")
+        } catch {
+            guard case .truncated = error as? MoshWireError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        await wrapped.inject(TransportDatagram(data: Data(repeating: 0xAA, count: 8 + 15)))
+        do {
+            _ = try await encrypted.receive()
+            XCTFail("Expected truncated encrypted-body")
+        } catch {
+            guard case .truncated = error as? MoshWireError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let shortDirectional = MoshWire.directionalSequence(sequence: 123, direction: .toClient)
+        let shortNonce = OCBNonce.from(messageID: 0, sequence: shortDirectional)
+        let shortSeal = try OCBCipher(key: key).seal(plaintext: Data([0x01, 0x02, 0x03]), nonce: shortNonce)
+        let shortPlainDatagram = encodeUInt64BE(shortDirectional) + shortSeal.ciphertext + shortSeal.tag
+        await wrapped.inject(TransportDatagram(data: shortPlainDatagram))
+        do {
+            _ = try await encrypted.receive()
+            XCTFail("Expected truncated plaintext")
+        } catch {
+            guard case .truncated = error as? MoshWireError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        var tampered = wireDatagram
+        tampered[tampered.count - 1] ^= 0xFF
+        await wrapped.inject(TransportDatagram(data: tampered))
+        do {
+            _ = try await encrypted.receive()
+            XCTFail("Expected authentication failure")
+        } catch {
+            XCTAssertTrue(error is OCBCipherError)
+        }
+
+        await encrypted.stop()
+    }
+
+    func testNetworkCryptoRoundTripWithDebugDisabled() async throws {
+        unsetenv("SWIFTMOSH_DEBUG_REAL_E2E")
+
+        var config = MoshClientConfig(maxReceiveStates: 8, mtu: 256, useNetworkCrypto: true)
+        config.localPort = nil
+
+        let (session, server) = await makeInMemorySession(config: config)
+        try await server.start()
+        try await session.start()
+
+        try await session.enqueue(.keystrokes(Data("d".utf8)))
+        let outbound = try await server.receivePayload()
+        let outboundInstruction = try decodeInstructionPayload(outbound.payload, compressed: true)
+        XCTAssertNotNil(outboundInstruction.diff)
+
+        let hostInstruction = TransportInstruction(
+            protocolVersion: MoshWire.protocolVersion,
+            diff: HostMessage(instructions: [.hostBytes(Data("ok".utf8))]).encoded()
+        )
+        let seq = await server.reserveOutgoingSequence()
+        try await server.sendPayload(
+            try encodeInstructionPayload(hostInstruction, compressed: true),
+            sequence: seq
+        )
+        let drained = await drainEventually(session: session)
+        XCTAssertEqual(drained, [.hostBytes(Data("ok".utf8))])
+
+        await session.stop()
+        await server.stop()
+    }
+
+    private func makeEndpoint() -> MoshEndpoint {
+        let raw = Data((0..<16).map(UInt8.init))
+        let key = try! MoshBase64Key(raw: raw)
+        return MoshEndpoint(host: "127.0.0.1", port: 60001, keyBase64_22: key.printable)
+    }
+
+    /// With `clock`, the session's time moves only when the test moves it.
+    private func makeInMemorySession(
+        config: MoshClientConfig, clock: ManualClock? = nil
+    ) async -> (MoshClientSession, TransportEngine) {
+        let (client, server) = await InMemoryDatagramPair.makeLinked()
+        let endpoint = makeEndpoint()
+        let configuredSession = MoshClientSession(
+            endpoint: endpoint,
+            config: config,
+            endpointFactory: { _, _ in client },
+            snapshotEncoder: defaultSnapshotEncoder,
+            clock: sessionClock(clock)
+        )
+        let serverEndpoint: any DatagramEndpoint
+        if config.useNetworkCrypto {
+            let key = try! MoshBase64Key(printableKey: endpoint.keyBase64_22)
+            serverEndpoint = try! MoshEncryptedDatagramEndpoint(wrapping: server, key: key.raw)
+        } else {
+            serverEndpoint = server
+        }
+        let serverEngine = TransportEngine(endpoint: serverEndpoint, outgoingDirection: .toClient, mtu: config.mtu)
+        return (configuredSession, serverEngine)
+    }
+
+    private func encodeInstructionPayload(
+        _ instruction: TransportInstruction,
+        compressed: Bool
+    ) throws -> Data {
+        if compressed {
+            return try MoshCompressionCodec().compress(instruction.encoded(), algorithm: .zlib)
+        } else {
+            return instruction.encoded()
+        }
+    }
+
+    private func decodeInstructionPayload(
+        _ payload: Data,
+        compressed: Bool
+    ) throws -> TransportInstruction {
+        let data: Data
+        if compressed {
+            data = try MoshCompressionCodec().decompress(payload, algorithm: .zlib)
+        } else {
+            data = payload
+        }
+        return try TransportInstruction(decoding: data)
+    }
+
+    private func drainEventually(session: MoshClientSession) async -> [MoshHostOp] {
+        for _ in 0..<50 {
+            let drained = await session.drainHostOps()
+            if !drained.isEmpty {
+                return drained
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return []
+    }
+
+    private func waitForFailure(
+        session: MoshClientSession,
+        timeoutNs: UInt64,
+        stepNs: UInt64 = 20_000_000
+    ) async -> MoshSessionFailure? {
+        var waited: UInt64 = 0
+        while waited < timeoutNs {
+            let state = await session.state
+            if case .failed(let failure) = state {
+                return failure
+            }
+            try? await Task.sleep(nanoseconds: stepNs)
+            waited &+= stepNs
+        }
+
+        let state = await session.state
+        if case .failed(let failure) = state {
+            return failure
+        }
+        return nil
+    }
+
+    private func waitForPendingOutboundCount(
+        session: MoshClientSession,
+        expected: Int,
+        timeoutNs: UInt64,
+        stepNs: UInt64 = 20_000_000
+    ) async -> Bool {
+        var waited: UInt64 = 0
+        while waited < timeoutNs {
+            if await session._testPendingOutboundCount() == expected {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: stepNs)
+            waited &+= stepNs
+        }
+        return await session._testPendingOutboundCount() == expected
+    }
+
+    private func waitForEndpointStarts(
+        _ endpoint: RestartRecoveringEndpoint,
+        expected: Int,
+        timeoutNs: UInt64 = 1_000_000_000,
+        stepNs: UInt64 = 20_000_000
+    ) async -> Bool {
+        var waited: UInt64 = 0
+        while waited < timeoutNs {
+            if await endpoint.startCount() >= expected {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: stepNs)
+            waited += stepNs
+        }
+        return await endpoint.startCount() >= expected
+    }
+
+    private func receivePayloadEventually(
+        engine: TransportEngine,
+        timeoutNs: UInt64 = UInt64(waitCeilingSeconds * 1_000_000_000)
+    ) async throws -> TransportReceivedPayload {
+        try await withThrowingTaskGroup(of: TransportReceivedPayload.self) { group in
+            group.addTask {
+                try await engine.receivePayload()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNs)
+                throw TestTimeoutError.timedOut
+            }
+
+            guard let first = try await group.next() else {
+                throw TestTimeoutError.timedOut
+            }
+            group.cancelAll()
+            return first
+        }
+    }
+
+    private enum TestTimeoutError: Error {
+        case timedOut
+    }
+}
+
+private func defaultSnapshotEncoder(_ blob: SessionStateBlob) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return try encoder.encode(blob)
+}
+
+private enum EncodeSentinel: Error {
+    case failure
+}
+
+private enum GenericSyntheticError: Error {
+    case synthetic
+}
+
+private actor HostOpCollector {
+    private var entries: [MoshHostOp] = []
+
+    func appendAndCount(_ op: MoshHostOp) -> Int {
+        entries.append(op)
+        return entries.count
+    }
+
+    func values() -> [MoshHostOp] {
+        entries
+    }
+}
+
+private actor AlwaysFailingReceiveEndpoint: DatagramEndpoint {
+    private var started = false
+    private var receiveCount = 0
+
+    func start() async throws {
+        started = true
+    }
+
+    func stop() async {
+        started = false
+    }
+
+    func send(_ data: Data) async throws {
+        guard started else {
+            throw TransportError.notStarted
+        }
+    }
+
+    func receive() async throws -> TransportDatagram {
+        guard started else {
+            throw TransportError.notStarted
+        }
+        receiveCount += 1
+        try await Task.sleep(nanoseconds: 1_000_000)
+        throw TransportError.networkFailure("synthetic")
+    }
+
+    func receiveAttempts() -> Int {
+        receiveCount
+    }
+}
+
+private actor RestartRecoveringEndpoint: DatagramEndpoint {
+    private var started = false
+    private var starts = 0
+    private var sends = 0
+    private var didFailReceive = false
+    private var receiveContinuation: CheckedContinuation<TransportDatagram, Error>?
+
+    func start() async throws {
+        started = true
+        starts += 1
+    }
+
+    func stop() async {
+        started = false
+        receiveContinuation?.resume(throwing: TransportError.cancelled)
+        receiveContinuation = nil
+    }
+
+    func send(_ data: Data) async throws {
+        guard started else {
+            throw TransportError.notStarted
+        }
+        sends += 1
+    }
+
+    func receive() async throws -> TransportDatagram {
+        guard started else {
+            throw TransportError.notStarted
+        }
+        if !didFailReceive {
+            didFailReceive = true
+            throw TransportError.networkFailure("synthetic path loss")
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            receiveContinuation = continuation
+        }
+    }
+
+    func startCount() -> Int {
+        starts
+    }
+
+    func sendCount() -> Int {
+        sends
+    }
+}
+
+private actor StartThrowsEndpoint: DatagramEndpoint {
+    func start() async throws {
+        throw TransportError.networkFailure("start-failure")
+    }
+
+    func stop() async {}
+
+    func send(_ data: Data) async throws {}
+
+    func receive() async throws -> TransportDatagram {
+        throw TransportError.cancelled
+    }
+}
+
+private actor BlockingStartEndpoint: DatagramEndpoint {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func start() async throws {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            self.continuation = continuation
+        }
+    }
+
+    func resumeStart() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func stop() async {}
+
+    func send(_ data: Data) async throws {}
+
+    func receive() async throws -> TransportDatagram {
+        throw TransportError.cancelled
+    }
+}
+
+private actor BufferedDatagramEndpoint: DatagramEndpoint {
+    private var started = false
+    private var sent: [Data] = []
+    private var inbox: [TransportDatagram] = []
+
+    func start() async throws {
+        started = true
+    }
+
+    func stop() async {
+        started = false
+        sent.removeAll(keepingCapacity: false)
+        inbox.removeAll(keepingCapacity: false)
+    }
+
+    func send(_ data: Data) async throws {
+        guard started else {
+            throw TransportError.notStarted
+        }
+        sent.append(data)
+    }
+
+    func receive() async throws -> TransportDatagram {
+        guard started else {
+            throw TransportError.notStarted
+        }
+        guard !inbox.isEmpty else {
+            throw TransportError.cancelled
+        }
+        return inbox.removeFirst()
+    }
+
+    func inject(_ datagram: TransportDatagram) {
+        inbox.append(datagram)
+    }
+
+    func takeSentData() -> Data {
+        guard !sent.isEmpty else { return Data() }
+        return sent.removeFirst()
+    }
+}
+
+private actor ChaosDatagramEndpoint: DatagramEndpoint {
+    private let base: any DatagramEndpoint
+    private let dropSendOrdinals: Set<Int>
+    private let sendDelayMsByOrdinal: [Int: UInt64]
+    private let receiveDelayMsByOrdinal: [Int: UInt64]
+
+    private var sendOrdinal = 0
+    private var receiveOrdinal = 0
+    private var droppedSends = 0
+
+    init(
+        base: any DatagramEndpoint,
+        dropSendOrdinals: Set<Int> = [],
+        sendDelayMsByOrdinal: [Int: UInt64] = [:],
+        receiveDelayMsByOrdinal: [Int: UInt64] = [:]
+    ) {
+        self.base = base
+        self.dropSendOrdinals = dropSendOrdinals
+        self.sendDelayMsByOrdinal = sendDelayMsByOrdinal
+        self.receiveDelayMsByOrdinal = receiveDelayMsByOrdinal
+    }
+
+    func start() async throws {
+        try await base.start()
+    }
+
+    func stop() async {
+        await base.stop()
+    }
+
+    func send(_ data: Data) async throws {
+        sendOrdinal += 1
+        let current = sendOrdinal
+        if let delayMs = sendDelayMsByOrdinal[current], delayMs > 0 {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+        }
+        if dropSendOrdinals.contains(current) {
+            droppedSends += 1
+            return
+        }
+        try await base.send(data)
+    }
+
+    func receive() async throws -> TransportDatagram {
+        let datagram = try await base.receive()
+        receiveOrdinal += 1
+        let current = receiveOrdinal
+        if let delayMs = receiveDelayMsByOrdinal[current], delayMs > 0 {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+        }
+        return datagram
+    }
+
+    func droppedSendCount() -> Int {
+        droppedSends
+    }
+}
+
+private func encodeUInt64BE(_ value: UInt64) -> Data {
+    var output = Data()
+    for shift in stride(from: 56, through: 0, by: -8) {
+        output.append(UInt8((value >> UInt64(shift)) & 0xFF))
+    }
+    return output
+}

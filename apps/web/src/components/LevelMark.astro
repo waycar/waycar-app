@@ -1,0 +1,48 @@
+---
+// The shape beside a comparison cell's text, drawn in CSS so it looks the same
+// in every browser (a font glyph for "half full" does not). The shape differs
+// per level (filled, half, hollow, dash), so no cell relies on color alone, and
+// it is `aria-hidden`: the cell's text starts with the level's word.
+import type { Level } from '../lib/compare-rows.mjs';
+
+interface Props {
+  level: Level;
+}
+
+const { level } = Astro.props;
+---
+
+<span class:list={['mark', `mark-${level}`]} aria-hidden="true"></span>
+
+<style>
+  .mark {
+    display: inline-block;
+    flex: none;
+    width: 0.7em;
+    height: 0.7em;
+    border: 1.5px solid var(--text-3);
+    border-radius: 50%;
+    box-sizing: border-box;
+  }
+
+  .mark-yes {
+    background: var(--done);
+    border-color: var(--done);
+  }
+
+  .mark-partial {
+    background: linear-gradient(90deg, var(--working) 50%, transparent 50%);
+    border-color: var(--working);
+  }
+
+  .mark-unknown {
+    height: 0;
+    border-width: 1.5px 0 0;
+    border-radius: 0;
+  }
+
+  /* Descriptive rows have no rating, so no mark. */
+  .mark-info {
+    display: none;
+  }
+</style>

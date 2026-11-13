@@ -1,0 +1,42 @@
+id = "waycar"
+name = "waycar"
+version = "2.6.0"
+min_herdr_version = "0.7.5"
+description = "Pair a Waycar device by scanning a QR Pairing Code"
+platforms = ["linux", "macos"]
+
+[[startup]]
+command = ["./bin/waycar", "herdr-startup"]
+
+[[actions]]
+id = "pair"
+title = "Pair a mobile device"
+description = "Show a Pairing Code QR for the Waycar app"
+contexts = ["global"]
+command = ["./bin/waycar", "pair-action"]
+
+# Invoked by the app over SSH about once a minute; see README "Agent Summary".
+# herdr 0.9.1 treats `contexts` as metadata only, so no value hides an
+# action from its palette; running it by hand is a harmless refresh.
+[[actions]]
+id = "refresh-summaries"
+title = "Refresh Agent Summaries"
+description = "Summarize Agents whose screens changed, for the Waycar app"
+contexts = ["global"]
+command = ["./bin/waycar", "summaries", "refresh"]
+
+[[panes]]
+id = "pair"
+title = "Pair device"
+placement = "popup"
+width = "100%"
+height = "100%"
+command = ["./bin/waycar", "pair"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["./bin/waycar", "herdr-event", "notify"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["./bin/waycar", "herdr-event", "activity"]

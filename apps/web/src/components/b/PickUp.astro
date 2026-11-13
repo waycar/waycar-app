@@ -1,0 +1,93 @@
+---
+import PhoneShot from './PhoneShot.astro';
+import { closedSessions } from '../../data/screens';
+---
+
+<section id="back" class="section" aria-labelledby="back-title">
+  <div class="wrap grid">
+    <div class="text">
+      <div class="sec-head">
+        <span class="kicker">Come back</span>
+        <h2 id="back-title" class="sec-title">Sit back down. <span class="muted">It's all still there.</span></h2>
+      </div>
+      <p class="sec-lede">
+        Your agent never left your computer. The session, its history and its files are where they were, along with
+        whatever it got done while you were out.
+      </p>
+      <div class="cards">
+        <div class="glass card">
+          <p class="card-label">herdr</p>
+          <p>
+            Opening an agent in Waycar takes over its terminal, and the herdr client at your desk gets disconnected.
+            Reattach at your desk and keep going.
+          </p>
+        </div>
+        <div class="glass card">
+          <p class="card-label">tmux</p>
+          <p>Nothing gets taken over. Your desk and phone can both watch the same window.</p>
+        </div>
+      </div>
+      <p class="closed">
+        Quit one by mistake? Waycar keeps ended agents for 30 days. Tap Closed in the Console, then tap the agent. Most
+        come back in the same chat.
+      </p>
+    </div>
+    <PhoneShot image={closedSessions.image} alt={closedSessions.alt} crop />
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(0, 340px);
+    justify-content: center;
+    align-items: center;
+    gap: 56px;
+  }
+
+  .text .sec-head {
+    margin-bottom: 0;
+  }
+
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .card-label {
+    font: 500 12px var(--font-mono);
+    color: var(--cyan);
+  }
+
+  .card p:not(.card-label) {
+    margin-top: 8px;
+    font-size: 14.5px;
+    color: var(--text-2);
+  }
+
+  .closed {
+    margin-top: 20px;
+    font-size: 15px;
+    color: var(--text-3);
+  }
+
+
+  @media (max-width: 720px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: 36px;
+    }
+
+    .cards {
+      grid-template-columns: 1fr;
+    }
+
+  }
+</style>

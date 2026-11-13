@@ -1,0 +1,163 @@
+---
+// The SLEEP and QUEUED items are sourced from CHANGELOG.md [1.1.3] (Faster
+// return to an Agent and Last screen while reconnecting, #105) and
+// [Unreleased] (Queued messages, #151).
+import PhoneShot from './PhoneShot.astro';
+import { iphone } from '../../data/screens';
+---
+
+<section id="away" class="section" aria-labelledby="away-title">
+  <div class="wrap">
+    <div class="grid">
+      <div class="text">
+        <div class="sec-head">
+          <span class="kicker">Step away</span>
+          <h2 id="away-title" class="sec-title">Go do something else.<br /> <span class="muted">You'll know when an agent needs you.</span></h2>
+          <p class="sec-lede">Waycar sends a push when an agent is Blocked or Done. Your machine encrypts it first, so our relay can't read it.</p>
+        </div>
+        <ul class="points">
+          <li>
+            <p>Live Activities keep each Host on your Lock Screen and in the Dynamic Island.</p>
+          </li>
+          <li>
+            <p>Open the app and the Console has every machine's agents in one list, with the blocked ones on top.</p>
+            <p class="sort-order">
+              <span class="visually-hidden">Sort order:</span>
+              <span class="pill pill-blocked">Blocked</span><span aria-hidden="true">→</span>
+              <span class="pill pill-done">Done</span><span aria-hidden="true">→</span>
+              <span class="pill pill-working">Working</span><span aria-hidden="true">→</span>
+              <span class="pill pill-idle">Idle</span>
+            </p>
+          </li>
+        </ul>
+      </div>
+      <PhoneShot image={iphone.console.image} alt={iphone.console.alt} />
+    </div>
+
+    <div id="mosh" class="glass move">
+      <p class="move-label">on the move</p>
+      <ul class="move-list">
+        <li>
+          <span class="pill pill-mosh">MOSH</span>
+          <span>Walk from Wi-Fi to cellular and the live terminal stays attached.</span>
+        </li>
+        <li>
+          <span class="pill pill-ssh">SSH</span>
+          <span>If mosh can't get through, Waycar switches to SSH by itself.</span>
+        </li>
+        <li>
+          <span class="pill pill-sleep">SLEEP</span>
+          <span>Come back and you're right where you left off.</span>
+        </li>
+        <li>
+          <span class="pill pill-queued">QUEUED</span>
+          <span>No signal? Send it anyway. It goes out once the Host is back.</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(0, 340px);
+    justify-content: center;
+    align-items: center;
+    gap: 56px;
+  }
+
+  .text .sec-head {
+    margin-bottom: 32px;
+  }
+
+  .points {
+    display: grid;
+    gap: 24px;
+  }
+
+  .points li > p:not(.sort-order) {
+    max-width: 480px;
+    font-size: var(--fs-lede);
+    color: var(--text-2);
+  }
+
+  .sort-order {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    font: 12.5px var(--font-mono);
+    color: var(--text-3);
+  }
+
+
+  .move {
+    margin-top: 32px;
+    padding: 24px 28px;
+  }
+
+  .move-label {
+    margin-bottom: 16px;
+    font: 500 11.5px var(--font-mono);
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  .move-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+
+  .move-list li {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+  .pill-sleep,
+  .pill-queued {
+    color: var(--text-2);
+    background: rgb(var(--white-rgb) / 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+
+  @media (max-width: 1080px) {
+    .move-list {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: 36px;
+    }
+
+
+    .move {
+      padding: 20px;
+    }
+
+    .move-list {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .move-list li {
+      display: grid;
+      grid-template-columns: 4rem 1fr;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .move-list .pill {
+      justify-self: start;
+    }
+  }
+</style>

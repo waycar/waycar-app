@@ -1,0 +1,8 @@
+
+### rc noise = none
+  ssh -tt <attach line>: first bytes: @@WAYCAR-ATTACH@@\r\n\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\\x1b[16t\x1b[c\x1b[?1004h\x1b[!p\x1b[?2026l\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1
+  ssh -tt host (interactive login shell): NOISE-PROFILE=False NOISE-BASHRC-TOP=False NOISE-BASHRC-AFTER-GUARD=False MOTD-text=True 'Welcome to Ubuntu'=True
+
+### rc noise = all
+  ssh -tt <attach line>: first bytes: NOISE-BASHRC-TOP\r\n@@WAYCAR-ATTACH@@\r\n\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\\x1b[16t\x1b[c\x1b[?1004h\x1b[!p\x1b[?2026l\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[
+  ssh -tt host (interactive login shell): NOISE-PROFILE=True NOISE-BASHRC-TOP=True NOISE-BASHRC-AFTER-GUARD=True MOTD-text=True 'Welcome to Ubuntu'=True

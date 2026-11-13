@@ -1,0 +1,254 @@
+import Foundation
+import Synchronization
+
+/// One ranged read of a remote file: the bytes that range holds, plus the
+/// file's size at that moment. `length` is `nil` when the file is gone, which
+/// is how a follower tells "nothing appended yet" from "the file it was
+/// following no longer exists".
+public struct SSHSFTPFileSlice: Sendable, Equatable {
+    public let data: Data
+    public let length: UInt64?
+
+    public init(data: Data, length: UInt64?) {
+        self.data = data
+        self.length = length
+    }
+}
+
+/// One SFTP subsystem channel owned by an authenticated SSH connection.
+///
+/// The surface is intentionally limited to Waycar's atomic file-staging needs.
+/// Native handles and remote paths never leave `SessionDriver` diagnostics.
+///
+/// A read (`readFileIfPresent`, `readFileRange`, `readRegularFile`,
+/// `listDirectories`) cancelled or timed out once it has the channel shuts the
+/// channel down, so the request it abandoned cannot answer a later call. Every
+/// later call but `close`, including one already queued behind it, fails with
+/// `SSHError.channelFailed`; open a new client. The SSH connection stays
+/// usable unless that shutdown itself cannot finish.
+public final class SSHSFTPClient: Sendable {
+    private let id: UInt64
+    private let driver: SessionDriver
+    private let closed = Mutex(false)
+
+    init(id: UInt64, driver: SessionDriver) {
+        self.id = id
+        self.driver = driver
+    }
+
+    public func createDirectory(
+        at path: String,
+        permissions: UInt32,
+        timeout: Duration
+    ) async throws {
+        try await driver.createSFTPDirectory(
+            id: id,
+            path: path,
+            permissions: permissions,
+            timeout: timeout)
+    }
+
+    public func attributes(at path: String, timeout: Duration) async throws
+        -> SSHSFTPAttributes
+    {
+        try await driver.sftpAttributes(id: id, path: path, timeout: timeout)
+    }
+
+    public func setPermissions(
+        _ permissions: UInt32,
+        at path: String,
+        timeout: Duration
+    ) async throws {
+        try await driver.setSFTPPermissions(
+            id: id,
+            path: path,
+            permissions: permissions,
+            timeout: timeout)
+    }
+
+    /// Reads one complete optional file without exposing a native read handle.
+    /// A missing file is the expected `nil` case; every other SFTP status is
+    /// surfaced as a path-free `SSHError`.
+    public func readFileIfPresent(
+        at path: String,
+        timeout: Duration
+    ) async throws -> Data? {
+        try await driver.readSFTPFileIfPresent(
+            id: id,
+            path: path,
+            timeout: timeout)
+    }
+
+    /// Reads at most `maxBytes` from `offset`, answering only that range.
+    ///
+    /// A file that reaches tens of megabytes and grows cannot be read whole on
+    /// every look, so a follower asks for what it has not seen yet and uses
+    /// `length` to notice the file it was following was replaced. Callers that
+    /// look repeatedly should hold one client: each SFTP channel is a real
+    /// server-side allocation.
+    public func readFileRange(
+        at path: String,
+        offset: UInt64,
+        maxBytes: Int,
+        timeout: Duration
+    ) async throws -> SSHSFTPFileSlice {
+        try await driver.readSFTPFileRange(
+            id: id,
+            path: path,
+            offset: offset,
+            maxBytes: maxBytes,
+            timeout: timeout)
+    }
+
+    /// Reads one whole regular file of at most `maxBytes` from a single open
+    /// handle whose type and size were checked with `fstat`. Directories,
+    /// FIFOs, devices, missing, unreadable, and oversized files come back as
+    /// the matching refusal instead of an error.
+    ///
+    /// `timeout` bounds each request — the stat, the open and `fstat`, and
+    /// the wait for every next chunk — not the transfer: a file that keeps
+    /// arriving may take as long as its size needs at about 1 Mbit/s, up to
+    /// five minutes.
+    public func readRegularFile(
+        at path: String,
+        maxBytes: Int,
+        timeout: Duration
+    ) async throws -> SSHSFTPRegularFileRead {
+        try await driver.readSFTPRegularFile(
+            id: id,
+            path: path,
+            maxBytes: maxBytes,
+            timeout: timeout)
+    }
+
+    /// Lists the directories directly inside one remote directory without
+    /// exposing a native directory handle. A missing directory surfaces as
+    /// a path-free `SSHError.sftpFailure`.
+    public func listDirectories(
+        at path: String,
+        timeout: Duration
+    ) async throws -> SSHSFTPDirectoryListing {
+        try await driver.listSFTPDirectories(
+            id: id,
+            path: path,
+            timeout: timeout)
+    }
+
+    public func openFileForWriting(
+        at path: String,
+        permissions: UInt32,
+        timeout: Duration
+    ) async throws -> SSHSFTPFile {
+        try await driver.openSFTPFileForWriting(
+            sftpID: id,
+            path: path,
+            permissions: permissions,
+            timeout: timeout)
+    }
+
+    public func removeFile(at path: String, timeout: Duration) async throws {
+        try await driver.removeSFTPFile(id: id, path: path, timeout: timeout)
+    }
+
+    /// Removes one exact operation-owned path during failure compensation.
+    /// This call ignores caller cancellation, verifies that the path is absent,
+    /// and remains bounded by `timeout`.
+    public func removeFileForCompensation(
+        at path: String,
+        timeout: Duration
+    ) async throws {
+        try await driver.removeSFTPFileForCompensation(
+            id: id,
+            path: path,
+            timeout: timeout)
+    }
+
+    public func renameFileAtomically(
+        from sourcePath: String,
+        to destinationPath: String,
+        timeout: Duration
+    ) async throws {
+        try await driver.renameSFTPFileAtomically(
+            id: id,
+            sourcePath: sourcePath,
+            destinationPath: destinationPath,
+            timeout: timeout)
+    }
+
+    /// Closes only this SFTP subsystem channel. Idempotent.
+    public func close(timeout: Duration) async throws {
+        let shouldClose = closed.withLock { closed in
+            guard !closed else { return false }
+            closed = true
+            return true
+        }
+        guard shouldClose else { return }
+        try await driver.closeSFTP(id: id, timeout: timeout)
+    }
+
+    deinit {
+        let shouldClose = closed.withLock { closed in
+            guard !closed else { return false }
+            closed = true
+            return true
+        }
+        guard shouldClose else { return }
+        let id = id
+        let driver = driver
+        Task { try? await driver.closeSFTP(id: id, timeout: .seconds(2)) }
+    }
+}
+
+/// One write-only SFTP file handle.
+public final class SSHSFTPFile: Sendable {
+    private let sftpID: UInt64
+    private let fileID: UInt64
+    private let driver: SessionDriver
+    private let closed = Mutex(false)
+
+    init(sftpID: UInt64, fileID: UInt64, driver: SessionDriver) {
+        self.sftpID = sftpID
+        self.fileID = fileID
+        self.driver = driver
+    }
+
+    public func write(_ data: Data, timeout: Duration) async throws {
+        try await driver.writeSFTPFile(
+            sftpID: sftpID,
+            fileID: fileID,
+            data: data,
+            timeout: timeout)
+    }
+
+    /// Closes only this file handle. Idempotent.
+    public func close(timeout: Duration) async throws {
+        let shouldClose = closed.withLock { closed in
+            guard !closed else { return false }
+            closed = true
+            return true
+        }
+        guard shouldClose else { return }
+        try await driver.closeSFTPFile(
+            sftpID: sftpID,
+            fileID: fileID,
+            timeout: timeout)
+    }
+
+    deinit {
+        let shouldClose = closed.withLock { closed in
+            guard !closed else { return false }
+            closed = true
+            return true
+        }
+        guard shouldClose else { return }
+        let sftpID = sftpID
+        let fileID = fileID
+        let driver = driver
+        Task {
+            try? await driver.closeSFTPFile(
+                sftpID: sftpID,
+                fileID: fileID,
+                timeout: .seconds(2))
+        }
+    }
+}

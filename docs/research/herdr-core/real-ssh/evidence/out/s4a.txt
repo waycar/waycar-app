@@ -1,0 +1,30 @@
+
+### baseline: ssh -tt host 'printf hi' (connect+auth+pty+exec+exit)
+  run 0: first byte 0.198s exit at 0.217s rc=0 out=b'hiConnection to 127.0.0.1 closed.\r\r\n'
+  run 1: first byte 0.194s exit at 0.216s rc=0 out=b'hiConnection to 127.0.0.1 closed.\r\r\n'
+  run 2: first byte 0.195s exit at 0.216s rc=0 out=b'hiConnection to 127.0.0.1 closed.\r\r\n'
+
+### attach t1 (alpha), 80x24 pty, DA1 reply from outer terminal: True
+  rep 0: marker@0.19451375500648282 first-paint(ESC[!p)@0.19601319401408546  total bytes=346  core size=(80, 24)
+  first chunks: [(0.195, '@@WAYCAR-ATTACH@@\\r\\n'), (0.195, '\\x1b]10;?\\x1b\\\\\\x1b]11;?\\x1b\\\\\\x1b]12;?\\x1b\\\\\\x1b[16t\\x1b[c'), (0.196, '\\x1b[?1004h'), (0.196, '\\x1b[!p\\x1b[?2026l\\x1b[?9l\\x1b[?1000l\\x1b[?1001l\\x1b[?1002l\\x1b[?1003l\\x1b[?1004l\\x1b[?1005l\\x1b[?1006l\\x1b[?1015l\\x1b[?1016l\\x1b[?2004l\\x1b[?1l\\x1b[?66l\\x1b[?2031l\\x1b[?2048l\\x1b[=0;1u\\x1b[?1049l\\x1b...(+239)')]
+         detach: rc=255
+  rep 1: marker@0.19339747799676843 first-paint(ESC[!p)@0.1958168150158599  total bytes=346  core size=(80, 24)
+         detach: rc=255
+  rep 2: marker@0.19388489000266418 first-paint(ESC[!p)@0.1958937129820697  total bytes=346  core size=(80, 24)
+         detach: rc=255
+
+### attach t1 (alpha), 80x24 pty, DA1 reply from outer terminal: False
+  rep 0: marker@0.1931772230018396 first-paint(ESC[!p)@0.6960104199824855  total bytes=346  core size=(80, 24)
+         detach: rc=255
+  rep 1: marker@0.19550734499352984 first-paint(ESC[!p)@0.698968035983853  total bytes=346  core size=(80, 24)
+         detach: rc=255
+  rep 2: marker@0.1917838439985644 first-paint(ESC[!p)@0.6945147750084288  total bytes=346  core size=(80, 24)
+         detach: rc=255
+
+### resize through the local pty (TIOCSWINSZ on master -> SIGWINCH -> ssh window-change -> hc RESIZE)
+  attached: core size (80, 24)
+  setsize 100x30 -> core saw it after 0.093 s
+  setsize 52x28 -> core saw it after 0.101 s
+  setsize 120x40 -> core saw it after 0.099 s
+  setsize 80x24 -> core saw it after 0.101 s
+  close master: ssh exit rc=255 after 0.009s; core back at 200x120 after 0.011s (from close); size=(200, 120)

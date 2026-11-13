@@ -1,0 +1,421 @@
+{
+  "version": 1,
+  "description": "Agent Summary store lines (plugin/README.md, \"Agent Summary\") and what a reader keeps of each: null when the line is dropped (another v, a status outside working|idle|done|blocked, a tombstone), else pane, status, summary, ts, and progress normalized per the README (done/total only as a valid pair, phase only when known, null when nothing survives), plus progress_ts when it is a number and the progress survives (omitted otherwise), and declares_progress: whether the line has a progress key at all (any value, null and malformed included), which marks a plugin that writes progress. Consumed by plugin/test/summary-store.test.js and the app's AgentSummary tests.",
+  "cases": [
+    {
+      "name": "steps and phase",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7,\"phase\":\"verifying\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 3,
+          "total": 7,
+          "phase": "verifying"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "steps only",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 3,
+          "total": 7
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "phase only",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"phase\":\"implementing\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "implementing"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "phase exploring",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"phase\":\"exploring\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "exploring"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "phase wrapping_up",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"phase\":\"wrapping_up\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "wrapping_up"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "no steps done yet",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":0,\"total\":5}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 0,
+          "total": 5
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "every step done",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":7,\"total\":7}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 7,
+          "total": 7
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "total at the cap of 99",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":98,\"total\":99}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 98,
+          "total": 99
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "blocked record keeps its frozen progress",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"blocked\",\"summary\":\"Needs approval to run the migration\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":2,\"total\":4,\"phase\":\"implementing\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "blocked",
+        "summary": "Needs approval to run the migration",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 2,
+          "total": 4,
+          "phase": "implementing"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "absent progress (older plugin) declares nothing",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\"}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": false
+      }
+    },
+    {
+      "name": "progress null declares the capability with no estimate",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":null}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "total 0 drops the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":0,\"total\":0}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "total 100 drops the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":50,\"total\":100}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "done above total drops the steps, phase survives",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":8,\"total\":7,\"phase\":\"verifying\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "verifying"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "negative done drops the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":-1,\"total\":7}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "done without total drops the steps, phase survives",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"phase\":\"implementing\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "implementing"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "total without done drops the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"total\":7}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "non-integer done drops the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3.5,\"total\":7}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "string done drops the steps, phase survives",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":\"3\",\"total\":7,\"phase\":\"exploring\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "phase": "exploring"
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "unknown phase with valid steps keeps the steps",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7,\"phase\":\"deploying\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 3,
+          "total": 7
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "unknown phase alone is no progress",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"phase\":\"deploying\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "phase in another case is unknown",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"phase\":\"Verifying\"}}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress as a string keeps the summary",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":\"3/7\"}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress as an array keeps the summary",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":[3,7]}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress_ts newer than ts is kept with the progress",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":4,\"total\":7,\"phase\":\"verifying\"},\"progress_ts\":1760000090000}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 4,
+          "total": 7,
+          "phase": "verifying"
+        },
+        "progress_ts": 1760000090000,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress_ts equal to ts (written with the summary)",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"blocked\",\"summary\":\"Needs approval to run the migration\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":2,\"total\":4},\"progress_ts\":1760000000000}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "blocked",
+        "summary": "Needs approval to run the migration",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 2,
+          "total": 4
+        },
+        "progress_ts": 1760000000000,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress_ts without progress is ignored",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress_ts\":1760000090000}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": false
+      }
+    },
+    {
+      "name": "progress_ts with only invalid progress is ignored",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":9,\"total\":7},\"progress_ts\":1760000090000}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": null,
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "progress_ts as a string is ignored, the progress kept",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7},\"progress_ts\":\"1760000090000\"}",
+      "expected": {
+        "pane": "w1:p1",
+        "status": "working",
+        "summary": "Adding backoff to webhook retries",
+        "ts": 1760000000000,
+        "progress": {
+          "done": 3,
+          "total": 7
+        },
+        "declares_progress": true
+      }
+    },
+    {
+      "name": "tombstone with progress is dropped",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":null,\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7,\"phase\":\"verifying\"}}",
+      "expected": null
+    },
+    {
+      "name": "tombstone is dropped",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":null,\"ts\":1760000000000,\"hash\":\"ab12\"}",
+      "expected": null
+    },
+    {
+      "name": "another store version is dropped",
+      "line": "{\"v\":2,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7}}",
+      "expected": null
+    },
+    {
+      "name": "an unknown status is dropped",
+      "line": "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"exited\",\"summary\":\"Adding backoff to webhook retries\",\"ts\":1760000000000,\"hash\":\"ab12\",\"progress\":{\"done\":3,\"total\":7}}",
+      "expected": null
+    }
+  ]
+}

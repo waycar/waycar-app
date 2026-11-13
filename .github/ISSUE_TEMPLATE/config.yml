@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/waycar/waycar-app/security/advisories/new
+    about: Please report vulnerabilities privately, never in a public issue.
+  - name: Help and setup guides
+    url: https://waycar.dev/help
+    about: Installing the Host Tools, pairing, connection problems and every feature.

@@ -1,0 +1,244 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 145,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAia2VwdDEiLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 621,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDFjIiwiYXJndiI6WyJzaCIsIi1jIiwiZWNobyBvcmlnaW5hbDsgc2xlZXAgMzAwMCJdLCJjb2xzIjo1MiwiY3JlYXRlZF9tcyI6MTc5MzMwOTExOTQ1OCwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCItYyIsImVjaG8gb3JpZ2luYWw7IHNsZWVwIDMwMDAiXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzI2OTl9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjp0cnVlLCJsYWJlbHMiOnt9LCJuYW1lIjoia2VwdDEiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMyNjk5LCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoyOCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfX19",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t1c",
+      "argv": [
+       "sh",
+       "-c",
+       "echo original; sleep 3000"
+      ],
+      "cols": 52,
+      "created_ms": 1793309119458,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+       "argv": [
+        "sh",
+        "-c",
+        "echo original; sleep 3000"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2532699
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {},
+      "name": "kept1",
+      "notify": true,
+      "parent": null,
+      "pid": 2532699,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 234,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbM2cbWzlHG0gbWzE3RxtIG1syNUcbSBtbMzNHG0gbWzQxRxtIG1s0OUcbSBtbSG9yaWdpbmFsG1syOzFIG1swbRtbPzkwMDFs"
+  },
+  {
+   "t": 0.584,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 68,
+   "payload_b64": "eyJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJyZWFzb24iOiJzaWduYWxlZCIsInNpZ25hbCI6OX0=",
+   "reason": {
+    "exit_code": null,
+    "finished_ms": null,
+    "reason": "signaled",
+    "signal": 9
+   }
+  },
+  {
+   "t": 1.052,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 145,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDIsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAia2VwdDEiLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 1.052,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 170,
+   "payload_b64": "eyJlcnJvciI6eyJjb2RlIjotMzIwMDAsImRhdGEiOnsiaGludCI6InJldHJ5IGFmdGVyIHRoZSByZXN0YXJ0ZWQgZXZlbnQiLCJraW5kIjoidW5hdmFpbGFibGUifSwibWVzc2FnZSI6InQxYyBpcyBsb3N0LCB3YWl0aW5nIGZvciBpdHMgbmV3IHNoZWxsIn0sImlkIjoyLCJqc29ucnBjIjoiMi4wIn0=",
+   "json": {
+    "error": {
+     "code": -32000,
+     "data": {
+      "hint": "retry after the restarted event",
+      "kind": "unavailable"
+     },
+     "message": "t1c is lost, waiting for its new shell"
+    },
+    "id": 2,
+    "jsonrpc": "2.0"
+   }
+  },
+  {
+   "t": 5.103,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 145,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDMsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAia2VwdDEiLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 5.103,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 565,
+   "payload_b64": "eyJpZCI6MywianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoyLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDFjIiwiYXJndiI6WyIvYmluL3NoIl0sImNvbHMiOjUyLCJjcmVhdGVkX21zIjoxNzkzMzA5MTE5NDU4LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyIvYmluL3NoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMyNzU3fSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6dHJ1ZSwibGFiZWxzIjp7fSwibmFtZSI6ImtlcHQxIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMjc1NywicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MjgsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjpudWxsLCJzdGF0ZSI6ImxpdmUiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH19fQ==",
+   "json": {
+    "id": 3,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 2,
+     "terminal": {
+      "address": "t1c",
+      "argv": [
+       "/bin/sh"
+      ],
+      "cols": 52,
+      "created_ms": 1793309119458,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+       "argv": [
+        "/bin/sh"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2532757
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {},
+      "name": "kept1",
+      "notify": true,
+      "parent": null,
+      "pid": 2532757,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 5.103,
+   "dir": "in",
+   "ch": 2,
+   "kind": "DATA",
+   "len": 228,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbM2cbWzlHG0gbWzE3RxtIG1syNUcbSBtbMzNHG0gbWzQxRxtIG1s0OUcbSBtbSCQgG1sxOzNIG1swbRtbPzkwMDFs"
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

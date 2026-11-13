@@ -1,0 +1,13 @@
+# Harness lab: Codex talks to the mock's OpenAI Responses API.
+model = "mock-model"
+model_provider = "mock"
+check_for_update_on_startup = false
+
+[model_providers.mock]
+name = "Waycar harness lab mock"
+base_url = "http://mock:8080/v1"
+env_key = "WAYCAR_LAB_API_KEY"
+wire_api = "responses"
+
+[projects."/home/waycar/work/demo"]
+trust_level = "trusted"

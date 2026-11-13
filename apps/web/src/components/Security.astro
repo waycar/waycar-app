@@ -1,0 +1,144 @@
+---
+const locks = [
+  { icon: '⚿', title: 'On-device keys', body: 'The private key never leaves your Keychain.' },
+  { icon: '#', title: 'Pinned fingerprints', body: 'The Pairing Code verifies your first connection.' },
+  { icon: '⇉', title: 'Checked at both hops', body: 'Jump Host and machine are verified separately.' },
+  { icon: '⌬', title: 'Post-quantum ready', body: 'Post-quantum key exchange when your server supports it.' },
+  { icon: '◉', title: 'On-device dictation', body: 'Speech becomes text on your phone.' },
+  { icon: '☁', title: 'Encrypted sync', body: 'Hosts and keys sync via end-to-end encrypted iCloud Keychain. Optional.' },
+];
+---
+
+<section id="security" class="section security" aria-labelledby="security-title">
+  <div class="wrap">
+    <div class="glass sec-strip">
+      <div class="intro">
+        <span class="kicker">Security &amp; privacy</span>
+        <h2 id="security-title" class="sec-title">
+          Your keys. Your machines. <span class="muted">Nobody else's servers.</span>
+        </h2>
+        <p>
+          The app has no account and no ads. Your keys and terminals never touch our servers. Notifications are encrypted before they
+          leave your Host. <a href="/privacy">Read the privacy policy →</a>
+        </p>
+      </div>
+      <ul class="locks">
+        {
+          locks.map((lock) => (
+            <li class="lock">
+              <span class="ic" aria-hidden="true">
+                {lock.icon}
+              </span>
+              <h3>{lock.title}</h3>
+              <p>{lock.body}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .security {
+    padding-top: 0;
+  }
+
+  .sec-strip {
+    display: grid;
+    grid-template-columns: 1.1fr 2fr;
+    gap: 48px;
+    align-items: start;
+    padding: 44px;
+    overflow: hidden;
+  }
+
+  .sec-strip::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(500px 300px at 0% 0%, rgb(var(--cyan-rgb) / 0.1), transparent 70%);
+    pointer-events: none;
+  }
+
+  .sec-title {
+    font-size: clamp(28px, 3.2vw, 38px);
+  }
+
+  .intro p {
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--text-2);
+  }
+
+  .intro a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .locks {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    overflow: hidden;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+
+  .lock {
+    padding: 22px;
+    background: var(--panel);
+  }
+
+  .ic {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    font: 13px var(--font-mono);
+    color: var(--cyan);
+    background: rgb(var(--cyan-rgb) / 0.06);
+    border: 1px solid rgb(var(--cyan-rgb) / 0.35);
+    border-radius: 8px;
+  }
+
+  h3 {
+    margin: 14px 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .lock p {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 1080px) {
+    .sec-strip {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .locks {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .sec-strip {
+      padding: 26px;
+    }
+
+    .locks {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

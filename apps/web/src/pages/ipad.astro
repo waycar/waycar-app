@@ -1,0 +1,110 @@
+---
+import { Image } from 'astro:assets';
+import { ipad } from '../data/screens';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="Waycar on iPad"
+  description="See Waycar on iPad: your agent list in a sidebar next to the live terminal, with keyboard shortcuts, multiple windows, and drag and drop."
+  image="/og-ipad.png"
+  imageAlt="The Waycar logo above the headline 'Waycar on iPad.' and an iPad showing the Agent list in a sidebar next to a live terminal"
+>
+  <section class="section gallery" aria-labelledby="gallery-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="kicker">iPad</span>
+        <h1 id="gallery-title" class="sec-title">Waycar on <span class="grad-text">iPad.</span></h1>
+        <p class="sec-lede">
+          The Agent Console moves into a sidebar next to the live terminal. Magic Keyboard shortcuts work, you can open
+          more than one window, and drag and drop goes straight into the Composer.
+        </p>
+      </div>
+
+      <ol class="shots">
+        {
+          ipad.map((shot, index) => (
+            <li>
+              <figure>
+                <div class="ipad">
+                  <Image
+                    src={shot.image}
+                    alt={shot.alt}
+                    widths={[640, 960, 1400, 1900]}
+                    sizes="(min-width: 1248px) 1172px, 94vw"
+                    format="webp"
+                    quality={80}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    fetchpriority={index === 0 ? 'high' : 'auto'}
+                  />
+                </div>
+                <figcaption>
+                  <span class="heading">{shot.heading}</span>
+                  <span class="caption">{shot.caption}</span>
+                </figcaption>
+              </figure>
+            </li>
+          ))
+        }
+      </ol>
+
+      <p class="back">
+        <a class="btn btn-ghost" href="/"><span aria-hidden="true">←</span> Back to the home page</a>
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .shots {
+    display: grid;
+    gap: clamp(48px, 7vw, 80px);
+  }
+
+  .ipad {
+    padding: 14px;
+    background: var(--bezel-tablet);
+    border-radius: 30px;
+    box-shadow: var(--shadow-device);
+  }
+
+  .ipad :global(img) {
+    width: 100%;
+    aspect-ratio: 2752 / 2064;
+    object-fit: cover;
+    border-radius: 17px;
+  }
+
+  figcaption {
+    display: grid;
+    gap: 4px;
+    margin-top: 20px;
+  }
+
+  .heading {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .caption {
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+  .back {
+    margin-top: 56px;
+  }
+
+  @media (max-width: 560px) {
+    .ipad {
+      padding: 6px;
+      border-radius: 16px;
+    }
+
+    .ipad :global(img) {
+      border-radius: 11px;
+    }
+  }
+</style>

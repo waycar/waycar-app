@@ -1,0 +1,292 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+---
+
+<Layout
+  title="Support · Waycar"
+  description="Get help with Waycar, the free iPhone and iPad agent console: contact support, set up a Host, and fix common connection problems."
+>
+  <article class="section support">
+    <div class="wrap">
+      <div class="glass prose">
+        <h1>Waycar Support</h1>
+        <p>
+          Waycar is an iPhone and iPad app for herdr and tmux. It connects to computers you control, called Hosts, over
+          SSH or mosh, and shows the Agents running there. Waycar is made by OTREVA, LLC.
+        </p>
+        <p>
+          For how each feature works, step by step, see <a href="/help"><strong>Waycar Help</strong></a>: one page per
+          feature, with fixes for common problems.
+        </p>
+
+        <h2>Contact us</h2>
+        <p>Email <a href="mailto:support@waycar.dev"><strong>support@waycar.dev</strong></a>. We answer every message by email.</p>
+        <p>
+          For discussion, bugs, and feature requests, join the community at
+          <a href="https://www.reddit.com/r/waycar/"><strong>r/waycar</strong></a> on Reddit. Both are also in the app under
+          Settings › Support.
+        </p>
+        <p>
+          Please tell us your iPhone or iPad model, its iOS version, the Waycar version (Settings › About), and what you
+          see on screen. Never send passwords, private keys, tokens, or other secrets.
+        </p>
+        <p>For privacy questions or data requests, email <a href="mailto:privacy@waycar.dev"><strong>privacy@waycar.dev</strong></a>.</p>
+
+        <h2>What you need</h2>
+        <ul>
+          <li>An iPhone or iPad with iOS or iPadOS 18 or later. An Android app is coming next.</li>
+          <li>
+            A Mac or Linux computer you control (a Host) running herdr 0.7.5 or later, or tmux 3.2 or later. See <a href="https://herdr.dev">herdr.dev</a>.
+          </li>
+          <li>SSH access to that Host. On a Mac, turn on Remote Login in System Settings › General › Sharing.</li>
+          <li>Optional: Waycar's tools (the install command below), for Scan to Pair, Agent Notifications, Live Activities, Chat Mode, and status hooks.</li>
+          <li>Optional: mosh-server on the Host, for connections that survive network changes.</li>
+        </ul>
+
+        <h2>Set up</h2>
+        <ol>
+          <li>Install herdr on your Host and start it, or have tmux 3.2 or later on the Host.</li>
+          <li>Add the Host to Waycar in one of two ways.</li>
+        </ol>
+
+        <h3>Scan to Pair (uses Waycar's tools)</h3>
+        <ol>
+          <li>
+            On the Host, run: <code>curl -fsSL https://waycar.dev/install.sh | sh</code><br />
+            The same command works for herdr, tmux, or both. It needs curl and tar, and no Node.js. It does not use sudo.
+          </li>
+          <li>
+            Answer <strong>Y</strong> when it offers to show a Pairing Code. On herdr it pops up inside herdr. On tmux
+            it draws in your terminal. Press <strong>c</strong> if you want to copy the code instead. On a Mac Host
+            that copies it. On a Linux Host it shows the code so you can select it. The code expires in about 2 minutes.
+          </li>
+          <li>
+            In Waycar, tap <strong>Scan to Pair</strong> and scan the code, or tap <strong>Paste Pairing Code</strong>.
+            The Pairing Code carries the Host's local network addresses, so keep your device on the same network while
+            you pair.
+          </li>
+          <li>Run the command again whenever you want to pair another device.</li>
+        </ol>
+
+        <h3>Add Manually (no install needed)</h3>
+        <ol>
+          <li>In Waycar, tap <strong>Add Manually</strong> on the welcome screen, or <strong>+</strong> (Add Host) in the Hosts list.</li>
+          <li>
+            Enter the Host's <strong>Address</strong> (a DNS name such as <code>mac.example.com</code> works best),
+            <strong>Port</strong> (usually 22), and <strong>User</strong>.
+          </li>
+          <li>
+            Under <strong>Authentication</strong>, choose a <strong>Method</strong>:
+            <ul>
+              <li><strong>Password</strong>: type your login password for that user.</li>
+              <li><strong>Device Key</strong>: copy the line Waycar shows and add it to <code>~/.ssh/authorized_keys</code> on the Host.</li>
+            </ul>
+          </li>
+          <li>
+            Tap <strong>Save</strong>. When Waycar asks <strong>Trust this Host?</strong>, check the fingerprint (see
+            "Host key" below) and tap <strong>Trust</strong>.
+          </li>
+          <li>Waycar runs its checks. When they pass, your Agents appear in the Console.</li>
+        </ol>
+
+        <h2>Free, with everything included</h2>
+        <p>
+          Waycar is free, with no limit on starting or resuming agents and shells. No account or subscription.
+          Your own machines and AI providers are still yours to pay for. See <a href="/pricing">pricing</a>.
+        </p>
+        <p>Waycar is licensed under <a href={eula}>Apple's standard end user license agreement</a>.</p>
+
+        <h2>Common problems</h2>
+
+        <h3>Host key: "Trust this Host?", "The host key is not trusted", or "The host key changed"</h3>
+        <p>
+          Waycar pins each Host's SSH host key the first time you connect. To check the fingerprint Waycar shows, run
+          this on the Host; one of the SHA256 values it prints must match:
+        </p>
+        <p><code>for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done</code></p>
+        <p>
+          If you see "The host key is not trusted", open the Host's page and answer Trust this Host?. If you see "The
+          host key changed" and you did not reinstall or replace the Host, do not trust the new key: someone may be
+          intercepting the connection. If you did, open the Host's page and choose Trust New Key.
+        </p>
+
+        <h3>"herdr is not running on this Host"</h3>
+        <p>
+          Start herdr on the Host. If it is running, check that SSH stream-local forwarding is allowed: Waycar talks to
+          herdr through its socket over SSH. In <code>/etc/ssh/sshd_config</code>, <code>AllowStreamLocalForwarding</code>
+          must not be <code>no</code> and <code>DisableForwarding</code> must not be <code>yes</code>. The line in
+          <code>~/.ssh/authorized_keys</code> must not contain <code>restrict</code> or <code>no-port-forwarding</code>.
+          Restart SSH on the Host after a change.
+        </p>
+
+        <h3>"herdr is not on this Host's SSH PATH"</h3>
+        <p>
+          SSH commands do not load your full shell profile. Homebrew installs herdr in <code>/opt/homebrew/bin</code>
+          (Apple silicon Mac) or <code>/home/linuxbrew/.linuxbrew/bin</code> (Linux). Make sure that folder is on the
+          PATH for non-interactive SSH sessions.
+        </p>
+
+        <h3>"tmux is not installed on this Host"</h3>
+        <p>
+          Install tmux 3.2 or later, or herdr, on the Host.
+        </p>
+
+        <h3>"tmux is too old"</h3>
+        <p>
+          Waycar needs tmux 3.2 or later. Update tmux on the Host. If the Host also runs herdr, the install command
+          ignores an old tmux and sets up herdr. Without herdr, it stops and tells you tmux is too old.
+        </p>
+
+        <h3>tmux Isn't Running on your Host</h3>
+        <p>
+          tmux has no sessions yet. Tap <strong>Start Session</strong> in the Console to start one, or start one on the
+          Host.
+        </p>
+
+        <h3>Agents show Unknown on tmux</h3>
+        <p>
+          Waycar's status hooks tell it when an Agent is Working, Blocked, or Done. Claude Code, Codex, Gemini CLI,
+          opencode and the other agents in <a href="/help/tmux-hooks">Waycar hooks for tmux</a> get hooks, but only if
+          they were installed before you ran the install command. Run it again if you added one later. On the Host's
+          page, <strong>Install Status Hooks</strong> does the same. Codex also needs a one-time review on its /hooks
+          screen. Other Agents show Unknown.
+        </p>
+
+        <h3>One backend shows an issue on a Host with herdr and tmux</h3>
+        <p>
+          A Host can run both. If herdr or tmux fails, Waycar shows that issue with a <strong>Retry</strong> button while
+          the other keeps working. To hide the tmux sessions on that Host, turn off <strong>Show tmux sessions</strong> on
+          the Host's page. That also stops their notifications.
+        </p>
+
+        <h3>"Authentication failed"</h3>
+        <p>
+          Password sign-in uses SSH password authentication. If the Host only allows keys or keyboard-interactive
+          sign-in, choose Device Key and add its line to <code>~/.ssh/authorized_keys</code>.
+        </p>
+
+        <h3>Mosh does not connect</h3>
+        <p>
+          Mosh is optional. When it fails, Waycar uses SSH instead. To use mosh, install mosh-server on the Host
+          (<code>brew install mosh</code> or <code>sudo apt install mosh</code>) and allow incoming UDP ports 60000 to
+          61000 through the Host's firewall and router. Then edit the Host and tap <strong>Test Mosh on this Host</strong>.
+        </p>
+
+        <h3>IPv6-only networks</h3>
+        <p>
+          Some cellular and guest networks offer only IPv6. Waycar works there with a DNS name or an IP address; type
+          IPv6 addresses without square brackets.
+        </p>
+
+        <h3>Pairing Code: "The Host has no pairing in progress for this code"</h3>
+        <p>
+          The code expired or was already used. Run the install command again, or show a new Pairing Code in herdr. On
+          tmux, run the pair command the install command printed. Then scan the new code.
+        </p>
+
+        <h3>My computer is not reachable from the internet</h3>
+        <p>
+          Add a Jump Host: a server that you can reach and that can reach your computer. Enter it in the Host's Jump Host
+          section. Waycar checks host keys at both hops.
+        </p>
+
+        <h2>Privacy</h2>
+        <p>
+          Your SSH keys, passwords, commands, and terminal output go only between your device and your Hosts. If you turn
+          on AI Summaries, your Host also sends recent screen text to its AI provider.
+          <a href="/privacy">Read the full privacy policy</a>.
+        </p>
+
+        <h2>Company</h2>
+        <p>
+          Waycar is an independent app from OTREVA, LLC. It is not affiliated with or endorsed by the herdr project,
+          CodexBar, Anthropic, OpenAI or Google.
+        </p>
+      </div>
+    </div>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: 80ch;
+    margin-inline: auto;
+    padding: clamp(24px, 5vw, 56px);
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--text-2);
+  }
+
+  h1 {
+    font-size: clamp(32px, 4.4vw, 48px);
+    font-weight: 620;
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+
+  h2 {
+    margin-top: 48px;
+    padding-top: 24px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    border-top: 1px solid var(--line);
+  }
+
+  h3 {
+    margin-top: 32px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  p,
+  ul,
+  ol {
+    margin-top: 16px;
+  }
+
+  li ul {
+    margin-top: 10px;
+  }
+
+  ul,
+  ol {
+    display: grid;
+    gap: 10px;
+    padding-left: 20px;
+  }
+
+  ul {
+    list-style: disc;
+  }
+
+  ol {
+    list-style: decimal;
+  }
+
+  li::marker {
+    color: var(--violet-soft);
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  code {
+    padding: 1px 6px;
+    font-size: 0.88em;
+    color: var(--text);
+    overflow-wrap: anywhere;
+    background: rgb(var(--white-rgb) / 0.06);
+    border-radius: var(--radius-code);
+  }
+</style>

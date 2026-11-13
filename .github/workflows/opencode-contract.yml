@@ -1,0 +1,54 @@
+# OpenCode 2's experimental HTTP API changes quickly. The pin lives only in the script.
+# Real scratch service + local model stand-in; no account, tokens or simulator.
+name: OpenCode contract
+
+on:
+  pull_request:
+    paths:
+      - scripts/ci/opencode-contract.py
+      - .github/workflows/opencode-contract.yml
+      - scripts/harness-lab/mock/**
+      - Sources/Waycar/Transport/OpenCode/**
+      - docs/design/opencode-backend.md
+      - docs/research/opencode-v2-server-2026-11.md
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencode-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned:
+    name: Pinned OpenCode
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "26"
+      - name: Check the pinned OpenCode
+        run: python3 scripts/ci/opencode-contract.py
+
+  latest:
+    name: Latest OpenCode (warn only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "26"
+      - name: Check latest npm release
+        run: python3 scripts/ci/opencode-contract.py --latest --warn

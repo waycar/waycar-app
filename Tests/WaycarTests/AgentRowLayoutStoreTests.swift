@@ -1,0 +1,157 @@
+import Foundation
+import Testing
+
+@testable import Waycar
+
+@MainActor
+@Suite("Agent row layout store")
+struct AgentRowLayoutStoreTests {
+    private func makeDefaults() throws -> (UserDefaults, cleanup: () -> Void) {
+        let suiteName = "hm-agent-row-layout-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        return (defaults, { defaults.removePersistentDomain(forName: suiteName) })
+    }
+
+    @Test func hostLayoutsPersistWithoutCrossHostChanges() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let first = UUID(), second = UUID(), third = UUID()
+        let custom = AgentRowLayout(rows: [[.init(.terminalTitle, fg: HexColor("#abc"), bold: false)]],
+                                    rowGap: 2, rowsByAgent: ["claude": [[.init(.custom("pin_icon"))]]])
+        let plugin = AgentRowLayoutSnapshot(layout: AgentRowLayout(rows: [[.init(.agent)]]))
+        let store = AgentRowLayoutStore(defaults: defaults)
+        #expect(store.hostLayouts.isEmpty && store.catalogLoadError == nil)
+        try store.setLayout(custom, for: first)
+        try store.setLayout(AgentRowLayout(rows: []), for: second)
+
+        let reloaded = AgentRowLayoutStore(defaults: defaults)
+        #expect(reloaded.hostLayouts == [first: custom, second: AgentRowLayout(rows: [])])
+        #expect(reloaded.resolvedLayout(for: first, pluginSnapshot: plugin) == custom.normalizedForConsole())
+        #expect(reloaded.resolvedLayout(for: first, pluginSnapshot: plugin).rows == custom.rows)
+        #expect(reloaded.resolvedLayout(for: second, pluginSnapshot: plugin).rows.isEmpty)
+        #expect(reloaded.resolvedLayout(for: third, pluginSnapshot: plugin) == plugin.layout.withWaycarRow())
+        #expect(reloaded.resolvedLayout(for: third, pluginSnapshot: nil) == .consoleDefault)
+        #expect(reloaded.catalogLoadError == nil)
+    }
+
+    @Test func batchWritesAreAtomicAndNilRestoresInheritance() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let host = UUID(), other = UUID()
+        let custom = AgentRowLayout(rows: [[.init(.pane)]])
+        let plugin = AgentRowLayoutSnapshot(layout: AgentRowLayout(rows: [[.init(.agent)]]))
+        let store = AgentRowLayoutStore(defaults: defaults)
+        try store.setLayouts([host: AgentRowLayout(rows: []), other: custom])
+        let before = defaults.data(forKey: "agent-row-layouts")
+        #expect(throws: AgentRowLayoutError.invalidRowGap) {
+            try store.setLayouts([host: nil, other: AgentRowLayout(rows: [], rowGap: -1)])
+        }
+        #expect(store.hostLayouts == [host: AgentRowLayout(rows: []), other: custom])
+        #expect(defaults.data(forKey: "agent-row-layouts") == before)
+        try store.setLayouts([host: nil])
+        #expect(store.resolvedLayout(for: host, pluginSnapshot: plugin) == plugin.layout.withWaycarRow())
+        let reloaded = AgentRowLayoutStore(defaults: defaults)
+        #expect(reloaded.hostLayouts == [other: custom])
+        #expect(reloaded.resolvedLayout(for: host, pluginSnapshot: nil) == .consoleDefault)
+    }
+
+    @Test func legacyGlobalLayoutIsIgnoredAndDroppedOnNextWrite() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let host = UUID()
+        let custom = AgentRowLayout(rows: [[.init(.pane)]])
+        let plugin = AgentRowLayoutSnapshot(layout: AgentRowLayout(rows: [[.init(.agent)]]))
+        let legacy = Data(#"{"version":1,"hostLayouts":[],"globalLayout":{"rows":[[{"token":"workspace"}]],"rowGap":0,"rowsByAgent":{}}}"#.utf8)
+        defaults.set(legacy, forKey: "agent-row-layouts")
+        let store = AgentRowLayoutStore(defaults: defaults)
+        #expect(store.catalogLoadError == nil)
+        #expect(store.resolvedLayout(for: host, pluginSnapshot: plugin) == plugin.layout.withWaycarRow())
+        #expect(store.resolvedLayout(for: host, pluginSnapshot: nil) == .consoleDefault)
+        try store.setLayout(custom, for: host)
+        let data = try #require(defaults.data(forKey: "agent-row-layouts"))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["globalLayout"] == nil)
+        #expect(AgentRowLayoutStore(defaults: defaults).hostLayouts == [host: custom])
+    }
+
+    @Test func unreadableOrFutureCatalogRefusesWritesAndRetainsBytes() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        for json in ["not json", #"{"version":2,"hostLayouts":[]}"#,
+                     #"{"version":1,"hostLayouts":["\#(UUID().uuidString)",{"rows":"nope"}]}"#,
+                     #"{"version":1,"hostLayouts":["\#(UUID().uuidString)",{"rows":[],"row_gap":-1}]}"#] {
+            let corrupt = Data(json.utf8)
+            defaults.set(corrupt, forKey: "agent-row-layouts")
+            let store = AgentRowLayoutStore(defaults: defaults)
+            #expect(store.catalogLoadError == .catalogUnreadable)
+            #expect(throws: AgentRowLayoutStoreError.catalogUnreadable) {
+                try store.setLayout(.waycarDefault, for: UUID())
+            }
+            #expect(throws: AgentRowLayoutStoreError.catalogUnreadable) {
+                try store.setLayouts([UUID(): nil])
+            }
+            #expect(defaults.data(forKey: "agent-row-layouts") == corrupt)
+        }
+    }
+
+    @Test func invalidEditsDoNotChangeMemoryOrPersistedCatalog() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let store = AgentRowLayoutStore(defaults: defaults)
+        let host = UUID()
+        try store.setLayout(.waycarDefault, for: host)
+        let before = defaults.data(forKey: "agent-row-layouts")
+        #expect(throws: AgentRowLayoutError.invalidRowGap) {
+            try store.setLayout(AgentRowLayout(rows: [], rowGap: -1), for: host)
+        }
+        #expect(throws: AgentRowLayoutError.tooManyRows) {
+            try store.setLayout(AgentRowLayout(rows: Array(repeating: [], count: 17)), for: UUID())
+        }
+        #expect(store.hostLayouts == [host: .waycarDefault])
+        #expect(defaults.data(forKey: "agent-row-layouts") == before)
+    }
+    /// Captured from a device that had run the unmerged PR #312 build, which
+    /// knew herdr's `machine` field (#320). Names this build does not know
+    /// and invalid colors drop individually; everything else survives.
+    @Test func unknownFieldNamesDropOnLoadAndByTheNextWrite() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let host = try #require(UUID(uuidString: "F75B1706-8EAC-4641-AC08-1F9FF038A1F1"))
+        let captured = ##"{"hostLayouts":["F75B1706-8EAC-4641-AC08-1F9FF038A1F1",{"rows":[[{"token":"terminal_title_stripped","fg":"#6c7086","dim":false}],[{"token":"$pin_icon"},{"token":"workspace","fg":"#45475a","dim":false},{"token":"agent"}],[{"token":"machine"},{"token":"tab","fg":"nothex"}]],"row_gap":0,"rows_by_agent":{"claude":[[{"token":"future"},{"token":"pane"}]]}}],"version":1}"##
+        defaults.set(Data(captured.utf8), forKey: "agent-row-layouts")
+        let store = AgentRowLayoutStore(defaults: defaults)
+        #expect(store.catalogLoadError == nil)
+        let expected = AgentRowLayout(rows: [
+            [.init(.terminalTitleStripped, fg: HexColor("#6c7086"), dim: false)],
+            [.init(.custom("pin_icon")), .init(.workspace, fg: HexColor("#45475a"), dim: false), .init(.agent)],
+            [.init(.tab)],
+        ], rowsByAgent: ["claude": [[.init(.pane)]]])
+        #expect(store.hostLayouts == [host: expected])
+
+        let other = UUID()
+        try store.setLayout(.waycarDefault, for: other)
+        let written = try #require(defaults.data(forKey: "agent-row-layouts"))
+        #expect(String(decoding: written, as: UTF8.self).contains("machine") == false)
+        #expect(AgentRowLayoutStore(defaults: defaults).hostLayouts == [host: expected, other: .waycarDefault])
+    }
+
+    @Test func resetDiscardsOnlyAnUnreadableCatalog() throws {
+        let (defaults, cleanup) = try makeDefaults()
+        defer { cleanup() }
+        let host = UUID()
+        let readable = AgentRowLayoutStore(defaults: defaults)
+        try readable.setLayout(.waycarDefault, for: host)
+        readable.resetUnreadableCatalog()
+        #expect(readable.hostLayouts == [host: .waycarDefault])
+        #expect(defaults.data(forKey: "agent-row-layouts") != nil)
+
+        defaults.set(Data("not json".utf8), forKey: "agent-row-layouts")
+        let store = AgentRowLayoutStore(defaults: defaults)
+        #expect(store.catalogLoadError == .catalogUnreadable)
+        store.resetUnreadableCatalog()
+        #expect(store.catalogLoadError == nil && store.hostLayouts.isEmpty)
+        #expect(defaults.data(forKey: "agent-row-layouts") == nil)
+        try store.setLayout(.waycarDefault, for: host)
+        #expect(AgentRowLayoutStore(defaults: defaults).hostLayouts == [host: .waycarDefault])
+    }
+}

@@ -1,0 +1,62 @@
+# herdr-core contract check (WAY-472). Waycar uses herdr-core (`herdr-core`,
+# 0.x, API generation 1) as a Host runtime and relies on specific behaviors of
+# its wire protocol: record shape, framed attach and events, credit, key
+# names, env freezing. Core is preview software, so
+# scripts/ci/core-contract.py pins those behaviors against a real release;
+# each scenario maps to a fact in docs/design/herdr-core-backend.md section 1.
+#
+# `pinned` is strict and runs on every matching PR, on dispatch and weekly,
+# against PINNED_VERSION in the script (the only place the pin lives; bump it
+# there). `latest` runs weekly and on dispatch against the newest release with
+# --warn: drift shows as annotations and never fails the run
+# (continue-on-error), so a new core release cannot block unrelated work.
+#
+# The script downloads the release from releases.herdr.dev, verifies its
+# sha256, and runs every core in a throwaway session under /tmp (own HOME,
+# XDG_* and HC_SESSION), stopping it and deleting the directory at the end. No
+# secrets, no artifacts: the repository's artifact storage quota is spent.
+
+name: herdr-core contract
+
+on:
+  pull_request:
+    paths:
+      - scripts/ci/core-contract.py
+      - .github/workflows/core-contract.yml
+      - Sources/Waycar/Transport/Core/**
+      - docs/research/herdr-core/**
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned:
+    name: Pinned core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check the pinned core
+        run: python3 scripts/ci/core-contract.py --version "$(python3 scripts/ci/core-contract.py --print-pin)"
+
+  latest:
+    name: Latest core (warn only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check the latest core
+        run: python3 scripts/ci/core-contract.py --latest --warn

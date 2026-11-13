@@ -1,0 +1,27 @@
+# Harness lab: Grok Build talks to the mock's OpenAI Chat Completions API.
+[cli]
+installer = "internal"
+auto_update = false
+
+[features]
+telemetry = "off"
+
+[telemetry]
+trace_upload = false
+
+[models]
+default = "mock"
+
+[model.mock]
+model = "mock-model"
+name = "mock-model (Waycar harness lab mock)"
+base_url = "http://mock:8080/v1"
+api_key = "waycar-lab-dummy-key"
+api_backend = "chat_completions"
+context_window = 128000
+
+# Ask before every shell command, so the mock's `echo` tool call raises the
+# approval dialog the e2e suite answers (HarnessLabProfile; grok.md §10).
+# Without it grok runs the call unasked.
+[permission]
+ask = ["Bash"]

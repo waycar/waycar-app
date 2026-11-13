@@ -1,0 +1,215 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 147,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAiYnl0ZXNfb2JzIiwgImNvbHMiOiAyMCwgInJvd3MiOiA1LCAib2JzZXJ2ZSI6IHRydWUsICJoaXN0b3J5IjogMH19"
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 507,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDEwIiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTA2NjMzMywiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6ImJ5dGVzX29icyIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzE0NTUsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfX19",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t10",
+      "argv": [
+       "sh",
+       "/tmp/hcna/s/bytes.sh"
+      ],
+      "cols": 200,
+      "created_ms": 1793309066333,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {},
+      "name": "bytes_obs",
+      "notify": true,
+      "parent": null,
+      "pid": 2531455,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 120,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 364,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbM2cbWzlHG0gbWzE3RxtIG1syNUcbSBtbMzNHG0gbWzQxRxtIG1s0OUcbSBtbNTdHG0gbWzY1RxtIG1s3M0cbSBtbODFHG0gbWzg5RxtIG1s5N0cbSBtbMTA1RxtIG1sxMTNHG0gbWzEyMUcbSBtbMTI5RxtIG1sxMzdHG0gbWzE0NUcbSBtbMTUzRxtIG1sxNjFHG0gbWzE2OUcbSBtbMTc3RxtIG1sxODVHG0gbWzE5M0cbSBtbSBtbMTsxSBtbMG0bWz85MDAxbA=="
+  },
+  {
+   "t": 0.352,
+   "dir": "out",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 1,
+   "payload_b64": "Wg=="
+  },
+  {
+   "t": 0.352,
+   "dir": "out",
+   "ch": 1,
+   "kind": "RESIZE",
+   "len": 4,
+   "payload_b64": "HgAKAA=="
+  },
+  {
+   "t": 1.052,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 90,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDIsICJtZXRob2QiOiAidGVybWluYWwuZ2V0IiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAiYnl0ZXNfb2JzIn19"
+  },
+  {
+   "t": 1.053,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 583,
+   "payload_b64": "eyJpZCI6MiwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJhZGRyZXNzIjoidDEwIiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTA2NjMzMywiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy9ieXRlcy5zaCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMTQ1NX0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoiYnl0ZXNfb2JzIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTQ1NSwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9fQ==",
+   "json": {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result": {
+     "address": "t10",
+     "argv": [
+      "sh",
+      "/tmp/hcna/s/bytes.sh"
+     ],
+     "cols": 200,
+     "created_ms": 1793309066333,
+     "cwd": "/tmp/hcna/proj",
+     "die_with_parent": false,
+     "exit_code": null,
+     "finished_ms": null,
+     "foreground": {
+      "argv": [
+       "sh",
+       "/tmp/hcna/s/bytes.sh"
+      ],
+      "cwd": "/tmp/hcna/proj",
+      "name": "sh",
+      "pid": 2531455
+     },
+     "identity": "ghostty",
+     "keep": false,
+     "labels": {},
+     "name": "bytes_obs",
+     "notify": true,
+     "parent": null,
+     "pid": 2531455,
+     "reason": null,
+     "reported": false,
+     "rm": false,
+     "rows": 120,
+     "screen": "exact",
+     "signal": null,
+     "state": "live",
+     "status": null,
+     "status_ms": null,
+     "template": null,
+     "title": "",
+     "turn": 0
+    }
+   }
+  },
+  {
+   "t": 1.102,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": ""
+  },
+  {
+   "t": 1.103,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": "",
+   "reason": null
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

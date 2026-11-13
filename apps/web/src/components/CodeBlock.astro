@@ -1,0 +1,150 @@
+---
+import TermWindow from './TermWindow.astro';
+
+// Shell snippet in a terminal frame. The `$` prompt is decorative and not
+// selectable, so copying a command copies only the command. `arg` names one
+// token in a command to highlight (a plugin path, an action id).
+//
+// `copy` adds a copy button at the right end of the `cmd` line whose text it
+// equals; clicking it puts exactly that text on the clipboard. The command
+// itself stays selectable.
+interface Line {
+  kind: 'cmd' | 'comment' | 'blank';
+  text?: string;
+  arg?: string;
+}
+
+interface Props {
+  title: string;
+  lines: Line[];
+  label?: string;
+  copy?: string;
+  class?: string;
+}
+
+const { title, lines, label, copy, class: className } = Astro.props;
+
+if (copy !== undefined && !lines.some((line) => line.kind === 'cmd' && line.text === copy)) {
+  throw new Error(`CodeBlock "${title}": copy text matches no cmd line: ${copy}`);
+}
+
+const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Icon-only, so selecting and copying the block never picks up button text.
+// Rendered `hidden`; the script unhides it, so without JavaScript (or if the
+// script is blocked) there is no dead button.
+const copyButton =
+  '<button type="button" class="copy-btn" data-copy-button aria-label="Copy command" hidden>' +
+  '<svg class="copy-icon copy-icon-copy" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>' +
+  '<svg class="copy-icon copy-icon-done" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' +
+  '</button>';
+
+const renderCmd = (line: Line) => {
+  let html = escape(line.text ?? '').replace(/(^|\s)(--?[a-z][\w-]*)/g, '$1<span class="tk-flag">$2</span>');
+  if (line.arg) html = html.replace(escape(line.arg), `<span class="tk-arg">${escape(line.arg)}</span>`);
+  return `<span class="tk-prompt" aria-hidden="true">$ </span>${html}`;
+};
+
+// Each line is its own block so the copy button can sit on its line; a blank
+// line keeps one preserved space so it still takes a line's height.
+const render = (line: Line) => {
+  switch (line.kind) {
+    case 'comment':
+      return `<span class="line"><span class="tk-comment">${escape(line.text ?? '')}</span></span>`;
+    case 'blank':
+      return '<span class="line"> </span>';
+    default:
+      return copy !== undefined && line.text === copy
+        ? `<span class="line line-copy">${renderCmd(line)}${copyButton}</span>`
+        : `<span class="line">${renderCmd(line)}</span>`;
+  }
+};
+
+const html = lines.map(render).join('');
+---
+
+<TermWindow title={title} class={className}>
+  {label && <span class="visually-hidden">{label}</span>}
+  <pre data-copy={copy}><code set:html={html} /></pre>
+  {copy !== undefined && <span class="visually-hidden" role="status" data-copy-status></span>}
+</TermWindow>
+
+<script>
+  // Copy buttons in CodeBlock. Bundled by Astro into an external module (see
+  // `assetsInlineLimit` in astro.config.mjs) so the Worker's CSP can stay at
+  // `script-src 'self'`.
+  const RESET_MS = 1500;
+  const resetTimers = new WeakMap<HTMLButtonElement, number>();
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-copy-button]')) button.hidden = false;
+
+  // Copies through a selected off-screen textarea and the copy command. The
+  // copy event handler puts exactly `text` on the clipboard, so success means
+  // both that the command ran and that the handler did.
+  function copyWithExecCommand(text: string): boolean {
+    const previousFocus = document.activeElement;
+    const sink = document.createElement('textarea');
+    sink.value = text;
+    sink.readOnly = true;
+    sink.tabIndex = -1;
+    sink.setAttribute('aria-hidden', 'true');
+    Object.assign(sink.style, { position: 'fixed', top: '0', left: '0', opacity: '0', pointerEvents: 'none' });
+    document.body.append(sink);
+    sink.select();
+    sink.setSelectionRange(0, text.length);
+    let wrote = false;
+    const onCopy = (event: ClipboardEvent) => {
+      if (!event.clipboardData) return;
+      event.clipboardData.setData('text/plain', text);
+      event.preventDefault();
+      wrote = true;
+    };
+    document.addEventListener('copy', onCopy);
+    let copied = false;
+    try {
+      copied = document.execCommand('copy') && wrote;
+    } catch {
+      copied = false;
+    }
+    document.removeEventListener('copy', onCopy);
+    sink.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
+    return copied;
+  }
+
+  function showCopied(button: HTMLButtonElement, status: Element | null | undefined) {
+    button.dataset.copied = '';
+    if (status) status.textContent = 'Copied';
+    clearTimeout(resetTimers.get(button));
+    resetTimers.set(
+      button,
+      window.setTimeout(() => {
+        delete button.dataset.copied;
+        if (status) status.textContent = '';
+      }, RESET_MS),
+    );
+  }
+
+  // The copy command goes first because its result is known before the click
+  // handler returns, and WebKit allows it only while the click is being
+  // handled. navigator.clipboard.writeText reports only later: Chrome and Brave
+  // on iOS wait for a native round trip before writing, and that promise may
+  // never settle. By then it is too late to fall back, so writeText is the
+  // fallback, and it too starts inside the click.
+  document.addEventListener('click', (event) => {
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('button[data-copy-button]');
+    const block = button?.closest<HTMLElement>('pre[data-copy]');
+    const text = block?.dataset.copy;
+    if (!button || !block || text === undefined) return;
+
+    const status = block.parentElement?.querySelector('[data-copy-status]');
+    if (copyWithExecCommand(text)) {
+      showCopied(button, status);
+      return;
+    }
+    navigator.clipboard?.writeText(text).then(
+      () => showCopied(button, status),
+      () => {},
+    );
+  });
+</script>

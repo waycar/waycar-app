@@ -1,0 +1,435 @@
+{
+ "keys": {
+  "": {
+   "error": "unknown key \"\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "!": {
+   "error": "unknown key \"!\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "\"": {
+   "error": "unknown key \"\\\"\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "#": {
+   "error": "unknown key \"#\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "$": {
+   "error": "unknown key \"$\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "%": {
+   "error": "unknown key \"%\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "&": {
+   "error": "unknown key \"&\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "'": {
+   "bytes_repr": "b\"'\""
+  },
+  "(": {
+   "error": "unknown key \"(\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  ")": {
+   "error": "unknown key \")\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "*": {
+   "error": "unknown key \"*\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "+": {
+   "error": "unknown key \"+\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  ",": {
+   "bytes_repr": "b','"
+  },
+  "-": {
+   "bytes_repr": "b'-'"
+  },
+  ".": {
+   "bytes_repr": "b'.'"
+  },
+  "/": {
+   "bytes_repr": "b'/'"
+  },
+  "0": {
+   "bytes_repr": "b'0'"
+  },
+  "9": {
+   "bytes_repr": "b'9'"
+  },
+  ":": {
+   "error": "unknown key \":\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  ";": {
+   "bytes_repr": "b';'"
+  },
+  "<": {
+   "error": "unknown key \"<\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "=": {
+   "bytes_repr": "b'='"
+  },
+  ">": {
+   "error": "unknown key \">\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "?": {
+   "error": "unknown key \"?\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "@": {
+   "error": "unknown key \"@\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "A": {
+   "bytes_repr": "b'a'"
+  },
+  "C-c": {
+   "error": "unknown key \"C-c\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "Ctrl+C": {
+   "bytes_repr": "b'\\x03'"
+  },
+  "ENTER": {
+   "bytes_repr": "b'\\r'"
+  },
+  "F5": {
+   "bytes_repr": "b'\\x1b[15~'"
+  },
+  "[": {
+   "bytes_repr": "b'['"
+  },
+  "\\": {
+   "bytes_repr": "b'\\\\'"
+  },
+  "]": {
+   "bytes_repr": "b']'"
+  },
+  "^": {
+   "error": "unknown key \"^\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "_": {
+   "error": "unknown key \"_\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "`": {
+   "bytes_repr": "b'`'"
+  },
+  "a": {
+   "bytes_repr": "b'a'"
+  },
+  "alt+b": {
+   "bytes_repr": "b'\\x1bb'"
+  },
+  "alt+backspace": {
+   "bytes_repr": "b'\\x1b\\x7f'"
+  },
+  "alt+enter": {
+   "bytes_repr": "b'\\x1b\\r'"
+  },
+  "alt+shift+x": {
+   "bytes_repr": "b'\\x1bx'"
+  },
+  "alt+x": {
+   "bytes_repr": "b'\\x1bx'"
+  },
+  "ampersand": {
+   "error": "unknown key \"ampersand\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "backslash": {
+   "bytes_repr": "b'\\\\'"
+  },
+  "backspace": {
+   "bytes_repr": "b'\\x7f'"
+  },
+  "backtick": {
+   "error": "unknown key \"backtick\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "cmd+k": {
+   "bytes_repr": "b'k'"
+  },
+  "colon": {
+   "error": "unknown key \"colon\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "comma": {
+   "error": "unknown key \"comma\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+": {
+   "error": "unknown key \"ctrl+\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl++": {
+   "error": "unknown key \"ctrl++\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+1": {
+   "bytes_repr": "b'1'"
+  },
+  "ctrl+@": {
+   "error": "unknown key \"ctrl+@\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+[": {
+   "error": "unknown key \"ctrl+[\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+\\": {
+   "bytes_repr": "b'\\x1c'"
+  },
+  "ctrl+]": {
+   "bytes_repr": "b'\\x1d'"
+  },
+  "ctrl+a": {
+   "bytes_repr": "b'\\x01'"
+  },
+  "ctrl+alt+delete": {
+   "bytes_repr": "b'\\x1b[3;7~'"
+  },
+  "ctrl+alt+x": {
+   "bytes_repr": "b'\\x1b\\x18'"
+  },
+  "ctrl+backslash": {
+   "bytes_repr": "b'\\x1c'"
+  },
+  "ctrl+c": {
+   "bytes_repr": "b'\\x03'"
+  },
+  "ctrl+d": {
+   "bytes_repr": "b'\\x04'"
+  },
+  "ctrl+e": {
+   "bytes_repr": "b'\\x05'"
+  },
+  "ctrl+enter": {
+   "bytes_repr": "b'\\x1b[27;5;13~'"
+  },
+  "ctrl+i": {
+   "error": "unknown key \"ctrl+i\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+j": {
+   "bytes_repr": "b'\\n'"
+  },
+  "ctrl+l": {
+   "bytes_repr": "b'\\x0c'"
+  },
+  "ctrl+left": {
+   "bytes_repr": "b'\\x1b[1;5D'"
+  },
+  "ctrl+m": {
+   "error": "unknown key \"ctrl+m\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+r": {
+   "bytes_repr": "b'\\x12'"
+  },
+  "ctrl+shift+a": {
+   "error": "unknown key \"ctrl+shift+a\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "ctrl+shift+tab": {
+   "bytes_repr": "b'\\x1b[27;6;9~'"
+  },
+  "ctrl+space": {
+   "bytes_repr": "b'\\x00'"
+  },
+  "ctrl+z": {
+   "bytes_repr": "b'\\x1a'"
+  },
+  "ctrl-c": {
+   "error": "unknown key \"ctrl-c\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "del": {
+   "bytes_repr": "b'\\x1b[3~'"
+  },
+  "delete": {
+   "bytes_repr": "b'\\x1b[3~'"
+  },
+  "double_quote": {
+   "error": "unknown key \"double_quote\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "down": {
+   "bytes_repr": "b'\\x1b[B'"
+  },
+  "end": {
+   "bytes_repr": "b'\\x1b[F'"
+  },
+  "enter": {
+   "bytes_repr": "b'\\r'"
+  },
+  "esc": {
+   "bytes_repr": "b'\\x1b'"
+  },
+  "escape": {
+   "bytes_repr": "b'\\x1b'"
+  },
+  "f0": {
+   "error": "unknown key \"f0\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "f1": {
+   "bytes_repr": "b'\\x1bOP'"
+  },
+  "f10": {
+   "bytes_repr": "b'\\x1b[21~'"
+  },
+  "f11": {
+   "bytes_repr": "b'\\x1b[23~'"
+  },
+  "f12": {
+   "bytes_repr": "b'\\x1b[24~'"
+  },
+  "f13": {
+   "error": "unknown key \"f13\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "f2": {
+   "bytes_repr": "b'\\x1bOQ'"
+  },
+  "f5": {
+   "bytes_repr": "b'\\x1b[15~'"
+  },
+  "hello": {
+   "error": "unknown key \"hello\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "home": {
+   "bytes_repr": "b'\\x1b[H'"
+  },
+  "hyper+x": {
+   "error": "unknown key \"hyper+x\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "insert": {
+   "bytes_repr": "b'\\x1b[2~'"
+  },
+  "left": {
+   "bytes_repr": "b'\\x1b[D'"
+  },
+  "meta+x": {
+   "bytes_repr": "b'\\x1bx'"
+  },
+  "minus": {
+   "error": "unknown key \"minus\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "opt+x": {
+   "bytes_repr": "b'\\x1bx'"
+  },
+  "pagedown": {
+   "bytes_repr": "b'\\x1b[6~'"
+  },
+  "pageup": {
+   "bytes_repr": "b'\\x1b[5~'"
+  },
+  "percent": {
+   "error": "unknown key \"percent\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "period": {
+   "error": "unknown key \"period\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "pgdn": {
+   "bytes_repr": "b'\\x1b[6~'"
+  },
+  "pgup": {
+   "bytes_repr": "b'\\x1b[5~'"
+  },
+  "plus": {
+   "error": "unknown key \"plus\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "quote": {
+   "error": "unknown key \"quote\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "return": {
+   "bytes_repr": "b'\\r'"
+  },
+  "right": {
+   "bytes_repr": "b'\\x1b[C'"
+  },
+  "semicolon": {
+   "error": "unknown key \"semicolon\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "shift+1": {
+   "bytes_repr": "b'1'"
+  },
+  "shift+a": {
+   "bytes_repr": "b'A'"
+  },
+  "shift+enter": {
+   "bytes_repr": "b'\\x1b[27;2;13~'"
+  },
+  "shift+tab": {
+   "bytes_repr": "b'\\x1b[Z'"
+  },
+  "shift+up": {
+   "bytes_repr": "b'\\x1b[1;2A'"
+  },
+  "slash": {
+   "error": "unknown key \"slash\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "space": {
+   "bytes_repr": "b' '"
+  },
+  "super+k": {
+   "bytes_repr": "b'k'"
+  },
+  "tab": {
+   "bytes_repr": "b'\\t'"
+  },
+  "tab+tab": {
+   "error": "unknown key \"tab+tab\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "up": {
+   "bytes_repr": "b'\\x1b[A'"
+  },
+  "z": {
+   "bytes_repr": "b'z'"
+  },
+  "{": {
+   "error": "unknown key \"{\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "|": {
+   "error": "unknown key \"|\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "}": {
+   "error": "unknown key \"}\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "~": {
+   "error": "unknown key \"~\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  },
+  "\u00e9": {
+   "error": "unknown key \"\u00e9\" (try enter, esc, up, ctrl+c, alt+x, f5, a)",
+   "error_kind": "invalid_params"
+  }
+ },
+ "note": "Each name sent alone via terminal.keys to a raw-mode python reader (repr of bytes read). default terminal modes (no kitty, no app cursor). Captured live."
+}

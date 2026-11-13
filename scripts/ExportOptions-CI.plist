@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TestFlight export on the maintainers' self-hosted runner (their TestFlight
+  workflow, kept in ops, checks out this repository).
+  Manual signing: the runner's ASC key cannot use Xcode cloud signing, so the
+  export signs with the local "Apple Distribution: OTREVA, LLC" identity and the
+  "Waycar CI AppStore" profiles, both installed on the runner Mac. Local
+  interactive uploads keep using scripts/ExportOptions.plist (automatic).
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>teamID</key>
+	<string>5NWMRTN5BA</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>com.otreva.waycar</key>
+		<string>Waycar CI AppStore com.otreva.waycar</string>
+		<key>com.otreva.waycar.Widgets</key>
+		<string>Waycar CI AppStore com.otreva.waycar.Widgets</string>
+		<key>com.otreva.waycar.NotificationService</key>
+		<string>Waycar CI AppStore com.otreva.waycar.NotificationService</string>
+	</dict>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

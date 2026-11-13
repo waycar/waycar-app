@@ -1,0 +1,122 @@
+---
+import PhoneShot from './PhoneShot.astro';
+import { chat } from '../../data/screens';
+---
+
+<section id="talk" class="section talk" aria-labelledby="talk-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Just talk</span>
+      <h2 id="talk-title" class="sec-title">Say what's next.<br /> <span class="muted">Your agent takes it from there.</span></h2>
+      <p class="sec-lede">Tap the mic under an agent's terminal and talk. Tap stop, and your words go to the agent as a message. If it's waiting on a question, they land in the Composer so you can check them first.</p>
+    </div>
+
+    <div class="glass stage">
+      <PhoneShot image={chat.iphone.image} alt={chat.iphone.alt}>
+        <p class="callout" aria-hidden="true"><span class="pill pill-mosh">MIC</span> tap, talk, tap stop</p>
+      </PhoneShot>
+      <ul class="points">
+        <li>
+          <h3>Want to check it first?</h3>
+          <p>Dictate into the Composer instead. Fix a word if you need to, then tap Send.</p>
+        </li>
+        <li>
+          <h3>Or skip the terminal</h3>
+          <p>
+            Start Claude Code, Codex, omp or pi with Chat Mode on, and it opens as a simple chat. When the agent asks for
+            permission, tap Allow or Cancel right there.
+          </p>
+        </li>
+        <li>
+          <h3>Your voice stays on your phone</h3>
+          <p>Apple's on-device model turns speech into text. The audio is never recorded or sent. Needs iOS 26 or later.</p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Stage and glow rules copied from page A's ChatMode.astro on purpose, for A/B test isolation. */
+  .talk::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: -1;
+    height: 520px;
+    background: radial-gradient(640px 300px at 20% 10%, rgb(var(--violet-rgb) / 0.09), transparent 70%);
+    pointer-events: none;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 420px);
+    justify-content: space-evenly;
+    align-items: center;
+    gap: 48px;
+    padding: 48px 40px;
+  }
+
+  .points {
+    display: grid;
+    gap: 28px;
+  }
+
+  .points h3 {
+    margin: 0 0 6px;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .points p {
+    max-width: 400px;
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+
+  .callout {
+    position: absolute;
+    right: 16px;
+    bottom: -16px;
+    left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+    color: var(--text-2);
+    text-align: left;
+    background: rgb(var(--bg-2-rgb) / 0.86);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform: none;
+  }
+
+  .callout .pill {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  @media (max-width: 720px) {
+    .stage {
+      grid-template-columns: 1fr;
+      gap: 36px;
+      padding: 28px 20px;
+    }
+
+
+    .callout {
+      position: static;
+      justify-content: center;
+      margin-top: 12px;
+      width: fit-content;
+      margin-inline: auto;
+      white-space: normal;
+    }
+  }
+</style>

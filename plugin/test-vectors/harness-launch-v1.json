@@ -1,0 +1,2776 @@
+{
+  "cases" : [
+    {
+      "expected" : {
+        "argv" : [
+          "claude",
+          "--append-system-prompt-file",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock-model",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "--",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-CLAUDE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR claude-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLAUDE Reply like a text.",
+        "firstMessage" : "hello WAYCAR claude-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "claude",
+      "name" : "claude chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-CLAUDE"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "claude",
+          "--append-system-prompt-file",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock-model",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-CLAUDE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLAUDE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "claude",
+      "name" : "claude chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "codex",
+          "-p",
+          "waycar-22222222-3333-4444-8555-666666666666",
+          "-m",
+          "mock-model",
+          "-c",
+          "model_reasoning_effort=\"low\"",
+          "--",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "developer_instructions = \"WAYCARMARK-CODEX Reply like a text.\"\n",
+            "path" : "{codexHome}/waycar-22222222-3333-4444-8555-666666666666.config.toml"
+          },
+          {
+            "contents" : "hello WAYCAR codex-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CODEX Reply like a text.",
+        "firstMessage" : "hello WAYCAR codex-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "codex",
+      "name" : "codex chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-CODEX"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "codex",
+          "-p",
+          "waycar-22222222-3333-4444-8555-666666666666",
+          "-m",
+          "mock-model",
+          "-c",
+          "model_reasoning_effort=\"low\""
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "developer_instructions = \"WAYCARMARK-CODEX Reply like a text.\"\n",
+            "path" : "{codexHome}/waycar-22222222-3333-4444-8555-666666666666.config.toml"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CODEX Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "codex",
+      "name" : "codex chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "opencode",
+          "-m",
+          "mock/mock-model",
+          "--prompt",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR opencode-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OPENCODE Reply like a text.",
+        "firstMessage" : "hello WAYCAR opencode-first",
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "opencode",
+      "name" : "opencode chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : null
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "opencode",
+          "-m",
+          "mock/mock-model"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OPENCODE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "opencode",
+      "name" : "opencode chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "pi",
+          "--append-system-prompt",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock/mock-model",
+          "--thinking",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-PI Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR pi-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-PI Reply like a text.",
+        "firstMessage" : "hello WAYCAR pi-first",
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "pi",
+      "name" : "pi chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-PI"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "pi",
+          "--append-system-prompt",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock/mock-model",
+          "--thinking",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-PI Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-PI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "pi",
+      "name" : "pi chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "omp",
+          "--append-system-prompt={stage}/chat-prompt.md",
+          "--model=mock/mock-model",
+          "--thinking=low",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-OMP Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR omp-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OMP Reply like a text.",
+        "firstMessage" : "hello WAYCAR omp-first",
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "omp",
+      "name" : "omp chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-OMP"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "omp",
+          "--append-system-prompt={stage}/chat-prompt.md",
+          "--model=mock/mock-model",
+          "--thinking=low"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-OMP Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OMP Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "omp",
+      "name" : "omp chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "copilot",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+          "COPILOT_CUSTOM_INSTRUCTIONS_DIRS" : "{stage}"
+        },
+        "files" : [
+          {
+            "contents" : "---\napplyTo: \"**\"\n---\n\nWAYCARMARK-COPILOT Reply like a text.\n",
+            "path" : "{stage}/.github/instructions/waycar.instructions.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-COPILOT Reply like a text.",
+        "firstMessage" : "hello WAYCAR copilot-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "copilot",
+      "name" : "copilot chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "hello WAYCAR copilot-first",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-COPILOT"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "copilot",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+          "COPILOT_CUSTOM_INSTRUCTIONS_DIRS" : "{stage}"
+        },
+        "files" : [
+          {
+            "contents" : "---\napplyTo: \"**\"\n---\n\nWAYCARMARK-COPILOT Reply like a text.\n",
+            "path" : "{stage}/.github/instructions/waycar.instructions.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-COPILOT Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "copilot",
+      "name" : "copilot chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--include-directories",
+          "{stage}",
+          "--append-system-prompt",
+          "WAYCARMARK-QWEN Reply like a text.",
+          "-m",
+          "mock-model",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "-i",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-QWEN Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR qwen-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-QWEN Reply like a text.",
+        "firstMessage" : "hello WAYCAR qwen-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-QWEN"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--append-system-prompt",
+          "WAYCARMARK-QWEN Reply like a text.",
+          "-m",
+          "mock-model",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-QWEN Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-QWEN Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "gemini",
+          "--include-directories",
+          "{stage}",
+          "-m",
+          "mock-model",
+          "-i",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GEMINI Reply like a text.",
+            "path" : "{stage}/GEMINI.md"
+          },
+          {
+            "contents" : "hello WAYCAR gemini-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GEMINI Reply like a text.",
+        "firstMessage" : "hello WAYCAR gemini-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "gemini",
+      "name" : "gemini chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : null
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "gemini",
+          "--include-directories",
+          "{stage}",
+          "-m",
+          "mock-model"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GEMINI Reply like a text.",
+            "path" : "{stage}/GEMINI.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GEMINI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "gemini",
+      "name" : "gemini chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "--rules",
+          "WAYCARMARK-GROK Reply like a text.",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GROK Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR grok-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GROK Reply like a text.",
+        "firstMessage" : "hello WAYCAR grok-first",
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-GROK"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "--rules",
+          "WAYCARMARK-GROK Reply like a text.",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GROK Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GROK Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "agy",
+          "--add-dir",
+          "{stage}",
+          "--model",
+          "gemini-3.6-flash",
+          "--effort",
+          "low",
+          "-i",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-AGY Reply like a text.",
+            "path" : "{stage}/AGENTS.md"
+          },
+          {
+            "contents" : "hello WAYCAR agy-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-AGY Reply like a text.",
+        "firstMessage" : "hello WAYCAR agy-first",
+        "model" : "gemini-3.6-flash",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "agy",
+      "name" : "agy chat mode launch",
+      "wire" : {
+        "effort" : "budget:1000",
+        "firstUserContains" : "first-message.md",
+        "model" : "gemini-3.6-flash",
+        "systemContains" : "WAYCARMARK-AGY"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "agy",
+          "--add-dir",
+          "{stage}",
+          "--model",
+          "gemini-3.6-flash",
+          "--effort",
+          "low"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-AGY Reply like a text.",
+            "path" : "{stage}/AGENTS.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-AGY Reply like a text.",
+        "firstMessage" : null,
+        "model" : "gemini-3.6-flash",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "agy",
+      "name" : "agy chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "hermes",
+          "chat",
+          "-m",
+          "mock-model",
+          "--reasoning",
+          "low",
+          "-q",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+          "HERMES_EPHEMERAL_SYSTEM_PROMPT" : "WAYCARMARK-HERMES Reply like a text."
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR hermes-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-HERMES Reply like a text.",
+        "firstMessage" : "hello WAYCAR hermes-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "hermes",
+      "name" : "hermes chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-HERMES"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "hermes",
+          "chat",
+          "-m",
+          "mock-model",
+          "--reasoning",
+          "low"
+        ],
+        "env" : {
+          "HERMES_EPHEMERAL_SYSTEM_PROMPT" : "WAYCARMARK-HERMES Reply like a text."
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-HERMES Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "hermes",
+      "name" : "hermes chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kilo",
+          "-m",
+          "mock/mock-model",
+          "--prompt",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR kilo-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-KILO Reply like a text.",
+        "firstMessage" : "hello WAYCAR kilo-first",
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kilo",
+      "name" : "kilo chat mode launch",
+      "wire" : {
+        "effort" : null,
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : null
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kilo",
+          "-m",
+          "mock/mock-model"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-KILO Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kilo",
+      "name" : "kilo chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cline",
+          "-i",
+          "--data-dir",
+          "{home}/.cline/data",
+          "-m",
+          "mock-model",
+          "--thinking",
+          "low",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR cline-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLINE Reply like a text.",
+        "firstMessage" : "hello WAYCAR cline-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cline",
+      "name" : "cline chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : null
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cline",
+          "-i",
+          "--data-dir",
+          "{home}/.cline/data",
+          "-m",
+          "mock-model",
+          "--thinking",
+          "low"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLINE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cline",
+      "name" : "cline chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "claude",
+          "--append-system-prompt-file",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock-model",
+          "--effort",
+          "low",
+          "--resume",
+          "0b6a2c1e-5f1d-4e4c-9b1a-3f2d8c7e6a10"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-CLAUDE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLAUDE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "0b6a2c1e-5f1d-4e4c-9b1a-3f2d8c7e6a10"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "claude",
+      "name" : "claude resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "claude",
+          "--append-system-prompt-file",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock-model",
+          "--effort",
+          "low",
+          "--resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-CLAUDE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLAUDE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "claude",
+      "name" : "claude resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "codex",
+          "-p",
+          "waycar-22222222-3333-4444-8555-666666666666",
+          "-m",
+          "mock-model",
+          "-c",
+          "model_reasoning_effort=\"low\"",
+          "resume",
+          "0b6a2c1e-5f1d-4e4c-9b1a-3f2d8c7e6a10"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "developer_instructions = \"WAYCARMARK-CODEX Reply like a text.\"\n",
+            "path" : "{codexHome}/waycar-22222222-3333-4444-8555-666666666666.config.toml"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CODEX Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "0b6a2c1e-5f1d-4e4c-9b1a-3f2d8c7e6a10"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "codex",
+      "name" : "codex resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "codex",
+          "-p",
+          "waycar-22222222-3333-4444-8555-666666666666",
+          "-m",
+          "mock-model",
+          "-c",
+          "model_reasoning_effort=\"low\"",
+          "resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "developer_instructions = \"WAYCARMARK-CODEX Reply like a text.\"\n",
+            "path" : "{codexHome}/waycar-22222222-3333-4444-8555-666666666666.config.toml"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CODEX Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "codex",
+      "name" : "codex resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "opencode",
+          "-m",
+          "mock/mock-model",
+          "--session",
+          "ses_ecf088b69ffeFiAu1FQKHe4843"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OPENCODE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "ses_ecf088b69ffeFiAu1FQKHe4843"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "opencode",
+      "name" : "opencode resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "opencode",
+          "-m",
+          "mock/mock-model"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OPENCODE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "opencode",
+      "name" : "opencode resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "pi",
+          "--append-system-prompt",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock/mock-model",
+          "--thinking",
+          "low",
+          "--session",
+          "/var/sessions/--work-demo--/2026-10-12_pi.jsonl"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-PI Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-PI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "path",
+          "value" : "/var/sessions/--work-demo--/2026-10-12_pi.jsonl"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "pi",
+      "name" : "pi resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "pi",
+          "--append-system-prompt",
+          "{stage}/chat-prompt.md",
+          "--model",
+          "mock/mock-model",
+          "--thinking",
+          "low",
+          "--resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-PI Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-PI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "pi",
+      "name" : "pi resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "omp",
+          "--append-system-prompt={stage}/chat-prompt.md",
+          "--model=mock/mock-model",
+          "--thinking=low",
+          "--resume=/var/sessions/-work-demo/2026-10-12_omp.jsonl"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-OMP Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OMP Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "path",
+          "value" : "/var/sessions/-work-demo/2026-10-12_omp.jsonl"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "omp",
+      "name" : "omp resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "omp",
+          "--append-system-prompt={stage}/chat-prompt.md",
+          "--model=mock/mock-model",
+          "--thinking=low",
+          "--resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-OMP Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-OMP Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "omp",
+      "name" : "omp resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "copilot",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "--resume=f18f4b89-0000-4000-8000-000000000001"
+        ],
+        "env" : {
+          "COPILOT_CUSTOM_INSTRUCTIONS_DIRS" : "{stage}"
+        },
+        "files" : [
+          {
+            "contents" : "---\napplyTo: \"**\"\n---\n\nWAYCARMARK-COPILOT Reply like a text.\n",
+            "path" : "{stage}/.github/instructions/waycar.instructions.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-COPILOT Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "f18f4b89-0000-4000-8000-000000000001"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "copilot",
+      "name" : "copilot resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "copilot",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "--continue"
+        ],
+        "env" : {
+          "COPILOT_CUSTOM_INSTRUCTIONS_DIRS" : "{stage}"
+        },
+        "files" : [
+          {
+            "contents" : "---\napplyTo: \"**\"\n---\n\nWAYCARMARK-COPILOT Reply like a text.\n",
+            "path" : "{stage}/.github/instructions/waycar.instructions.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-COPILOT Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "copilot",
+      "name" : "copilot resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--append-system-prompt",
+          "WAYCARMARK-QWEN Reply like a text.",
+          "-m",
+          "mock-model",
+          "--resume",
+          "5f3ac653-0000-4000-8000-000000000002"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-QWEN Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "5f3ac653-0000-4000-8000-000000000002"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--append-system-prompt",
+          "WAYCARMARK-QWEN Reply like a text.",
+          "-m",
+          "mock-model",
+          "--continue"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-QWEN Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "gemini",
+          "--include-directories",
+          "{stage}",
+          "-m",
+          "mock-model",
+          "--resume",
+          "01ccc475-d9df-4b1a-8b1e-ebddc21cd237"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GEMINI Reply like a text.",
+            "path" : "{stage}/GEMINI.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GEMINI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "01ccc475-d9df-4b1a-8b1e-ebddc21cd237"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "gemini",
+      "name" : "gemini resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "gemini",
+          "--include-directories",
+          "{stage}",
+          "-m",
+          "mock-model",
+          "--resume",
+          "latest"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-GEMINI Reply like a text.",
+            "path" : "{stage}/GEMINI.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GEMINI Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "gemini",
+      "name" : "gemini resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--resume",
+          "01a130f5-82fd-79c3-b63d-a2aa609ea70e"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GROK Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "01a130f5-82fd-79c3-b63d-a2aa609ea70e"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--continue"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-GROK Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "agy",
+          "--add-dir",
+          "{stage}",
+          "--model",
+          "gemini-3.6-flash",
+          "--effort",
+          "low",
+          "--conversation",
+          "8e00464e-0000-4000-8000-000000000003"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-AGY Reply like a text.",
+            "path" : "{stage}/AGENTS.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-AGY Reply like a text.",
+        "firstMessage" : null,
+        "model" : "gemini-3.6-flash",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "8e00464e-0000-4000-8000-000000000003"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "agy",
+      "name" : "agy resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "agy",
+          "--add-dir",
+          "{stage}",
+          "--model",
+          "gemini-3.6-flash",
+          "--effort",
+          "low",
+          "--continue"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-AGY Reply like a text.",
+            "path" : "{stage}/AGENTS.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-AGY Reply like a text.",
+        "firstMessage" : null,
+        "model" : "gemini-3.6-flash",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "agy",
+      "name" : "agy resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "hermes",
+          "chat",
+          "-m",
+          "mock-model",
+          "--reasoning",
+          "low",
+          "--resume",
+          "20261012_164012_b4df59"
+        ],
+        "env" : {
+          "HERMES_EPHEMERAL_SYSTEM_PROMPT" : "WAYCARMARK-HERMES Reply like a text."
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-HERMES Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "20261012_164012_b4df59"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "hermes",
+      "name" : "hermes resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "hermes",
+          "chat",
+          "-m",
+          "mock-model",
+          "--reasoning",
+          "low",
+          "--resume",
+          "latest"
+        ],
+        "env" : {
+          "HERMES_EPHEMERAL_SYSTEM_PROMPT" : "WAYCARMARK-HERMES Reply like a text."
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-HERMES Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "hermes",
+      "name" : "hermes resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kilo",
+          "-m",
+          "mock/mock-model",
+          "--session",
+          "ses_ecf088b69ffeFiAu1FQKHe4843"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-KILO Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "ses_ecf088b69ffeFiAu1FQKHe4843"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kilo",
+      "name" : "kilo resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kilo",
+          "-m",
+          "mock/mock-model",
+          "--continue"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-KILO Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock/mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kilo",
+      "name" : "kilo resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cline",
+          "-i",
+          "--data-dir",
+          "{home}/.cline/data",
+          "-m",
+          "mock-model",
+          "--thinking",
+          "low",
+          "--id",
+          "1791823632626_6jtha"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLINE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "1791823632626_6jtha"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cline",
+      "name" : "cline resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cline",
+          "-i",
+          "--data-dir",
+          "{home}/.cline/data",
+          "-m",
+          "mock-model",
+          "--thinking",
+          "low"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-CLINE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cline",
+      "name" : "cline resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cursor-agent",
+          "--resume",
+          "1871a527-7c04-4423-8fe0-3cf5f874ad23"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "1871a527-7c04-4423-8fe0-3cf5f874ad23"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cursor",
+      "name" : "cursor resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cursor-agent"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cursor",
+      "name" : "cursor resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "devin",
+          "--resume",
+          "devin-session-1"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "devin-session-1"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "devin",
+      "name" : "devin resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "devin",
+          "--resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "devin",
+      "name" : "devin resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kiro-cli",
+          "chat",
+          "--resume-id",
+          "3c1f2b9e-0000-4000-8000-000000000004"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "3c1f2b9e-0000-4000-8000-000000000004"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kiro",
+      "name" : "kiro resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kiro-cli",
+          "chat",
+          "--resume"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kiro",
+      "name" : "kiro resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cursor-agent",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR cursor-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : "hello WAYCAR cursor-first",
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cursor",
+      "name" : "cursor launch with a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "devin",
+          "--",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR devin-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : "hello WAYCAR devin-first",
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "devin",
+      "name" : "devin launch with a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "kiro-cli",
+          "chat",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR kiro-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : "hello WAYCAR kiro-first",
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "kiro",
+      "name" : "kiro launch with a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--include-directories",
+          "{stage}",
+          "-m",
+          "mock-model",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "-i",
+          "Read and follow {stage}/chat-prompt.md as standing instructions for this session"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "{defaultChatPrompt}",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "{defaultChatPrompt}",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen default chat prompt on herdr",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "qwen",
+          "--append-system-prompt",
+          "{defaultChatPrompt}",
+          "-m",
+          "mock-model",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "tmux",
+        "chatPrompt" : "{defaultChatPrompt}",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "qwen",
+      "name" : "qwen default chat prompt on tmux",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555",
+          "Read and follow {stage}/chat-prompt.md as standing instructions for this session"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+          {
+            "contents" : "{defaultChatPrompt}",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "{defaultChatPrompt}",
+        "firstMessage" : null,
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok default chat prompt on herdr",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "grok",
+          "--rules",
+          "{defaultChatPrompt}",
+          "-m",
+          "mock",
+          "--effort",
+          "low",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "tmux",
+        "chatPrompt" : "{defaultChatPrompt}",
+        "firstMessage" : null,
+        "model" : "mock",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "grok",
+      "name" : "grok default chat prompt on tmux",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "cline",
+          "-i",
+          "--data-dir",
+          "{home}/.cline/data"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "cline",
+      "name" : "cline plain launch",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "claude",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "claude",
+      "name" : "claude plain launch pins its session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "copilot",
+          "--session-id",
+          "11111111-2222-4333-8444-555555555555"
+        ],
+        "env" : {
+
+        },
+        "files" : [
+
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : null,
+        "model" : null,
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : "11111111-2222-4333-8444-555555555555",
+        "userArguments" : [
+
+        ]
+      },
+      "kind" : "copilot",
+      "name" : "copilot plain launch pins its session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "-c",
+          "run.developer_prompt=\"WAYCARMARK-MUSE Reply like a text.\"",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-MUSE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          },
+          {
+            "contents" : "hello WAYCAR muse-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-MUSE Reply like a text.",
+        "firstMessage" : "hello WAYCAR muse-first",
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse chat mode launch",
+      "wire" : {
+        "effort" : "low",
+        "firstUserContains" : "first-message.md",
+        "model" : "mock-model",
+        "systemContains" : "WAYCARMARK-MUSE"
+      }
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "-c",
+          "run.developer_prompt=\"WAYCARMARK-MUSE Reply like a text.\"",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+          {
+            "contents" : "WAYCARMARK-MUSE Reply like a text.",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-MUSE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse chat mode launch without a first message",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "-c",
+          "run.developer_prompt=\"WAYCARMARK-MUSE Reply like a text.\"",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "resume",
+          "019a3c1e-0000-7000-8000-000000000003"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+    
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-MUSE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : {
+          "form" : "id",
+          "value" : "019a3c1e-0000-7000-8000-000000000003"
+        },
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse resume by session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "-c",
+          "run.developer_prompt=\"WAYCARMARK-MUSE Reply like a text.\"",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "resume",
+          "--last"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+    
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "WAYCARMARK-MUSE Reply like a text.",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : "none",
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse resume without a session",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "--model",
+          "mock-model",
+          "--reasoning-effort",
+          "low",
+          "Read and follow {stage}/chat-prompt.md as standing instructions for this session"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+          {
+            "contents" : "{defaultChatPrompt}",
+            "path" : "{stage}/chat-prompt.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : "{defaultChatPrompt}",
+        "firstMessage" : null,
+        "model" : "mock-model",
+        "quickThinking" : true,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse default chat prompt on herdr",
+      "wire" : null
+    },
+    {
+      "expected" : {
+        "argv" : [
+          "muse",
+          "Read and follow {stage}/first-message.md"
+        ],
+        "env" : {
+    
+        },
+        "files" : [
+          {
+            "contents" : "hello WAYCAR muse-first",
+            "path" : "{stage}/first-message.md"
+          }
+        ]
+      },
+      "input" : {
+        "backend" : "herdr",
+        "chatPrompt" : null,
+        "firstMessage" : "hello WAYCAR muse-first",
+        "model" : null,
+        "quickThinking" : false,
+        "resume" : null,
+        "sessionPin" : null,
+        "userArguments" : [
+    
+        ]
+      },
+      "kind" : "muse",
+      "name" : "muse plain launch",
+      "wire" : null
+    }
+  ],
+  "description" : "Harness launch vectors, v1: per kind, the launch inputs Waycar takes (Chat Mode prompt/model/Quick thinking, first message, the user's Arguments, a resume and its session, the Backend) and exactly what the app's builders (LaunchPromptStager.plan + LaunchPromptPlan.command, ChatModeLaunch, ClosedSession.resumeArguments) ask for: the argv herdr's agent.start types / tmux runs (executable first; tmux also inserts --no-daemon after `codex` when the Host's codex lists it), the pane environment, and the staged files. Placeholders: {stage} = the Launch Prompt stage directory, {codexHome} = the Codex home, {home} = the Host's $HOME, {defaultChatPrompt} = ChatModePrompt.defaultText. sessionPin is the id a fresh launch pins, Chat Mode or not (fixed here); codex profiles are named waycar-22222222-3333-4444-8555-666666666666. `wire`, when present, is what the lab mock (/_log) logged for that launch, live-verified; absent fields are not asserted.",
+  "profileID" : "22222222-3333-4444-8555-666666666666",
+  "version" : 1
+}

@@ -1,0 +1,209 @@
+---
+// /help: every help page by category, in the order of
+// src/content/help/categories.json, with
+// the search field up top (it opens the header's search palette, so it only
+// shows with JavaScript).
+import Layout from '../../layouts/Layout.astro';
+import { helpPath } from '../../data/help';
+import { getHelpPages, helpSections } from '../../lib/help';
+
+const sections = helpSections(await getHelpPages());
+---
+
+<Layout
+  title="Waycar Help"
+  description={`How to set up and use Waycar on iPhone and iPad: pair a Host, the Console, agents, the terminal, mosh, notifications, CarPlay, and common fixes.`}
+  markdown="/help.md"
+>
+  <section class="section help-index" aria-labelledby="help-title">
+    <div class="wrap">
+      <header class="head">
+        <span class="kicker">Help</span>
+        <h1 id="help-title" class="sec-title">How can we help?</h1>
+        <p class="sec-lede">One page for each Waycar feature, from pairing your first Host to fixing a connection.</p>
+        <button type="button" class="big-search" data-help-search-open hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-3.5-3.5"></path>
+          </svg>
+          <span class="big-search-text">Search help</span>
+          <kbd class="big-search-key" data-help-search-key hidden></kbd>
+        </button>
+        <nav class="jump" aria-label="Help categories">
+          <ul>
+            {
+              sections.map(({ category }) => (
+                <li>
+                  <a href={`#${category.id}`}>{category.label}</a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </header>
+
+      {
+        sections.map(({ category, pages }) => (
+          <section class="category" id={category.id} aria-labelledby={`${category.id}-title`}>
+            <h2 id={`${category.id}-title`}>{category.label}</h2>
+            <ul>
+              {pages.map((page) => (
+                <li>
+                  <a class="glass card" href={helpPath(page.id)}>
+                    <span class="card-title">{page.data.title}</span>
+                    <span class="card-text">{page.data.description}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+
+      <p class="more">
+        Didn't find it? <a href="/support">Waycar Support</a> covers common problems and how to reach us by email.
+        What changed in each update is in the <a href="/changelog">Changelog</a>.
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .help-index {
+    padding-top: 64px;
+  }
+
+  .head {
+    max-width: 820px;
+    margin-bottom: 24px;
+  }
+
+  .big-search {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 640px;
+    min-height: 56px;
+    margin-top: 32px;
+    padding: 0 14px 0 18px;
+    font: 17px var(--font-sans);
+    color: var(--text-3);
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-control-lg);
+    box-shadow: var(--shadow-glass);
+    cursor: text;
+  }
+
+  .big-search:hover {
+    border-color: rgb(var(--violet-soft-rgb) / 0.5);
+  }
+
+  .big-search[hidden] {
+    display: none;
+  }
+
+  .big-search svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .big-search-text {
+    flex: 1;
+  }
+
+  .big-search-key {
+    padding: 2px 8px;
+    font: 500 12px / 1.4 var(--font-mono);
+    background: rgb(var(--white-rgb) / 0.04);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-code);
+  }
+
+  .big-search-key[hidden] {
+    display: none;
+  }
+
+  .jump ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .jump a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: var(--text-2);
+    background: rgb(var(--white-rgb) / 0.03);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+  }
+
+  .jump a:hover {
+    color: var(--text);
+    border-color: var(--line-2);
+  }
+
+  .category {
+    margin-top: 56px;
+  }
+
+  .category h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .category ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .card {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    height: 100%;
+    padding: 18px 20px;
+    border-radius: var(--radius-control-lg);
+  }
+
+  .card:hover {
+    border-color: var(--line-2);
+  }
+
+  .card-title {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .card-text {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-3);
+  }
+
+  .more {
+    margin-top: 64px;
+    color: var(--text-2);
+  }
+
+  .more a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

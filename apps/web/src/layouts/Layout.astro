@@ -1,0 +1,406 @@
+---
+import ConsentBanner from '../components/ConsentBanner.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import '../styles/global.css';
+import { APP_SCHEMA_ID } from '../data/links';
+import { color } from '../styles/tokens';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Emit `robots: noindex` and no canonical URL (the 404 page). */
+  noindex?: boolean;
+  /**
+   * Emit only `<title>`: no `og:*`, `twitter:*` or meta description, so a
+   * link-preview crawler (X's, for a text-only ad) finds nothing to unfurl.
+   * Use with `noindex` on pages only ad links reach.
+   */
+  cardless?: boolean;
+  /** Share card under public/, 1200x630 PNG. Defaults to the site card. */
+  image?: string;
+  imageAlt?: string;
+  /** Markdown twin of the page for AI agents, e.g. `/index.md`. */
+  markdown?: string;
+  /**
+   * Public path when the page is served at another URL, e.g. home page B
+   * (`src/pages/b.astro`) at `/`. Sets the canonical URL and `og:url`.
+   */
+  canonicalPath?: string;
+  /** The page is served at `/`, so section links are in-page anchors (`#features`, not `/#features`). */
+  homePage?: boolean;
+  /** `og:type`: `article` for help pages. */
+  ogType?: 'website' | 'article';
+  /**
+   * More schema.org JSON-LD for this page (help pages: `TechArticle` and
+   * `BreadcrumbList`), each emitted after the site's `SoftwareApplication`,
+   * whose `@id` is `APP_SCHEMA_ID` for them to point at.
+   */
+  schema?: Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  noindex = false,
+  cardless = false,
+  image = '/og.png',
+  markdown,
+  canonicalPath,
+  homePage = false,
+  ogType = 'website',
+  schema = [],
+  imageAlt = "The Waycar logo beside the headline 'Your agents stay attached. Over mosh, and SSH.' and an iPhone showing Waycar's Agent list",
+} = Astro.props;
+// `build.format: 'file'` makes pathnames end in `.html`; the public URLs don't.
+const canonical = new URL(canonicalPath ?? Astro.url.pathname.replace(/(index)?\.html$/, ''), Astro.site);
+const ogImage = new URL(image, Astro.site);
+// Search engines read this to describe the app itself, not just the page.
+// `<` is escaped so no string can close the script element.
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    '@id': new URL(APP_SCHEMA_ID, Astro.site).href,
+    name: 'Waycar',
+    url: new URL('/', Astro.site).href,
+    image: new URL('/icon-512.png', Astro.site).href,
+    description:
+      'Check on your coding agents in herdr or tmux from iPhone or iPad. Agent terminals run over mosh and fall back to SSH. No account, no cloud relay for your sessions. Android app coming soon.',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'iOS, iPadOS',
+  },
+  ...schema,
+].map((data) => JSON.stringify(data).replace(/</g, '\\u003c'));
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {!cardless && <meta name="description" content={description} />}
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    {/* Safari's Smart App Banner: indexable pages only, like the canonical URL. */}
+    {!noindex && <meta name="apple-itunes-app" content="app-id=6815881853" />}
+    <link rel="preload" href="/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="describedby" href="/llms.txt" />
+    {markdown && <link rel="alternate" type="text/markdown" href={markdown} />}
+    <meta name="application-name" content="Waycar" />
+    <meta name="apple-mobile-web-app-title" content="Waycar" />
+    <meta name="theme-color" content={color.bg} />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    {
+      !cardless && (
+        <>
+          <meta property="og:type" content={ogType} />
+          <meta property="og:site_name" content="Waycar" />
+          <meta property="og:locale" content="en_US" />
+          <meta property="og:title" content={title} />
+          <meta property="og:description" content={description} />
+          <meta property="og:url" content={canonical} />
+          <meta property="og:image" content={ogImage} />
+          <meta property="og:image:type" content="image/png" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content={imageAlt} />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:site" content="@waycardev" />
+          <meta name="twitter:title" content={title} />
+          <meta name="twitter:description" content={description} />
+          <meta name="twitter:image" content={ogImage} />
+          <meta name="twitter:image:alt" content={imageAlt} />
+        </>
+      )
+    }
+    {!noindex && jsonLd.map((json) => <script type="application/ld+json" set:html={json} />)}
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <SiteHeader homePage={homePage} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter homePage={homePage} />
+    <ConsentBanner />
+    <script>
+      // Anonymous usage analytics (see PRIVACY.md). Astro bundles this into
+      // /_astro, so it loads same-origin. The `no-external` build never fetches
+      // extra scripts from PostHog's asset hosts, and `advanced_disable_flags`
+      // skips the remote-config and feature-flag requests, so PostHog's own
+      // network traffic is event capture to us.i.posthog.com. The Reddit and X
+      // ad pixels (lib/ad-pixels.ts) are the only other scripts, and add the
+      // traffic to their own hosts listed in the Worker's CSP.
+      //
+      // Consent, by region: the Worker marks `<html data-consent="required">`
+      // for the EU, EEA, UK, and Switzerland (or an unknown country or Tor). There,
+      // and for any browser sending Global Privacy Control (seen by this script
+      // or, as `<html data-gpc="1">`, by the Worker from `Sec-GPC: 1`),
+      // "no choice yet" behaves like "Decline": `cookieless_mode: 'on_reject'` with
+      // `opt_out_capturing_by_default` keeps it cookieless and stores nothing,
+      // and PostHog's server counts a visitor as a daily hash of IP, user agent,
+      // and a salt it rotates daily (needs the project's cookieless tracking
+      // setting on, or PostHog drops those events). Only required regions see
+      // the banner on first visit; "Allow" opts in to a first-party cookie (and,
+      // outside GPC, loads the ad pixels). The footer's "Cookie settings"
+      // button shows everywhere and reopens the banner so a choice can be
+      // changed. Everywhere else the cookie is set, and the ad pixels load,
+      // from the first visit until "Decline". PostHog stores an explicit choice
+      // in localStorage.
+      import posthog from 'posthog-js/dist/module.slim.no-external';
+      import { appStoreCampaignUrl, campaignFromSearch } from '../lib/ad-links.mjs';
+      import { dropAdPixels, loadAdPixels, pixelsSettled, trackAppStoreClick } from '../lib/ad-pixels';
+
+      // `/go` (a `store` ad link's hop page) must always forward the visitor, so
+      // its target is computed first, the fallback link is set, and a timer
+      // forwards even if anything below throws. `?c=` must be one of our ad
+      // link slugs, so the URL is built here, never taken from the query.
+      const hop = document.querySelector<HTMLElement>('[data-ad-hop]');
+      const hopCampaign = hop?.dataset.adHop
+        ? campaignFromSearch(`?utm_campaign=${new URLSearchParams(location.search).get('c') ?? ''}`)
+        : null;
+      const hopUrl = hop?.dataset.adHop
+        ? hopCampaign
+          ? appStoreCampaignUrl(hop.dataset.adHop, hopCampaign)
+          : hop.dataset.adHop
+        : null;
+      if (hop && hopUrl) {
+        const fallback = hop.querySelector<HTMLAnchorElement>('a');
+        if (fallback) fallback.href = hopUrl;
+        setTimeout(() => location.replace(hopUrl), 4000);
+      }
+
+      // localStorage throws in some private modes and when storage is blocked.
+      const storage = {
+        get: (key: string) => {
+          try {
+            return localStorage.getItem(key);
+          } catch {
+            return null;
+          }
+        },
+        set: (key: string, value: string) => {
+          try {
+            localStorage.setItem(key, value);
+          } catch {}
+        },
+        remove: (key: string) => {
+          try {
+            localStorage.removeItem(key);
+          } catch {}
+        },
+      };
+
+      const consentRequired = document.documentElement.dataset.consent !== 'not-required';
+      const gpc =
+        (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true ||
+        document.documentElement.dataset.gpc === '1';
+      // `on_reject` alone would treat "no choice yet" as opted out and send
+      // nothing, so it is only set where "no choice yet" must mean cookieless.
+      const cookieless = consentRequired || gpc;
+      // Opting in resets PostHog's persistence, which drops super properties, so
+      // `tags` are registered again after every opt-in.
+      const env = location.hostname === 'waycar.dev' ? 'release' : 'debug';
+      // `internal`: the owner's own browsers. Visiting `/?internal=1` marks this
+      // browser (a localStorage flag the owner sets on purpose; `/?internal=0`
+      // clears it). `likely_bot`: automated browsers, and headless setups with a
+      // UTC or unknown (`Etc/*`) time zone plus one tell real visitors
+      // essentially never have: the headless default 800x600 screen, a desktop
+      // OS reporting a phone-width screen, or no preferred languages. A UTC
+      // visitor on a normal desktop screen is not tagged. The PostHog project's
+      // test-user filter hides both.
+      const internalParam = new URLSearchParams(location.search).get('internal');
+      if (internalParam === '1') storage.set('waycar_internal', '1');
+      if (internalParam === '0') storage.remove('waycar_internal');
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+      const ua = navigator.userAgent;
+      const desktopOs = /Mac|Win|Linux/.test(ua) && !/iPhone|iPad|iPod|Android/.test(ua);
+      const likelyBot =
+        navigator.webdriver === true ||
+        (/^(UTC|Etc\/)/.test(timeZone) &&
+          ((screen.width === 800 && screen.height === 600) ||
+            (desktopOs && screen.width < 500) ||
+            (Array.isArray(navigator.languages) && navigator.languages.length === 0)));
+      const tags = {
+        env,
+        ...(storage.get('waycar_internal') === '1' ? { internal: true } : {}),
+        ...(likelyBot ? { likely_bot: true } : {}),
+      };
+      // Super properties persist in PostHog's cookie, so a tag that no longer
+      // applies (after `/?internal=0`, or one of the retired A/B test tags:
+      // `site_variant`, `variant_assignment`, `$feature/home-page-hero`) must
+      // be removed, not just left out.
+      const optionalTags = [
+        'internal',
+        'likely_bot',
+        'site_variant',
+        'variant_assignment',
+        '$feature/home-page-hero',
+      ] as const;
+      const applyTags = (ph: Pick<typeof posthog, "register" | "unregister">) => {
+        ph.register(tags);
+        for (const key of optionalTags) if (!(key in tags)) ph.unregister(key);
+      };
+
+      posthog.init('phc_DmYrhynP2Ly3k9pdY8bkbQH3isw4PzLovDsDXRbbQsQV', {
+        api_host: 'https://us.i.posthog.com',
+        ...(cookieless ? { cookieless_mode: 'on_reject' as const, opt_out_capturing_by_default: true } : {}),
+        persistence: 'localStorage+cookie',
+        person_profiles: 'identified_only',
+        capture_pageview: true,
+        capture_pageleave: false,
+        autocapture: false,
+        rageclick: false,
+        capture_dead_clicks: false,
+        capture_heatmaps: false,
+        capture_exceptions: false,
+        capture_performance: false,
+        disable_session_recording: true,
+        disable_surveys: true,
+        disable_external_dependency_loading: true,
+        advanced_disable_flags: true,
+        mask_personal_data_properties: true,
+        // Super property on every event, including the initial $pageview.
+        loaded: applyTags,
+      });
+
+      // Ad-conversion pixels (Reddit, X; see lib/ad-pixels.ts) are third-party
+      // and never run on a Global Privacy Control signal. Where consent is
+      // required they also wait for "Allow"; elsewhere they run until the
+      // visitor picks "Decline" in the footer's "Cookie settings".
+      const adsAllowed = () => {
+        if (gpc) return false;
+        const status = posthog.get_explicit_consent_status();
+        return consentRequired ? status === 'granted' : status !== 'denied';
+      };
+      // Not allowed (GPC, declined, or no consent yet): sweep any pixel cookie a
+      // past visit left behind.
+      if (adsAllowed()) loadAdPixels();
+      else dropAdPixels();
+
+      const banner = document.querySelector<HTMLElement>('[data-consent-banner]');
+      const settings = document.querySelector<HTMLElement>('[data-consent-open]');
+      if (banner) {
+        if (consentRequired && posthog.get_explicit_consent_status() === 'pending') banner.hidden = false;
+        if (settings) {
+          settings.hidden = false;
+          settings.addEventListener('click', () => {
+            banner.hidden = false;
+            banner.querySelector<HTMLElement>('[data-consent-choice]')?.focus();
+          });
+        }
+        banner.addEventListener('click', (e) => {
+          const choice = (e.target as Element | null)?.closest<HTMLElement>('[data-consent-choice]')?.dataset
+            .consentChoice;
+          if (!choice) return;
+          if (choice === 'accept') {
+            posthog.opt_in_capturing({ captureProperties: tags });
+            applyTags(posthog);
+            if (adsAllowed()) loadAdPixels();
+          } else {
+            // Also clears a visitor ID persisted by an earlier "Allow".
+            posthog.opt_out_capturing();
+            // Pixels that already loaded keep running until the page reloads.
+            if (dropAdPixels()) return location.reload();
+          }
+          document.getElementById('main')?.focus();
+          banner.hidden = true;
+        });
+      }
+
+      // A visitor sent here by a paid ad (`/go/<slug>` adds `utm_campaign`) gets
+      // that campaign's Apple `ct` on every App Store link, so App Analytics
+      // credits the install to the ad. It lasts for this page view only: nothing
+      // is stored, so a visitor who browses on loses the tag and falls back to
+      // the surface's own build-time `ct`.
+      const adCampaign = campaignFromSearch(location.search);
+      if (adCampaign) {
+        document.querySelectorAll<HTMLAnchorElement>('a[href^="https://apps.apple.com/"]').forEach((a) => {
+          a.href = appStoreCampaignUrl(a.href.split('?')[0] ?? a.href, adCampaign);
+        });
+      }
+
+      // `/go`: count the click for the ad pixels (only for a known campaign),
+      // give them a moment to send, then forward. A blocked or absent pixel
+      // does not hold the visitor.
+      if (hopUrl) {
+        if (hopCampaign) trackAppStoreClick();
+        pixelsSettled(2000).then(() => location.replace(hopUrl));
+      }
+
+      // Tracked controls opt in with a data attribute; one delegated listener each
+      // for clicks and copies. Only the event name is sent (plus a `ct`, below), never
+      // element text or the copied content. Beacon transport so an outbound click still lands.
+      //
+      // `app_store_clicked` also carries the `ct` of the link that was clicked
+      // (its href's campaign token: the surface's own, or a paid ad's after the
+      // rewrite above), so a click, the store tap behind it and the download
+      // App Analytics reports under that `ct` can be joined. `get_picker_opened`,
+      // sent by the button that opens a Get Waycar picker, carries the `ct` of
+      // the App Store link inside that picker: the one a tap there will send.
+      //
+      // An event sent from inside a `data-ph-module` wrapper (the article page's
+      // rail and TOC card) also carries that wrapper's id as `module`. The id is
+      // written at build time, never read from element text.
+      const send = (event: string | undefined, link?: Element | null, place: EventTarget | Node | null | undefined = link) => {
+        if (!event) return;
+        const storeLink =
+          event === 'app_store_clicked'
+            ? link
+            : event === 'get_picker_opened' && link instanceof HTMLAnchorElement
+              ? document.getElementById(link.hash.slice(1))?.querySelector('a[href^="https://apps.apple.com/"]')
+              : null;
+        const ct =
+          storeLink instanceof HTMLAnchorElement
+            ? new URL(storeLink.href, location.href).searchParams.get('ct')
+            : null;
+        const origin = place instanceof Element ? place : place instanceof Node ? place.parentElement : null;
+        const module = origin?.closest<HTMLElement>('[data-ph-module]')?.dataset.phModule;
+        const properties = { ...(ct ? { ct } : {}), ...(module ? { module } : {}) };
+        posthog.capture(event, Object.keys(properties).length ? properties : undefined, {
+          send_instantly: true,
+          transport: 'sendBeacon',
+        });
+        if (event === 'app_store_clicked') trackAppStoreClick();
+      };
+
+      const closestData = (node: EventTarget | Node | null | undefined, key: 'phEvent' | 'phCopyEvent') => {
+        const el = node instanceof Element ? node : node instanceof Node ? node.parentElement : null;
+        const selector = key === 'phEvent' ? '[data-ph-event]' : '[data-ph-copy-event]';
+        return el?.closest<HTMLElement>(selector)?.dataset[key];
+      };
+
+      // CodeBlock's copy button writes through the Clipboard API, which fires no
+      // `copy` event, so a click on it counts as its block's copy event.
+      document.addEventListener('click', (e) => {
+        const target = e.target instanceof Element ? e.target : null;
+        send(
+          target?.closest('[data-copy-button]')
+            ? closestData(target, 'phCopyEvent')
+            : closestData(target, 'phEvent'),
+          target?.closest('[data-ph-event]'),
+          target,
+        );
+      });
+
+      // A copy fires at the focused element (usually <body>), so also check where
+      // the selection starts and ends.
+      document.addEventListener('copy', (e) => {
+        const selection = document.getSelection();
+        const place = [e.target, selection?.anchorNode, selection?.focusNode].find((node) =>
+          closestData(node, 'phCopyEvent'),
+        );
+        send(closestData(place, 'phCopyEvent'), null, place);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+--- sshd's view while they sleep: sshd children of the ssh connection
+  14184 sshd: waycar [priv]
+  14197 sshd: waycar@notty
+  14264 sshd: waycar [priv]
+  14269 sshd: waycar [priv]
+  14281 sshd: waycar@notty
+  14294 sshd: waycar@notty
+chan 1 rc=0
+chan 2 rc=0
+chan 3 rc=0
+chan 4 rc=0
+chan 5 rc=0
+chan 6 rc=0
+chan 7 rc=0
+chan 8 rc=0
+chan 9 rc=0
+chan 10 rc=0
+chan 11 rc=0
+chan 12 rc=0
+--- errors the clients saw (distinct):
+      2 mux_client_request_session: session request failed: Session open refused by peer
+--- outputs:
+     12 done
+Exit request sent.

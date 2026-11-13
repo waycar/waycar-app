@@ -1,0 +1,929 @@
+---
+// /articles/<slug>: one article, rendered from src/content/articles/<slug>.md.
+import { render } from 'astro:content';
+import AppStoreCta from '../../components/AppStoreCta.astro';
+import ArticleRail from '../../components/ArticleRail.astro';
+import Prose from '../../components/Prose.astro';
+import Layout from '../../layouts/Layout.astro';
+import { APP_SCHEMA_ID, APP_STORE_LISTING_URL, ON_APP_STORE } from '../../data/links';
+import { appStoreCampaignUrl } from '../../lib/ad-links.mjs';
+import { articleMarkdownPath, articlePath, getArticles } from '../../lib/articles';
+import { formatReleaseDate } from '../../lib/changelog.mjs';
+import { proseWords, readMinutes } from '../../lib/read-time.mjs';
+import { RAIL_MODULE_IDS, TOC_CARD, modulesBesideArticle, startHereSlugs } from '../../data/article-rail';
+
+export async function getStaticPaths() {
+  const articles = await getArticles();
+  return articles.map((article) => ({ params: { slug: article.id }, props: { article } }));
+}
+
+const { article } = Astro.props;
+const { Content, headings } = await render(article);
+const { title, description, date, keywords, hero } = article.data;
+
+// "On this page": the body's H2s, from the render's own `headings` so the
+// links and the ids come from one source (never the page HTML: the footer has
+// H2s with ids that must stay out).
+const toc = headings.filter((heading) => heading.depth === 2);
+const minutes = readMinutes(article.body ?? '');
+
+// The right rail. "Start here" picks only live articles (a scheduled or draft
+// one has no page yet). A short article gets only the modules that fit beside
+// it; the rest follow below it.
+const live = await getArticles();
+const picks = startHereSlugs(article.id, new Set(live.map((candidate) => candidate.id))).flatMap((id) => {
+  const pick = live.find((candidate) => candidate.id === id);
+  return pick ? [{ href: articlePath(id), title: pick.data.title }] : [];
+});
+const beside = modulesBesideArticle(proseWords(article.body ?? ''), toc.length);
+const railIds = RAIL_MODULE_IDS.slice(0, beside);
+const moreIds = RAIL_MODULE_IDS.slice(beside);
+
+// The article's setup prompt for coding agents. The prompt below is what the
+// page's copy button puts on the clipboard: plain text, self-contained, no site
+// internals, so any agent can follow it on a fresh machine. An article opts in
+// with `setupPrompt: true` in its front matter.
+const NEXT_STEPS_URL = 'https://waycar.dev/articles/reach-your-local-network-with-tailscale';
+// The prompt's install link tags its own campaign (`ct=setup-prompt`), so
+// installs started from a pasted prompt do not count as `ct=site` traffic.
+const SETUP_PROMPT_APP_URL = ON_APP_STORE
+  ? appStoreCampaignUrl(APP_STORE_LISTING_URL, 'setup-prompt')
+  : APP_STORE_LISTING_URL;
+const SETUP_PROMPT = [
+  `Set up this machine as a Tailscale subnet router so I can reach my other machines from my phone with Waycar. Waycar runs on my phone. Nothing here installs Waycar on this machine.`,
+  '',
+  `Work through the steps in order. Before you run any command that needs sudo, or that changes system files, network settings or firewall rules, show me the exact command and wait until I say yes. Never tell me the setup is done before I confirm it works from my phone. If a step does not cover something, ask me first.`,
+  '',
+  `1. Work out which operating system this machine runs (macOS, Linux or Windows) and tell me before you do anything.`,
+  '',
+  `2. Install Tailscale on this machine. Show me each command and wait for my yes first.`,
+  `   - macOS: install the Tailscale app. Its command line tool lives at /Applications/Tailscale.app/Contents/MacOS/Tailscale. No sudo is needed.`,
+  `   - Linux: install the tailscale package with the system package manager.`,
+  `   - Windows: install the Tailscale app.`,
+  '',
+  `3. Sign in. Run tailscale up (on macOS, /Applications/Tailscale.app/Contents/MacOS/Tailscale up). It prints a login URL. Show me that URL, tell me to open it and sign in, and wait until I confirm I am signed in.`,
+  '',
+  `4. Find this machine's LAN subnet. On Linux run: ip -4 route show default. On macOS run: ipconfig getifaddr en0, or ifconfig. On Windows run: ipconfig. Work out the subnet from the local address, so 192.168.1.10 means 192.168.1.0/24. Show me the subnet you found and ask me to confirm that this machine should be the subnet router that shares my whole local network with my tailnet. Do not go on until I say yes. If I say no, stop and tell me what to do instead.`,
+  '',
+  `5. Only if I confirmed, turn on forwarding and advertise the route. Show me every command and wait for my yes before each one.`,
+  `   - Linux: first check /etc/sysctl.d/99-tailscale.conf with grep for the two lines below. For each line that is missing, append it with: echo '<line>' | sudo tee -a /etc/sysctl.d/99-tailscale.conf (a rerun that appends a duplicate line is harmless). Then run: sudo sysctl -p /etc/sysctl.d/99-tailscale.conf`,
+  `     net.ipv4.ip_forward = 1`,
+  `     net.ipv6.conf.all.forwarding = 1`,
+  `   - Windows: do not change IP forwarding yourself. Point me at the Windows section of https://tailscale.com/docs/features/subnet-routers and ask me to follow it first.`,
+  `   - macOS: the Tailscale app needs no forwarding step. The how-to at ${NEXT_STEPS_URL} shows the exact commands for every system.`,
+  `   Then advertise the subnet I confirmed. Show me the command first: tailscale set --advertise-routes=<subnet> (on macOS, /Applications/Tailscale.app/Contents/MacOS/Tailscale set --advertise-routes=<subnet>).`,
+  '',
+  `6. Tell me to install the Tailscale app on my phone (step 1 of the how-to at ${NEXT_STEPS_URL}) and sign in with the same tailnet account. Wait until I confirm the phone is on the tailnet.`,
+  '',
+  `7. Tell me to approve the route in the Tailscale admin console at https://login.tailscale.com/admin/machines: select this machine, edit its subnet routes, tick the advertised subnet and save. Tailscale skips this only when the tailnet's access controls approve routes automatically. Then tell me to turn off key expiry for this machine in the same place; Tailscale's default is 180 days, and an expired key takes the route down. Wait until I have done both.`,
+  '',
+  `8. Give me the Waycar install link for my phone: ${SETUP_PROMPT_APP_URL}. If qrencode is installed on this machine, also run qrencode -t ansiutf8 with that link so I can scan the code from my terminal. Offer to open the link in my browser. Do not install anything else on this machine.`,
+  '',
+  `9. Verify the route works. Run tailscale status --json (macOS: the full path) and look for the confirmed subnet under Self.AllowedIPs, which is what this machine advertises. Show me the JSON. Then the real test: tell me to turn OFF Wi-Fi on my phone (so it runs on cellular), open Waycar, and connect to a machine on my network by its LAN address. The machine you connect to needs SSH reachable; turn on SSH on that machine or ask me first. Wait until I confirm that worked.`,
+  '',
+  `When the route works from my phone, tell me what you set up and what still needs my attention.`,
+].join('\n');
+
+const url = new URL(articlePath(article.id), Astro.site).href;
+const articlesHome = new URL('/articles', Astro.site).href;
+const publisher = { '@type': 'Organization', name: 'OTREVA, LLC', url: new URL('/', Astro.site).href };
+const schema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: title,
+    description,
+    url,
+    mainEntityOfPage: url,
+    inLanguage: 'en',
+    datePublished: date,
+    dateModified: date,
+    keywords: keywords.join(', '),
+    ...(hero ? { image: new URL(hero.src, Astro.site).href } : {}),
+    about: { '@id': new URL(APP_SCHEMA_ID, Astro.site).href },
+    author: publisher,
+    publisher,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Articles', item: articlesHome },
+      { '@type': 'ListItem', position: 2, name: title, item: url },
+    ],
+  },
+];
+---
+
+<Layout
+  title={`${title} · Waycar`}
+  description={description}
+  markdown={articleMarkdownPath(article.id)}
+  ogType="article"
+  schema={schema}
+>
+  <div class="wrap page">
+    {/* Reading progress: CSS only, drawn only where scroll-driven animations exist. */}
+    <div class="progress" aria-hidden="true"></div>
+    <article class="story">
+      <header class:list={['band', hero ? 'band-plain' : 'band-glow']}>
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="/articles">Articles</a></li>
+          </ol>
+        </nav>
+        <h1>{title}</h1>
+        <p class="lead">{description}</p>
+        <p class="meta">
+          <time datetime={date}>{formatReleaseDate(date)}</time>
+          <span aria-hidden="true">·</span>
+          <span>{minutes} min read</span>
+        </p>
+      </header>
+      {hero && (
+        <figure class="hero">
+          {/* The page's LCP element: eager, high priority, and its pixel size
+              set so the box is reserved before it loads. The lightbox script
+              wraps it in a zoom button, like the images in the body. */}
+          <img
+            src={hero.src}
+            alt={hero.alt}
+            width={hero.width}
+            height={hero.height}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            data-zoom-src={hero.zoom}
+          />
+        </figure>
+      )}
+      {/* "On this page" twice, from the same headings: a closed <details>
+          under 1024 px, the sticky list from 1024 px. CSS shows one, so there
+          is no script, no shift, and the links jump without JavaScript. */}
+      <details class="toc-fold">
+        <summary>On this page</summary>
+        <ol data-toc>
+          {toc.map((heading) => (
+            <li><a href={`#${heading.slug}`} data-ph-event="article_toc_clicked">{heading.text}</a></li>
+          ))}
+        </ol>
+      </details>
+      <div class="grid">
+      <aside class="toc" aria-labelledby="toc-title">
+        <div class="toc-sticky">
+          <h2 id="toc-title">On this page</h2>
+          <ol class="toc-list" data-toc data-toc-list>
+            {toc.map((heading) => (
+              <li><a href={`#${heading.slug}`} data-ph-event="article_toc_clicked">{heading.text}</a></li>
+            ))}
+          </ol>
+          <section class="toc-card" data-ph-module="toc-card" aria-labelledby="toc-card-title">
+            <h2 id="toc-card-title">{TOC_CARD.heading}</h2>
+            <p>{TOC_CARD.body}</p>
+            <AppStoreCta kind="button" ct="article" class="toc-card-cta">Get Waycar</AppStoreCta>
+          </section>
+        </div>
+      </aside>
+      <div class="article">
+      {article.data.setupPrompt && (
+        <section class="setup-prompt" data-setup-prompt>
+          {/* Rendered `hidden` like CodeBlock's copy button; the script unhides
+              it, so without JavaScript there is no dead button. */}
+          <button type="button" class="btn btn-ghost" data-setup-prompt-copy hidden>
+            Copy a setup prompt
+          </button>
+          <p class="caption">
+            Paste this into your coding agent. It sets up a Tailscale subnet router on this machine and ends with the Waycar install link for your phone.
+            <span role="status" data-setup-prompt-status></span>
+          </p>
+          {/* The prompt itself, so a failed copy is not silent and readers can
+              see exactly what will run on their machine. */}
+          <details class="setup-prompt-details">
+            <summary>Show the prompt</summary>
+            <pre>{SETUP_PROMPT}</pre>
+          </details>
+          <textarea data-setup-prompt-text hidden aria-hidden="true" tabindex="-1">{SETUP_PROMPT}</textarea>
+        </section>
+      )}
+      <Prose>
+        <Content />
+      </Prose>
+      <footer class="after">
+        <p>
+          New to Waycar? Read <a href="/help/what-is-waycar">What is Waycar?</a>
+        </p>
+        <div class="get">
+          <AppStoreCta kind="text">Get Waycar</AppStoreCta>
+        </div>
+      </footer>
+      </div>
+      {railIds.length > 0 && (
+        <aside class="rail" aria-label="Get started with Waycar">
+          <ArticleRail ids={railIds} picks={picks} />
+        </aside>
+      )}
+      {moreIds.length > 0 && (
+        <aside class="rail-more" aria-label="More ways to get started">
+          <ArticleRail ids={moreIds} picks={picks} />
+        </aside>
+      )}
+      </div>
+    </article>
+    {/* Image lightbox. Empty until the script below fills it, so without
+        JavaScript the page is unchanged: the images stay plain images. */}
+    <dialog class="lightbox" data-lightbox aria-label="Image preview">
+      <figure>
+        <img data-lightbox-img alt="" />
+        <figcaption data-lightbox-caption hidden></figcaption>
+      </figure>
+      <button type="button" class="close" data-lightbox-close>Close</button>
+    </dialog>
+  </div>
+</Layout>
+
+<script>
+  // Copies the article's setup prompt. Bundled by Astro into an external
+  // module (see CodeBlock) so the Worker's CSP can stay at `script-src
+  // 'self'` with no inline scripts. Same click-window trick as CodeBlock: the
+  // copy command runs inside the click, and the Clipboard API is the fallback.
+  const section = document.querySelector<HTMLElement>('[data-setup-prompt]');
+  const button = section?.querySelector<HTMLButtonElement>('[data-setup-prompt-copy]');
+  const status = section?.querySelector<Element>('[data-setup-prompt-status]');
+  const text = section?.querySelector<HTMLTextAreaElement>('[data-setup-prompt-text]')?.value;
+  if (section && button && status && text !== undefined) {
+    button.hidden = false;
+    const showCopied = () => {
+      status.textContent = 'Copied';
+      window.setTimeout(() => (status.textContent = ''), 1500);
+    };
+    button.addEventListener('click', () => {
+      const sink = document.createElement('textarea');
+      sink.value = text;
+      sink.readOnly = true;
+      sink.setAttribute('aria-hidden', 'true');
+      Object.assign(sink.style, { position: 'fixed', top: '0', left: '0', opacity: '0', pointerEvents: 'none' });
+      document.body.append(sink);
+      sink.select();
+      sink.setSelectionRange(0, text.length);
+      let wrote = false;
+      const onCopy = (event: ClipboardEvent) => {
+        if (!event.clipboardData) return;
+        event.clipboardData.setData('text/plain', text);
+        event.preventDefault();
+        wrote = true;
+      };
+      document.addEventListener('copy', onCopy);
+      let copied = false;
+      try {
+        copied = document.execCommand('copy') && wrote;
+      } catch {
+        copied = false;
+      }
+      document.removeEventListener('copy', onCopy);
+      sink.remove();
+      if (copied) {
+        showCopied();
+        return;
+      }
+      navigator.clipboard?.writeText(text).then(showCopied, () => {});
+    });
+  }
+</script>
+
+<script>
+  // Image lightbox. Bundled by Astro into an external module like the copy
+  // script above, so the Worker's CSP stays at `script-src 'self'` with no
+  // inline scripts. Every image in the article body becomes a button (added
+  // here, so without JavaScript there is no dead control) that opens the
+  // dialog with the image near fullscreen. An author can point a GIF at its
+  // crisp vector twin with a `data-zoom-src` attribute (a raw `<img>` in the
+  // article Markdown); without it the image shows as-is.
+  const lightbox = document.querySelector<HTMLDialogElement>('[data-lightbox]');
+  const lightboxImg = lightbox?.querySelector<HTMLImageElement>('[data-lightbox-img]');
+  const lightboxCaption = lightbox?.querySelector<HTMLElement>('[data-lightbox-caption]');
+  const body = document.querySelector<HTMLElement>('.article > .prose');
+  if (lightbox && lightboxImg && lightboxCaption && body) {
+    let opener: HTMLButtonElement | null = null;
+    const open = (img: HTMLImageElement, button: HTMLButtonElement) => {
+      opener = button;
+      // The zoom target: the author's vector twin for an animated GIF, or the
+      // image itself.
+      lightboxImg.src = img.getAttribute('data-zoom-src') || img.currentSrc || img.src;
+      const alt = img.getAttribute('alt') ?? '';
+      lightboxCaption.textContent = alt;
+      lightboxCaption.hidden = alt === '';
+      lightbox.showModal();
+    };
+    // Wrap each image in a button so keyboard and VoiceOver users get a real
+    // control with the image's alt text as its name. Images inside links stay
+    // links.
+    for (const img of body.querySelectorAll<HTMLImageElement>('img')) {
+      if (img.closest('a')) continue;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'zoom';
+      img.replaceWith(button);
+      button.append(img);
+    }
+    body.addEventListener('click', (event) => {
+      const target = event.target as Element | null;
+      const button = target?.closest<HTMLButtonElement>('button.zoom');
+      const img = button?.querySelector('img');
+      if (button && img) open(img, button);
+    });
+    lightbox.addEventListener('close', () => opener?.focus());
+    // A click on the backdrop lands on the <dialog> itself (see HelpSearch).
+    lightbox.addEventListener('click', (event) => {
+      if (event.target === lightbox) lightbox.close();
+    });
+    lightbox.querySelector('[data-lightbox-close]')?.addEventListener('click', () => lightbox.close());
+    // The hero sits above the prose column, so the loop above never sees it.
+    // Same button, same dialog: the GIF opens its `data-zoom-src` vector.
+    const heroImg = document.querySelector<HTMLImageElement>('.hero img');
+    if (heroImg) {
+      const heroButton = document.createElement('button');
+      heroButton.type = 'button';
+      heroButton.className = 'zoom';
+      heroImg.replaceWith(heroButton);
+      heroButton.append(heroImg);
+      heroButton.addEventListener('click', () => open(heroImg, heroButton));
+    }
+  }
+</script>
+
+<script>
+  // "On this page": marks the section being read. Bundled by Astro like the
+  // scripts above, so the CSP stays at `script-src 'self'`. The page holds the
+  // same list twice (the <details> under 1024 px, the sticky one above); every
+  // link in both gets `aria-current="location"`, and without JavaScript the
+  // links still jump and nothing is marked.
+  const tocLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc] a[href^="#"]')];
+  const sectionId = (link: HTMLAnchorElement) => decodeURIComponent(link.hash.slice(1));
+  const sections = [...new Set(tocLinks.map(sectionId))]
+    .map((id) => document.getElementById(id))
+    .filter((section): section is HTMLElement => section !== null);
+  const tocList = document.querySelector<HTMLElement>('[data-toc-list]');
+  if (sections.length > 0) {
+    // A section counts as reached once its top crosses this line, just under
+    // the sticky header (the same offset as the page's `scroll-padding-top`).
+    const header = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
+    const line = header + 24;
+    let current = '';
+    const mark = (id: string) => {
+      if (id === current) return;
+      current = id;
+      for (const link of tocLinks) {
+        if (sectionId(link) === id) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      }
+      // Keep the marked entry inside the sticky list's own scroll. Not
+      // scrollIntoView: it would move the page too.
+      const active = tocList?.querySelector<HTMLElement>('[aria-current]');
+      if (tocList && active && tocList.offsetParent) {
+        const top = active.offsetTop;
+        const bottom = top + active.offsetHeight;
+        if (top < tocList.scrollTop) tocList.scrollTop = Math.max(0, top - 8);
+        else if (bottom > tocList.scrollTop + tocList.clientHeight) tocList.scrollTop = bottom - tocList.clientHeight + 8;
+      }
+    };
+    const update = () => {
+      // At the very bottom the last section wins: a short one may never reach the line.
+      const atBottom = Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2;
+      let id = atBottom ? (sections.at(-1)?.id ?? '') : '';
+      if (!atBottom) {
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top > line) break;
+          id = section.id;
+        }
+      }
+      mark(id);
+    };
+    let queued = false;
+    const schedule = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        update();
+      });
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // A click marks its entry at once, before the smooth scroll gets there.
+    for (const link of tocLinks) link.addEventListener('click', () => mark(sectionId(link)));
+    update();
+  }
+</script>
+
+<style>
+  .page {
+    padding-block: 24px 96px;
+  }
+
+  .story {
+    /* The gap between two rail modules. MODULE_GAP in src/data/article-rail.ts mirrors it. */
+    --module-gap: 48px;
+  }
+
+  /* Reading progress: scroll-driven, so only where the browser supports it. */
+  .progress {
+    display: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .progress {
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 60;
+        display: block;
+        height: 3px;
+        pointer-events: none;
+        background: var(--grad);
+        transform: scaleX(0);
+        transform-origin: 0 50%;
+        animation: read-progress linear both;
+        animation-timeline: scroll(root block);
+      }
+
+      @keyframes read-progress {
+        to {
+          transform: scaleX(1);
+        }
+      }
+    }
+  }
+
+  /* ---------- Title band and hero ---------- */
+
+  .band {
+    position: relative;
+    padding: 12px clamp(20px, 4vw, 40px) clamp(28px, 4vw, 44px);
+    overflow: hidden;
+    background: var(--glass-fill);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* No graphic: the band carries a violet glow instead, and no image loads. */
+  .band-glow {
+    background:
+      radial-gradient(ellipse 70% 110% at 12% -10%, rgb(var(--violet-rgb) / 0.32), transparent 70%),
+      radial-gradient(ellipse 45% 80% at 95% 110%, rgb(var(--indigo-rgb) / 0.16), transparent 70%),
+      var(--glass-fill);
+  }
+
+  .crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--violet-soft);
+  }
+
+  .crumbs a:hover {
+    color: var(--text);
+  }
+
+  h1 {
+    max-width: 28ch;
+    margin-top: 12px;
+    font-size: clamp(32px, 4.4vw, 48px);
+    font-weight: var(--fw-title);
+    line-height: 1.08;
+    letter-spacing: var(--ls-title);
+  }
+
+  .lead {
+    max-width: 72ch;
+    margin-top: 16px;
+    font-size: var(--fs-lede);
+    color: var(--text-2);
+  }
+
+  .meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .hero {
+    margin-top: 24px;
+  }
+
+  .hero img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
+
+  .hero :global(button.zoom) {
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: var(--radius-card);
+    cursor: zoom-in;
+  }
+
+  .hero :global(button.zoom:focus-visible) {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Grid: table of contents, article, rail ---------- */
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 32px;
+  }
+
+  .article {
+    min-width: 0;
+  }
+
+  .rail,
+  .rail-more {
+    min-width: 0;
+  }
+
+  .rail {
+    margin-top: 56px;
+  }
+
+  .rail-more {
+    margin-top: var(--module-gap);
+  }
+
+  .toc {
+    display: none;
+  }
+
+  /* Under 1024 px: one column, and the table of contents is a closed card above the text. */
+  .toc-fold {
+    margin-top: 24px;
+    background: var(--glass-fill);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+  }
+
+  .toc-fold summary::after {
+    content: '+';
+    font-size: 18px;
+    line-height: 1;
+    transition: rotate 0.15s;
+  }
+
+  .toc-fold[open] summary::after {
+    rotate: 45deg;
+  }
+
+  .toc-fold summary {
+    justify-content: space-between;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 16px;
+    font: var(--fw-label) 11.5px / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+
+  .toc-fold ol {
+    display: grid;
+    padding: 0 16px 12px;
+  }
+
+  .toc-fold a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding-left: 12px;
+    line-height: 1.35;
+    color: var(--text-2);
+    border-left: 2px solid transparent;
+  }
+
+  .toc-fold a[aria-current='location'] {
+    color: var(--text);
+    border-left-color: var(--violet-soft);
+  }
+
+  .toc-sticky {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--header-h) - 48px);
+    font-size: 14px;
+  }
+
+  .toc h2 {
+    flex: none;
+    margin-bottom: 8px;
+    font: var(--fw-label) 11.5px / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .toc-list {
+    position: relative;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .toc-list a {
+    display: block;
+    padding: 5px 8px 5px 12px;
+    line-height: 1.4;
+    color: var(--text-2);
+    border-left: 2px solid transparent;
+  }
+
+  .toc-list a:hover {
+    color: var(--text);
+  }
+
+  .toc-list a[aria-current='location'] {
+    color: var(--text);
+    border-left-color: var(--violet-soft);
+  }
+
+  /* The store card stays in view under the list; the list scrolls inside itself. */
+  .toc-card {
+    flex: none;
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--glass-fill);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .toc-card h2 {
+    margin-bottom: 0;
+    font: 600 15px / 1.3 var(--font-sans);
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--text);
+  }
+
+  .toc-card p {
+    margin-top: 8px;
+    color: var(--text-2);
+  }
+
+  .toc-card :global(.toc-card-cta) {
+    width: 100%;
+    margin-top: 12px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  /* From 1024 px: sticky list beside the article, the rail under the article. */
+  @media (min-width: 1024px) {
+    .grid {
+      grid-template-columns: 220px minmax(0, 640px);
+      grid-template-rows: auto auto auto;
+      column-gap: 40px;
+      justify-content: center;
+      margin-top: 48px;
+    }
+
+    .toc-fold {
+      display: none;
+    }
+
+    .toc {
+      display: block;
+      grid-column: 1;
+      grid-row: 1 / -1;
+    }
+
+    .article {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .rail {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .rail-more {
+      grid-column: 2;
+      grid-row: 3;
+    }
+  }
+
+  /* From 1280 px: the rail moves beside the article. Modules that would make it
+     taller than the article follow below it instead. */
+  @media (min-width: 1280px) {
+    .grid {
+      grid-template-columns: 220px 640px 260px;
+    }
+
+    .rail {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: start;
+      margin-top: 0;
+    }
+
+    .rail-more {
+      margin-top: 56px;
+    }
+  }
+
+  .article > :global(.prose) {
+    margin-top: 0;
+  }
+
+  /* The column is a fixed 640 px, 120 px narrower than the old 72ch one, so a
+     long command wraps inside its block instead of scrolling sideways. */
+  .article > :global(.prose) :global(pre) {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .setup-prompt {
+    margin: 0 0 32px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+  }
+
+  .setup-prompt .caption {
+    margin-top: 8px;
+    font-size: var(--fs-caption);
+    color: var(--text-3);
+  }
+
+  .setup-prompt .caption [data-setup-prompt-status] {
+    margin-left: 8px;
+    color: var(--cyan);
+  }
+
+  .setup-prompt-details {
+    margin-top: 12px;
+  }
+
+  .setup-prompt-details summary {
+    cursor: pointer;
+    color: var(--cyan);
+  }
+
+  .setup-prompt-details pre {
+    margin-top: 12px;
+    padding: 12px;
+    overflow-x: auto;
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+  }
+
+  .after {
+    display: grid;
+    gap: 8px;
+    margin-top: 56px;
+    padding-top: 24px;
+    color: var(--text-2);
+    border-top: 1px solid var(--line);
+  }
+
+  .after a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ---------- Image lightbox ---------- */
+
+  /* The trigger buttons are created by the script, so they need :global()
+     to match (scoped selectors carry the page's build-time attribute). */
+  .article :global(.prose button.zoom) {
+    display: block;
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: zoom-in;
+  }
+
+  .article :global(.prose button.zoom:focus-visible) {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+  }
+
+  .lightbox {
+    width: 100dvw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    padding: 24px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    color: var(--text);
+    background: rgb(var(--bg-rgb) / 0.94);
+    border: 0;
+  }
+
+  .lightbox::backdrop {
+    background: rgb(var(--black-rgb) / 0.6);
+  }
+
+  /* On phones the image keeps its natural pixel size and the dialog pans;
+     pinch-zoom keeps working (the page's viewport meta is untouched). */
+  .lightbox figure {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-height: 100%;
+    width: fit-content;
+    margin: auto;
+  }
+
+  .lightbox img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+  }
+
+  .lightbox figcaption {
+    max-width: 92vw;
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+    color: var(--text-3);
+    text-align: center;
+  }
+
+  /* On large screens the image fits the viewport instead of panning. */
+  @media (min-width: 720px) {
+    .lightbox img {
+      max-width: 92vw;
+      max-height: 92dvh;
+    }
+  }
+
+  .lightbox .close {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    padding: 4px 10px;
+    font: 500 11.5px / 1.3 var(--font-mono);
+    color: var(--text-3);
+    background: rgb(var(--white-rgb) / 0.06);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-code);
+    cursor: pointer;
+  }
+
+  .lightbox .close:hover {
+    color: var(--text);
+  }
+
+  /* A fast fade and scale; reduced motion shows the dialog without it. */
+  @media (prefers-reduced-motion: no-preference) {
+    .lightbox[open] {
+      animation: lightbox-in 0.18s ease-out;
+    }
+
+    @keyframes lightbox-in {
+      from {
+        opacity: 0;
+        scale: 0.98;
+      }
+    }
+  }
+
+  :global(html:has(dialog.lightbox[open])) {
+    overflow: hidden;
+  }
+</style>

@@ -1,0 +1,66 @@
+{
+  "description": "Shared Zellij pane-state test vectors, v1. Single source of truth for the per-pane state documents Waycar's Host Tools (bin/waycar-hook, `waycar hook-status`, `waycar hook-session`, the omp/pi/opencode/kilo extensions) write for Zellij panes, and the app's ZellijTransport reads through its change feed; consumed by the Rust plugin tests and the Swift app tests (design docs/design/zellij-backend.md §1, §5, §6). `paneIds` pins the pane id grammar (Zellij session names cannot contain '/'), `fileNames` the file name (atomic.rs pane_file_name: unpadded base64url of the UTF-8 pane id plus .json), `documents` what the app derives from a document (null = the app ignores the document).",
+  "directory": "$HOME/.local/state/waycar/zellij (XDG_STATE_HOME is ignored on purpose: the app reads it from a bare SSH exec)",
+  "statusValues": ["working", "blocked", "done", "idle"],
+  "paneIds": [
+    { "id": "zellij:work/terminal_0", "expected": { "session": "work", "pane": 0 } },
+    { "id": "zellij:my project/terminal_12", "expected": { "session": "my project", "pane": 12 } },
+    { "id": "zellij:a:b/terminal_3", "expected": { "session": "a:b", "pane": 3 } },
+    { "id": "zellij:work/terminal_", "expected": null },
+    { "id": "zellij:work/terminal_01", "expected": null },
+    { "id": "zellij:work/terminal_-1", "expected": null },
+    { "id": "zellij:work/plugin_2", "expected": null },
+    { "id": "zellij:/terminal_1", "expected": null },
+    { "id": "zellij:a/b/terminal_1", "expected": null },
+    { "id": "zellij:work", "expected": null },
+    { "id": "tmux:%1", "expected": null },
+    { "id": "hc:t1", "expected": null }
+  ],
+  "fileNames": [
+    { "id": "zellij:work/terminal_0", "file": "emVsbGlqOndvcmsvdGVybWluYWxfMA.json" },
+    { "id": "zellij:my project/terminal_12", "file": "emVsbGlqOm15IHByb2plY3QvdGVybWluYWxfMTI.json" },
+    { "id": "zellij:a:b/terminal_3", "file": "emVsbGlqOmE6Yi90ZXJtaW5hbF8z.json" }
+  ],
+  "documents": [
+    {
+      "name": "full",
+      "document": { "version": 1, "pane": "zellij:work/terminal_2", "kind": "claude", "status": "working", "seq": 3, "session": "0f6c2b1e-1b2a-4c3d-9e8f-001122334455", "transcript": "/home/waycar/.claude/projects/-home-waycar-work-demo/0f6c2b1e-1b2a-4c3d-9e8f-001122334455.jsonl", "launch": "w-7Q2C9KJ4", "pid": 4729, "updated_ms": 1794448338909 },
+      "expected": { "pane": "zellij:work/terminal_2", "kind": "claude", "status": "working", "seq": 3, "session": "0f6c2b1e-1b2a-4c3d-9e8f-001122334455", "transcript": "/home/waycar/.claude/projects/-home-waycar-work-demo/0f6c2b1e-1b2a-4c3d-9e8f-001122334455.jsonl", "launch": "w-7Q2C9KJ4", "updatedMs": 1794448338909 }
+    },
+    {
+      "name": "minimal",
+      "document": { "version": 1, "pane": "zellij:work/terminal_5" },
+      "expected": { "pane": "zellij:work/terminal_5", "kind": null, "status": null, "seq": null, "session": null, "transcript": null, "launch": null, "updatedMs": null }
+    },
+    {
+      "name": "path session (omp, pi)",
+      "document": { "version": 1, "pane": "zellij:work/terminal_7", "kind": "omp", "status": "done", "session": "/home/waycar/.omp/agent/sessions/--home-waycar-work-demo--/2026-11-12T01-52-00-000Z_abc.jsonl", "updated_ms": 1794448400000 },
+      "expected": { "pane": "zellij:work/terminal_7", "kind": "omp", "status": "done", "seq": null, "session": "/home/waycar/.omp/agent/sessions/--home-waycar-work-demo--/2026-11-12T01-52-00-000Z_abc.jsonl", "transcript": null, "launch": null, "updatedMs": 1794448400000 }
+    },
+    {
+      "name": "unknown fields are ignored",
+      "document": { "version": 1, "pane": "zellij:work/terminal_8", "status": "idle", "future": { "x": 1 } },
+      "expected": { "pane": "zellij:work/terminal_8", "kind": null, "status": "idle", "seq": null, "session": null, "transcript": null, "launch": null, "updatedMs": null }
+    },
+    {
+      "name": "an unknown status reads as no status",
+      "document": { "version": 1, "pane": "zellij:work/terminal_9", "status": "thinking" },
+      "expected": { "pane": "zellij:work/terminal_9", "kind": null, "status": null, "seq": null, "session": null, "transcript": null, "launch": null, "updatedMs": null }
+    },
+    {
+      "name": "a newer version is ignored",
+      "document": { "version": 2, "pane": "zellij:work/terminal_2", "status": "working" },
+      "expected": null
+    },
+    {
+      "name": "no pane",
+      "document": { "version": 1, "status": "working" },
+      "expected": null
+    },
+    {
+      "name": "an invalid pane id",
+      "document": { "version": 1, "pane": "zellij:work/plugin_1", "status": "working" },
+      "expected": null
+    }
+  ]
+}

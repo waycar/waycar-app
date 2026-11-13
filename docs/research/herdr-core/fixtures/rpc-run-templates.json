@@ -1,0 +1,191 @@
+{
+ "exchanges": {
+  "get_finished": [
+   {
+    "reply_raw": "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t5\",\"argv\":[\"sh\",\"-c\",\"r(){ printf '\\\\033]7501;%s\\\\033\\\\\\\\' \\\"$1\\\"; }\\nr state=idle:app=zoo; sleep 1\\nr \\\"state=working:app=zoo:progress=40:title=$(printf 'Refactoring' | base64):msg=$(printf 'step 1' | base64)\\\"; sleep 1\\nr \\\"state=working:app=zoo:id=sub1:msg=$(printf 'subtask' | base64)\\\"; sleep 1\\nr \\\"state=done:app=zoo:msg=$(printf 'All done' | base64)\\\"; sleep 1\\nr \\\"state=blocked:kind=permission:app=zoo:msg=$(printf 'Allow rm -rf /tmp/x?' | base64)\\\"; sleep 1\\nr \\\"state=error:app=zoo:msg=$(printf 'It broke' | base64)\\\"; sleep 1\\nprintf '\\\\033]0;my title\\\\007'; sleep 1\\nr state=idle:app=zoo; sleep 2; exit 7\"],\"cols\":200,\"created_ms\":1793309038546,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":7,\"finished_ms\":1793309047570,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"zoo\",\"notify\":true,\"parent\":null,\"pid\":2531074,\"reason\":\"exited\",\"reported\":true,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"finished\",\"status\":null,\"status_ms\":1793309047570,\"template\":null,\"title\":\"my title\",\"turn\":1}}",
+    "request": {
+     "id": 8,
+     "jsonrpc": "2.0",
+     "method": "terminal.get",
+     "params": {
+      "terminal": "zoo"
+     }
+    }
+   }
+  ],
+  "run_plain_agent": [
+   {
+    "reply_raw": "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t4\",\"argv\":[\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309037520,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"plainag\",\"notify\":true,\"parent\":null,\"pid\":2531062,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "/tmp/hc-neutral/home/.fakebin/fakeagent"
+      ],
+      "cwd": "/tmp/hc-neutral/proj",
+      "name": "plainag"
+     }
+    }
+   }
+  ],
+  "run_template": [
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309005480,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"first_message\":{\"sent\":true,\"started\":true,\"turn\":0},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"host\":\"x\",\"waycar\":\"1\"},\"name\":\"ag1\",\"notify\":true,\"parent\":null,\"pid\":2530804,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":\"fake\",\"title\":\"\",\"turn\":0}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "fake",
+       "Do the thing"
+      ],
+      "cwd": "/tmp",
+      "labels": {
+       "host": "x",
+       "waycar": "1"
+      },
+      "name": "ag1"
+     }
+    }
+   }
+  ],
+  "run_template_noready": [
+   {
+    "reply_raw": "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t3\",\"argv\":[\"sh\",\"-c\",\"sleep 300\"],\"cols\":200,\"created_ms\":1793309007515,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"first_message\":{\"reason\":\"it never reported its status, so it may be showing a dialog; check its screen (hc read t3), then hc send t3\",\"sent\":false},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"ps1\",\"notify\":true,\"parent\":null,\"pid\":2530851,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":\"plainsleep\",\"title\":\"\",\"turn\":0}}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "plainsleep",
+       "task text"
+      ],
+      "name": "ps1"
+     }
+    }
+   }
+  ],
+  "run_template_quiet": [
+   {
+    "reply_raw": "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t2\",\"argv\":[\"sh\",\"-c\",\"FAKE_MODE=noreport /tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309006502,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"first_message\":{\"sent\":true,\"turn\":0},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"q1\",\"notify\":true,\"parent\":null,\"pid\":2530826,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":\"quiet\",\"title\":\"\",\"turn\":0}}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "quiet",
+       "Say hi"
+      ],
+      "cwd": "/tmp",
+      "name": "q1"
+     }
+    }
+   }
+  ],
+  "run_zoo": [
+   {
+    "reply_raw": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t5\",\"argv\":[\"sh\",\"-c\",\"r(){ printf '\\\\033]7501;%s\\\\033\\\\\\\\' \\\"$1\\\"; }\\nr state=idle:app=zoo; sleep 1\\nr \\\"state=working:app=zoo:progress=40:title=$(printf 'Refactoring' | base64):msg=$(printf 'step 1' | base64)\\\"; sleep 1\\nr \\\"state=working:app=zoo:id=sub1:msg=$(printf 'subtask' | base64)\\\"; sleep 1\\nr \\\"state=done:app=zoo:msg=$(printf 'All done' | base64)\\\"; sleep 1\\nr \\\"state=blocked:kind=permission:app=zoo:msg=$(printf 'Allow rm -rf /tmp/x?' | base64)\\\"; sleep 1\\nr \\\"state=error:app=zoo:msg=$(printf 'It broke' | base64)\\\"; sleep 1\\nprintf '\\\\033]0;my title\\\\007'; sleep 1\\nr state=idle:app=zoo; sleep 2; exit 7\"],\"cols\":200,\"created_ms\":1793309038546,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"zoo\",\"notify\":true,\"parent\":null,\"pid\":2531074,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}",
+    "request": {
+     "id": 7,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "cwd": "/tmp",
+      "line": "r(){ printf '\\033]7501;%s\\033\\\\' \"$1\"; }\nr state=idle:app=zoo; sleep 1\nr \"state=working:app=zoo:progress=40:title=$(printf 'Refactoring' | base64):msg=$(printf 'step 1' | base64)\"; sleep 1\nr \"state=working:app=zoo:id=sub1:msg=$(printf 'subtask' | base64)\"; sleep 1\nr \"state=done:app=zoo:msg=$(printf 'All done' | base64)\"; sleep 1\nr \"state=blocked:kind=permission:app=zoo:msg=$(printf 'Allow rm -rf /tmp/x?' | base64)\"; sleep 1\nr \"state=error:app=zoo:msg=$(printf 'It broke' | base64)\"; sleep 1\nprintf '\\033]0;my title\\007'; sleep 1\nr state=idle:app=zoo; sleep 2; exit 7",
+      "name": "zoo"
+     }
+    }
+   }
+  ],
+  "send_first_prompt": [
+   {
+    "reply_raw": "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"idle\",\"turn\":0}}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "plainag",
+      "text": "first prompt here"
+     }
+    }
+   }
+  ],
+  "ssh_env": [
+   {
+    "reply_raw": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"a92dbff1599e56d3b468feddd561cad7\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}",
+    "request": {
+     "id": 1,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {}
+    }
+   },
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"echo PATH=$PATH SHELL=$SHELL HOME=$HOME USER=$USER LANG=$LANG; env | grep -E '^(SSH_|XDG_RUNTIME|HC_|TERM|PWD)' | sort | cut -c1-100; command -v claude codex node || echo NOT_FOUND\"],\"cols\":200,\"created_ms\":1793309003490,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"PATH=/usr/bin:/bin SHELL=/bin/bash HOME=/tmp/hc-neutral/home USER=node LANG=C.UTF-8\\nHC_SCOPE=25055730-39b9980561f5999743e80df90b9e6d93\\nHC_SESSION=env1\\nHC_TERMINAL_ID=t1\\nHC_TERMINAL_SOCKET=/tmp/hc-neutral/run/herdr-core/env1.sock\\nPWD=/tmp/hc-neutral/proj\\nTERM=xterm-256color\\nTERM_PROGRAM=ghostty\\nXDG_RUNTIME_DIR=/tmp/hc-neutral/run\\nNOT_FOUND\",\"parent\":null,\"pid\":2530681,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t1\",\"turn\":0}}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "line": "echo PATH=$PATH SHELL=$SHELL HOME=$HOME USER=$USER LANG=$LANG; env | grep -E '^(SSH_|XDG_RUNTIME|HC_|TERM|PWD)' | sort | cut -c1-100; command -v claude codex node || echo NOT_FOUND",
+      "timeout": 10,
+      "wait": true
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the program name and cwd\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start \\\"claude\\\": No such file or directory (os error 2)\"},\"id\":3,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "claude",
+       "--version"
+      ],
+      "timeout": 10,
+      "wait": true
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t3\",\"argv\":[\"claude\",\"--version\"],\"cols\":200,\"created_ms\":1793309003499,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"2.1.311 (Claude Code)\",\"parent\":null,\"pid\":2530690,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t3\",\"turn\":0}}}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "terminal.run",
+     "params": {
+      "argv": [
+       "claude",
+       "--version"
+      ],
+      "env": {
+       "PATH": "/usr/local/bin:/usr/bin:/bin"
+      },
+      "timeout": 10,
+      "wait": true
+     }
+    }
+   }
+  ],
+  "templates": [
+   {
+    "reply_raw": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"templates\":[{\"command\":\"\",\"description\":\"\",\"error\":\"/tmp/hc-neutral/config/herdr-core/templates/broken.md: no frontmatter (start the file with ---)\",\"name\":\"broken\"},{\"command\":\"sleep 5\",\"description\":\"made via file.write\",\"name\":\"created-by-api\"},{\"command\":\"/tmp/hc-neutral/home/.fakebin/fakeagent\",\"description\":\"Fake agent for tests\",\"name\":\"fake\"},{\"command\":\"sleep 300\",\"description\":\"never reports\",\"name\":\"plainsleep\"},{\"command\":\"FAKE_MODE=noreport /tmp/hc-neutral/home/.fakebin/fakeagent\",\"description\":\"Quiet fake\",\"name\":\"quiet\"}]}}",
+    "request": {
+     "id": 1,
+     "jsonrpc": "2.0",
+     "method": "templates.list",
+     "params": {}
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout)."
+}

@@ -1,0 +1,138 @@
+import Foundation
+
+/// A user-added Host (CONTEXT.md): connection coordinates, how to
+/// authenticate, and which herdr session to reach. Never carries a secret —
+/// the password lives in the Keychain keyed by `id`, and private keys live in
+/// `DeviceKeyStore` or `RSAKeyStore`.
+struct Host: Identifiable, Codable, Hashable, Sendable {
+    /// How the app authenticates against this Host. OpenSSH key import is
+    /// deliberately absent (out of scope per spec #20).
+    enum AuthMethod: String, Codable, Sendable {
+        case deviceKey
+        case rsaKey
+        case password
+    }
+
+    let id: UUID
+    /// Optional display label; blank falls back to `user@address`.
+    var name: String
+    var address: String
+    var port: Int
+    var username: String
+    var authMethod: AuthMethod
+    /// Persisted session selection; onboarding discovers available sessions,
+    /// while this field remains editable for older herdr versions. Blank
+    /// means the default herdr session.
+    var sessionName: String
+    /// Optional Jump Host this Host is reached through. Blank means a direct
+    /// connection; when set, `address`/`port` are resolved from the Jump Host
+    /// and normally point at a loopback port held open by a reverse tunnel.
+    var jumpAddress: String
+    var jumpPort: Int
+    /// Account on the Jump Host. Blank reuses `username`, which is the common
+    /// case only when both machines share an account name.
+    var jumpUsername: String
+    /// Off makes this a Disabled Host (CONTEXT.md): its configuration stays
+    /// saved, but the app never contacts it. Not part of the Host record (it
+    /// is absent from `CodingKeys`): `HostStore` derives it from its own key,
+    /// which older builds leave alone, so neither an edit nor an older
+    /// device republishing the record can turn a Disabled Host back on.
+    var isEnabled: Bool
+
+    /// `socatPath` is deliberately absent: Hosts serialized before ADR 0011
+    /// still carry it on disk, and leaving it out of the keys both ignores it
+    /// on decode and drops it on the Host's next save.
+    private enum CodingKeys: String, CodingKey {
+        case id, name, address, port, username, authMethod, sessionName
+        case jumpAddress, jumpPort, jumpUsername
+    }
+
+    /// Whether this Host is reached through a Jump Host.
+    var usesJumpHost: Bool {
+        !jumpAddress.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The Jump Host account, falling back to the Host's own username.
+    var resolvedJumpUsername: String {
+        let trimmed = jumpUsername.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? username : trimmed
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String = "",
+        address: String,
+        port: Int = 22,
+        username: String,
+        authMethod: AuthMethod = .deviceKey,
+        sessionName: String = "",
+        jumpAddress: String = "",
+        jumpPort: Int = 22,
+        jumpUsername: String = ""
+    ) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.port = port
+        self.username = username
+        self.authMethod = authMethod
+        self.sessionName = sessionName
+        self.jumpAddress = jumpAddress
+        self.jumpPort = jumpPort
+        self.jumpUsername = jumpUsername
+        // A new Host is enabled; `HostStore.setEnabled` is the only way to
+        // change that, so the initializer does not offer it.
+        isEnabled = true
+    }
+
+    /// This Host with enablement normalized to the record's `true`. Records
+    /// never carry enablement, and views key on this value so turning a Host
+    /// on or off does not read as a different Host.
+    var recordForm: Host {
+        var record = self
+        record.isEnabled = true
+        return record
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        address = try container.decode(String.self, forKey: .address)
+        port = try container.decode(Int.self, forKey: .port)
+        username = try container.decode(String.self, forKey: .username)
+        let authMethodValue = try container.decode(String.self, forKey: .authMethod)
+        guard let decodedAuthMethod = AuthMethod(rawValue: authMethodValue) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .authMethod,
+                in: container,
+                debugDescription: "Unknown authentication method: \(authMethodValue)")
+        }
+        authMethod = decodedAuthMethod
+        sessionName = try container.decodeIfPresent(String.self, forKey: .sessionName) ?? ""
+        // Absent in Hosts saved before jump-host support; a blank address
+        // decodes as the direct connection those Hosts already had.
+        jumpAddress = try container.decodeIfPresent(String.self, forKey: .jumpAddress) ?? ""
+        jumpPort = try container.decodeIfPresent(Int.self, forKey: .jumpPort) ?? 22
+        jumpUsername = try container.decodeIfPresent(String.self, forKey: .jumpUsername) ?? ""
+        // Enablement is kept outside the record; `HostStore` applies it.
+        isEnabled = true
+
+        let trimmedSessionName = sessionName.trimmingCharacters(in: .whitespaces)
+        guard trimmedSessionName.isEmpty || HerdrSessionName.isValid(trimmedSessionName) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .sessionName, in: container, debugDescription: "Invalid herdr session name")
+        }
+    }
+
+    var displayName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "\(username)@\(address)" : trimmed
+    }
+
+    /// The herdr socket this Host's session name points at.
+    var socketLocation: HerdrSocketLocation {
+        let trimmed = sessionName.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? .defaultSession : .namedSession(trimmed)
+    }
+}

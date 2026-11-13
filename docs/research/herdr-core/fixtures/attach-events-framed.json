@@ -1,0 +1,1717 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 71,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAiZXZlbnRzLnN1YnNjcmliZSIsICJwYXJhbXMiOiB7fX0="
+  },
+  {
+   "t": 0.003,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 12022,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJzZXEiOjEwMywidGVybWluYWxzIjpbeyJhZGRyZXNzIjoidDEiLCJhcmd2IjpbInNoIiwiLWMiLCJwcmludGYgXCJcXDAzM1s/MTA0OWhcXDAzM1sySlxcMDMzW0hoZWxsbyBhbHRcIjsgc2xlZXAgMzAwMCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNDA0NzMsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiLWMiLCJwcmludGYgXCJcXDAzM1s/MTA0OWhcXDAzM1sySlxcMDMzW0hoZWxsbyBhbHRcIjsgc2xlZXAgMzAwMCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMTExMn0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoiYWx0Iiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTExMiwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQyIiwiYXJndiI6WyJzaCIsIi1jIiwiZWNobyBsaW5lMTsgZWNobyBsaW5lMjsgZm9yIGkgaW4gMSAyIDMgNCA1OyBkbyBlY2hvIGhpc3QkaTsgZG9uZTsgc2xlZXAgMzAwMCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNDA0NzcsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiLWMiLCJlY2hvIGxpbmUxOyBlY2hvIGxpbmUyOyBmb3IgaSBpbiAxIDIgMyA0IDU7IGRvIGVjaG8gaGlzdCRpOyBkb25lOyBzbGVlcCAzMDAwIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxMTE4fSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJwbGFpbiIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzExMTgsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MyIsImFyZ3YiOlsic2giLCItYyIsImk9MDsgd2hpbGUgWyAkaSAtbHQgMjAwIF07IGRvIGk9JCgoaSsxKSk7IGVjaG8gXCJzY3JvbGxsaW5lICRpXCI7IGRvbmU7IHNsZWVwIDMwMDAiXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDQwNDgzLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi1jIiwiaT0wOyB3aGlsZSBbICRpIC1sdCAyMDAgXTsgZG8gaT0kKChpKzEpKTsgZWNobyBcInNjcm9sbGxpbmUgJGlcIjsgZG9uZTsgc2xlZXAgMzAwMCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMTEyNH0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoic2Nyb2xsIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTEyNCwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQ0IiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2Zha2VhZ2VudC5zaCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNDA0ODksImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvZmFrZWFnZW50LnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxMTMwfSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJhZ2VudCIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzExMzAsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOnRydWUsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjp7ImFwcCI6ImZha2UiLCJzdGF0ZSI6ImlkbGUifSwic3RhdHVzX21zIjoxNzkzMzA5MDQyNDkyLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiJmYWtlIGFnZW50IHRpdGxlIiwidHVybiI6MX0seyJhZGRyZXNzIjoidDUiLCJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvZmFrZWFnZW50LnNoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTA1MTYyMSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy9mYWtlYWdlbnQuc2giXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzEyNjB9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6ImFnZW50MiIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzEyNjAsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOnRydWUsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjp7ImFwcCI6ImZha2UiLCJzdGF0ZSI6ImlkbGUifSwic3RhdHVzX21zIjoxNzkzMzA5MDUzNjI0LCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiJmYWtlIGFnZW50IHRpdGxlIiwidHVybiI6MX0seyJhZGRyZXNzIjoidDYiLCJhcmd2IjpbInNoIiwiLWMiLCJlY2hvIGJ5ZTsgc2xlZXAgMjsgZXhpdCAzIl0sImNvbHMiOjUyLCJjcmVhdGVkX21zIjoxNzkzMzA5MDU1MjA4LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6MywiZmluaXNoZWRfbXMiOjE3OTMzMDkwNTcyMTIsImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoiZXgzIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTMyMywicmVhc29uIjoiZXhpdGVkIiwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjI4LCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJmaW5pc2hlZCIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0NyIsImFyZ3YiOlsic2giLCItYyIsImVjaG8gYWxpdmU7IHNsZWVwIDMwMDAiXSwiY29scyI6NTIsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNTg4NDMsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6MTc5MzMwOTA1OTg1MSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJ0b2tpbGwiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMxMzY2LCJyZWFzb24iOiJraWxsZWQiLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MjgsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjoxLCJzdGF0ZSI6ImZpbmlzaGVkIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQ4IiwiYXJndiI6WyJzaCIsIi1jIiwiaT0wOyB3aGlsZSA6OyBkbyBpPSQoKGkrMSkpOyBlY2hvIFwidGljayAkaVwiOyBzbGVlcCAxOyBkb25lIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTA2MTQzMSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCItYyIsImk9MDsgd2hpbGUgOjsgZG8gaT0kKChpKzEpKTsgZWNobyBcInRpY2sgJGlcIjsgc2xlZXAgMTsgZG9uZSJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMTM5OH0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoidGljayIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzEzOTgsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0OSIsImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy9ieXRlcy5zaCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNjE0NDMsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzE0MDR9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6ImJ5dGVzX211bHRpIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTQwNCwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQxMCIsImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy9ieXRlcy5zaCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNjYzMzMsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzE0NTV9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6ImJ5dGVzX29icyIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzE0NTUsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MTEiLCJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDY3OTcwLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxNDc0fSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJieXRlc19rZXlzIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTQ3NCwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQxMiIsImFyZ3YiOlsic2giLCItYyIsInRyYXAgXCJlY2hvIEdPVC1JTlRcIiBJTlQ7IHRyYXAgXCJlY2hvIEdPVC1RVUlUXCIgUVVJVDsgdHJhcCBcImVjaG8gR09ULVRTVFBcIiBUU1RQOyBlY2hvIHJlYWR5OyB3aGlsZSA6OyBkbyBzbGVlcCAwLjI7IGRvbmUiXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDY5NzYzLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi1jIiwidHJhcCBcImVjaG8gR09ULUlOVFwiIElOVDsgdHJhcCBcImVjaG8gR09ULVFVSVRcIiBRVUlUOyB0cmFwIFwiZWNobyBHT1QtVFNUUFwiIFRTVFA7IGVjaG8gcmVhZHk7IHdoaWxlIDo7IGRvIHNsZWVwIDAuMjsgZG9uZSJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMTU1Nn0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoic2lncyIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzE1NTYsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MTMiLCJhcmd2IjpbInNoIiwiLWMiLCJwcmludGYgJ1xcMDMzWz8xMDA0aCc7IGV4ZWMgc2ggL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDcyNjUyLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxNjE5fSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJmb2N1cyIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzE2MTksInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MTQiLCJhcmd2IjpbInNoIiwiLWMiLCJwcmludGYgJ1xcMDMzWz85MDAxaFxcMDMzWz8yMDA0aCc7IGV4ZWMgc2ggL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDc0MzQwLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxNjYwfSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJ3MzIiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMxNjYwLCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoxMjAsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjpudWxsLCJzdGF0ZSI6ImxpdmUiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH0seyJhZGRyZXNzIjoidDE1IiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL3F1ZXJ5Mi5zaCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwNzU1MjgsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiL3RtcC9oY25hL3MvYnl0ZXMuc2giXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzE2ODV9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6InFuIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTY4NSwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQxNiIsImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy9xdWVyeTIuc2giXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MDc5MTE1LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL2J5dGVzLnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxOTY0fSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJxZiIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzE5NjQsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MTciLCJhcmd2IjpbInRvcCIsIi1kIiwiMSJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwODI3MDksImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjowLCJmaW5pc2hlZF9tcyI6MTc5MzMwOTA4NjkwMywiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJ0b3AiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMyMjI4LCJyZWFzb24iOiJraWxsZWQiLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJmaW5pc2hlZCIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSx7ImFkZHJlc3MiOiJ0MTgiLCJhcmd2IjpbInNoIiwiLWMiLCJlY2hvIGhpOyBleGVjIGNhdCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkwODY5MDYsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbImNhdCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJjYXQiLCJwaWQiOjI1MzIyODZ9LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6IndpcmUxIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMjI4NiwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LHsiYWRkcmVzcyI6InQxOSIsImFyZ3YiOlsic2giLCItYyIsInllcyBcImZsb29kIGxpbmUgMDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OVwiIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTEwNjkxNCwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjoxNzkzMzA5MTExNTU2LCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6ImZsb29kIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMjQ5NSwicmVhc29uIjoia2lsbGVkIiwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOjEsInN0YXRlIjoiZmluaXNoZWQiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH0seyJhZGRyZXNzIjoidDFiIiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL3dpbmNoLnNoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTExMTU2OSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCIvdG1wL2hjbmEvcy93aW5jaC5zaCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMjU1MX0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoid2luY2giLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMyNTUxLCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoxMjAsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjpudWxsLCJzdGF0ZSI6ImxpdmUiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH0seyJhZGRyZXNzIjoidDFjIiwiYXJndiI6WyIvYmluL3NoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTExOTQ1OCwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsiL2Jpbi9zaCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMjc1N30sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOnRydWUsImxhYmVscyI6e30sIm5hbWUiOiJrZXB0MSIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzI3NTcsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfV19fQ==",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "seq": 103,
+     "terminals": [
+      {
+       "address": "t1",
+       "argv": [
+        "sh",
+        "-c",
+        "printf \"\\033[?1049h\\033[2J\\033[Hhello alt\"; sleep 3000"
+       ],
+       "cols": 200,
+       "created_ms": 1793309040473,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "-c",
+         "printf \"\\033[?1049h\\033[2J\\033[Hhello alt\"; sleep 3000"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531112
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "alt",
+       "notify": true,
+       "parent": null,
+       "pid": 2531112,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t2",
+       "argv": [
+        "sh",
+        "-c",
+        "echo line1; echo line2; for i in 1 2 3 4 5; do echo hist$i; done; sleep 3000"
+       ],
+       "cols": 200,
+       "created_ms": 1793309040477,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "-c",
+         "echo line1; echo line2; for i in 1 2 3 4 5; do echo hist$i; done; sleep 3000"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531118
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "plain",
+       "notify": true,
+       "parent": null,
+       "pid": 2531118,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t3",
+       "argv": [
+        "sh",
+        "-c",
+        "i=0; while [ $i -lt 200 ]; do i=$((i+1)); echo \"scrollline $i\"; done; sleep 3000"
+       ],
+       "cols": 200,
+       "created_ms": 1793309040483,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "-c",
+         "i=0; while [ $i -lt 200 ]; do i=$((i+1)); echo \"scrollline $i\"; done; sleep 3000"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531124
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "scroll",
+       "notify": true,
+       "parent": null,
+       "pid": 2531124,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t4",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/fakeagent.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309040489,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/fakeagent.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531130
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "agent",
+       "notify": true,
+       "parent": null,
+       "pid": 2531130,
+       "reason": null,
+       "reported": true,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": {
+        "app": "fake",
+        "state": "idle"
+       },
+       "status_ms": 1793309042492,
+       "template": null,
+       "title": "fake agent title",
+       "turn": 1
+      },
+      {
+       "address": "t5",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/fakeagent.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309051621,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/fakeagent.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531260
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "agent2",
+       "notify": true,
+       "parent": null,
+       "pid": 2531260,
+       "reason": null,
+       "reported": true,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": {
+        "app": "fake",
+        "state": "idle"
+       },
+       "status_ms": 1793309053624,
+       "template": null,
+       "title": "fake agent title",
+       "turn": 1
+      },
+      {
+       "address": "t6",
+       "argv": [
+        "sh",
+        "-c",
+        "echo bye; sleep 2; exit 3"
+       ],
+       "cols": 52,
+       "created_ms": 1793309055208,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": 3,
+       "finished_ms": 1793309057212,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "ex3",
+       "notify": true,
+       "parent": null,
+       "pid": 2531323,
+       "reason": "exited",
+       "reported": false,
+       "rm": false,
+       "rows": 28,
+       "screen": "exact",
+       "signal": null,
+       "state": "finished",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t7",
+       "argv": [
+        "sh",
+        "-c",
+        "echo alive; sleep 3000"
+       ],
+       "cols": 52,
+       "created_ms": 1793309058843,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": 1793309059851,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "tokill",
+       "notify": true,
+       "parent": null,
+       "pid": 2531366,
+       "reason": "killed",
+       "reported": false,
+       "rm": false,
+       "rows": 28,
+       "screen": "exact",
+       "signal": 1,
+       "state": "finished",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t8",
+       "argv": [
+        "sh",
+        "-c",
+        "i=0; while :; do i=$((i+1)); echo \"tick $i\"; sleep 1; done"
+       ],
+       "cols": 200,
+       "created_ms": 1793309061431,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "-c",
+         "i=0; while :; do i=$((i+1)); echo \"tick $i\"; sleep 1; done"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531398
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "tick",
+       "notify": true,
+       "parent": null,
+       "pid": 2531398,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t9",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/bytes.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309061443,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531404
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "bytes_multi",
+       "notify": true,
+       "parent": null,
+       "pid": 2531404,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t10",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/bytes.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309066333,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531455
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "bytes_obs",
+       "notify": true,
+       "parent": null,
+       "pid": 2531455,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t11",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/bytes.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309067970,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531474
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "bytes_keys",
+       "notify": true,
+       "parent": null,
+       "pid": 2531474,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t12",
+       "argv": [
+        "sh",
+        "-c",
+        "trap \"echo GOT-INT\" INT; trap \"echo GOT-QUIT\" QUIT; trap \"echo GOT-TSTP\" TSTP; echo ready; while :; do sleep 0.2; done"
+       ],
+       "cols": 200,
+       "created_ms": 1793309069763,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "-c",
+         "trap \"echo GOT-INT\" INT; trap \"echo GOT-QUIT\" QUIT; trap \"echo GOT-TSTP\" TSTP; echo ready; while :; do sleep 0.2; done"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531556
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "sigs",
+       "notify": true,
+       "parent": null,
+       "pid": 2531556,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t13",
+       "argv": [
+        "sh",
+        "-c",
+        "printf '\\033[?1004h'; exec sh /tmp/hcna/s/bytes.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309072652,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531619
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "focus",
+       "notify": true,
+       "parent": null,
+       "pid": 2531619,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t14",
+       "argv": [
+        "sh",
+        "-c",
+        "printf '\\033[?9001h\\033[?2004h'; exec sh /tmp/hcna/s/bytes.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309074340,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531660
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "w32",
+       "notify": true,
+       "parent": null,
+       "pid": 2531660,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t15",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/query2.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309075528,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531685
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "qn",
+       "notify": true,
+       "parent": null,
+       "pid": 2531685,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t16",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/query2.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309079115,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/bytes.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2531964
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "qf",
+       "notify": true,
+       "parent": null,
+       "pid": 2531964,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t17",
+       "argv": [
+        "top",
+        "-d",
+        "1"
+       ],
+       "cols": 200,
+       "created_ms": 1793309082709,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": 0,
+       "finished_ms": 1793309086903,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "top",
+       "notify": true,
+       "parent": null,
+       "pid": 2532228,
+       "reason": "killed",
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "finished",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t18",
+       "argv": [
+        "sh",
+        "-c",
+        "echo hi; exec cat"
+       ],
+       "cols": 200,
+       "created_ms": 1793309086906,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "cat"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "cat",
+        "pid": 2532286
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "wire1",
+       "notify": true,
+       "parent": null,
+       "pid": 2532286,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t19",
+       "argv": [
+        "sh",
+        "-c",
+        "yes \"flood line 0123456789012345678901234567890123456789\""
+       ],
+       "cols": 200,
+       "created_ms": 1793309106914,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": 1793309111556,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "flood",
+       "notify": true,
+       "parent": null,
+       "pid": 2532495,
+       "reason": "killed",
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": 1,
+       "state": "finished",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t1b",
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/winch.sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309111569,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "sh",
+         "/tmp/hcna/s/winch.sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2532551
+       },
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "winch",
+       "notify": true,
+       "parent": null,
+       "pid": 2532551,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      {
+       "address": "t1c",
+       "argv": [
+        "/bin/sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309119458,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "foreground": {
+        "argv": [
+         "/bin/sh"
+        ],
+        "cwd": "/tmp/hcna/proj",
+        "name": "sh",
+        "pid": 2532757
+       },
+       "identity": "ghostty",
+       "keep": true,
+       "labels": {},
+       "name": "kept1",
+       "notify": true,
+       "parent": null,
+       "pid": 2532757,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "t": 0.482,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 753,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhZGRyZXNzIjoidDFkIiwiYXJndiI6WyJzaCIsIi1jIiwicigpeyBwcmludGYgJ1xcMDMzXTc1MDE7JXNcXDAzM1xcXFwnIFwiJDFcIjsgfVxucHJpbnRmICdcXDAzM10wO215dGl0bGVcXDAwNyc7IHIgc3RhdGU9d29ya2luZzphcHA9ZmFrZTsgc2xlZXAgMS41OyByIHN0YXRlPWlkbGU6YXBwPWZha2U7IHIgJ3N0YXRlPXdvcmtpbmc6aWQ9c3ViMTphcHA9ZmFrZSc7IHNsZWVwIDAuNTsgciAnc3RhdGU9Y2xlYXI6aWQ9c3ViMSc7IHNsZWVwIDMwMDAiXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MTQ4MjQ0LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnsiYSI6ImIifSwibmFtZSI6ImV2MSIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzMxNDYsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfSwic2VxIjoxMDQsInRlcm1pbmFsIjoidDFkIiwidHlwZSI6ImNyZWF0ZWQifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "address": "t1d",
+       "argv": [
+        "sh",
+        "-c",
+        "r(){ printf '\\033]7501;%s\\033\\\\' \"$1\"; }\nprintf '\\033]0;mytitle\\007'; r state=working:app=fake; sleep 1.5; r state=idle:app=fake; r 'state=working:id=sub1:app=fake'; sleep 0.5; r 'state=clear:id=sub1'; sleep 3000"
+       ],
+       "cols": 200,
+       "created_ms": 1793309148244,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {
+        "a": "b"
+       },
+       "name": "ev1",
+       "notify": true,
+       "parent": null,
+       "pid": 2533146,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      "seq": 104,
+      "terminal": "t1d",
+      "type": "created"
+     }
+    }
+   ]
+  },
+  {
+   "t": 0.484,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 284,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJyZWNvcmRzIjp7fSwicmVwb3J0ZWQiOnRydWUsInN0YXR1cyI6eyJhcHAiOiJmYWtlIiwic3RhdGUiOiJ3b3JraW5nIn19LCJzZXEiOjEwNSwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoic3RhdHVzIn19CnsianNvbnJwYyI6IjIuMCIsIm1ldGhvZCI6ImV2ZW50IiwicGFyYW1zIjp7ImRhdGEiOnsidGl0bGUiOiJteXRpdGxlIn0sInNlcSI6MTA2LCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJ0aXRsZSJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "records": {},
+       "reported": true,
+       "status": {
+        "app": "fake",
+        "state": "working"
+       }
+      },
+      "seq": 105,
+      "terminal": "t1d",
+      "type": "status"
+     }
+    },
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "title": "mytitle"
+      },
+      "seq": 106,
+      "terminal": "t1d",
+      "type": "title"
+     }
+    }
+   ]
+  },
+  {
+   "t": 0.664,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 394,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhcmd2IjpbInNoIiwiLWMiLCJyKCl7IHByaW50ZiAnXFwwMzNdNzUwMTslc1xcMDMzXFxcXCcgXCIkMVwiOyB9XG5wcmludGYgJ1xcMDMzXTA7bXl0aXRsZVxcMDA3JzsgciBzdGF0ZT13b3JraW5nOmFwcD1mYWtlOyBzbGVlcCAxLjU7IHIgc3RhdGU9aWRsZTphcHA9ZmFrZTsgciAnc3RhdGU9d29ya2luZzppZD1zdWIxOmFwcD1mYWtlJzsgc2xlZXAgMC41OyByICdzdGF0ZT1jbGVhcjppZD1zdWIxJzsgc2xlZXAgMzAwMCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMzE0Nn0sInNlcSI6MTA3LCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJmb3JlZ3JvdW5kIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "argv": [
+        "sh",
+        "-c",
+        "r(){ printf '\\033]7501;%s\\033\\\\' \"$1\"; }\nprintf '\\033]0;mytitle\\007'; r state=working:app=fake; sleep 1.5; r state=idle:app=fake; r 'state=working:id=sub1:app=fake'; sleep 0.5; r 'state=clear:id=sub1'; sleep 3000"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2533146
+      },
+      "seq": 107,
+      "terminal": "t1d",
+      "type": "foreground"
+     }
+    }
+   ]
+  },
+  {
+   "t": 1.984,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 166,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJyZWNvcmRzIjp7fSwicmVwb3J0ZWQiOnRydWUsInN0YXR1cyI6eyJhcHAiOiJmYWtlIiwic3RhdGUiOiJpZGxlIn19LCJzZXEiOjEwOCwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoic3RhdHVzIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "records": {},
+       "reported": true,
+       "status": {
+        "app": "fake",
+        "state": "idle"
+       }
+      },
+      "seq": 108,
+      "terminal": "t1d",
+      "type": "status"
+     }
+    }
+   ]
+  },
+  {
+   "t": 1.984,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 120,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJzdGF0ZSI6ImlkbGUiLCJ0dXJuIjoxfSwic2VxIjoxMDksInRlcm1pbmFsIjoidDFkIiwidHlwZSI6InR1cm4ifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "state": "idle",
+       "turn": 1
+      },
+      "seq": 109,
+      "terminal": "t1d",
+      "type": "turn"
+     }
+    }
+   ]
+  },
+  {
+   "t": 1.984,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 205,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJyZWNvcmRzIjp7InN1YjEiOnsiYXBwIjoiZmFrZSIsInN0YXRlIjoid29ya2luZyJ9fSwicmVwb3J0ZWQiOnRydWUsInN0YXR1cyI6eyJhcHAiOiJmYWtlIiwic3RhdGUiOiJpZGxlIn19LCJzZXEiOjExMCwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoic3RhdHVzIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "records": {
+        "sub1": {
+         "app": "fake",
+         "state": "working"
+        }
+       },
+       "reported": true,
+       "status": {
+        "app": "fake",
+        "state": "idle"
+       }
+      },
+      "seq": 110,
+      "terminal": "t1d",
+      "type": "status"
+     }
+    }
+   ]
+  },
+  {
+   "t": 2.485,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 166,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJyZWNvcmRzIjp7fSwicmVwb3J0ZWQiOnRydWUsInN0YXR1cyI6eyJhcHAiOiJmYWtlIiwic3RhdGUiOiJpZGxlIn19LCJzZXEiOjExMSwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoic3RhdHVzIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "records": {},
+       "reported": true,
+       "status": {
+        "app": "fake",
+        "state": "idle"
+       }
+      },
+      "seq": 111,
+      "terminal": "t1d",
+      "type": "status"
+     }
+    }
+   ]
+  },
+  {
+   "t": 3.51,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 116,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJjb2xzIjo1Miwicm93cyI6Mjh9LCJzZXEiOjExMiwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoic2l6ZSJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "cols": 52,
+       "rows": 28
+      },
+      "seq": 112,
+      "terminal": "t1d",
+      "type": "size"
+     }
+    }
+   ]
+  },
+  {
+   "t": 5.06,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 118,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJjb2xzIjoyMDAsInJvd3MiOjEyMH0sInNlcSI6MTEzLCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJzaXplIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "cols": 200,
+       "rows": 120
+      },
+      "seq": 113,
+      "terminal": "t1d",
+      "type": "size"
+     }
+    }
+   ]
+  },
+  {
+   "t": 5.569,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 125,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJsYWJlbHMiOnsiYSI6ImIiLCJ4IjoieSJ9fSwic2VxIjoxMTQsInRlcm1pbmFsIjoidDFkIiwidHlwZSI6ImxhYmVscyJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "labels": {
+        "a": "b",
+        "x": "y"
+       }
+      },
+      "seq": 114,
+      "terminal": "t1d",
+      "type": "labels"
+     }
+    }
+   ]
+  },
+  {
+   "t": 5.972,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 108,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJrZWVwIjp0cnVlfSwic2VxIjoxMTUsInRlcm1pbmFsIjoidDFkIiwidHlwZSI6ImtlZXAifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "keep": true
+      },
+      "seq": 115,
+      "terminal": "t1d",
+      "type": "keep"
+     }
+    }
+   ]
+  },
+  {
+   "t": 6.376,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 141,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJyZWNvcmRzIjp7fSwicmVwb3J0ZWQiOnRydWUsInN0YXR1cyI6bnVsbH0sInNlcSI6MTE2LCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJzdGF0dXMifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "records": {},
+       "reported": true,
+       "status": null
+      },
+      "seq": 116,
+      "terminal": "t1d",
+      "type": "status"
+     }
+    }
+   ]
+  },
+  {
+   "t": 6.376,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 163,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJyZWFzb24iOiJzaWduYWxlZCIsInNpZ25hbCI6OX0sInNlcSI6MTE3LCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJsb3N0In19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "exit_code": null,
+       "finished_ms": null,
+       "reason": "signaled",
+       "signal": 9
+      },
+      "seq": 117,
+      "terminal": "t1d",
+      "type": "lost"
+     }
+    }
+   ]
+  },
+  {
+   "t": 8.82,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 547,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhZGRyZXNzIjoidDFkIiwiYXJndiI6WyIvYmluL3NoIl0sImNvbHMiOjIwMCwiY3JlYXRlZF9tcyI6MTc5MzMwOTE0ODI0NCwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjp0cnVlLCJsYWJlbHMiOnsiYSI6ImIiLCJ4IjoieSJ9LCJuYW1lIjoiZXYxIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMzI4MywicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOjE3OTMzMDkxNTQxNDAsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjF9LCJzZXEiOjExOCwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoicmVzdGFydGVkIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "address": "t1d",
+       "argv": [
+        "/bin/sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309148244,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "identity": "ghostty",
+       "keep": true,
+       "labels": {
+        "a": "b",
+        "x": "y"
+       },
+       "name": "ev1",
+       "notify": true,
+       "parent": null,
+       "pid": 2533283,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": 1793309154140,
+       "template": null,
+       "title": "",
+       "turn": 1
+      },
+      "seq": 118,
+      "terminal": "t1d",
+      "type": "restarted"
+     }
+    }
+   ]
+  },
+  {
+   "t": 9.208,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 170,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhcmd2IjpbIi9iaW4vc2giXSwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJuYW1lIjoic2giLCJwaWQiOjI1MzMyODN9LCJzZXEiOjExOSwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoiZm9yZWdyb3VuZCJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "argv": [
+        "/bin/sh"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2533283
+      },
+      "seq": 119,
+      "terminal": "t1d",
+      "type": "foreground"
+     }
+    }
+   ]
+  },
+  {
+   "t": 10.877,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 109,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJrZWVwIjpmYWxzZX0sInNlcSI6MTIwLCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJrZWVwIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "keep": false
+      },
+      "seq": 120,
+      "terminal": "t1d",
+      "type": "keep"
+     }
+    }
+   ]
+  },
+  {
+   "t": 11.181,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 174,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjoxNzkzMzA5MTU4OTQ2LCJyZWFzb24iOiJraWxsZWQiLCJzaWduYWwiOjF9LCJzZXEiOjEyMSwidGVybWluYWwiOiJ0MWQiLCJ0eXBlIjoiZmluaXNoZWQifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "exit_code": null,
+       "finished_ms": 1793309158946,
+       "reason": "killed",
+       "signal": 1
+      },
+      "seq": 121,
+      "terminal": "t1d",
+      "type": "finished"
+     }
+    }
+   ]
+  },
+  {
+   "t": 11.986,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 100,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6e30sInNlcSI6MTIyLCJ0ZXJtaW5hbCI6InQxZCIsInR5cGUiOiJyZW1vdmVkIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {},
+      "seq": 122,
+      "terminal": "t1d",
+      "type": "removed"
+     }
+    }
+   ]
+  },
+  {
+   "t": 12.391,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 517,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhZGRyZXNzIjoidDFmIiwiYXJndiI6WyJzaCJdLCJjb2xzIjoyMDAsImNyZWF0ZWRfbXMiOjE3OTMzMDkxNjAxNTMsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJzaDEiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMzMzg5LCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoxMjAsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjpudWxsLCJzdGF0ZSI6ImxpdmUiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH0sInNlcSI6MTIzLCJ0ZXJtaW5hbCI6InQxZiIsInR5cGUiOiJjcmVhdGVkIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "address": "t1f",
+       "argv": [
+        "sh"
+       ],
+       "cols": 200,
+       "created_ms": 1793309160153,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "sh1",
+       "notify": true,
+       "parent": null,
+       "pid": 2533389,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      "seq": 123,
+      "terminal": "t1f",
+      "type": "created"
+     }
+    }
+   ]
+  },
+  {
+   "t": 12.728,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 165,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhcmd2IjpbInNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMzMzg5fSwic2VxIjoxMjQsInRlcm1pbmFsIjoidDFmIiwidHlwZSI6ImZvcmVncm91bmQifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "argv": [
+        "sh"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2533389
+      },
+      "seq": 124,
+      "terminal": "t1f",
+      "type": "foreground"
+     }
+    }
+   ]
+  },
+  {
+   "t": 13.732,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 175,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhcmd2IjpbInNsZWVwIiwiMyJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzbGVlcCIsInBpZCI6MjUzMzQxNH0sInNlcSI6MTI1LCJ0ZXJtaW5hbCI6InQxZiIsInR5cGUiOiJmb3JlZ3JvdW5kIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "argv": [
+        "sleep",
+        "3"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sleep",
+       "pid": 2533414
+      },
+      "seq": 125,
+      "terminal": "t1f",
+      "type": "foreground"
+     }
+    }
+   ]
+  },
+  {
+   "t": 15.003,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 60,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiaGVhcnRiZWF0IiwicGFyYW1zIjp7InNlcSI6MTI1fX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "heartbeat",
+     "params": {
+      "seq": 125
+     }
+    }
+   ]
+  },
+  {
+   "t": 16.404,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 174,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJleGl0X2NvZGUiOjUsImZpbmlzaGVkX21zIjoxNzkzMzA5MTY0MTY5LCJyZWFzb24iOiJleGl0ZWQiLCJzaWduYWwiOm51bGx9LCJzZXEiOjEyNiwidGVybWluYWwiOiJ0MWYiLCJ0eXBlIjoiZmluaXNoZWQifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "exit_code": 5,
+       "finished_ms": 1793309164169,
+       "reason": "exited",
+       "signal": null
+      },
+      "seq": 126,
+      "terminal": "t1f",
+      "type": "finished"
+     }
+    }
+   ]
+  },
+  {
+   "t": 17.406,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 524,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhZGRyZXNzIjoidDFnIiwiYXJndiI6WyJzbGVlcCIsIjEiXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MTY1MTY4LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoidG1wIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMzQ5MCwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MTIwLCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9LCJzZXEiOjEyNywidGVybWluYWwiOiJ0MWciLCJ0eXBlIjoiY3JlYXRlZCJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "address": "t1g",
+       "argv": [
+        "sleep",
+        "1"
+       ],
+       "cols": 200,
+       "created_ms": 1793309165168,
+       "cwd": "/tmp/hcna/proj",
+       "die_with_parent": false,
+       "exit_code": null,
+       "finished_ms": null,
+       "identity": "ghostty",
+       "keep": false,
+       "labels": {},
+       "name": "tmp",
+       "notify": true,
+       "parent": null,
+       "pid": 2533490,
+       "reason": null,
+       "reported": false,
+       "rm": false,
+       "rows": 120,
+       "screen": "exact",
+       "signal": null,
+       "state": "live",
+       "status": null,
+       "status_ms": null,
+       "template": null,
+       "title": "",
+       "turn": 0
+      },
+      "seq": 127,
+      "terminal": "t1g",
+      "type": "created"
+     }
+    }
+   ]
+  },
+  {
+   "t": 17.75,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 175,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJhcmd2IjpbInNsZWVwIiwiMSJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzbGVlcCIsInBpZCI6MjUzMzQ5MH0sInNlcSI6MTI4LCJ0ZXJtaW5hbCI6InQxZyIsInR5cGUiOiJmb3JlZ3JvdW5kIn19Cg==",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "argv": [
+        "sleep",
+        "1"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sleep",
+       "pid": 2533490
+      },
+      "seq": 128,
+      "terminal": "t1g",
+      "type": "foreground"
+     }
+    }
+   ]
+  },
+  {
+   "t": 18.409,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 174,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJleGl0X2NvZGUiOjAsImZpbmlzaGVkX21zIjoxNzkzMzA5MTY2MTczLCJyZWFzb24iOiJleGl0ZWQiLCJzaWduYWwiOm51bGx9LCJzZXEiOjEyOSwidGVybWluYWwiOiJ0MWciLCJ0eXBlIjoiZmluaXNoZWQifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "exit_code": 0,
+       "finished_ms": 1793309166173,
+       "reason": "exited",
+       "signal": null
+      },
+      "seq": 129,
+      "terminal": "t1g",
+      "type": "finished"
+     }
+    }
+   ]
+  },
+  {
+   "t": 30.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 60,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiaGVhcnRiZWF0IiwicGFyYW1zIjp7InNlcSI6MTI5fX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "heartbeat",
+     "params": {
+      "seq": 129
+     }
+    }
+   ]
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

@@ -1,0 +1,16 @@
+# Generic leak rules for scan.py (this folder), run by
+# .github/workflows/secret-scan.yml on every pull request and push to main,
+# next to gitleaks. Columns, tab-separated: id, kind, severity, pattern,
+# description. kind: regex (content), name (file path), ipv4 (literals inside
+# the comma-separated CIDRs). severity: fail, or secret (fail and redact).
+# Accepted hits go in scan-allow.tsv, each with a reason.
+private-ipv4	ipv4	fail	10.0.0.0/8,172.16.0.0/12,192.168.0.0/16	RFC 1918 address (a LAN)
+tailnet-ipv4	ipv4	fail	100.64.0.0/10	CGNAT / Tailscale tailnet address
+ts-net	regex	fail	(?i)\b(?:[a-z0-9-]+\.)*ts\.net\b	Tailscale MagicDNS name
+pem-private-key	regex	secret	BEGIN[A-Z ]*PRIVATE KEY	PEM private key header
+aws-access-key	regex	secret	\b(?:AKIA|ASIA)[0-9A-Z]{16}\b	AWS access key id
+github-token	regex	secret	\bgh[opsur]_[A-Za-z0-9]{4,}|\bgithub_pat_[A-Za-z0-9_]{10,}	GitHub token
+slack-token	regex	secret	\bxox[abposr]-[A-Za-z0-9-]{10,}	Slack token
+openai-key	regex	secret	\bsk-(?:proj-|or-v1-|ant-[a-z0-9]+-)?[A-Za-z0-9_-]{20,}	OpenAI / OpenRouter / Anthropic API key
+posthog-personal-key	regex	secret	\bphx_[A-Za-z0-9]{20,}	PostHog personal API key
+key-file	name	fail	(?i)\.(?:p8|p12|pfx|mobileprovision|keystore|jks)$|(?:^|/)id_(?:rsa|dsa|ecdsa|ed25519)$|(?:^|/)\.env$	key, certificate or env file

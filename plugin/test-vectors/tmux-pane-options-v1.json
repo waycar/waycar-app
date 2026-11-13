@@ -1,0 +1,217 @@
+{
+  "description": "Shared tmux pane option test vectors, v1. Single source of truth for the pane options Waycar's host tools (bin/waycar-hook, `waycar hook-session`, the omp/pi/opencode extensions) write with `tmux set-option -p -t \"$TMUX_PANE\"` and the app's TmuxTransport reads; consumed by the Rust plugin tests and the Swift app tests (design docs/design/tmux-backend.md §4.6). `paneCases[].options` is the set of pane-level @waycar_* options as read back from tmux (absent = unset); `expected` is what the app derives. `hookTransitions` pins the waycar-hook status guards: `next` null means the hook writes nothing.",
+  "options": {
+    "status": "@waycar_status",
+    "agent": "@waycar_agent",
+    "session": "@waycar_session",
+    "transcript": "@waycar_transcript",
+    "seq": "@waycar_seq"
+  },
+  "statusValues": ["working", "blocked", "done", "idle"],
+  "unknownStatus": "unknown",
+  "agentValues": ["claude", "codex", "omp", "pi", "opencode", "copilot", "qwen", "gemini", "grok", "agy", "hermes", "kilo", "cline", "cursor", "devin", "kiro", "muse"],
+  "seq": {
+    "format": "decimal integer, nanoseconds since the Unix epoch, no sign, no leading zeros",
+    "pattern": "^[1-9][0-9]{0,18}$",
+    "rule": "raised on every @waycar_status write; never at or below the pane's previous @waycar_seq (previous + 1 when the clock has not moved past it)"
+  },
+  "transcriptEncoding": {
+    "description": "UTF-8 bytes; every byte outside the unreserved set becomes %XX with uppercase hex. Decoding is plain percent-decoding.",
+    "unreserved": "A-Z a-z 0-9 - . _ ~ /",
+    "cases": [
+      { "raw": "/Users/me/.claude/projects/-Users-me-src-app/0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4.jsonl", "encoded": "/Users/me/.claude/projects/-Users-me-src-app/0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4.jsonl" },
+      { "raw": "/home/a b/t~1_x.jsonl", "encoded": "/home/a%20b/t~1_x.jsonl" },
+      { "raw": "/tmp/tab\there.jsonl", "encoded": "/tmp/tab%09here.jsonl" },
+      { "raw": "/tmp/line\nbreak.jsonl", "encoded": "/tmp/line%0Abreak.jsonl" },
+      { "raw": "/tmp/café/😀.jsonl", "encoded": "/tmp/caf%C3%A9/%F0%9F%98%80.jsonl" },
+      { "raw": "/tmp/100%;'\"$x.jsonl", "encoded": "/tmp/100%25%3B%27%22%24x.jsonl" },
+      { "raw": "/tmp/sep\u001e\u001f.jsonl", "encoded": "/tmp/sep%1E%1F.jsonl" },
+      { "raw": "C:\\Users\\me\\s.jsonl", "encoded": "C%3A%5CUsers%5Cme%5Cs.jsonl" }
+    ]
+  },
+  "hookTransitions": [
+    { "current": null, "arg": "working", "next": "working" },
+    { "current": "idle", "arg": "working", "next": "working" },
+    { "current": "done", "arg": "working", "next": "working" },
+    { "current": "working", "arg": "working", "next": null },
+    { "current": "working", "arg": "blocked", "next": "blocked" },
+    { "current": "blocked", "arg": "blocked", "next": null },
+    { "current": "working", "arg": "done", "next": "done" },
+    { "current": "blocked", "arg": "done", "next": "done" },
+    { "current": "done", "arg": "idle", "next": "idle" },
+    { "current": "working", "arg": "working-if-active", "next": null },
+    { "current": "blocked", "arg": "working-if-active", "next": "working" },
+    { "current": "idle", "arg": "working-if-active", "next": null },
+    { "current": "done", "arg": "working-if-active", "next": null },
+    { "current": null, "arg": "working-if-active", "next": null },
+    { "current": "blocked", "arg": "working-if-blocked", "next": "working" },
+    { "current": "working", "arg": "working-if-blocked", "next": null },
+    { "current": "done", "arg": "working-if-blocked", "next": null },
+    { "current": "idle", "arg": "working-if-blocked", "next": null },
+    { "current": "working", "arg": "idle-if-working", "next": "idle" },
+    { "current": "blocked", "arg": "idle-if-working", "next": null },
+    { "current": "done", "arg": "idle-if-working", "next": null },
+    { "current": "idle", "arg": "idle-if-working", "next": null },
+    { "current": null, "arg": "done-if-active", "next": null },
+    { "current": "working", "arg": "done-if-active", "next": "done" },
+    { "current": "blocked", "arg": "done-if-active", "next": "done" },
+    { "current": "done", "arg": "done-if-active", "next": null },
+    { "current": "idle", "arg": "done-if-active", "next": null }
+  ],
+  "paneCases": [
+    {
+      "name": "claude working with a session",
+      "options": {
+        "@waycar_status": "working",
+        "@waycar_agent": "claude",
+        "@waycar_session": "0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4",
+        "@waycar_transcript": "/Users/me/.claude/projects/-Users-me-src-app/0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4.jsonl",
+        "@waycar_seq": "1790879769610922000"
+      },
+      "expected": {
+        "agentStatus": "working",
+        "agentKind": "claude",
+        "sessionID": "0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4",
+        "transcriptPath": "/Users/me/.claude/projects/-Users-me-src-app/0b6f3c1e-2a4d-4c55-9d1e-7f00a1b2c3d4.jsonl",
+        "stateChangeSeq": "1790879769610922000"
+      }
+    },
+    {
+      "name": "codex blocked on a permission",
+      "options": {
+        "@waycar_status": "blocked",
+        "@waycar_agent": "codex",
+        "@waycar_session": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+        "@waycar_transcript": "/home/a%20b/.codex/sessions/2026/10/01/rollout.jsonl",
+        "@waycar_seq": "1790879770218401000"
+      },
+      "expected": {
+        "agentStatus": "blocked",
+        "agentKind": "codex",
+        "sessionID": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+        "transcriptPath": "/home/a b/.codex/sessions/2026/10/01/rollout.jsonl",
+        "stateChangeSeq": "1790879770218401000"
+      }
+    },
+    {
+      "name": "omp done, session is the session file",
+      "options": {
+        "@waycar_status": "done",
+        "@waycar_agent": "omp",
+        "@waycar_session": "/Users/me/.omp/agent/sessions/-src-app/2026-10-01T00-32-23-081Z_01a0f4e0.jsonl",
+        "@waycar_transcript": "/Users/me/.omp/agent/sessions/-src-app/2026-10-01T00-32-23-081Z_01a0f4e0.jsonl",
+        "@waycar_seq": "1790879771144335000"
+      },
+      "expected": {
+        "agentStatus": "done",
+        "agentKind": "omp",
+        "sessionID": "/Users/me/.omp/agent/sessions/-src-app/2026-10-01T00-32-23-081Z_01a0f4e0.jsonl",
+        "transcriptPath": "/Users/me/.omp/agent/sessions/-src-app/2026-10-01T00-32-23-081Z_01a0f4e0.jsonl",
+        "stateChangeSeq": "1790879771144335000"
+      }
+    },
+    {
+      "name": "claude idle right after SessionStart",
+      "options": {
+        "@waycar_status": "idle",
+        "@waycar_agent": "claude",
+        "@waycar_session": "5c1d0a2e-0000-4000-8000-000000000001",
+        "@waycar_transcript": "/tmp/caf%C3%A9/%F0%9F%98%80.jsonl",
+        "@waycar_seq": "1790879771451730000"
+      },
+      "expected": {
+        "agentStatus": "idle",
+        "agentKind": "claude",
+        "sessionID": "5c1d0a2e-0000-4000-8000-000000000001",
+        "transcriptPath": "/tmp/café/😀.jsonl",
+        "stateChangeSeq": "1790879771451730000"
+      }
+    },
+    {
+      "name": "opencode working, no transcript",
+      "options": {
+        "@waycar_status": "working",
+        "@waycar_agent": "opencode",
+        "@waycar_session": "ses_7f3a1b2c3d4e5f60",
+        "@waycar_seq": "1790879772000000000"
+      },
+      "expected": {
+        "agentStatus": "working",
+        "agentKind": "opencode",
+        "sessionID": "ses_7f3a1b2c3d4e5f60",
+        "transcriptPath": null,
+        "stateChangeSeq": "1790879772000000000"
+      }
+    },
+    {
+      "name": "status written before any SessionStart",
+      "options": {
+        "@waycar_status": "working",
+        "@waycar_agent": "claude",
+        "@waycar_seq": "1790879773000000000"
+      },
+      "expected": {
+        "agentStatus": "working",
+        "agentKind": "claude",
+        "sessionID": null,
+        "transcriptPath": null,
+        "stateChangeSeq": "1790879773000000000"
+      }
+    },
+    {
+      "name": "session recorded, no status yet (Codex SessionStart)",
+      "options": {
+        "@waycar_agent": "codex",
+        "@waycar_session": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5c"
+      },
+      "expected": {
+        "agentStatus": "unknown",
+        "agentKind": "codex",
+        "sessionID": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5c",
+        "transcriptPath": null,
+        "stateChangeSeq": null
+      }
+    },
+    {
+      "name": "released pane (SessionEnd)",
+      "options": {},
+      "expected": {
+        "agentStatus": "unknown",
+        "agentKind": null,
+        "sessionID": null,
+        "transcriptPath": null,
+        "stateChangeSeq": null
+      }
+    },
+    {
+      "name": "unrecognized status value",
+      "options": {
+        "@waycar_status": "thinking",
+        "@waycar_agent": "claude",
+        "@waycar_seq": "1790879774000000000"
+      },
+      "expected": {
+        "agentStatus": "unknown",
+        "agentKind": "claude",
+        "sessionID": null,
+        "transcriptPath": null,
+        "stateChangeSeq": "1790879774000000000"
+      }
+    },
+    {
+      "name": "malformed seq is ignored",
+      "options": {
+        "@waycar_status": "done",
+        "@waycar_agent": "pi",
+        "@waycar_seq": "12ab"
+      },
+      "expected": {
+        "agentStatus": "done",
+        "agentKind": "pi",
+        "sessionID": null,
+        "transcriptPath": null,
+        "stateChangeSeq": null
+      }
+    }
+  ]
+}

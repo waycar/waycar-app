@@ -1,0 +1,18 @@
+---
+// /help/<slug>: one help page, rendered from src/content/help/<slug>.md.
+import { render } from 'astro:content';
+import HelpLayout from '../../layouts/HelpLayout.astro';
+import { getHelpPages } from '../../lib/help';
+
+export async function getStaticPaths() {
+  const pages = await getHelpPages();
+  return pages.map((page) => ({ params: { slug: page.id }, props: { page, pages } }));
+}
+
+const { page, pages } = Astro.props;
+const { Content, headings } = await render(page);
+---
+
+<HelpLayout page={page} pages={pages} headings={headings}>
+  <Content />
+</HelpLayout>

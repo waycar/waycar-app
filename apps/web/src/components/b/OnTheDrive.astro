@@ -1,0 +1,81 @@
+---
+// Page B only, after StepAway. Outcome-led fork of CarPlay.astro. Sourced from
+// CHANGELOG.md [Unreleased] (Waycar in CarPlay, #152). The car screen is a
+// decorative mock of the attention-first list.
+
+import CarPlayScreen from '../CarPlayScreen.astro';
+---
+
+<section id="road" class="section road" aria-labelledby="road-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">On the drive</span>
+      <h2 id="road-title" class="sec-title">
+        Unblock an agent on your drive. <span class="muted">Nothing to read.</span>
+      </h2>
+      <p class="sec-lede">Your agents in CarPlay, the ones that need you on top. Works with your iPhone locked. iOS 26.4 or later.</p>
+    </div>
+
+    <div class="glass stage">
+      <CarPlayScreen />
+      <ul class="points">
+        <li>
+          <h3>Ask how it's going</h3>
+          <p>Tap an agent, ask, and hear the answer in a sentence or two.</p>
+        </li>
+        <li>
+          <h3>Say yes, keep driving</h3>
+          <p>Allow or deny a Claude Code or Codex approval out loud. Risky ones wait for you.</p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Stage and glow rules copied from page A's CarPlay.astro on purpose, for A/B test isolation. */
+  .road::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: -1;
+    height: 520px;
+    background: radial-gradient(640px 300px at 80% 10%, rgb(var(--cyan-rgb) / 0.08), transparent 70%);
+    pointer-events: none;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(0, 320px);
+    justify-content: space-evenly;
+    align-items: center;
+    gap: 48px;
+    padding: 48px 40px;
+  }
+
+  .points {
+    display: grid;
+    gap: 28px;
+  }
+
+  .points h3 {
+    margin: 0 0 6px;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .points p {
+    max-width: 400px;
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 860px) {
+    .stage {
+      grid-template-columns: 1fr;
+      gap: 36px;
+      padding: 28px 20px;
+    }
+  }
+</style>

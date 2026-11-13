@@ -1,0 +1,2 @@
+GEMINI_API_KEY=waycar-lab-dummy-key
+GOOGLE_GEMINI_BASE_URL=http://mock:8080

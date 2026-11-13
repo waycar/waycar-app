@@ -1,0 +1,9 @@
+{
+  "description": "Agent kind catalog, v1. `kinds` lists the canonical kind ids in the app's SupportedAgentKind declaration order (Swift raw values; Antigravity is `agy`). The Swift tests assert SupportedAgentKind.allCases raw values equal `kinds`, in order; the plugin tests assert sidebar-config's AGENT_IDS (herdr's canonical labels) hold exactly these ids, and that every Status Hook kind (agent-hooks HOOK_AGENTS) is one of them.",
+  "version": 1,
+  "kinds": [
+    "pi", "claude", "codex", "gemini", "cursor", "devin", "agy", "cline",
+    "omp", "mastracode", "opencode", "copilot", "kimi", "kiro", "droid",
+    "amp", "grok", "hermes", "kilo", "qodercli", "maki", "muse", "qwen"
+  ]
+}

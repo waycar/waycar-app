@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "description": "Registration file with one APNs and one FCM device. The FCM entry keeps `env`, carries `provider`, and enables Live Updates with `live_activity.enabled` (no per-activity token, no push-to-start).",
+  "file": {
+    "v": 1,
+    "devices": [
+      {
+        "token": "abababababababababababababababababababababababababababababababab",
+        "env": "production",
+        "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "notify": {
+          "blocked": true,
+          "done": true
+        }
+      },
+      {
+        "provider": "fcm",
+        "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+        "env": "production",
+        "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "notify": {
+          "blocked": true,
+          "done": true
+        },
+        "live_activity": {
+          "enabled": true
+        }
+      }
+    ]
+  },
+  "fcmToken": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z"
+}

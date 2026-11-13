@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest something Waycar should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation and what gets in the way today. A real example beats a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you picture it working, and anything you tried instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Console and Agents
+        - Terminal and Composer
+        - Chat Mode
+        - Hosts, SSH and pairing
+        - Notifications and Live Activities
+        - Apple Watch or CarPlay
+        - Host Tools (plugin)
+        - Something else

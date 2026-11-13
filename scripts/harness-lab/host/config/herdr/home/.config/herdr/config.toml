@@ -1,0 +1,6 @@
+# Harness lab herdr config: stays on the pinned version (VERSIONS) and skips
+# first-run onboarding. Agent detection manifests still update, as for users.
+onboarding = false
+
+[update]
+version_check = false

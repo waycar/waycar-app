@@ -1,0 +1,16 @@
+subscribed; ssh client pid 8443; core client conns=1
+SIGSTOP ssh
+t= 0 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t= 5 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=10 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=15 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=20 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=25 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=30 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=35 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=40 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=45 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=50 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=55 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+t=60 core client conns=1 queues(Recv,Send)=[('0', '0')] remote 'herdr-core connect' procs=1
+SIGKILL ssh: core client conns=0 after 0.014s; remote connect procs=0

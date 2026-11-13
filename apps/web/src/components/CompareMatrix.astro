@@ -1,0 +1,160 @@
+---
+// Waycar and every comparison, one column each, on every row in
+// src/lib/compare-rows.mjs. Wide, so it scrolls inside its own focusable
+// region and keeps the row labels in view.
+import { WAYCAR_ROWS } from '../data/compare-waycar';
+import { CAPABILITIES, GROUPS } from '../lib/compare-rows.mjs';
+import { comparePath, type Comparison } from '../lib/compare';
+import CompareCell from './CompareCell.astro';
+
+interface Props {
+  comparisons: Comparison[];
+}
+
+const { comparisons } = Astro.props;
+const columns = comparisons.length + 2;
+---
+
+<div class="scroll" role="region" aria-label="Waycar and every comparison, side by side" tabindex="0">
+  <table>
+    <caption class="visually-hidden">
+      Waycar and {comparisons.length} other products compared on {CAPABILITIES.length} points
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col"><span class="visually-hidden">Point of comparison</span></th>
+        <th scope="col" class="us">Waycar</th>
+        {
+          comparisons.map((comparison) => (
+            <th scope="col">
+              <a href={comparePath(comparison.id)}>{comparison.data.name}</a>
+            </th>
+          ))
+        }
+      </tr>
+    </thead>
+    {
+      GROUPS.map((group) => (
+        <tbody>
+          <tr class="group">
+            <th scope="rowgroup" colspan={columns}>
+              <span class="group-label">{group.label}</span>
+            </th>
+          </tr>
+          {CAPABILITIES.filter((row) => row.group === group.id).map((row) => (
+            <tr>
+              <th scope="row">{row.label}</th>
+              <td class="us">
+                <CompareCell cell={WAYCAR_ROWS[row.id]} />
+              </td>
+              {comparisons.map((comparison) => (
+                <td>
+                  <CompareCell cell={comparison.data.rows[row.id]} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      ))
+    }
+  </table>
+</div>
+
+<style>
+  .scroll {
+    overflow-x: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
+
+  table {
+    min-width: 100%;
+    font-size: 13.5px;
+    line-height: 1.5;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  th,
+  td {
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+
+  td,
+  thead th:not(:first-child) {
+    min-width: 168px;
+    max-width: 220px;
+  }
+
+  td {
+    color: var(--text-2);
+  }
+
+  thead th {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    border-bottom-color: var(--line-2);
+  }
+
+  thead a {
+    color: var(--text-2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  thead a:hover {
+    color: var(--text);
+  }
+
+  /* Waycar's column is the baseline every other column is read against. */
+  .us {
+    background: rgb(var(--violet-rgb) / 0.07);
+  }
+
+  thead th.us {
+    color: var(--violet-soft);
+  }
+
+  /* The row labels stay put while the columns scroll under them. */
+  tbody th[scope='row'],
+  thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 170px;
+    max-width: 200px;
+    background: var(--bg-2);
+  }
+
+  tbody th[scope='row'] {
+    font-weight: 500;
+    color: var(--text);
+    border-right: 1px solid var(--line);
+  }
+
+  .group th {
+    padding-top: 22px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+    background: var(--bg-2);
+  }
+
+  /* A group row spans every column, so its label is pinned inside the cell and stays at the left edge while the columns scroll. */
+  .group-label {
+    position: sticky;
+    left: 14px;
+    display: inline-block;
+  }
+
+  tbody:last-of-type tr:last-child > * {
+    border-bottom: 0;
+  }
+</style>

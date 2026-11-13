@@ -1,0 +1,135 @@
+---
+import { Image } from 'astro:assets';
+import logo from '../assets/logo.png';
+import AppStoreCta from './AppStoreCta.astro';
+import HelpSearch from './HelpSearch.astro';
+
+interface Props {
+  /** The page is served at `/`, so section links are in-page anchors. */
+  homePage?: boolean;
+}
+
+const { homePage = false } = Astro.props;
+/** Link to a home page section: `#id` on a home page, `/#id` elsewhere. */
+const section = (id: string) => (homePage ? `#${id}` : `/#${id}`);
+
+const links = [
+  { href: section('features'), label: 'Features' },
+  { href: section('security'), label: 'Security' },
+  { href: section('setup'), label: 'Setup' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: section('faq'), label: 'FAQ' },
+  { href: '/help', label: 'Help' },
+  { href: '/articles', label: 'Articles' },
+];
+---
+
+<header class="nav">
+  <div class="wrap bar">
+    <a class="brand" href="/">
+      <Image class="mark" src={logo} alt="" width={28} height={28} densities={[1, 2, 3]} loading="eager" />
+      <span>Waycar</span>
+    </a>
+    <nav class="links" aria-label="Primary">
+      <ul>
+        {
+          links.map((link) => (
+            <li>
+              <a href={link.href}>{link.label}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+    <div class="right">
+      <HelpSearch />
+      <AppStoreCta kind="header" ct="site-nav" />
+    </div>
+  </div>
+</header>
+
+<style>
+  /* The frosted ground is a pseudo-element, not the header's own
+     `backdrop-filter`: a filter on the header would make it the containing
+     block of the Get Waycar picker's fixed overlay when JavaScript is off,
+     and the overlay would shrink to the header's box. */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .nav::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgb(var(--bg-rgb) / 0.72);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    height: var(--header-h);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .brand :global(.mark) {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    box-shadow: 0 0 0 1px var(--line-2);
+  }
+
+  .links ul {
+    display: flex;
+    gap: 4px;
+  }
+
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 14px;
+    color: var(--text-2);
+    white-space: nowrap;
+    border-radius: 8px;
+  }
+
+  .links a:hover {
+    color: var(--text);
+  }
+
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+  }
+
+  /* Where the link row stops fitting beside the brand and button. */
+  @media (max-width: 860px) {
+    .links {
+      display: none;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .bar {
+      gap: 12px;
+    }
+  }
+</style>

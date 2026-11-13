@@ -1,0 +1,13 @@
+# Harness lab: omp talks to the mock's OpenAI Chat Completions API.
+providers:
+  mock:
+    baseUrl: http://mock:8080/v1
+    apiKey: waycar-lab-dummy-key
+    api: openai-completions
+    models:
+      - id: mock-model
+        name: mock-model (Waycar harness lab mock)
+        reasoning: false
+        input: [text]
+        contextWindow: 128000
+        maxTokens: 8192

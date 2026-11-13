@@ -1,0 +1,149 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 143,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAiYWx0IiwgImNvbHMiOiA1MiwgInJvd3MiOiAyOCwgIm9ic2VydmUiOiBmYWxzZSwgImhpc3RvcnkiOiAwfX0="
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 687,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDEiLCJhcmd2IjpbInNoIiwiLWMiLCJwcmludGYgXCJcXDAzM1s/MTA0OWhcXDAzM1sySlxcMDMzW0hoZWxsbyBhbHRcIjsgc2xlZXAgMzAwMCJdLCJjb2xzIjo1MiwiY3JlYXRlZF9tcyI6MTc5MzMwOTA0MDQ3MywiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJmb3JlZ3JvdW5kIjp7ImFyZ3YiOlsic2giLCItYyIsInByaW50ZiBcIlxcMDMzWz8xMDQ5aFxcMDMzWzJKXFwwMzNbSGhlbGxvIGFsdFwiOyBzbGVlcCAzMDAwIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMxMTEyfSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJhbHQiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMxMTEyLCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoyOCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfX19",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t1",
+      "argv": [
+       "sh",
+       "-c",
+       "printf \"\\033[?1049h\\033[2J\\033[Hhello alt\"; sleep 3000"
+      ],
+      "cols": 52,
+      "created_ms": 1793309040473,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+       "argv": [
+        "sh",
+        "-c",
+        "printf \"\\033[?1049h\\033[2J\\033[Hhello alt\"; sleep 3000"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2531112
+      },
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {},
+      "name": "alt",
+      "notify": true,
+      "parent": null,
+      "pid": 2531112,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 244,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbPzEwNDloG1szZxtbOUcbSBtbMTdHG0gbWzI1RxtIG1szM0cbSBtbNDFHG0gbWzQ5RxtIG1tIaGVsbG8gYWx0G1sxOzEwSBtbMG0bWz85MDAxbA=="
+  },
+  {
+   "t": 1.052,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": ""
+  },
+  {
+   "t": 1.052,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": "",
+   "reason": null
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

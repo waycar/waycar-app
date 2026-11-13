@@ -1,0 +1,19 @@
+core before: pid=1797 uptime_ms=690179 live=12
+attach bytes before restart: 344 ; viewers: core size (80, 24)
+`ssh host 'herdr-core server restart'`: rc=0 in 3.286s stdout='{"core":{"id":"73722ea3e24fff22b8f6907e2a1729f6","name":"bf6c156225fa"},"finished":9,"holder":{"current":true,"instance":"0d41037578be14bd9c6e1d71dca346d1","pid":1820,"terminals":12},"holders":[{"current":true,"instance":"0d41037578be14bd9c6e1d71dca346d1","pid":1820,"terminals":12}],"installed_by":null,"live":12,"pid":13155,"uptime_ms":14,"version":"0.1.14"}' stderr='hc: no systemd user manager here: the core ends with whatever started it'
+attach PTY ssh: rc=0 exited 3.287s after the restart command started; last bytes: 1016l\x1b[?2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\x1b\\\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\\x1b]22;\x1b\\\r\n[lost the core; it keeps tick running: hc attach tick]\r\nConnection to 127.0.0.1 closed.\r\r\n
+reconnect (new ssh + framed hello + events.subscribe + 0.3 s hold): total 0.598s
+    [  0.215] PLAIN <- {"id":0,"jsonrpc":"2.0","result":{"core":{"id":"73722ea3e24fff22b8f6907e2a1729f6","name":"bf6c156225fa"},"features":["framed","attach","events","status
+    [  0.216] -> ch=0 DATA len=71 {"jsonrpc": "2.0", "id": 1, "method": "events.subscribe", "params": {}}
+    [  0.217] <- ch=0 DATA {"id": 1, "jsonrpc": "2.0", "result": {"channel": 1, "seq": 0, "terminals": [{"address": "t1", "argv": ["sh", "-c", "echo PATH=$PATH SHELL=$SHELL H
+core after: pid=13155 uptime_ms=616 live=12 (same core.id: True)
+re-attach after restart: first paint @0.21891105998656712 s, bytes=422, core size=(80, 24); text '#tick' seen: True
+--- subscriber probe log tail:
+[  2.215] EOF on hc stdout (connection closed)
+[  2.416] connect process exit code 0
+
+[  2.073] <- ch=1 EVENT {"jsonrpc": "2.0", "method": "event", "params": {"data": {"records": {}, "reported": true, "status": {"app": "bravo", "msg": "bravo step 70", "progress": 70, "state": "working"}}, "seq": 847, "terminal": "t1k", "type": "status"}}
+[  2.215] EOF on hc stdout (connection closed)
+[  2.415] RX bytes per channel: {}
+[  2.416] connect process exit code 0
+

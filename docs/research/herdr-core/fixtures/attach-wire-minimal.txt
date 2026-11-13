@@ -1,0 +1,24 @@
+=== CLIENT -> core (what the app writes to the exec channel stdin) (288 bytes) ===
+[plain-mode line, 75 bytes] '{"jsonrpc": "2.0", "id": 0, "method": "hello", "params": {"framed": true}}\n'
+hdr 00 00 00 00 00 91 00 00 00  -> channel=0 kind=0(DATA) len=145
+    payload: '{"jsonrpc": "2.0", "id": 1, "method": "terminal.attach", "params": {"terminal": "wire1", "cols": 52, "rows": 28, "observe": false, "history": 0}}'
+hdr 01 00 00 00 01 04 00 00 00  -> channel=1 kind=1(CREDIT consumed=228) len=4
+    payload: '\\xe4\x00\x00\x00'
+hdr 01 00 00 00 00 02 00 00 00  -> channel=1 kind=0(DATA) len=2
+    payload: 'x\r'
+hdr 01 00 00 00 01 04 00 00 00  -> channel=1 kind=1(CREDIT consumed=6) len=4
+    payload: '\x06\x00\x00\x00'
+hdr 01 00 00 00 03 04 00 00 00  -> channel=1 kind=3(RESIZE cols=40 rows=20) len=4
+    payload: '(\x00\x14\x00'
+hdr 01 00 00 00 02 00 00 00 00  -> channel=1 kind=2(CLOSE) len=0
+    payload: ''
+
+=== core -> CLIENT (what the app reads from exec channel stdout, AFTER the plain-mode hello reply line) (853 bytes) ===
+hdr 00 00 00 00 00 47 02 00 00  -> channel=0 kind=0(DATA) len=583
+    payload: '{"id":1,"jsonrpc":"2.0","result":{"channel":1,"terminal":{"address":"t18","argv":["sh","-c","echo hi; exec cat"],"cols":52,"created_ms":1793309086906,"cwd":"/tmp/hcna/proj","die_with_parent":false,"exit_code":null,"finished_ms":n...
+hdr 01 00 00 00 00 e4 00 00 00  -> channel=1 kind=0(DATA) len=228
+    payload: '\x1b[!p\x1b[?2026l\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?2004l\x1b[?1l\x1b[?66l\x1b[?2031l\x1b[?2048l\x1b[=0;1u\x1b[?1049l\x1b[?1047l\x1b[?47l\x1b[H\x1b[2J...
+hdr 01 00 00 00 00 06 00 00 00  -> channel=1 kind=0(DATA) len=6
+    payload: 'x\r\nx\r\n'
+hdr 01 00 00 00 02 00 00 00 00  -> channel=1 kind=2(CLOSE) len=0
+    payload: ''

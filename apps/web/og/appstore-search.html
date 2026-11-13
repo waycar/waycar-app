@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  /* App Store search results asset, 3840x2560: laid out at 1920x1280 CSS px and
+     rendered at device scale factor 2. Apple's template marks a centred Art
+     Safe Area (836,765 to 3004,1795 at full size); the line and the top of both
+     screens (Console list, terminal, Chat Mode) sit inside it, and the devices
+     run on below it. Add class "safe" to <body> to see it. */
+  html, body { width: 1920px; height: 1280px; }
+  .grid { background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(ellipse 60% 75% at 50% 30%, #000 5%, transparent 80%); }
+  .glow {
+    position: absolute; left: 50%; top: 520px; width: 1800px; height: 1000px; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--violet) 40%, transparent),
+      color-mix(in srgb, var(--cyan) 14%, transparent) 55%, transparent 82%);
+    filter: blur(50px);
+  }
+  .head { position: absolute; z-index: 3; left: 418px; top: 386px; width: 1084px; text-align: center; }
+  h1 { font-size: 76px; white-space: nowrap; font-weight: 650; line-height: 1.03; letter-spacing: -0.045em; }
+  h1 span { display: block; padding-bottom: 3px; }
+  .ipad {
+    position: absolute; z-index: 1; left: 420px; top: 590px; width: 940px;
+    padding: 14px; border-radius: 34px; background: var(--bezel-tablet); box-shadow: var(--shadow-device);
+  }
+  .ipad img { display: block; width: 100%; border-radius: 21px; }
+  .phone {
+    position: absolute; z-index: 2; left: 1174px; top: 652px; width: 300px;
+    padding: 9px; border-radius: 48px; background: var(--bezel-phone);
+    box-shadow: var(--shadow-device), 0 0 90px -20px color-mix(in srgb, var(--cyan) 35%, transparent);
+  }
+  .phone img { display: block; width: 100%; border-radius: 40px; }
+  .fade { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: 170px;
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 90%, transparent)); }
+  body.safe::after { left: 418px; top: 382px; width: 1084px; height: 516px; bottom: auto; }
+</style></head>
+<body>
+  <div class="grid"></div><div class="glow"></div>
+  <div class="head">
+    <h1><span class="title-text">Your coding agents,</span><span class="grad-text">on your iPhone and iPad.</span></h1>
+  </div>
+  <div class="ipad"><img src="../src/assets/screens/ipad-console.png" alt=""></div>
+  <div class="phone"><img src="../src/assets/screens/iphone-chat.png" alt=""></div>
+  <div class="fade"></div>
+</body></html>

@@ -1,0 +1,96 @@
+{
+ "exchanges": [
+  {
+   "note": "plain program that never reports status",
+   "received": [
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309048089,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"k\":\"v\"},\"name\":\"plain-sleep\",\"notify\":true,\"parent\":null,\"pid\":2531196,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"100\"],\"name\":\"plain-sleep\",\"labels\":{\"k\":\"v\"}}}"
+  },
+  {
+   "note": "get plain (status null, reported false, foreground present)",
+   "received": [
+    "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309048089,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"100\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sleep\",\"pid\":2531196},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"k\":\"v\"},\"name\":\"plain-sleep\",\"notify\":true,\"parent\":null,\"pid\":2531196,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"plain-sleep\"}}"
+  },
+  {
+   "note": "run with no argv/line = core's own shell ($SHELL)",
+   "received": [
+    "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t2\",\"argv\":[\"/bin/bash\"],\"cols\":200,\"created_ms\":1793309048592,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"myshell\",\"notify\":true,\"parent\":null,\"pid\":2531206,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"terminal.run\",\"params\":{\"name\":\"myshell\",\"cwd\":\"/tmp\"}}"
+  },
+  {
+   "note": "type a command into the shell",
+   "received": [
+    "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"started\":null,\"status\":null,\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"myshell\",\"text\":\"sleep 30\"}}"
+  },
+  {
+   "note": "get: foreground tracks the running command",
+   "received": [
+    "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t2\",\"argv\":[\"/bin/bash\"],\"cols\":200,\"created_ms\":1793309048592,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"30\"],\"cwd\":\"/tmp\",\"name\":\"sleep\",\"pid\":2531211},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"myshell\",\"notify\":true,\"parent\":null,\"pid\":2531206,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"myshell\"}}"
+  },
+  {
+   "note": "finished with exit code",
+   "received": [
+    "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t3\",\"argv\":[\"sh\",\"-c\",\"echo done; exit 3\"],\"cols\":200,\"created_ms\":1793309050248,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"exit3\",\"notify\":true,\"parent\":null,\"pid\":2531212,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"terminal.run\",\"params\":{\"line\":\"echo done; exit 3\",\"name\":\"exit3\"}}"
+  },
+  {
+   "note": "get finished (state=finished, exit_code=3, reason=exited)",
+   "received": [
+    "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t3\",\"argv\":[\"sh\",\"-c\",\"echo done; exit 3\"],\"cols\":200,\"created_ms\":1793309050248,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":3,\"finished_ms\":1793309050251,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"exit3\",\"notify\":true,\"parent\":null,\"pid\":2531212,\"reason\":\"exited\",\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"finished\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"exit3\"}}"
+  },
+  {
+   "note": "child via parent=<address>",
+   "received": [
+    "{\"id\":9,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t5\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051055,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-a\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531222,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"100\"],\"name\":\"child-a\",\"parent\":\"t4\"}}"
+  },
+  {
+   "note": "child via caller=<name> (a NAME is ignored: parent stays null)",
+   "received": [
+    "{\"id\":10,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t6\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051058,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-b\",\"notify\":true,\"parent\":null,\"pid\":2531226,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"100\"],\"name\":\"child-b\",\"caller\":\"par-a\"}}"
+  },
+  {
+   "note": "child via caller=<address>",
+   "received": [
+    "{\"id\":11,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t7\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051060,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-c\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531230,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"100\"],\"name\":\"child-c\",\"caller\":\"t4\"}}"
+  },
+  {
+   "note": "list live only (finished hidden: hidden_finished)",
+   "received": [
+    "{\"id\":12,\"jsonrpc\":\"2.0\",\"result\":{\"hidden_finished\":1,\"terminals\":[{\"address\":\"t1\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309048089,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"100\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sleep\",\"pid\":2531196},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"k\":\"v\"},\"name\":\"plain-sleep\",\"notify\":true,\"parent\":null,\"pid\":2531196,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t2\",\"argv\":[\"/bin/bash\"],\"cols\":200,\"created_ms\":1793309048592,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"30\"],\"cwd\":\"/tmp\",\"name\":\"sleep\",\"pid\":2531211},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"myshell\",\"notify\":true,\"parent\":null,\"pid\":2531206,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t4\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051052,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"par-a\",\"notify\":true,\"parent\":null,\"pid\":2531218,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t5\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051055,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-a\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531222,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t6\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051058,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-b\",\"notify\":true,\"parent\":null,\"pid\":2531226,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t7\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051060,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-c\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531230,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}]}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"terminal.list\",\"params\":{}}"
+  },
+  {
+   "note": "list all (includes finished)",
+   "received": [
+    "{\"id\":13,\"jsonrpc\":\"2.0\",\"result\":{\"hidden_finished\":0,\"terminals\":[{\"address\":\"t1\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309048089,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"100\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sleep\",\"pid\":2531196},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"k\":\"v\"},\"name\":\"plain-sleep\",\"notify\":true,\"parent\":null,\"pid\":2531196,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t2\",\"argv\":[\"/bin/bash\"],\"cols\":200,\"created_ms\":1793309048592,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"30\"],\"cwd\":\"/tmp\",\"name\":\"sleep\",\"pid\":2531211},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"myshell\",\"notify\":true,\"parent\":null,\"pid\":2531206,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t3\",\"argv\":[\"sh\",\"-c\",\"echo done; exit 3\"],\"cols\":200,\"created_ms\":1793309050248,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":3,\"finished_ms\":1793309050251,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"exit3\",\"notify\":true,\"parent\":null,\"pid\":2531212,\"reason\":\"exited\",\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"finished\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t4\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051052,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"par-a\",\"notify\":true,\"parent\":null,\"pid\":2531218,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t5\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051055,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-a\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531222,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t6\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051058,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-b\",\"notify\":true,\"parent\":null,\"pid\":2531226,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},{\"address\":\"t7\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309051060,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":true,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"child-c\",\"notify\":true,\"parent\":\"t4\",\"pid\":2531230,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}]}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"terminal.list\",\"params\":{\"all\":true}}"
+  },
+  {
+   "note": "list filtered by label",
+   "received": [
+    "{\"id\":14,\"jsonrpc\":\"2.0\",\"result\":{\"hidden_finished\":0,\"terminals\":[{\"address\":\"t1\",\"argv\":[\"sleep\",\"100\"],\"cols\":200,\"created_ms\":1793309048089,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sleep\",\"100\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sleep\",\"pid\":2531196},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"k\":\"v\"},\"name\":\"plain-sleep\",\"notify\":true,\"parent\":null,\"pid\":2531196,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}]}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"terminal.list\",\"params\":{\"labels\":{\"k\":\"v\"}}}"
+  }
+ ],
+ "note": "terminal.run/get/list records. NB: a terminal record has NO id field; \"address\" is the id."
+}

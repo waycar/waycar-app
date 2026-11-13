@@ -1,0 +1,13 @@
+C1 attached: size=(80, 24) (want (80, 24))
+C2 attached: size=(81, 25) (want (81, 25))
+C3 attached: size=(82, 26) (want (82, 26))
+C4 attached: size=(83, 27) (want (83, 27))
+cut/stop at t=0
+t=  74.5 C1: ssh client exited rc=255 tail=\x1b[17G\x1bH\x1b[25G\x1bH\x1b[33G\x1bH\x1b[41G\x1bH\x1b[49G\x1bH\x1b[57G\x1bH\x1b[65G\x1bH\x1b[73G\x1bH\x1b[H\x1b[1;1H\x1b[0m\x1b[?1004hTimeout, server 127.0.0.1 not responding.\r\n
+t=  75.5 C2: core dropped the viewer (200x120)
+t=  75.5 C3: core dropped the viewer (200x120)
+--- after 170s: client_dead={'C1': 74.5} core_freed={'C2': 75.5, 'C3': 75.5}
+C1 final core size (80, 24) (ghost wanted (80, 24))
+C2 final core size (200, 120) (ghost wanted (81, 25))
+C3 final core size (200, 120) (ghost wanted (82, 26))
+C4 final core size (83, 27) (ghost wanted (83, 27))

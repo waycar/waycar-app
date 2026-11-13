@@ -1,0 +1,45 @@
+import Foundation
+import Testing
+
+@testable import Waycar
+
+/// The shared agent-name rule (server rule, verified live: 0.7.5 rejects
+/// violations with `invalid_agent_name`), consumed by both the new-agent
+/// form (#12) and the rename sheet (#98).
+@Suite("Agent name rule")
+struct AgentNameTests {
+    @Test(arguments: [
+        "reviewer", "a", "a1", "agent-2", "agent_2", "x1234567890",
+        String(repeating: "a", count: 32),
+    ])
+    func validAgentNamesPassTheServerRule(name: String) {
+        #expect(AgentName.validationError(name) == nil)
+    }
+
+    @Test(arguments: [
+        "", "Agent", "1agent", "-agent", "_agent", "agent name", "拆解任务",
+        "café", String(repeating: "a", count: 33),
+    ])
+    func invalidAgentNamesFailTheServerRule(name: String) {
+        #expect(AgentName.validationError(name) != nil)
+    }
+
+    @Test(arguments: [
+        ("My Agent", "my-agent"),
+        ("Café Bot", "cafe-bot"),
+        ("feat/fix.login", "feat-fix-login"),
+        (" lead  -- trail ", "lead-trail-"),
+        ("foo ", "foo-"),
+        ("foo  ", "foo-"),
+        ("foo -", "foo-"),
+        ("   ", ""),
+        (String(repeating: "a", count: 32).appending(" "), String(repeating: "a", count: 32)),
+        ("snake_case", "snake_case"),
+        ("拆解task", "task"),
+        ("1agent", "1agent"),
+        (String(repeating: "a", count: 40), String(repeating: "a", count: 32)),
+    ])
+    func typedInputIsRewrittenTowardTheRule(input: String, expected: String) {
+        #expect(AgentName.normalizingInput(input) == expected)
+    }
+}

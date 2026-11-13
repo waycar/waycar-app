@@ -1,0 +1,2 @@
+# Keep checked-in native dependencies out of GitHub language statistics.
+Packages/WaycarSSH/Artifacts/** linguist-vendored

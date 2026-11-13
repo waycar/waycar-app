@@ -1,0 +1,170 @@
+---
+// Every store call to action on the site. The listing is live and
+// `APP_STORE_URL` is set (`ON_APP_STORE`), so each one is a "Get Waycar" (or
+// "Download") button that opens the Get Waycar picker (`GetPicker`), the one
+// place that names a store or a device: iPhone and iPad link to the App Store
+// and send `app_store_clicked`; Android is "Coming soon" and cannot be
+// clicked. The button and its picker travel together, so the App Store link
+// inside keeps this button's `ct`, and an event from the button or the link
+// keeps the `module` of the wrapper around them. The button sends
+// `get_picker_opened`. With `APP_STORE_LISTING_URL` emptied (the listing taken
+// down) each is a plain text label, "Coming soon to the App Store": no link,
+// no picker, no event, not focusable, no Apple logo or badge (Apple's
+// marketing guidelines allow neither without a live listing), the same size as
+// the button so layouts do not move.
+import { appStoreUrl, ON_APP_STORE } from '../data/links';
+import { nextPickerId } from '../lib/picker-id';
+import GetPicker from './GetPicker.astro';
+
+interface Props {
+  /**
+   * `header`: a "Download" button in the site header.
+   * `hero`: the hero's "Get Waycar" button. With `APP_STORE_LISTING_URL` empty
+   *   it is a plain text label the size of Apple's badge, the footprint the
+   *   hero had before the picker.
+   * `button`: a large button; the slot is its label.
+   * `text`: an inline link in running text; the slot is its text.
+   * Labels name no store or device: "Get Waycar" or "Download".
+   */
+  kind: 'header' | 'hero' | 'button' | 'text';
+  /** `button` only: the primary (paper) or ghost look. */
+  tone?: 'primary' | 'ghost';
+  /**
+   * The organic campaign token (`ct`) of the section this CTA sits in
+   * (`ORGANIC_CT` in src/lib/ad-links.mjs); `site` when omitted. A page type
+   * (`/pricing`, `/help/*`, `/articles/*`) overrides it.
+   */
+  ct?: string;
+  /** Extra classes for the caller's layout, in both states. */
+  class?: string;
+  /** Live button only: id of the element that says what the button is for. */
+  describedby?: string;
+}
+
+// `attrs` carries the caller's `data-astro-cid-*`, so the caller's scoped styles
+// (such as Setup's link color) still reach the element.
+const { kind, tone = 'primary', ct, class: className, describedby, ...attrs } = Astro.props;
+const href = appStoreUrl(Astro.url.pathname, ct);
+const pickerId = ON_APP_STORE ? nextPickerId(Astro.request) : '';
+const soonText = kind === 'text' ? 'Coming soon to the App Store.' : 'Coming soon to the App Store';
+// What the button opens and reports. `data-picker-open` is the script's hook;
+// `data-ph-event` is Layout's.
+const opens = {
+  href: `#${pickerId}`,
+  'aria-haspopup': 'dialog',
+  'aria-describedby': describedby,
+  'data-picker-open': '',
+  'data-ph-event': 'get_picker_opened',
+} as const;
+---
+
+{
+  ON_APP_STORE ? (
+    <>
+      {kind === 'header' ? (
+        <a {...attrs} class:list={['btn', 'btn-primary', 'cta-header', className]} {...opens}>
+          Download
+        </a>
+      ) : kind === 'hero' ? (
+        <a {...attrs} class:list={['btn', 'btn-lg', 'btn-primary', className]} {...opens}>
+          <slot>Get Waycar</slot>
+        </a>
+      ) : kind === 'button' ? (
+        <a
+          {...attrs}
+          class:list={['btn', 'btn-lg', tone === 'primary' ? 'btn-primary' : 'btn-ghost', className]}
+          {...opens}
+        >
+          <slot />
+        </a>
+      ) : (
+        <a {...attrs} class={className} {...opens}>
+          <slot />
+        </a>
+      )}
+      <GetPicker id={pickerId} href={href} />
+    </>
+  ) : kind === 'text' ? (
+    <span {...attrs} class={className}>
+      {soonText}
+    </span>
+  ) : (
+    <span {...attrs} class:list={['soon', `soon-${kind === 'hero' ? 'badge' : kind}`, className]}>
+      <span class="soon-full">{soonText}</span>
+      {kind === 'header' && <span class="soon-short" aria-hidden="true">Coming soon</span>}
+    </span>
+  )
+}
+
+<style>
+  /* Pre-launch label: a quiet outline pill of plain text in the label font.
+     No hover, no press, default cursor, so it never reads as a button.
+     Heights match the link it stands in for. */
+  .soon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 10px 20px;
+    font: var(--fw-caption) 13px / 1.3 var(--font-mono);
+    color: var(--text-2);
+    text-align: center;
+    cursor: default;
+    background: rgb(var(--white-rgb) / 0.02);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-pill);
+  }
+
+  /* Takes the badge's footprint (150 by 50 px plus 12 px clear space) so the
+     hero does not move at launch; the phrase wraps onto two lines. */
+  .soon-badge {
+    min-width: 150px;
+    min-height: 50px;
+    margin: 12px;
+    padding: 6px 16px;
+    font-size: var(--fs-caption);
+  }
+
+  .soon-badge .soon-full {
+    max-width: 14ch;
+    line-height: 1.25;
+  }
+
+  .soon-header {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: var(--fs-caption);
+    white-space: nowrap;
+  }
+
+  .soon-short {
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    .cta-header {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
+    .soon-header {
+      padding: 8px 12px;
+    }
+
+    /* The full phrase does not fit beside the brand on a phone: show
+       "Coming soon" and keep the full phrase for screen readers. */
+    .soon-short {
+      display: inline;
+    }
+
+    .soon-header .soon-full {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+</style>

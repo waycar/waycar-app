@@ -1,0 +1,45 @@
+---
+import CodeBlock from '../components/CodeBlock.astro';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Not found · Waycar" description="That page doesn't exist on waycar.dev." noindex>
+  <section class="section missing" aria-labelledby="missing-title">
+    <div class="wrap">
+      <span class="kicker">404</span>
+      <h1 id="missing-title" class="sec-title">Nothing attached <span class="grad-text">at this path.</span></h1>
+      <p class="sec-lede">That page doesn't exist. Everything about Waycar is on the home page.</p>
+      <CodeBlock
+        class="code"
+        title="shell — waycar.dev"
+        label="A mock terminal reporting that the page was not found"
+        lines={[
+          { kind: 'cmd', text: 'herdr agent attach this-page --takeover' },
+          { kind: 'comment', text: '# error: agent_not_found' },
+        ]}
+      />
+      <div class="actions">
+        <a class="btn btn-primary btn-lg" href="/">Back to the start</a>
+        <a class="btn btn-ghost btn-lg" href="/privacy">Privacy policy</a>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .missing {
+    min-height: 70vh;
+  }
+
+  .missing :global(.code) {
+    max-width: 36rem;
+    margin-top: 32px;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 32px;
+  }
+</style>

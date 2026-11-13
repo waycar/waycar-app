@@ -1,0 +1,11 @@
+=== (c) noise=profile: lines after the motd box:
+$
+NOISE-PROFILE$
+X$
+=== (c) noise=bashrctop: lines after the motd box:
+$
+NOISE-BASHRC-TOP$
+X$
+=== (c) noise=bashrcafter: lines after the motd box:
+$
+X$

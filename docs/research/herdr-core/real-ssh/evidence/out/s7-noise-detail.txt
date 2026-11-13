@@ -1,0 +1,54 @@
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+=== (c) clean rc, login shell fed by stdin, full stdout (cat -A):
+Welcome to Ubuntu 24.04.5 LTS (GNU/Linux 7.0.0-38-generic x86_64)$
+$
+ * Documentation:  https://help.ubuntu.com$
+ * Management:     https://landscape.canonical.com$
+ * Support:        https://ubuntu.com/pro$
+$
+This system has been minimized by removing packages and content that are$
+not required on a system that users do not log into.$
+$
+To restore this content, you can run the 'unminimize' command.$
+$
+  +--------------------------------------------------+$
+  |  core lab: a throwaway herdr-core test host       |$
+  |  this MOTD is real text for PrintMotd yes         |$
+  +--------------------------------------------------+$
+$
+X$
+=== (c) all noise:
+Welcome to Ubuntu 24.04.5 LTS (GNU/Linux 7.0.0-38-generic x86_64)$
+$
+ * Documentation:  https://help.ubuntu.com$
+ * Management:     https://landscape.canonical.com$
+ * Support:        https://ubuntu.com/pro$
+$
+This system has been minimized by removing packages and content that are$
+not required on a system that users do not log into.$
+$
+To restore this content, you can run the 'unminimize' command.$
+$
+  +--------------------------------------------------+$
+  |  core lab: a throwaway herdr-core test host       |$
+  |  this MOTD is real text for PrintMotd yes         |$
+  +--------------------------------------------------+$
+$
+NOISE-PROFILE$
+NOISE-BASHRC-TOP$
+X$
+=== hc_probe over ssh with NOISE-BASHRC-TOP:
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+=== sentinel remedy: the line prints a marker line before exec
+NOISE-BASHRC-TOP$
+@@WAYCAR-CORE@@$
+{"id":0,"jsonrpc":"2.0","result":{"core":{"id":"5448c866d7055cf692ecp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead

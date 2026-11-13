@@ -1,0 +1,33 @@
+# Harness lab pins (scripts/harness-lab). lab.sh passes this file to
+# `docker compose --env-file`, and each value is a build arg of the host image
+# (host/Dockerfile), one layer per harness: changing one pin rebuilds that
+# layer and the ones after it only.
+#
+# "pin" means the official installer takes the version. "record" means the
+# official installer only installs its latest build: the value is what the
+# last build got (see /etc/harness-lab/versions.txt in the host); bump it to
+# force a reinstall.
+#
+# Arch: every harness has a linux-arm64 build, so all run natively (aarch64).
+
+HERDR_VERSION=0.9.3                # pin: release asset, sha256 below
+HERDR_SHA256_AARCH64=4de7aa3e25678812e92960de64f7c2aaa1bca1f0f80a3c5e559837e231e1f5c0
+NODE_MAJOR=22                      # NodeSource apt repo
+
+CLAUDE_VERSION=2.1.296             # pin: claude.ai/install.sh <version>
+CODEX_VERSION=0.162.1              # pin: npm @openai/codex
+COPILOT_VERSION=1.0.95             # pin: npm @github/copilot
+OPENCODE_VERSION=1.19.0            # pin: opencode.ai/install --version
+CURSOR_VERSION=2026.10.01-e373342  # record: cursor.com/install (version baked into the script)
+PI_VERSION=1.1.0                   # pin: npm @earendil-works/pi-coding-agent
+AGY_VERSION=1.3.3                  # record: antigravity.google/cli/install.sh
+GEMINI_VERSION=0.63.0              # pin: npm @google/gemini-cli
+CLINE_VERSION=3.0.70               # pin: npm cline
+OMP_VERSION=18.10.2                # pin: omp.sh/install --binary --ref v<version>
+KILO_VERSION=7.8.8                 # pin: npm @kilocode/cli
+KIRO_VERSION=2.29.1                # record: cli.kiro.dev/install
+DEVIN_VERSION=3000.11.3            # pin: static.devin.ai/cli/<version>/setup.sh (= cli.devin.ai/install.sh)
+HERMES_COMMIT=7cc3fb8cb55898747dd1dfa56fda3e16ebba028e  # pin: hermes install.sh --commit (main; the installer needs main's pm/, absent from tag v2026.9.24)
+QWEN_VERSION=0.25.1                # pin: npm @qwen-code/qwen-code
+GROK_VERSION=1.0.50                # pin: x.ai/cli/install.sh <version>
+MUSE_VERSION=1.4.6-R6000.1         # record: dev.meta.ai/install.sh (channel muse-stable; latest only)

@@ -1,0 +1,83 @@
+Waycar patch for libssh2 c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f.
+
+userauth: optionally sign the first publickey request (no PK_OK query)
+
+ssh2_userauth_publickey() first sends an unsigned USERAUTH_REQUEST and
+waits for SSH_MSG_USERAUTH_PK_OK before it signs, costing one round trip
+on every publickey login. RFC 4252 section 7 lets a client send the
+signed request straight away.
+
+New session flag LIBSSH2_FLAG_PUBKEY_SKIP_QUERY (1001, set with
+libssh2_session_flag()): when set, the request built in the idle state is
+marked as signed and the state machine goes directly to the signing step.
+The signed bytes are exactly those the PK_OK path would have signed, so
+the RFC 8332 rsa-sha2 upgrade, the ALGO_UNSUPPORTED retry, and the
+sign-callback, file and in-memory key paths are unchanged. Off by default.
+
+With the flag set, a key the server does not accept costs a signature
+and fails with LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED (the PK_OK path fails
+with LIBSSH2_ERROR_AUTHENTICATION_FAILED before signing).
+
+diff --git a/include/libssh2.h b/include/libssh2.h
+index 927b595..3ef8b1d 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -358,6 +358,11 @@ typedef struct _LIBSSH2_SK_SIG_INFO {
+ #define LIBSSH2_FLAG_SIGPIPE        1
+ #define LIBSSH2_FLAG_COMPRESS       2
+ #define LIBSSH2_FLAG_QUOTE_PATHS    3
++/* Waycar patch: sign the first publickey USERAUTH_REQUEST instead of first
++   asking the server whether it would accept the key (RFC 4252 7 permits
++   both). Saves the SSH_MSG_USERAUTH_PK_OK round trip. Numbered away from
++   upstream's flags so a future upstream flag cannot alias it. */
++#define LIBSSH2_FLAG_PUBKEY_SKIP_QUERY 1001
+ 
+ #if defined(__clang__) && __clang_major__ >= 13
+ #pragma clang diagnostic push
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index 9bb090d..3ac96bc 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -690,6 +690,7 @@ struct flags {
+     int sigpipe;     /* LIBSSH2_FLAG_SIGPIPE */
+     int compress;    /* LIBSSH2_FLAG_COMPRESS */
+     int quote_paths; /* LIBSSH2_FLAG_QUOTE_PATHS */
++    int pubkey_skip_query; /* LIBSSH2_FLAG_PUBKEY_SKIP_QUERY (Waycar) */
+ };
+ 
+ #if defined(__clang__) && __clang_major__ >= 13
+diff --git a/src/session.c b/src/session.c
+index d4c1691..87255dc 100644
+--- a/src/session.c
++++ b/src/session.c
+@@ -1307,6 +1307,9 @@ int libssh2_session_flag(LIBSSH2_SESSION *session, int flag, int value)
+     case LIBSSH2_FLAG_QUOTE_PATHS:
+         session->flag.quote_paths = value;
+         break;
++    case LIBSSH2_FLAG_PUBKEY_SKIP_QUERY:
++        session->flag.pubkey_skip_query = value;
++        break;
+     default:
+         return LIBSSH2_ERROR_INVAL;  /* unknown flag */
+     }
+diff --git a/src/userauth.c b/src/userauth.c
+index 7bdc577..9af89e1 100644
+--- a/src/userauth.c
++++ b/src/userauth.c
+@@ -1494,7 +1494,15 @@ retry_auth:
+         ssh2_deb((session, LIBSSH2_TRACE_AUTH,
+                   "Attempting publickey authentication"));
+ 
+-        session->userauth_pblc_state = ssh2_NB_state_created;
++        if(session->flag.pubkey_skip_query) {
++            /* Waycar patch: sign this very request instead of asking first.
++               The signed request is byte-for-byte the one the PK_OK path
++               would have signed, so only the query round trip goes away. */
++            *session->userauth_pblc_b = 0x01;
++            session->userauth_pblc_state = ssh2_NB_state_sent1;
++        }
++        else
++            session->userauth_pblc_state = ssh2_NB_state_created;
+     }
+ 
+     if(session->userauth_pblc_state == ssh2_NB_state_created) {

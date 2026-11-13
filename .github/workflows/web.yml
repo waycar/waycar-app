@@ -1,0 +1,253 @@
+# Build and deploy the marketing site (apps/web/) to Cloudflare Workers.
+#
+# This is the only workflow most site-only changes run. ci.yml (iOS) and
+# ci-node.yml (plugin / relay / codegen) use positive path filters that do
+# not include apps/web/**, so a copy edit never spends a macOS runner. The
+# exceptions are apps/web/src/content/help/** and
+# apps/web/src/content/changelog/**, which also trigger ci.yml because the
+# app bundles them.
+# PRIVACY.md is included because /privacy renders it at build time;
+# CHANGELOG.md because /changelog renders its [Unreleased] section, so every
+# merge that adds an entry redeploys; plugin/**, scripts/package-plugin.sh and
+# scripts/build-plugin-binaries.sh because the build packages the plugin
+# behind https://waycar.dev/install.sh (see package-plugin.sh, which builds the
+# four native binaries itself and installs its own toolchain on a cold
+# runner). The plugin version guard (scripts/check-plugin-version.sh,
+# see ci-node.yml) gates the deploy too, so a shipped-file change under an
+# already released version never reaches install.sh.
+#
+# The daily schedule (14:17 UTC, 10:17 EDT or 09:17 EST) is for dated articles:
+# src/lib/articles-list.mjs holds a post back until its `date` (read in
+# America/New_York), so it goes live on the first deploy on or after that day,
+# and this run makes that the same morning instead of the next unrelated push.
+#
+# A pull request builds, typechecks, and runs the site's script tests; a push
+# to main, a manual run, or the schedule also deploys. The build job never sees
+# a secret. The build writes sitemap.xml from the built pages' canonical URLs
+# (integrations/sitemap.mjs). The deploy job runs only for one of those three
+# on main and reads two secrets from the `production` environment:
+#
+#   CLOUDFLARE_API_TOKEN    scoped to Workers Scripts:Edit on the account that
+#                           owns the waycar.dev and waycar.app zones
+#   CLOUDFLARE_ACCOUNT_ID   the Cloudflare account id
+#
+# plus the repository secret OPENROUTER_API_KEY,
+# with which scripts/generate-llms-txt.mjs replaces dist/llms.txt with a richer
+# file an LLM writes from the built site. The optional repository variable
+# LLMS_TXT_MODEL overrides its default model. A missing key, a failed request,
+# or a file that fails validation leaves the committed llms.txt
+# (src/pages/llms.txt.ts) in place and never blocks the deploy. It generates
+# only when something under apps/web/ (other than the changelog release
+# files) or PRIVACY.md changed since the last deploy that uploaded an
+# `llms-txt` artifact (every successful deploy does, kept 90 days); that
+# artifact must come from a push, scheduled or manual web.yml run on this
+# repo's main, never a fork. Otherwise it carries that artifact's file
+# forward, so a plugin-only, changelog-only or workflow-only deploy, or a
+# daily run with nothing new, neither calls the model nor wipes the generated
+# file. The carried file must still list every article the build lists, so a
+# post that went live on its date regenerates it. A manual run, a first
+# deploy, or an expired artifact regenerates. The check reads artifacts and the
+# commit comparison with the job's GITHUB_TOKEN (`actions: read`).
+#
+# Setup: create a `production` environment (Settings › Environments) whose
+# deployment branches are restricted to `main`, and move both Cloudflare
+# secrets there from the repository secrets. A pull request run, whose workflow
+# file comes from the PR branch, then cannot read them.
+#
+# wrangler comes from apps/web/package-lock.json rather than a third-party
+# action, so the deploying binary is the same one `npm run deploy` uses locally.
+
+name: Web
+
+on:
+  pull_request:
+    paths:
+      - apps/web/**
+      - PRIVACY.md
+      - CHANGELOG.md
+      - plugin/**
+      - scripts/package-plugin.sh
+      - scripts/build-plugin-binaries.sh
+      - scripts/ci/provision-plugin-build.sh
+      - scripts/ci/package-clean-check.sh
+      - .github/workflows/web.yml
+  push:
+    branches: [main]
+    paths:
+      - apps/web/**
+      - PRIVACY.md
+      - CHANGELOG.md
+      - plugin/**
+      - scripts/package-plugin.sh
+      - scripts/build-plugin-binaries.sh
+      - scripts/ci/provision-plugin-build.sh
+      - scripts/ci/package-clean-check.sh
+      - .github/workflows/web.yml
+  # Daily, so an article dated for a later day goes live that day (see above).
+  schedule:
+    - cron: '17 14 * * *'
+  # Manual redeploy of main when a push event is missed.
+  workflow_dispatch:
+
+# One in-flight run per ref; a new push cancels the previous run.
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # `npm run build` packaged the plugin into public/ first (prebuild).
+      - name: The packaged plugin carries no Node
+        run: sh ../../scripts/ci/package-clean-check.sh public
+
+  # The build packages plugin/ behind waycar.dev/install.sh, so the crate's
+  # tests gate the deploy. (Node is not installed here: the Host Tools need
+  # none.)
+  plugin-test:
+    name: Plugin tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # Installs the pinned Rust toolchain and puts it on later steps' PATH;
+      # a no-op when the runner's cache already has it.
+      - name: Provision the toolchain
+        working-directory: .
+        run: sh scripts/ci/provision-plugin-build.sh --github
+
+      - name: Test
+        run: cargo test --locked
+
+  # Same guard as ci-node.yml. Full history brings the plugin-v* tags and the
+  # baseline; credentials stay (read-only token) so the script can ask origin
+  # for a tag missing locally. It runs no third-party code.
+  plugin-version:
+    name: Plugin version guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check plugin version and release guard
+        run: sh scripts/check-plugin-version.sh
+        env:
+          PLUGIN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  # Only a push, a manual run or the schedule, on main, deploys; a pull request stops at a verified build.
+  deploy:
+    name: Deploy
+    needs: [build, plugin-test, plugin-version]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    # actions: read lets the llms.txt steps list and download earlier
+    # deploys' artifacts (uploading needs no extra permission).
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Prints why, and outputs the run whose llms.txt artifact this deploy can
+      # reuse (empty: generate). Always exits 0.
+      - name: Pick llms.txt source
+        id: llms
+        continue-on-error: true
+        run: node scripts/generate-llms-txt.mjs --plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download the last deployed llms.txt
+        if: steps.llms.outputs.reuse_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: llms-txt
+          run-id: ${{ steps.llms.outputs.reuse_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/last-llms
+
+      # Reuses the downloaded file if it is still valid (and not the committed
+      # fallback), else generates. Best effort: any model failure keeps the
+      # committed llms.txt and exits 0, and continue-on-error covers a crash.
+      # The worst case (the first call and the repair turn each timing out and
+      # retried once, 180 s per attempt plus up to 30 s back-off per retry)
+      # runs past 8 minutes; the step cap bounds it, and a killed step ships
+      # the committed fallback.
+      - name: Generate llms.txt
+        continue-on-error: true
+        timeout-minutes: 8
+        run: node scripts/generate-llms-txt.mjs --reuse "$RUNNER_TEMP/last-llms/llms.txt"
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LLMS_TXT_MODEL: ${{ vars.LLMS_TXT_MODEL }}
+          LLMS_REUSE_RUN_ID: ${{ steps.llms.outputs.reuse_run_id }}
+          LLMS_REUSE_SHA: ${{ steps.llms.outputs.reuse_sha }}
+
+      - name: Deploy to Cloudflare
+        run: npx wrangler deploy --var POSTHOG_ENV:release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+
+      # What this deploy shipped, for the next deploy to carry forward. Only a
+      # successful deploy gets here. `path` ignores working-directory.
+      - name: Keep the deployed llms.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: llms-txt
+          path: apps/web/dist/llms.txt
+          retention-days: 90
+          if-no-files-found: error

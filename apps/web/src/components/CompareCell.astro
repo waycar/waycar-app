@@ -1,0 +1,47 @@
+---
+// One cell of a comparison table: a mark and the cell's text. The text starts
+// with the level's word (src/lib/compare-rows.mjs), so a screen reader hears
+// the rating without the mark.
+import type { Cell } from '../lib/compare-rows.mjs';
+import LevelMark from './LevelMark.astro';
+
+interface Props {
+  cell: Cell;
+}
+
+const { cell } = Astro.props;
+---
+
+<span class:list={['cell', `cell-${cell.level}`]}>
+  <LevelMark level={cell.level} />
+  <span class="text">{cell.text}</span>
+</span>
+
+<style>
+  .cell {
+    display: grid;
+    grid-template-columns: 0.7em minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    overflow-wrap: anywhere;
+  }
+
+  /* The mark sits on the first line of text. */
+  .cell :global(.mark) {
+    margin-top: 0.5em;
+  }
+
+  .cell-unknown .text {
+    color: var(--text-3);
+  }
+
+  /* The dash has no height, so it sits where the circles' centers are. */
+  .cell-unknown :global(.mark) {
+    margin-top: 0.85em;
+  }
+
+  /* Descriptive rows have no rating, so no mark column. */
+  .cell-info {
+    display: block;
+  }
+</style>

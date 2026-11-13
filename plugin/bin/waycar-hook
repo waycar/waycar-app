@@ -1,0 +1,354 @@
+#!/bin/sh
+# waycar-hook <agent> <status>
+#
+# Agent hook for Waycar's tmux and herdr-core backends. Agents run it from
+# their hook config (matchers or the event decide the status, so it parses
+# no JSON; payloads that matter go to `waycar hook-session` instead); the
+# omp, pi, opencode and
+# kilo extensions and cline's hook files run it for status changes. On tmux
+# it writes the pane options the app reads:
+#   @waycar_status  working | blocked | done | idle
+#   @waycar_seq     nanoseconds since the epoch, raised on every status write
+#   @waycar_agent   the agent kind
+# <status> is one of:
+#   working | blocked | done | idle   set unconditionally
+#   working-if-active                 working, only from working or blocked
+#   working-if-blocked                working, only from blocked
+#   idle-if-working                   idle, only from working
+#   done-if-active                    done, only from working or blocked
+#   release                           unset every @waycar_* option
+#   watch-approval                    no status write; while the pane works (or
+#                                     is blocked), poke the pane's approval
+#                                     watch, and start `waycar watch-approval`
+#                                     detached when none runs: Blocked while the
+#                                     agent's approval dialog shows, for kinds
+#                                     whose hooks report none (agy's
+#                                     PreToolUse; `waycar watch-approval`)
+# Tool events never revive idle or done (herdr #198).
+#
+# It does nothing when HERDR_PANE_ID or HERDR_ENV is set (the agent runs in a
+# herdr pane and herdr owns its status), nothing when WAYCAR_SUMMARY is set
+# (an Agent Summary's one-shot harness, never an Agent), and nothing unless
+# $TMUX_PANE is set and the agent's controlling tty is that pane's tty. The
+# agent is $CLAUDE_PID for claude, else the process that ran the hook, or its
+# parent when that process has no tty (claude 2.1.296 and grok 1.0.50 run
+# hooks from a tty-less `sh -c` session leader). Codex and cline never get
+# that second hop: their shared daemons (codex's app-server, cline's hub) run
+# hooks without a tty and with the TMUX_PANE of whichever pane started them,
+# so a tty-less parent is a mismatch. Cline needs no hop: its hook files
+# `exec` this, so the parent is the pane's own `.cline`.
+#
+# `claude` also requires CLAUDECODE=1 and none of the markers of the agents
+# that run ~/.claude/settings.json hooks too (grok, cursor, devin, copilot);
+# `cursor` requires CURSOR_VERSION and no grok marker (grok also runs
+# ~/.cursor/hooks.json). docs/research/harnesses/grok.md, copilot.md.
+#
+# Muse runs hooks with a cleared environment (HOME, PATH, LANG and a few
+# more; muse.md), so for `muse` TMUX, TMUX_PANE, HERDR_PANE_ID, HERDR_ENV,
+# WAYCAR_SUMMARY and the herdr-core variables (HC_TERMINAL_ID,
+# HC_TERMINAL_SOCKET, HC_SESSION, HC_SOCKET) are read from the agent's own
+# environment (/proc/$PPID/environ); where there is no /proc, the pane is the
+# one on the default tmux server whose tty is the agent's.
+#
+# On every status change, `release` of a set status included, it starts
+# `waycar notify --pane tmux:%N --status <status|release>` detached (push on
+# blocked/done, Live Activity on every change). Callers must give it a closed
+# or /dev/null stdin: it drains stdin (daemon Codex forwards it to Rust).
+#
+# Always exits 0 and never prints: agents may read a hook's stdout.
+#
+# herdr-core: when the agent is not in a tmux pane (every check above fails,
+# or HERDR_*/TMUX_PANE are stale: a core started in a tmux or herdr pane hands
+# its terminals that pane's variables, so they cannot say which runtime is
+# innermost) and $HC_TERMINAL_ID is set, it becomes `exec waycar hook-status
+# <agent> <status>`, which finds the core terminal, makes the same tty check
+# against the terminal's own process, writes the `waycar.*` labels (see
+# rust/hook_status.rs) and starts `waycar notify --pane hc:<address>`
+# detached. watch-approval has no core form. Nothing else here changes: a
+# hook in a tmux pane or a herdr pane that is no core terminal behaves as
+# before.
+
+agent=${1:-}
+want=${2:-}
+
+# Muse's value of one variable, from its environment. WAYCAR_HOOK_PROC
+# stands in for /proc in tests (Muse's cleared environment never has it).
+proc=${WAYCAR_HOOK_PROC:-/proc}
+
+# A process's tty, parent pid or command line: `ps -o <field>= -p <pid>`
+# (`tty`, `ppid`, `args`) where ps answers, else /proc on Linux. A bare Debian
+# slim has no ps at all and Alpine's busybox ps has no -p, so without this the
+# hook could never tell which pane its agent is in. Prints nothing for a
+# process neither knows (ps also fails for it).
+process_field() {
+  pf_wide=
+  [ "$1" = args ] && pf_wide=-ww
+  # shellcheck disable=SC2086 # empty means no option
+  if pf_out=$(ps $pf_wide -o "$1=" -p "$2" 2>/dev/null); then
+    printf '%s' "$pf_out"
+    return 0
+  fi
+  case $1 in
+    args)
+      pf_out=$(tr '\0' ' ' <"$proc/$2/cmdline" 2>/dev/null) || return 0
+      printf '%s' "${pf_out% }"
+      return 0
+      ;;
+  esac
+  # `pid (comm) state ppid pgrp session tty_nr ...`; comm may hold spaces and
+  # parentheses, so cut at the last `) `.
+  read -r pf_stat <"$proc/$2/stat" 2>/dev/null || return 0
+  pf_rest=${pf_stat##*) }
+  set -f
+  # shellcheck disable=SC2086 # splitting the fields is the point
+  set -- "$1" $pf_rest
+  set +f
+  case $1 in
+    ppid) printf '%s' "${3:-}" ;;
+    tty)
+      pf_nr=${6:-0}
+      case $pf_nr in "" | *[!0-9]*) return 0 ;; esac
+      [ "$pf_nr" -gt 0 ] || return 0
+      # Linux device numbers: pty slaves are majors 136 to 143, serial
+      # consoles major 4.
+      pf_major=$(((pf_nr >> 8) & 4095))
+      pf_minor=$(((pf_nr & 255) | ((pf_nr >> 12) & 1048320)))
+      if [ "$pf_major" -ge 136 ] && [ "$pf_major" -le 143 ]; then
+        printf 'pts/%s' $((pf_minor + (pf_major - 136) * 256))
+      elif [ "$pf_major" -eq 4 ]; then
+        if [ "$pf_minor" -lt 64 ]; then printf 'tty%s' "$pf_minor"; else printf 'ttyS%s' $((pf_minor - 64)); fi
+      fi
+      ;;
+  esac
+  return 0
+}
+# The directory this script, and `waycar` next to it, lives in.
+waycar_bin_dir() {
+  case $0 in
+    */*) bin_dir=${0%/*} ;;
+    *) bin_dir=$(dirname "$(command -v "$0" 2>/dev/null || echo ./waycar-hook)") ;;
+  esac
+}
+
+# Keep Codex's installed commands (and their trust hashes) unchanged. Only a
+# tty-less parent needs Rust to distinguish a shared daemon from another
+# wrapper; 125 means it is not a daemon, so the original pane path continues.
+# This precedes the stale HERDR_* checks and preserves the hook's JSON stdin.
+if [ "$agent" = codex ] && [ -z "${WAYCAR_SUMMARY:-}" ]; then
+  codex_parent_tty=$(process_field tty "$PPID" | tr -d ' ')
+  case $codex_parent_tty in
+    ""|"?"|"??"|-)
+      waycar_bin_dir
+      if [ -x "$bin_dir/waycar" ]; then
+        "$bin_dir/waycar" codex-daemon-hook "$want" >/dev/null 2>&1
+        [ "$?" = 125 ] || exit 0
+      fi
+      ;;
+  esac
+fi
+
+# Drain the hook's JSON so the agent never writes into a closed pipe.
+[ -t 0 ] || cat >/dev/null 2>&1
+
+muse_env() {
+  tr '\0' '\n' <"$proc/$PPID/environ" 2>/dev/null | sed -n "s/^$1=//p" | sed -n 1p
+}
+if [ "$agent" = muse ] && [ -z "${TMUX_PANE:-}" ]; then
+  if [ -r "$proc/$PPID/environ" ]; then
+    TMUX=$(muse_env TMUX)
+    TMUX_PANE=$(muse_env TMUX_PANE)
+    HERDR_PANE_ID=$(muse_env HERDR_PANE_ID)
+    HERDR_ENV=$(muse_env HERDR_ENV)
+    WAYCAR_SUMMARY=$(muse_env WAYCAR_SUMMARY)
+    [ -n "$TMUX" ] && export TMUX
+    for muse_var in HC_TERMINAL_ID HC_TERMINAL_SOCKET HC_SESSION HC_SOCKET ZELLIJ ZELLIJ_PANE_ID ZELLIJ_SESSION_NAME; do
+      muse_val=$(muse_env "$muse_var")
+      [ -n "$muse_val" ] || continue
+      eval "$muse_var=\$muse_val"
+      export "$muse_var"
+    done
+  elif command -v tmux >/dev/null 2>&1; then
+    muse_tty=$(process_field tty "$PPID" | tr -d ' ')
+    case $muse_tty in
+      ""|"?"|"??"|-) ;;
+      *)
+        TMUX_PANE=$(tmux list-panes -a -F '#{pane_tty} #{pane_id}' 2>/dev/null |
+          while read -r tty id; do
+            [ "${tty#/dev/}" = "$muse_tty" ] && { printf '%s' "$id"; break; }
+          done)
+        ;;
+    esac
+  fi
+fi
+
+[ -z "${WAYCAR_SUMMARY:-}" ] || exit 0
+case $agent in
+  claude)
+    [ -z "${GROK_HOOK_EVENT:-}${GROK_SESSION_ID:-}${CURSOR_VERSION:-}${DEVIN_PROJECT_DIR:-}${COPILOT_CLI:-}" ] || exit 0
+    [ "${CLAUDECODE:-}" = 1 ] || exit 0
+    ;;
+  cursor)
+    [ -z "${GROK_HOOK_EVENT:-}${GROK_SESSION_ID:-}" ] || exit 0
+    [ -n "${CURSOR_VERSION:-}" ] || exit 0
+    ;;
+esac
+case $want in
+  working|blocked|done|idle|working-if-active|working-if-blocked|idle-if-working|done-if-active|release|watch-approval) ;;
+  *) exit 0 ;;
+esac
+
+# Start `waycar <args>` detached, with no stdin or output.
+waycar_bg() {
+  waycar_bin_dir
+  if [ -x "$bin_dir/waycar" ]; then
+    nohup "$bin_dir/waycar" "$@" </dev/null >/dev/null 2>&1 &
+  fi
+}
+
+# The agent is not in a tmux pane (no TMUX_PANE, no tmux, another pane's tty,
+# a stale HERDR_* or TMUX_PANE that a herdr-core terminal inherited from the
+# pane that started the core): `waycar hook-status` tries Zellij ownership,
+# then herdr-core's tty check. Muse can restore its stripped environment via
+# sysctl on macOS in that native path; else nothing.
+# `exec` keeps this process's pid, so its parent is still the agent's.
+core_or_exit() {
+  { [ -n "${HC_TERMINAL_ID:-}${ZELLIJ_PANE_ID:-}" ] || [ "$agent" = muse ]; } && [ "$want" != watch-approval ] || exit 0
+  waycar_bin_dir
+  [ -x "$bin_dir/waycar" ] || exit 0
+  exec "$bin_dir/waycar" hook-status "$agent" "$want" </dev/null >/dev/null 2>&1
+}
+
+[ -z "${HERDR_PANE_ID:-}" ] && [ -z "${HERDR_ENV:-}" ] || core_or_exit
+[ -n "${TMUX_PANE:-}" ] || core_or_exit
+command -v tmux >/dev/null 2>&1 || core_or_exit
+
+# One tmux call: the pane's tty, then the pane-level options that are set
+# (`show-options -p` never inherits a window value).
+snapshot=$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' \; \
+  show-options -p -q -t "$TMUX_PANE" @waycar_status \; \
+  show-options -p -q -t "$TMUX_PANE" @waycar_seq 2>/dev/null) || core_or_exit
+
+pane_tty=""
+current=""
+prev_seq=""
+newline='
+'
+old_ifs=$IFS
+IFS=$newline
+set -f
+for line in $snapshot; do
+  case $line in
+    "@waycar_status "*) current=${line#@waycar_status } ;;
+    "@waycar_seq "*) prev_seq=${line#@waycar_seq } ;;
+    *) [ -n "$pane_tty" ] || pane_tty=$line ;;
+  esac
+done
+set +f
+IFS=$old_ifs
+# show-options quotes values that need it; ours never do, but strip quotes.
+current=${current#\"}; current=${current%\"}
+prev_seq=${prev_seq#\"}; prev_seq=${prev_seq%\"}
+
+# No pane with that id on this server: not ours.
+[ -n "$pane_tty" ] || core_or_exit
+
+# A process's controlling tty: `ps` prints `ttys012` (macOS) or `pts/3`
+# (Linux), `??`/`?` for none, and so does the /proc fallback; tmux prints
+# `/dev/ttys012`. Fails for none.
+tty_of() {
+  t=$(process_field tty "$1" | tr -d ' ')
+  case $t in
+    ""|"?"|"??"|-) return 1 ;;
+  esac
+  printf '%s' "$t"
+}
+
+agent_pid=$PPID
+case $agent:${CLAUDE_PID:-} in
+  claude:|claude:*[!0-9]*) ;;
+  claude:*) agent_pid=$CLAUDE_PID ;;
+esac
+if ! agent_tty=$(tty_of "$agent_pid"); then
+  [ "$agent_pid" = "$PPID" ] && [ "$agent" != codex ] && [ "$agent" != cline ] || core_or_exit
+  parent=$(process_field ppid "$PPID" | tr -d ' ')
+  case $parent in ""|*[!0-9]*|0|1) core_or_exit ;; esac
+  agent_tty=$(tty_of "$parent") || core_or_exit
+fi
+[ "${pane_tty#/dev/}" = "${agent_tty#/dev/}" ] || core_or_exit
+
+notify() {
+  waycar_bg notify --pane "tmux:$TMUX_PANE" --status "$1"
+}
+
+if [ "$want" = watch-approval ]; then
+  case $current in working|blocked) ;; *) exit 0 ;; esac
+  # One watch per pane (`waycar watch-approval`): the poke restarts a running
+  # watch's wait, and the token is read in the same tmux call, so a watch
+  # that just let go shows none and a new one starts.
+  watch=$(tmux set-option -p -t "$TMUX_PANE" @waycar_approval_poke "$$-$(date +%s)" \; \
+    show-options -p -q -v -t "$TMUX_PANE" @waycar_approval_watch 2>/dev/null) || exit 0
+  # The token's pid counts only while it runs this pane's watch: a reused pid
+  # now running a hook (`waycar-hook <agent> watch-approval`) or another
+  # pane's watch does not.
+  owner=${watch%%-*}
+  case $owner in
+    ""|*[!0-9]*) ;;
+    *) case " $(process_field args "$owner") " in
+         *" watch-approval --pane tmux:$TMUX_PANE "*) exit 0 ;;
+       esac ;;
+  esac
+  [ "$current" = working ] && waycar_bg watch-approval --pane "tmux:$TMUX_PANE" --agent "$agent"
+  exit 0
+fi
+
+if [ "$want" = release ]; then
+  tmux set-option -p -u -t "$TMUX_PANE" @waycar_status \; \
+    set-option -p -u -t "$TMUX_PANE" @waycar_seq \; \
+    set-option -p -u -t "$TMUX_PANE" @waycar_agent \; \
+    set-option -p -u -t "$TMUX_PANE" @waycar_session \; \
+    set-option -p -u -t "$TMUX_PANE" @waycar_transcript >/dev/null 2>&1 || exit 0
+  [ -n "$current" ] && notify release
+  exit 0
+fi
+
+case $want in
+  working-if-active)
+    case $current in working|blocked) next=working ;; *) exit 0 ;; esac ;;
+  working-if-blocked)
+    [ "$current" = blocked ] || exit 0
+    next=working ;;
+  idle-if-working)
+    [ "$current" = working ] || exit 0
+    next=idle ;;
+  done-if-active)
+    case $current in working|blocked) next=done ;; *) exit 0 ;; esac ;;
+  *) next=$want ;;
+esac
+
+[ "$next" = "$current" ] && exit 0
+
+# Nanoseconds; BSD date has no %N, so fall back to whole seconds. Either way
+# the seq never goes backwards or repeats for this pane.
+now=$(date +%s%N 2>/dev/null)
+case $now in
+  ''|*[!0-9]*) now="$(date +%s)000000000" ;;
+esac
+case $prev_seq in
+  ''|*[!0-9]*) ;;
+  *) [ "$now" -gt "$prev_seq" ] 2>/dev/null || now=$((prev_seq + 1)) ;;
+esac
+
+case $agent in
+  claude|codex|omp|pi|opencode|copilot|qwen|gemini|grok|agy|hermes|kilo|cline|cursor|devin|kiro|muse)
+    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_agent "$agent" >/dev/null 2>&1 || exit 0
+    ;;
+  *)
+    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" >/dev/null 2>&1 || exit 0
+    ;;
+esac
+
+notify "$next"
+exit 0

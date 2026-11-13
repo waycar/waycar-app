@@ -1,0 +1,461 @@
+---
+// A help page (/help/<slug>) on top of Layout: breadcrumbs, the title and
+// description, the rendered Markdown, related pages, "Still stuck?",
+// previous/next in global order, every help page and the Changelog in a
+// sidebar (collapsed on narrow screens), and an "On this page" list on wide ones.
+import type { MarkdownHeading } from 'astro';
+import { helpCategory, helpMarkdownPath, helpPath } from '../data/help';
+import { APP_SCHEMA_ID } from '../data/links';
+import { helpSections, type HelpPage } from '../lib/help';
+import Prose from '../components/Prose.astro';
+import Layout from './Layout.astro';
+
+interface Props {
+  page: HelpPage;
+  /** Every help page in global order. */
+  pages: HelpPage[];
+  headings: MarkdownHeading[];
+}
+
+const { page, pages, headings } = Astro.props;
+const { title, description, keywords } = page.data;
+const category = helpCategory(page.data.category);
+const position = pages.findIndex((candidate) => candidate.id === page.id);
+const previous = pages[position - 1];
+const next = pages[position + 1];
+const related = page.data.related.flatMap((slug) => pages.filter((candidate) => candidate.id === slug));
+const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
+const sections = helpSections(pages);
+
+const url = new URL(helpPath(page.id), Astro.site).href;
+const helpHome = new URL('/help', Astro.site).href;
+const schema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: title,
+    description,
+    url,
+    mainEntityOfPage: url,
+    inLanguage: 'en',
+    articleSection: category.label,
+    keywords: keywords.join(', '),
+    about: { '@id': new URL(APP_SCHEMA_ID, Astro.site).href },
+    publisher: { '@type': 'Organization', name: 'OTREVA, LLC', url: new URL('/', Astro.site).href },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Help', item: helpHome },
+      { '@type': 'ListItem', position: 2, name: category.label, item: `${helpHome}#${category.id}` },
+      { '@type': 'ListItem', position: 3, name: title, item: url },
+    ],
+  },
+];
+---
+
+<Layout
+  title={`${title} · Waycar Help`}
+  description={description}
+  markdown={helpMarkdownPath(page.id)}
+  ogType="article"
+  schema={schema}
+>
+  <div class="wrap help">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/help">Help</a></li>
+        <li><a href={`/help#${category.id}`}>{category.label}</a></li>
+      </ol>
+    </nav>
+    <div class="grid">
+      <article class="article">
+        <h1>{title}</h1>
+        <p class="lead">{description}</p>
+        <Prose>
+          <slot />
+        </Prose>
+
+        {
+          related.length > 0 && (
+            <section class="related" aria-labelledby="help-related">
+              <h2 id="help-related">Related</h2>
+              <ul>
+                {related.map((other) => (
+                  <li>
+                    <a class="glass card" href={helpPath(other.id)}>
+                      <span class="card-title">{other.data.title}</span>
+                      <span class="card-text">{other.data.description}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+
+        <section class="stuck" aria-labelledby="help-stuck">
+          <h2 id="help-stuck">Still stuck?</h2>
+          <p><a href="/support">Waycar Support</a> covers common problems and how to reach us by email.</p>
+        </section>
+
+        <nav class="pager" aria-label="Previous and next help page">
+          {
+            previous && (
+              <a class="pager-link" href={helpPath(previous.id)} rel="prev">
+                <span class="pager-dir">Previous</span>
+                <span class="pager-title">{previous.data.title}</span>
+              </a>
+            )
+          }
+          {
+            next && (
+              <a class="pager-link pager-next" href={helpPath(next.id)} rel="next">
+                <span class="pager-dir">Next</span>
+                <span class="pager-title">{next.data.title}</span>
+              </a>
+            )
+          }
+        </nav>
+      </article>
+
+      {
+        toc.length > 1 && (
+          <aside class="toc" aria-labelledby="help-toc">
+            <h2 id="help-toc">On this page</h2>
+            <ul>
+              {toc.map((heading) => (
+                <li class={heading.depth === 3 ? 'toc-sub' : undefined}>
+                  <a href={`#${heading.slug}`}>{heading.text}</a>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )
+      }
+
+      <details class="side" open data-help-nav>
+        <summary>All help topics</summary>
+        <nav aria-label="Help topics">
+          {
+            sections.map((section) => (
+              <div class="side-group">
+                <h2 class="side-title">
+                  <a href={`/help#${section.category.id}`}>{section.category.label}</a>
+                </h2>
+                <ul>
+                  {section.pages.map((other) => (
+                    <li>
+                      <a href={helpPath(other.id)} aria-current={other.id === page.id ? 'page' : undefined}>
+                        {other.data.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+          <div class="side-group">
+            <h2 class="side-title">Updates</h2>
+            <ul>
+              <li><a href="/changelog">Changelog</a></li>
+            </ul>
+          </div>
+        </nav>
+      </details>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // The topic list is open in the HTML, so it shows without JavaScript;
+  // where the sidebar stacks under the page it starts collapsed.
+  const nav = document.querySelector<HTMLDetailsElement>('[data-help-nav]');
+  const narrow = matchMedia('(max-width: 900px)');
+  const sync = () => {
+    if (nav) nav.open = !narrow.matches;
+  };
+  sync();
+  narrow.addEventListener('change', sync);
+</script>
+
+<style>
+  .help {
+    padding-block: 32px 96px;
+  }
+
+  .crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .crumbs li + li::before {
+    content: '›';
+    margin-right: 6px;
+  }
+
+  .crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--violet-soft);
+  }
+
+  .crumbs a:hover {
+    color: var(--text);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr) 200px;
+    grid-template-areas: 'side article toc';
+    gap: 56px;
+    align-items: start;
+    margin-top: 16px;
+  }
+
+  .article {
+    grid-area: article;
+    max-width: 72ch;
+  }
+
+  h1 {
+    font-size: clamp(32px, 4.4vw, 48px);
+    font-weight: var(--fw-title);
+    line-height: 1.08;
+    letter-spacing: var(--ls-title);
+  }
+
+  .lead {
+    margin-top: 16px;
+    font-size: var(--fs-lede);
+    color: var(--text-2);
+  }
+
+  /* Rendered Markdown: Prose.astro, plus its place under the lead. */
+
+  .article > :global(.prose) {
+    margin-top: 32px;
+  }
+
+  /* ---------- After the page ---------- */
+
+  .related,
+  .stuck {
+    margin-top: 56px;
+  }
+
+  .related h2,
+  .stuck h2 {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+  }
+
+  .related ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .card {
+    display: grid;
+    gap: 6px;
+    height: 100%;
+    padding: 16px 18px;
+    border-radius: var(--radius-control-lg);
+  }
+
+  .card:hover {
+    border-color: var(--line-2);
+  }
+
+  .card-title {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .card-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-3);
+  }
+
+  .stuck p {
+    margin-top: 10px;
+    color: var(--text-2);
+  }
+
+  .stuck a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .pager-link {
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control-lg);
+  }
+
+  .pager-link:hover {
+    border-color: var(--line-2);
+  }
+
+  .pager-next {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .pager-dir {
+    font: var(--fs-caption) var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .pager-title {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ---------- Sidebar and "On this page" ---------- */
+
+  .toc,
+  .side {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+    max-height: calc(100vh - var(--header-h) - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    font-size: 14px;
+  }
+
+  .toc {
+    grid-area: toc;
+  }
+
+  .toc h2,
+  .side-title {
+    margin-bottom: 8px;
+    font: var(--fw-label) 11.5px / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .toc a,
+  .side a {
+    display: block;
+    padding: 4px 0;
+    line-height: 1.4;
+    color: var(--text-2);
+  }
+
+  .toc a:hover,
+  .side a:hover {
+    color: var(--text);
+  }
+
+  .toc-sub a {
+    padding-left: 12px;
+    color: var(--text-3);
+  }
+
+  .side {
+    grid-area: side;
+  }
+
+  .side summary {
+    display: none;
+  }
+
+  .side-group + .side-group {
+    margin-top: 20px;
+  }
+
+  .side-title a {
+    color: inherit;
+  }
+
+  .side [aria-current='page'] {
+    margin-left: -12px;
+    padding-left: 10px;
+    color: var(--text);
+    border-left: 2px solid var(--violet-soft);
+  }
+
+  @media (max-width: 1180px) {
+    .grid {
+      grid-template-columns: 220px minmax(0, 1fr);
+      grid-template-areas: 'side article';
+      gap: 40px;
+    }
+
+    .toc {
+      display: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'article' 'side';
+    }
+
+    .side {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      padding: 4px 18px;
+      background: var(--glass-fill);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control-lg);
+    }
+
+    .side summary {
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .side[open] nav {
+      padding-bottom: 16px;
+    }
+
+    .side [aria-current='page'] {
+      margin-left: -18px;
+      padding-left: 16px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .pager {
+      grid-template-columns: 1fr;
+    }
+
+    .pager-next {
+      grid-column: 1;
+    }
+  }
+</style>

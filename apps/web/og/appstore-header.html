@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  /* App Store product page header, 3840x1646: laid out at 1920x823 CSS px and
+     rendered at device scale factor 2. Apple's template marks a centred Art
+     Safe Area (1097,493 to 2743,1154 at full size); every device crops to it
+     differently, so the whole message sits inside it and the phones on either
+     side are decoration that may be cut. Add class "safe" to <body> to see it. */
+  html, body { width: 1920px; height: 823px; }
+  .grid { background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(ellipse 55% 85% at 50% 50%, #000 5%, transparent 80%); }
+  .glow {
+    position: absolute; left: 50%; top: 50%; width: 1500px; height: 760px; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--violet) 34%, transparent),
+      color-mix(in srgb, var(--cyan) 12%, transparent) 55%, transparent 82%);
+    filter: blur(50px);
+  }
+  .phone {
+    position: absolute; z-index: 1; top: 118px; width: 360px;
+    padding: 10px; border-radius: 58px; background: var(--bezel-phone);
+    box-shadow: var(--shadow-device), 0 0 110px -30px color-mix(in srgb, var(--cyan) 40%, transparent);
+  }
+  .phone img { display: block; width: 100%; border-radius: 49px; }
+  .left { left: 104px; }
+  .right { right: 104px; }
+  .fade { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: 200px;
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 92%, transparent)); }
+  .copy { position: absolute; z-index: 2; left: 548px; top: 246px; width: 824px; height: 331px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+  h1 { font-size: 74px; white-space: nowrap; font-weight: 650; line-height: 1.03; letter-spacing: -0.045em; }
+  h1 span { display: block; padding-bottom: 3px; }
+  .sub { margin-top: 12px; font-size: 30px; line-height: 1.28; color: var(--text-2); letter-spacing: -0.01em; }
+  body.safe::after { left: 548px; top: 246px; width: 824px; height: 331px; bottom: auto; }
+</style></head>
+<body>
+  <div class="grid"></div><div class="glow"></div>
+  <div class="phone left"><img src="../src/assets/screens/iphone-console.png" alt=""></div>
+  <div class="phone right"><img src="../src/assets/screens/iphone-chat.png" alt=""></div>
+  <div class="fade"></div>
+  <div class="copy">
+    <h1><span class="title-text">Your agents</span><span class="title-text">stay attached.</span><span class="grad-text">Over mosh and SSH.</span></h1>
+    <p class="sub">Every coding agent on your Mac or Linux machines,<br>in one list on iPhone and iPad.</p>
+  </div>
+</body></html>

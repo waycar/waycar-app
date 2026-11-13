@@ -1,0 +1,477 @@
+{
+ "exchanges": {
+  "exec_badcwd": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start folder /nonexistent: No such file or directory (os error 2)\"},\"id\":8,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 8,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "ls"
+      ],
+      "cwd": "/nonexistent"
+     }
+    }
+   }
+  ],
+  "exec_badprog": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start no-such-prog: No such file or directory (os error 2)\"},\"id\":9,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 9,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "no-such-prog"
+      ]
+     }
+    }
+   }
+  ],
+  "exec_both": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"give either argv or line\"},\"id\":11,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 11,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "ls"
+      ],
+      "line": "ls"
+     }
+    }
+   }
+  ],
+  "exec_env": [
+   {
+    "reply_raw": "{\"id\":19,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":1,\"signal\":null,\"stderr\":\"\",\"stdout\":\"YmFyIC90bXAvaGMtbmV1dHJhbC9ob21lLy5mYWtlYmluOi91c3IvbG9jYWwvYmluOi91c3IvYmluOi9iaW4K\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 19,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "env": {
+       "FOO": "bar"
+      },
+      "line": "echo $FOO $PATH"
+     }
+    }
+   }
+  ],
+  "exec_exit3": [
+   {
+    "reply_raw": "{\"id\":18,\"jsonrpc\":\"2.0\",\"result\":{\"code\":3,\"ms\":1,\"signal\":null,\"stderr\":\"ZXJyCg==\",\"stdout\":\"b3V0Cg==\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 18,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "line": "echo out; echo err >&2; exit 3"
+     }
+    }
+   }
+  ],
+  "exec_git_revparse": [
+   {
+    "reply_raw": "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":2,\"signal\":null,\"stderr\":\"\",\"stdout\":\"L3RtcC9oYy1uZXV0cmFsL3Byb2oK\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "git",
+       "rev-parse",
+       "--show-toplevel"
+      ],
+      "cwd": "/tmp/hc-neutral/proj/sub"
+     }
+    }
+   }
+  ],
+  "exec_input": [
+   {
+    "reply_raw": "{\"id\":12,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":1,\"signal\":null,\"stderr\":\"\",\"stdout\":\"c3RkaW4gZGF0YQ==\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 12,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "cat"
+      ],
+      "input": "c3RkaW4gZGF0YQ=="
+     }
+    }
+   }
+  ],
+  "exec_line": [
+   {
+    "reply_raw": "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":3,\"signal\":null,\"stderr\":\"\",\"stdout\":\"d29ya3RyZWUgL3RtcC9oYy1uZXV0cmFsL3Byb2oKSEVBRCBhNWYyZmI0MWRkZWFlN2RiMjI4NmQ0MjU2YzZlMzM2YWJhMGM5YThkCmJyYW5jaCByZWZzL2hlYWRzL21haW4KCndvcmt0cmVlIC90bXAvaGMtbmV1dHJhbC9wcm9qLXd0CkhFQUQgYTVmMmZiNDFkZGVhZTdkYjIyODZkNDI1NmM2ZTMzNmFiYTBjOWE4ZApicmFuY2ggcmVmcy9oZWFkcy9mZWF0MQoKL3RtcC9oYy1uZXV0cmFsL2hvbWUKL3RtcC9oYy1uZXV0cmFsL3Byb2oK\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "cwd": "/tmp/hc-neutral/proj",
+      "line": "git worktree list --porcelain && echo $HOME && pwd"
+     }
+    }
+   }
+  ],
+  "exec_ls": [
+   {
+    "reply_raw": "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":2,\"signal\":null,\"stderr\":\"\",\"stdout\":\"LmdpdC8KYS50eHQKc3ViLwo=\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "ls",
+       "-1pA"
+      ],
+      "cwd": "/tmp/hc-neutral/proj"
+     }
+    }
+   }
+  ],
+  "exec_noargs": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"give either argv or line\"},\"id\":10,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 10,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {}
+    }
+   }
+  ],
+  "exec_notgit": [
+   {
+    "reply_raw": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"code\":128,\"ms\":2,\"signal\":null,\"stderr\":\"ZmF0YWw6IG5vdCBhIGdpdCByZXBvc2l0b3J5IChvciBhbnkgb2YgdGhlIHBhcmVudCBkaXJlY3Rvcmllcyk6IC5naXQK\",\"stdout\":\"\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 7,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "git",
+       "rev-parse",
+       "--show-toplevel"
+      ],
+      "cwd": "/tmp"
+     }
+    }
+   }
+  ],
+  "exec_signal": [
+   {
+    "reply_raw": "{\"id\":17,\"jsonrpc\":\"2.0\",\"result\":{\"code\":null,\"ms\":2,\"signal\":9,\"stderr\":\"\",\"stdout\":\"\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 17,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "line": "kill -9 $$"
+     }
+    }
+   }
+  ],
+  "exec_stdin_closed": [
+   {
+    "reply_raw": "{\"id\":13,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":1,\"signal\":null,\"stderr\":\"\",\"stdout\":\"\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 13,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "cat"
+      ]
+     }
+    }
+   }
+  ],
+  "exec_timeout": [
+   {
+    "reply_raw": "{\"id\":14,\"jsonrpc\":\"2.0\",\"result\":{\"code\":null,\"ms\":1003,\"signal\":15,\"stderr\":\"\",\"stdout\":\"\",\"timed_out\":true,\"truncated\":false}}",
+    "request": {
+     "id": 14,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "sleep",
+       "5"
+      ],
+      "timeout": 1
+     }
+    }
+   }
+  ],
+  "exec_timeout_big": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"timeout must be more than 0 and at most 600 s, not 601\"},\"id\":16,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 16,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "true"
+      ],
+      "timeout": 601
+     }
+    }
+   }
+  ],
+  "exec_timeout_neg": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"timeout must be more than 0 and at most 600 s, not -1\"},\"id\":15,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 15,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "true"
+      ],
+      "timeout": -1
+     }
+    }
+   }
+  ],
+  "exec_tty": [
+   {
+    "reply_raw": "{\"id\":20,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":1,\"signal\":null,\"stderr\":\"\",\"stdout\":\"bm90dHkKbm90dHkK\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 20,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "line": "[ -t 0 ] && echo tty || echo notty; [ -t 1 ] && echo tty || echo notty"
+     }
+    }
+   }
+  ],
+  "exec_worktree": [
+   {
+    "reply_raw": "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"code\":0,\"ms\":8,\"signal\":null,\"stderr\":\"UHJlcGFyaW5nIHdvcmt0cmVlIChuZXcgYnJhbmNoICdmZWF0MScpCg==\",\"stdout\":\"SEVBRCBpcyBub3cgYXQgYTVmMmZiNCBpbml0Cg==\",\"timed_out\":false,\"truncated\":false}}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "machine.exec",
+     "params": {
+      "argv": [
+       "git",
+       "worktree",
+       "add",
+       "-b",
+       "feat1",
+       "/tmp/hc-neutral/proj-wt"
+      ],
+      "cwd": "/tmp/hc-neutral/proj"
+     }
+    }
+   }
+  ],
+  "file_edit": [
+   {
+    "reply_raw": "{\"id\":24,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":21,\"path\":\"/tmp/hc-neutral/proj/sub/note.txt\"}}",
+    "request": {
+     "id": 24,
+     "jsonrpc": "2.0",
+     "method": "file.edit",
+     "params": {
+      "edits": [
+       {
+        "new": "LINE-TWO",
+        "old": "line2"
+       }
+      ],
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_edit_dup": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"add lines around it\",\"kind\":\"edit_failed\"},\"message\":\"the old text is in the file 2 times\"},\"id\":26,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 26,
+     "jsonrpc": "2.0",
+     "method": "file.edit",
+     "params": {
+      "edits": [
+       {
+        "new": "x",
+        "old": "line"
+       }
+      ],
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_edit_miss": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"read it again: exact text\",\"kind\":\"edit_failed\"},\"message\":\"the old text is not in the file\"},\"id\":25,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 25,
+     "jsonrpc": "2.0",
+     "method": "file.edit",
+     "params": {
+      "edits": [
+       {
+        "new": "x",
+        "old": "nope"
+       }
+      ],
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_read": [
+   {
+    "reply_raw": "{\"id\":22,\"jsonrpc\":\"2.0\",\"result\":{\"first\":1,\"last\":3,\"lines\":3,\"text\":\"line1\\nline2\\nline3\\n\"}}",
+    "request": {
+     "id": 22,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_read_dir": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"/tmp/hc-neutral/proj is not a regular file\"},\"id\":27,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 27,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "path": "/tmp/hc-neutral/proj"
+     }
+    }
+   }
+  ],
+  "file_read_missing": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the path, or hc exec ls\",\"kind\":\"not_found\"},\"message\":\"no file /tmp/hc-neutral/nope\"},\"id\":28,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 28,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "path": "/tmp/hc-neutral/nope"
+     }
+    }
+   }
+  ],
+  "file_read_range": [
+   {
+    "reply_raw": "{\"id\":23,\"jsonrpc\":\"2.0\",\"result\":{\"first\":2,\"last\":2,\"lines\":3,\"text\":\"line2\\n\"}}",
+    "request": {
+     "id": 23,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "limit": 1,
+      "offset": 2,
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_rel": [
+   {
+    "reply_raw": "{\"id\":30,\"jsonrpc\":\"2.0\",\"result\":{\"first\":1,\"last\":1,\"lines\":1,\"text\":\"hi\\n\"}}",
+    "request": {
+     "id": 30,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "cwd": "/tmp/hc-neutral/proj",
+      "path": "a.txt"
+     }
+    }
+   }
+  ],
+  "file_tilde": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the path, or hc exec ls\",\"kind\":\"not_found\"},\"message\":\"no file /tmp/hc-neutral/proj/~/.profile\"},\"id\":31,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 31,
+     "jsonrpc": "2.0",
+     "method": "file.read",
+     "params": {
+      "path": "~/.profile"
+     }
+    }
+   }
+  ],
+  "file_write": [
+   {
+    "reply_raw": "{\"id\":21,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":18,\"path\":\"/tmp/hc-neutral/proj/sub/note.txt\"}}",
+    "request": {
+     "id": 21,
+     "jsonrpc": "2.0",
+     "method": "file.write",
+     "params": {
+      "data": "bGluZTEKbGluZTIKbGluZTMK",
+      "path": "/tmp/hc-neutral/proj/sub/note.txt"
+     }
+    }
+   }
+  ],
+  "file_write_mkdir": [
+   {
+    "reply_raw": "{\"id\":29,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":1,\"path\":\"/tmp/hc-neutral/proj/new/deep/x.txt\"}}",
+    "request": {
+     "id": 29,
+     "jsonrpc": "2.0",
+     "method": "file.write",
+     "params": {
+      "data": "eg==",
+      "path": "/tmp/hc-neutral/proj/new/deep/x.txt"
+     }
+    }
+   }
+  ],
+  "file_write_template": [
+   {
+    "reply_raw": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":61,\"path\":\"/tmp/hc-neutral/config/herdr-core/templates/created-by-api.md\"}}",
+    "request": {
+     "id": 1,
+     "jsonrpc": "2.0",
+     "method": "file.write",
+     "params": {
+      "data": "LS0tCmRlc2NyaXB0aW9uOiBtYWRlIHZpYSBmaWxlLndyaXRlCmNvbW1hbmQ6IHNsZWVwIDUKLS0tCmhpCg==",
+      "path": "/tmp/hc-neutral/config/herdr-core/templates/created-by-api.md"
+     }
+    }
+   }
+  ],
+  "templates_after_file_write": [
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"templates\":[{\"command\":\"\",\"description\":\"\",\"error\":\"/tmp/hc-neutral/config/herdr-core/templates/broken.md: no frontmatter (start the file with ---)\",\"name\":\"broken\"},{\"command\":\"sleep 5\",\"description\":\"made via file.write\",\"name\":\"created-by-api\"},{\"command\":\"/tmp/hc-neutral/home/.fakebin/fakeagent\",\"description\":\"Fake agent for tests\",\"name\":\"fake\"},{\"command\":\"sleep 300\",\"description\":\"never reports\",\"name\":\"plainsleep\"},{\"command\":\"FAKE_MODE=noreport /tmp/hc-neutral/home/.fakebin/fakeagent\",\"description\":\"Quiet fake\",\"name\":\"quiet\"}]}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "templates.list",
+     "params": {}
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout). machine.exec stdout/stderr are base64."
+}

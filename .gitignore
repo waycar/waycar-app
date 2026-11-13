@@ -1,0 +1,49 @@
+# Xcode
+build/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcscmblueprint
+*.xccheckout
+
+# SPM
+.build/
+.swiftpm/
+# Hosted CI restores SwiftPM checkouts here between runs.
+.ci/
+
+# Node (pairing plugin)
+plugin/node_modules/
+
+# Push Relay (Cloudflare Worker): local secrets and wrangler state.
+# The APNs .p8 is a deploy-time secret and must never land in the repo.
+relay/.dev.vars
+relay/.wrangler/
+relay/node_modules/
+*.p8
+
+# Python (test fixtures under scripts/fixtures)
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Local-only notes and experiments
+.local/
+
+# testloop scratch artifacts; keep concise run reports as repository history
+.testloop/*
+!.testloop/reports/
+
+# Agent workspace (research reports, scratch)
+.claude/
+
+# Testbox authorized_keys, written by scripts/testboxes/deploy.sh
+scripts/testboxes/*/authorized_keys*
+
+# App Store screenshot compose inputs (copies of docs/images/screenshots)
+output/app-store/*/sources/
+
+# Rust Host Tools (plugin/)
+plugin/target/

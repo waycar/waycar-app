@@ -1,0 +1,2 @@
+# Newest app version released before the open-source cut (ADR 0033); scripts/publish.sh reads it only while the repository has no v* tag.
+1.3.0

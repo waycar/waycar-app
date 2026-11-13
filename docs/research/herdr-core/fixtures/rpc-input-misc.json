@@ -1,0 +1,423 @@
+{
+ "exchanges": {
+  "get_badaddr": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"no machines yet: hc machine add <ssh-target>\",\"kind\":\"machine_unknown\"},\"message\":\"unknown machine \\\"a\\\"\"},\"id\":19,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 19,
+     "jsonrpc": "2.0",
+     "method": "terminal.get",
+     "params": {
+      "terminal": "a/b/c"
+     }
+    }
+   }
+  ],
+  "get_empty": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"bad terminal address \\\"\\\"\"},\"id\":21,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 21,
+     "jsonrpc": "2.0",
+     "method": "terminal.get",
+     "params": {
+      "terminal": ""
+     }
+    }
+   }
+  ],
+  "get_machine": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"no machines yet: hc machine add <ssh-target>\",\"kind\":\"machine_unknown\"},\"message\":\"unknown machine \\\"foo\\\"\"},\"id\":20,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 20,
+     "jsonrpc": "2.0",
+     "method": "terminal.get",
+     "params": {
+      "terminal": "foo/t1"
+     }
+    }
+   }
+  ],
+  "get_missing": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"see `hc ls --all`\",\"kind\":\"not_found\"},\"message\":\"no terminal \\\"nonesuch\\\"\"},\"id\":18,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 18,
+     "jsonrpc": "2.0",
+     "method": "terminal.get",
+     "params": {
+      "terminal": "nonesuch"
+     }
+    }
+   }
+  ],
+  "interrupt_agent": [
+   {
+    "reply_raw": "{\"id\":12,\"jsonrpc\":\"2.0\",\"result\":{\"key\":\"esc\",\"outcome\":\"stopped\"}}",
+    "request": {
+     "id": 12,
+     "jsonrpc": "2.0",
+     "method": "terminal.interrupt",
+     "params": {
+      "terminal": "ag1",
+      "timeout": 1.5
+     }
+    }
+   }
+  ],
+  "interrupt_finished": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t2\",\"kind\":\"finished\"},\"message\":\"t2 has finished\"},\"id\":15,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 15,
+     "jsonrpc": "2.0",
+     "method": "terminal.interrupt",
+     "params": {
+      "terminal": "sl"
+     }
+    }
+   }
+  ],
+  "interrupt_plain": [
+   {
+    "reply_raw": "{\"id\":14,\"jsonrpc\":\"2.0\",\"result\":{\"key\":\"ctrl+c\",\"outcome\":\"exited\"}}",
+    "request": {
+     "id": 14,
+     "jsonrpc": "2.0",
+     "method": "terminal.interrupt",
+     "params": {
+      "terminal": "sl",
+      "timeout": 3
+     }
+    }
+   }
+  ],
+  "keys_after_block": [
+   {
+    "reply_raw": "{\"id\":10,\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"idle\",\"turn\":7}}",
+    "request": {
+     "id": 10,
+     "jsonrpc": "2.0",
+     "method": "terminal.keys",
+     "params": {
+      "keys": [
+       "enter"
+      ],
+      "terminal": "ag1"
+     }
+    }
+   }
+  ],
+  "keys_finished": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t2\",\"kind\":\"finished\"},\"message\":\"t2 has finished\"},\"id\":17,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 17,
+     "jsonrpc": "2.0",
+     "method": "terminal.keys",
+     "params": {
+      "keys": [
+       "a"
+      ],
+      "terminal": "sl"
+     }
+    }
+   }
+  ],
+  "keys_multi": [
+   {
+    "reply_raw": "{\"id\":30,\"jsonrpc\":\"2.0\",\"result\":{\"status\":null,\"turn\":0}}",
+    "request": {
+     "id": 30,
+     "jsonrpc": "2.0",
+     "method": "terminal.keys",
+     "params": {
+      "keys": [
+       "a",
+       "b",
+       "enter"
+      ],
+      "terminal": "nobp"
+     }
+    }
+   }
+  ],
+  "keys_partial_error": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"unknown key \\\"nope\\\" (try enter, esc, up, ctrl+c, alt+x, f5, a)\"},\"id\":31,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 31,
+     "jsonrpc": "2.0",
+     "method": "terminal.keys",
+     "params": {
+      "keys": [
+       "x",
+       "nope",
+       "y"
+      ],
+      "terminal": "nobp"
+     }
+    }
+   }
+  ],
+  "read_after_partial_error": [
+   {
+    "reply_raw": "{\"id\":32,\"jsonrpc\":\"2.0\",\"result\":{\"complete\":true,\"how\":\"screen\",\"text\":\"b'line one\\\\nline two'\\nb'\\\\r'\\nb'a'\\nb'b'\\nb'\\\\r'\"}}",
+    "request": {
+     "id": 32,
+     "jsonrpc": "2.0",
+     "method": "terminal.read",
+     "params": {
+      "terminal": "nobp"
+     }
+    }
+   }
+  ],
+  "read_bracketed": [
+   {
+    "reply_raw": "{\"id\":26,\"jsonrpc\":\"2.0\",\"result\":{\"complete\":true,\"how\":\"screen\",\"text\":\"b'\\\\x1b[200~line one\\\\nline two\\\\x1b[201~'\\nb'\\\\r'\\nb'\\\\x1b[200~ab\\\\x1b[201~'\\nb'\\\\r'\\nb'\\\\x1b[200~h\\\\xc3\\\\xa9llo \\\\xe6\\\\x97\\\\xa5\\\\xe6\\\\x9c\\\\xac \\\\xf0\\\\x9f\\\\x9a\\\\x80\\\\x1b[201~'\\nb'\\\\r'\"}}",
+    "request": {
+     "id": 26,
+     "jsonrpc": "2.0",
+     "method": "terminal.read",
+     "params": {
+      "terminal": "bp"
+     }
+    }
+   }
+  ],
+  "read_nobracket": [
+   {
+    "reply_raw": "{\"id\":29,\"jsonrpc\":\"2.0\",\"result\":{\"complete\":true,\"how\":\"screen\",\"text\":\"b'line one\\\\nline two'\\nb'\\\\r'\"}}",
+    "request": {
+     "id": 29,
+     "jsonrpc": "2.0",
+     "method": "terminal.read",
+     "params": {
+      "terminal": "nobp"
+     }
+    }
+   }
+  ],
+  "send": [
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"working\",\"turn\":2}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "ag1",
+      "text": "hello there"
+     }
+    }
+   }
+  ],
+  "send_block": [
+   {
+    "reply_raw": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"started\":false,\"status\":\"idle\",\"turn\":6}}",
+    "request": {
+     "id": 7,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "ag1",
+      "text": "please block now"
+     }
+    }
+   }
+  ],
+  "send_blocked_force": [
+   {
+    "reply_raw": "{\"id\":9,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"blocked\",\"turn\":6}}",
+    "request": {
+     "id": 9,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "force": true,
+      "terminal": "ag1",
+      "text": "yes"
+     }
+    }
+   }
+  ],
+  "send_blocked_refused": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"typing would answer its dialog; read its screen first (hc read t1), or --force\",\"kind\":\"blocked\"},\"message\":\"t1 is blocked (permission)\"},\"id\":8,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 8,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "ag1",
+      "text": "y"
+     }
+    }
+   }
+  ],
+  "send_bracketed": [
+   {
+    "reply_raw": "{\"id\":23,\"jsonrpc\":\"2.0\",\"result\":{\"started\":null,\"status\":null,\"turn\":0}}",
+    "request": {
+     "id": 23,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "bp",
+      "text": "line one\nline two"
+     }
+    }
+   }
+  ],
+  "send_esc_end_stripped": [
+   {
+    "reply_raw": "{\"id\":24,\"jsonrpc\":\"2.0\",\"result\":{\"started\":null,\"status\":null,\"turn\":0}}",
+    "request": {
+     "id": 24,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "bp",
+      "text": "a\u001b[201~b"
+     }
+    }
+   }
+  ],
+  "send_finished": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t2\",\"kind\":\"finished\"},\"message\":\"t2 has finished\"},\"id\":16,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 16,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "sl",
+      "text": "x"
+     }
+    }
+   }
+  ],
+  "send_if_bad": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"unknown variant `blocked`, expected `idle` or `working`\"},\"id\":6,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "if": "blocked",
+      "terminal": "ag1",
+      "text": "x"
+     }
+    }
+   }
+  ],
+  "send_if_mismatch": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"nothing was typed\",\"kind\":\"status_mismatch\"},\"message\":\"t1 is idle, not working\"},\"id\":4,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "if": "working",
+      "terminal": "ag1",
+      "text": "x"
+     }
+    }
+   }
+  ],
+  "send_if_ok": [
+   {
+    "reply_raw": "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"idle\",\"turn\":5}}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "if": "idle",
+      "terminal": "ag1",
+      "text": "third"
+     }
+    }
+   }
+  ],
+  "send_nobracket": [
+   {
+    "reply_raw": "{\"id\":28,\"jsonrpc\":\"2.0\",\"result\":{\"started\":null,\"status\":null,\"turn\":0}}",
+    "request": {
+     "id": 28,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "nobp",
+      "text": "line one\nline two"
+     }
+    }
+   }
+  ],
+  "send_unicode": [
+   {
+    "reply_raw": "{\"id\":25,\"jsonrpc\":\"2.0\",\"result\":{\"started\":null,\"status\":null,\"turn\":0}}",
+    "request": {
+     "id": 25,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "bp",
+      "text": "h\u00e9llo \u65e5\u672c \ud83d\ude80"
+     }
+    }
+   }
+  ],
+  "send_wait": [
+   {
+    "reply_raw": "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"idle\",\"turn\":4,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":null,\"reason\":\"status\",\"signal\":null,\"status\":\"done\",\"terminal\":\"t1\",\"turn\":5}}}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "ag1",
+      "text": "second",
+      "timeout": 10,
+      "wait": true
+     }
+    }
+   }
+  ],
+  "send_wait_not_started": [
+   {
+    "reply_raw": "{\"id\":34,\"jsonrpc\":\"2.0\",\"result\":{\"started\":false,\"status\":\"idle\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":false,\"exit_code\":null,\"reason\":\"not_started\",\"signal\":null,\"status\":\"idle\",\"terminal\":\"t5\",\"turn\":0}}}",
+    "request": {
+     "id": 34,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "lazy",
+      "text": "do it",
+      "timeout": 3,
+      "wait": true
+     }
+    }
+   }
+  ],
+  "send_working": [
+   {
+    "reply_raw": "{\"id\":11,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"working\",\"turn\":7}}",
+    "request": {
+     "id": 11,
+     "jsonrpc": "2.0",
+     "method": "terminal.send",
+     "params": {
+      "terminal": "ag1",
+      "text": "work please"
+     }
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout)."
+}

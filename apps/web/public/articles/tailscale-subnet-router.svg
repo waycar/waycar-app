@@ -1,0 +1,269 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', Arial, sans-serif">
+  <title id="t">Phone to a subnet router, which can be any always-on device, to every machine on the home network</title>
+  <desc id="d">An iPhone running Tailscale and Waycar connects through an encrypted Tailscale tunnel to a subnet router. Any always-on device can be the router: a Raspberry Pi, an old Windows PC, a Linux VM, a Mac mini or a MacBook. Behind it sit a work MacBook, a personal MacBook, a Mac mini, a Linux box and a virtual machine, all reachable over the local network.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c0d12"/>
+      <stop offset="1" stop-color="#07080b"/>
+    </linearGradient>
+    <radialGradient id="glowV" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tunnel" gradientUnits="userSpaceOnUse" x1="236" y1="0" x2="622" y2="0">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="lan" gradientUnits="userSpaceOnUse" x1="822" y1="0" x2="1128" y2="0">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17181f"/>
+      <stop offset="1" stop-color="#0e0f13"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" filterUnits="userSpaceOnUse" x="0" y="0" width="1600" height="760">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+    <pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1" fill="#ffffff" fill-opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <!-- ground -->
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect width="1600" height="960" fill="url(#dots)"/>
+  <ellipse cx="720" cy="580" rx="520" ry="340" fill="url(#glowV)"/>
+  <ellipse cx="1300" cy="580" rx="360" ry="340" fill="url(#glowC)"/>
+
+  <!-- home network zone -->
+  <rect x="560" y="46" width="960" height="868" rx="34" fill="#ffffff" fill-opacity="0.018" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="3 9" stroke-linecap="round"/>
+  <text x="596" y="86" font-size="15" font-weight="600" letter-spacing="2.4" fill="#7d8495">YOUR HOME NETWORK  ·  192.168.1.0/24</text>
+
+  <g transform="translate(0 200)">
+  <!-- tunnel: phone -> pi -->
+  <path d="M236 380 H622" stroke="#8b5cf6" stroke-opacity="0.55" stroke-width="10" stroke-linecap="round" filter="url(#soft)"/>
+  <path d="M236 380 H622" stroke="url(#tunnel)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M236 380 H622" stroke="#fff" stroke-opacity="0.55" stroke-width="1.2" stroke-dasharray="2 14" stroke-linecap="round"/>
+  <g transform="translate(429 332)">
+    <rect x="-96" y="-17" width="192" height="34" rx="17" fill="#0e0f13" stroke="#ffffff" stroke-opacity="0.16"/>
+    <g transform="translate(-76 -7)" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="6" width="12" height="9" rx="2"/>
+      <path d="M3 6 V4 a3 3 0 0 1 6 0 V6"/>
+    </g>
+    <text x="-54" y="5" font-size="13.5" font-weight="600" fill="#edeef3">Encrypted tunnel</text>
+  </g>
+  <text x="429" y="426" font-size="14" fill="#a1a7b5" text-anchor="middle">Tailscale, from anywhere</text>
+
+  <!-- fan: pi -> machines -->
+  <g fill="none" stroke-linecap="round">
+    <g stroke="#22d3ee" stroke-opacity="0.35" stroke-width="8" filter="url(#soft)">
+      <path d="M822 380 C 980 380, 980 140, 1128 140"/>
+      <path d="M822 380 C 980 380, 980 260, 1128 260"/>
+      <path d="M822 380 H1128"/>
+      <path d="M822 380 C 980 380, 980 500, 1128 500"/>
+      <path d="M822 380 C 980 380, 980 620, 1128 620"/>
+    </g>
+    <g stroke="url(#lan)" stroke-width="2.4">
+      <path d="M822 380 C 980 380, 980 140, 1128 140"/>
+      <path d="M822 380 C 980 380, 980 260, 1128 260"/>
+      <path d="M822 380 H1128"/>
+      <path d="M822 380 C 980 380, 980 500, 1128 500"/>
+      <path d="M822 380 C 980 380, 980 620, 1128 620"/>
+    </g>
+  </g>
+  <g fill="#22d3ee">
+    <circle cx="1128" cy="140" r="4.5"/><circle cx="1128" cy="260" r="4.5"/><circle cx="1128" cy="380" r="4.5"/><circle cx="1128" cy="500" r="4.5"/><circle cx="1128" cy="620" r="4.5"/>
+  </g>
+
+  <!-- phone -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="250" width="136" height="260" rx="30" fill="#0e0f13" stroke="#ffffff" stroke-opacity="0.28" stroke-width="1.5"/>
+    <rect x="108" y="258" width="120" height="244" rx="23" fill="#0a0b0f"/>
+    <rect x="108" y="258" width="120" height="244" rx="23" fill="url(#sheen)"/>
+    <rect x="142" y="266" width="52" height="14" rx="7" fill="#000"/>
+    <!-- agent rows -->
+    <g>
+      <rect x="120" y="300" width="96" height="42" rx="10" fill="#141519" stroke="#ffffff" stroke-opacity="0.08"/>
+      <circle cx="134" cy="314" r="4" fill="#f1d98a"/>
+      <rect x="144" y="311" width="50" height="6" rx="3" fill="#edeef3" fill-opacity="0.8"/>
+      <rect x="130" y="326" width="70" height="5" rx="2.5" fill="#7d8495"/>
+      <rect x="120" y="350" width="96" height="42" rx="10" fill="#141519" stroke="#ffffff" stroke-opacity="0.08"/>
+      <circle cx="134" cy="364" r="4" fill="#8ab4f8"/>
+      <rect x="144" y="361" width="42" height="6" rx="3" fill="#edeef3" fill-opacity="0.8"/>
+      <rect x="130" y="376" width="62" height="5" rx="2.5" fill="#7d8495"/>
+      <rect x="120" y="400" width="96" height="42" rx="10" fill="#141519" stroke="#ffffff" stroke-opacity="0.08"/>
+      <circle cx="134" cy="414" r="4" fill="#9bd88f"/>
+      <rect x="144" y="411" width="56" height="6" rx="3" fill="#edeef3" fill-opacity="0.8"/>
+      <rect x="130" y="426" width="48" height="5" rx="2.5" fill="#7d8495"/>
+    </g>
+    <rect x="132" y="462" width="72" height="26" rx="13" fill="#8b5cf6"/>
+    <rect x="152" y="494" width="32" height="3" rx="1.5" fill="#ffffff" fill-opacity="0.5"/>
+  </g>
+  <circle cx="236" cy="380" r="6" fill="#a78bfa"/>
+  <text x="168" y="560" font-size="20" font-weight="650" fill="#edeef3" text-anchor="middle">iPhone</text>
+  <text x="168" y="586" font-size="14" fill="#a1a7b5" text-anchor="middle">Waycar + Tailscale</text>
+  <text x="168" y="610" font-size="14" fill="#7d8495" text-anchor="middle">on cellular</text>
+
+  <!-- raspberry pi -->
+  <g filter="url(#shadow)">
+    <rect x="620" y="310" width="204" height="140" rx="16" fill="#0f2a1f" stroke="#9bd88f" stroke-opacity="0.55" stroke-width="1.6"/>
+    <rect x="620" y="310" width="204" height="140" rx="16" fill="url(#sheen)"/>
+    <!-- gpio -->
+    <g fill="#d8dae1" fill-opacity="0.85">
+      <rect x="636" y="318" width="150" height="10" rx="2" fill-opacity="0.18"/>
+      <g id="pins">
+        <circle cx="642" cy="323" r="1.8"/><circle cx="652" cy="323" r="1.8"/><circle cx="662" cy="323" r="1.8"/><circle cx="672" cy="323" r="1.8"/><circle cx="682" cy="323" r="1.8"/><circle cx="692" cy="323" r="1.8"/><circle cx="702" cy="323" r="1.8"/><circle cx="712" cy="323" r="1.8"/><circle cx="722" cy="323" r="1.8"/><circle cx="732" cy="323" r="1.8"/><circle cx="742" cy="323" r="1.8"/><circle cx="752" cy="323" r="1.8"/><circle cx="762" cy="323" r="1.8"/><circle cx="772" cy="323" r="1.8"/>
+      </g>
+    </g>
+    <!-- soc -->
+    <rect x="676" y="352" width="46" height="46" rx="6" fill="#c9ccd6" fill-opacity="0.9"/>
+    <rect x="684" y="360" width="30" height="30" rx="4" fill="#0a0b0f" fill-opacity="0.35"/>
+    <rect x="738" y="360" width="26" height="30" rx="4" fill="#1b1d25" stroke="#ffffff" stroke-opacity="0.25"/>
+    <!-- ports -->
+    <rect x="640" y="398" width="30" height="44" rx="3" fill="#9aa1b0"/>
+    <rect x="780" y="352" width="42" height="26" rx="3" fill="#9aa1b0"/>
+    <rect x="780" y="384" width="42" height="26" rx="3" fill="#9aa1b0"/>
+    <rect x="780" y="416" width="42" height="26" rx="3" fill="#7d8495"/>
+    <!-- led -->
+    <circle cx="700" cy="425" r="3.5" fill="#9bd88f"/>
+    <circle cx="714" cy="425" r="3.5" fill="#f1d98a"/>
+  </g>
+  <text x="722" y="490" font-size="22" font-weight="650" fill="#edeef3" text-anchor="middle">Subnet router</text>
+  <text x="722" y="516" font-size="15" fill="#a78bfa" text-anchor="middle" font-weight="600">Any always-on device running Tailscale</text>
+  <text x="722" y="540" font-size="14" fill="#7d8495" text-anchor="middle">shown here: a Raspberry Pi</text>
+
+  <!-- machines -->
+  <g>
+    <!-- 1 MacBook, work -->
+    <g transform="translate(1130 94)">
+      <rect width="340" height="92" rx="20" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect width="340" height="92" rx="20" fill="url(#sheen)" opacity="0.5"/>
+      <g transform="translate(26 22)" fill="none" stroke="#edeef3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="8" y="2" width="40" height="27" rx="3.5"/>
+        <path d="M0 36 H56 L52 31 H4 Z" fill="#edeef3" fill-opacity="0.12"/>
+      </g>
+      <text x="104" y="43" font-size="20" font-weight="650" fill="#edeef3">MacBook</text>
+      <text x="104" y="68" font-size="15" fill="#a1a7b5">Work  ·  192.168.1.20</text>
+      <circle cx="310" cy="46" r="5" fill="#9bd88f"/>
+    </g>
+    <!-- 2 MacBook, personal -->
+    <g transform="translate(1130 214)">
+      <rect width="340" height="92" rx="20" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect width="340" height="92" rx="20" fill="url(#sheen)" opacity="0.5"/>
+      <g transform="translate(26 22)" fill="none" stroke="#edeef3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="8" y="2" width="40" height="27" rx="3.5"/>
+        <path d="M0 36 H56 L52 31 H4 Z" fill="#edeef3" fill-opacity="0.12"/>
+      </g>
+      <text x="104" y="43" font-size="20" font-weight="650" fill="#edeef3">MacBook</text>
+      <text x="104" y="68" font-size="15" fill="#a1a7b5">Personal  ·  192.168.1.21</text>
+      <circle cx="310" cy="46" r="5" fill="#9bd88f"/>
+    </g>
+    <!-- 3 Mac mini -->
+    <g transform="translate(1130 334)">
+      <rect width="340" height="92" rx="20" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect width="340" height="92" rx="20" fill="url(#sheen)" opacity="0.5"/>
+      <g transform="translate(26 28)" fill="none" stroke="#edeef3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="0" y="6" width="56" height="26" rx="9" fill="#edeef3" fill-opacity="0.06"/>
+        <path d="M18 29 H38" opacity="0.6"/>
+      </g>
+      <text x="104" y="43" font-size="20" font-weight="650" fill="#edeef3">Mac mini</text>
+      <text x="104" y="68" font-size="15" fill="#a1a7b5">Always on  ·  192.168.1.30</text>
+      <circle cx="310" cy="46" r="5" fill="#9bd88f"/>
+    </g>
+    <!-- 4 Linux box -->
+    <g transform="translate(1130 454)">
+      <rect width="340" height="92" rx="20" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect width="340" height="92" rx="20" fill="url(#sheen)" opacity="0.5"/>
+      <g transform="translate(26 20)" fill="none" stroke="#edeef3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="4" y="2" width="48" height="16" rx="4"/>
+        <rect x="4" y="22" width="48" height="16" rx="4"/>
+        <circle cx="13" cy="10" r="1.6" fill="#9bd88f" stroke="none"/>
+        <circle cx="13" cy="30" r="1.6" fill="#9bd88f" stroke="none"/>
+        <path d="M24 10 H44 M24 30 H44" opacity="0.5"/>
+      </g>
+      <text x="104" y="43" font-size="20" font-weight="650" fill="#edeef3">Linux box</text>
+      <text x="104" y="68" font-size="15" fill="#a1a7b5">Homelab  ·  192.168.1.40</text>
+      <circle cx="310" cy="46" r="5" fill="#9bd88f"/>
+    </g>
+    <!-- 5 VM -->
+    <g transform="translate(1130 574)">
+      <rect width="340" height="92" rx="20" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect width="340" height="92" rx="20" fill="url(#sheen)" opacity="0.5"/>
+      <g transform="translate(26 20)" fill="none" stroke="#edeef3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M28 2 L52 14 L28 26 L4 14 Z" fill="#edeef3" fill-opacity="0.06"/>
+        <path d="M4 22 L28 34 L52 22" opacity="0.7"/>
+        <path d="M4 30 L28 42 L52 30" opacity="0.4"/>
+      </g>
+      <text x="104" y="43" font-size="20" font-weight="650" fill="#edeef3">Virtual machine</text>
+      <text x="104" y="68" font-size="15" fill="#a1a7b5">VM host  ·  192.168.1.50</text>
+      <circle cx="310" cy="46" r="5" fill="#9bd88f"/>
+    </g>
+  </g>
+
+  <text x="800" y="738" font-size="14" fill="#7d8495" text-anchor="middle" letter-spacing="0.4">No Tailscale needed on any of them. Waycar reaches each one by its local address over SSH.</text>
+  </g>
+
+  <!-- router options -->
+  <text x="596" y="138" font-size="14" font-weight="600" letter-spacing="2.2" fill="#a78bfa">ANY ALWAYS-ON DEVICE CAN BE THE SUBNET ROUTER</text>
+  <g fill="none" stroke="#a78bfa" stroke-opacity="0.45" stroke-width="1.6" stroke-linecap="round">
+    <path d="M648 250 V272 H1104 V250"/>
+    <path d="M762 250 V272 M876 250 V272 M990 250 V272"/>
+  </g>
+  <path d="M876 272 V320 C 876 420, 722 400, 722 508" fill="none" stroke="#a78bfa" stroke-width="2" stroke-dasharray="2 9" stroke-linecap="round"/>
+  <circle cx="722" cy="508" r="4.5" fill="#a78bfa"/>
+  <g font-size="12.5" font-weight="600" fill="#edeef3" text-anchor="middle">
+    <g transform="translate(596 156)">
+      <rect width="104" height="94" rx="16" fill="url(#card)" stroke="#a78bfa" stroke-opacity="0.5"/>
+      <rect x="30" y="14" width="44" height="30" rx="5" fill="#0f2a1f" stroke="#9bd88f" stroke-opacity="0.6" stroke-width="1.4"/>
+      <rect x="48" y="23" width="12" height="12" rx="2" fill="#c9ccd6"/>
+      <rect x="62" y="19" width="9" height="10" rx="1.5" fill="#9aa1b0"/><rect x="62" y="31" width="9" height="10" rx="1.5" fill="#9aa1b0"/>
+      <text x="52" y="72">Raspberry Pi</text>
+    </g>
+    <g transform="translate(710 156)">
+      <rect width="104" height="94" rx="16" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <g fill="none" stroke="#edeef3" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="30" y="12" width="44" height="30" rx="3"/>
+        <path d="M42 48 H62 M52 42 V48"/>
+      </g>
+      <g fill="#edeef3" fill-opacity="0.8"><rect x="42" y="19" width="9" height="7" rx="1"/><rect x="53" y="19" width="9" height="7" rx="1"/><rect x="42" y="28" width="9" height="7" rx="1"/><rect x="53" y="28" width="9" height="7" rx="1"/></g>
+      <text x="52" y="72">Old Windows PC</text>
+    </g>
+    <g transform="translate(824 156)">
+      <rect width="104" height="94" rx="16" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <g fill="none" stroke="#edeef3" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M52 12 L74 23 L52 34 L30 23 Z" fill="#edeef3" fill-opacity="0.06"/>
+        <path d="M30 30 L52 41 L74 30" opacity="0.7"/>
+        <path d="M30 37 L52 48 L74 37" opacity="0.4"/>
+      </g>
+      <text x="52" y="72">Linux VM</text>
+    </g>
+    <g transform="translate(938 156)">
+      <rect width="104" height="94" rx="16" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <g fill="none" stroke="#edeef3" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="28" y="22" width="48" height="22" rx="8" fill="#edeef3" fill-opacity="0.06"/>
+        <path d="M42 39 H62" opacity="0.6"/>
+      </g>
+      <text x="52" y="72">Mac mini</text>
+    </g>
+    <g transform="translate(1052 156)">
+      <rect width="104" height="94" rx="16" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.14"/>
+      <g fill="none" stroke="#edeef3" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="34" y="14" width="36" height="24" rx="3"/>
+        <path d="M26 44 H78 L74 39 H30 Z" fill="#edeef3" fill-opacity="0.12"/>
+      </g>
+      <text x="52" y="72">MacBook</text>
+    </g>
+  </g>
+</svg>

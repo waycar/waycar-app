@@ -1,0 +1,111 @@
+import Foundation
+import Observation
+
+enum AgentRowLayoutStoreError: Error, Equatable {
+    case catalogUnreadable
+}
+
+/// Per-Host whole-layout choices. Plugin snapshots belong to the connection
+/// that fetched them and are deliberately not persisted in this catalog.
+@MainActor
+@Observable
+final class AgentRowLayoutStore {
+    static let defaultsKey = "agent-row-layouts"
+    private static let catalogVersion = 1
+
+    /// Earlier version-1 catalogs also carried a `globalLayout`. It is
+    /// ignored on load and dropped by the next write, so a hidden legacy
+    /// choice can never override a Host's herdr fields.
+    private struct PersistedCatalog: Encodable {
+        let version: Int
+        let hostLayouts: [Host.ID: AgentRowLayout]
+    }
+
+    /// Field names come from whichever build last saved on this device, so a
+    /// name this build does not know is dropped on load and by the next
+    /// write rather than making the catalog unreadable (#320). Structural
+    /// problems still do: they keep the original bytes and refuse writes.
+    private struct LoadedCatalog: Decodable {
+        let version: Int
+        let hostLayouts: [Host.ID: AgentRowLayout.Lenient]
+    }
+
+    private(set) var hostLayouts: [Host.ID: AgentRowLayout] = [:]
+    private(set) var catalogLoadError: AgentRowLayoutStoreError?
+    @ObservationIgnored private nonisolated(unsafe) let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        (hostLayouts, catalogLoadError) = Self.load(from: defaults)
+    }
+
+    /// Re-reads the catalog after iCloud Sync replaced it (ADR 0019).
+    func reload() {
+        let (loaded, error) = Self.load(from: defaults)
+        if loaded != hostLayouts { hostLayouts = loaded }
+        if error != catalogLoadError { catalogLoadError = error }
+    }
+
+    private static func load(
+        from defaults: UserDefaults
+    ) -> ([Host.ID: AgentRowLayout], AgentRowLayoutStoreError?) {
+        guard let data = defaults.data(forKey: defaultsKey) else { return ([:], nil) }
+        guard let layouts = decode(data) else { return ([:], .catalogUnreadable) }
+        return (layouts, nil)
+    }
+
+    /// Whether this build can read a persisted catalog, e.g. one another
+    /// device synced (ADR 0019).
+    static func canRead(_ data: Data) -> Bool {
+        decode(data) != nil
+    }
+
+    private static func decode(_ data: Data) -> [Host.ID: AgentRowLayout]? {
+        guard let catalog = try? JSONDecoder().decode(LoadedCatalog.self, from: data),
+            catalog.version == catalogVersion
+        else { return nil }
+        return catalog.hostLayouts.mapValues(\.layout)
+    }
+
+    /// Discards an unreadable catalog so every Host follows its herdr fields
+    /// again and writes are accepted. The only way out of `catalogLoadError`;
+    /// a readable catalog is left alone.
+    func resetUnreadableCatalog() {
+        guard catalogLoadError != nil else { return }
+        defaults.removeObject(forKey: Self.defaultsKey)
+        hostLayouts = [:]
+        catalogLoadError = nil
+    }
+
+    /// nil removes this Host's choice so its herdr fields apply again.
+    func setLayout(_ layout: AgentRowLayout?, for hostID: Host.ID) throws {
+        try setLayouts([hostID: layout])
+    }
+
+    /// One validated write for every Host in `changes`; either all of them
+    /// are saved or none is.
+    func setLayouts(_ changes: [Host.ID: AgentRowLayout?]) throws {
+        var updated = hostLayouts
+        for (hostID, layout) in changes { updated[hostID] = layout }
+        try persist(hostLayouts: updated)
+        hostLayouts = updated
+    }
+
+    /// The layout for `backend`'s rows on the Host; the plugin snapshot
+    /// applies to herdr rows only (`AgentRowLayoutResolver`).
+    func resolvedLayout(
+        for hostID: Host.ID, pluginSnapshot: AgentRowLayoutSnapshot?,
+        backend: HostBackend = .herdr
+    ) -> AgentRowLayout {
+        AgentRowLayoutResolver.resolve(
+            hostLayout: hostLayouts[hostID], pluginSnapshot: pluginSnapshot, backend: backend)
+    }
+
+    private func persist(hostLayouts: [Host.ID: AgentRowLayout]) throws {
+        guard catalogLoadError == nil else { throw AgentRowLayoutStoreError.catalogUnreadable }
+        for layout in hostLayouts.values { try layout.validate() }
+        let encoded = try JSONEncoder().encode(PersistedCatalog(
+            version: Self.catalogVersion, hostLayouts: hostLayouts))
+        defaults.set(encoded, forKey: Self.defaultsKey)
+    }
+}

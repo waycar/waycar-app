@@ -1,0 +1,5 @@
+modelRoles:
+  default: mock/mock-model
+startup:
+  setupWizard: false
+  checkUpdate: false

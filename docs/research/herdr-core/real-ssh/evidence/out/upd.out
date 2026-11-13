@@ -1,0 +1,3 @@
+hc updated to 0.1.14.
+Add /home/waycar/.local/bin to your PATH to use hc.
+Agents: hc --skill. People: hc --help.

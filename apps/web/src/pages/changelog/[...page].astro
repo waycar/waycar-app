@@ -1,0 +1,312 @@
+---
+// /changelog and /changelog/<n> (n >= 2): what changed in each Waycar update,
+// newest first. Unreleased (the repo-root CHANGELOG.md's `## [Unreleased]`,
+// when it has a bullet) leads page 1; then one article per release from
+// src/content/changelog/<X.Y.Z>.md. Pages hold whole releases, at least 40
+// bullets each (src/lib/changelog.mjs). Each page ends with a link to the
+// next, older one; with JavaScript, the script below loads it in place as the
+// link nears the viewport.
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import Prose from '../../components/Prose.astro';
+import Layout from '../../layouts/Layout.astro';
+import { changelogPath, formatReleaseDate, releaseAnchor } from '../../lib/changelog.mjs';
+import { getChangelogPages, type ChangelogEntry } from '../../lib/changelog-entries';
+
+export const getStaticPaths = (async () => {
+  const pages = await getChangelogPages();
+  return pages.map((entries, index) => ({
+    params: { page: index === 0 ? undefined : String(index + 1) },
+    props: { entries, number: index + 1, total: pages.length },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  entries: ChangelogEntry[];
+  /** 1-based page number. */
+  number: number;
+  total: number;
+}
+
+const { entries, number, total } = Astro.props;
+const releases = await Promise.all(
+  entries.map(async (item) => {
+    const { Content } = await render(item.entry);
+    return item.version === null
+      ? { id: 'unreleased', title: 'Unreleased', version: undefined, Content, date: null }
+      : { id: releaseAnchor(item.version), title: `Version ${item.version}`, version: item.version, Content, date: item.date };
+  }),
+);
+const versions = entries.flatMap((item) => (item.version === null ? [] : [item.version]));
+const range = versions.length > 1 ? `${versions[0]} back to ${versions.at(-1)}` : (versions[0] ?? '');
+
+const title = number === 1 ? 'Changelog · Waycar' : `Changelog, page ${number} · Waycar`;
+const description =
+  number === 1
+    ? "What's new in Waycar for iPhone and iPad: the new features, changes, and fixes in every update, newest first."
+    : `Waycar updates ${range}: the new features, changes, and fixes in each one, for iPhone and iPad.`;
+const older = number < total ? changelogPath(number + 1) : undefined;
+const newer = number > 1 ? changelogPath(number - 1) : undefined;
+---
+
+<Layout title={title} description={description}>
+  <section class="section changelog" aria-labelledby="changelog-title">
+    <div class="wrap">
+      <header class="head">
+        <span class="kicker">Changelog</span>
+        <h1 id="changelog-title" class="sec-title">What's new in Waycar</h1>
+        <p class="sec-lede">
+          {number === 1 ? 'New features, changes, and fixes in every update, newest first.' : `Updates ${range}.`}
+        </p>
+        {
+          newer && (
+            <p class="newer">
+              <a href={newer} rel="prev">
+                Newer releases
+              </a>
+            </p>
+          )
+        }
+      </header>
+
+      <div class="releases" data-changelog>
+        {
+          releases.map(({ id, title, version, Content, date }) => (
+            <article class="release" id={id} aria-labelledby={`${id}-title`} data-release data-version={version}>
+              <header class="release-head">
+                <h2 id={`${id}-title`}>{title}</h2>
+                {date ? (
+                  <time class="release-meta" datetime={date}>
+                    {formatReleaseDate(date)}
+                  </time>
+                ) : (
+                  <p class="release-meta">Coming in the next update.</p>
+                )}
+              </header>
+              <Prose>
+                <Content />
+              </Prose>
+            </article>
+          ))
+        }
+      </div>
+
+      {
+        older && (
+          <p class="older" data-changelog-more>
+            <a class="btn btn-ghost" href={older} rel="next" data-changelog-older>
+              Older releases
+            </a>
+          </p>
+        )
+      }
+      <p class="visually-hidden" role="status" data-changelog-status></p>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  // Infinite scroll: as the "Older releases" link nears the viewport, fetch the
+  // page it points to, append its releases (skipping any already here), and
+  // swap in that page's own link, or drop the link after the last page. The
+  // URL stays as it is. A status line announces what loaded; if the link had
+  // focus, focus moves to the first loaded release. Without JavaScript, or
+  // while a fetch fails, the link works as a plain link; a failed fetch is
+  // tried again a few times as the link comes back into view.
+  const RETRY_DELAYS_MS = [2_000, 5_000, 15_000];
+
+  const list = document.querySelector<HTMLElement>('[data-changelog]');
+  const status = document.querySelector<HTMLElement>('[data-changelog-status]');
+  let older = document.querySelector<HTMLAnchorElement>('[data-changelog-older]');
+
+  /** "Loaded versions 1.0.2 to 1.0.0." for the releases just appended. */
+  const loadedMessage = (added: HTMLElement[], last: boolean) => {
+    const versions = added.flatMap((release) => (release.dataset.version ? [release.dataset.version] : []));
+    if (versions.length === 0) return '';
+    const text =
+      versions.length === 1 ? `Loaded version ${versions[0]}.` : `Loaded versions ${versions[0]} to ${versions.at(-1)}.`;
+    return last ? `${text} That is the oldest release.` : text;
+  };
+
+  if (list && older && 'IntersectionObserver' in window) {
+    let loading = false;
+    let failures = 0;
+
+    const loadOlder = async (link: HTMLAnchorElement) => {
+      if (loading || link !== older) return;
+      loading = true;
+      observer.unobserve(link);
+      list.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch(link.href, { headers: { Accept: 'text/html' } });
+        if (!response.ok) throw new Error(`${response.status} ${link.href}`);
+        const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const added: HTMLElement[] = [];
+        for (const release of page.querySelectorAll<HTMLElement>('[data-changelog] > [data-release]')) {
+          if (document.getElementById(release.id)) continue;
+          const copy = document.importNode(release, true);
+          list.append(copy);
+          added.push(copy);
+        }
+        const hadFocus = document.activeElement === link;
+        const next = page.querySelector<HTMLAnchorElement>('[data-changelog-older]');
+        if (next) {
+          const adopted = document.importNode(next, true);
+          link.replaceWith(adopted);
+          older = adopted;
+          observer.observe(adopted);
+        } else {
+          link.closest('[data-changelog-more]')?.remove();
+          older = null;
+          observer.disconnect();
+        }
+        if (hadFocus) {
+          const first = added[0];
+          if (first) {
+            first.tabIndex = -1;
+            first.focus();
+          } else {
+            older?.focus();
+          }
+        }
+        if (status) status.textContent = loadedMessage(added, !next);
+        failures = 0;
+      } catch {
+        // The link stays a plain link; look again later, a few times.
+        const delay = RETRY_DELAYS_MS[failures];
+        failures += 1;
+        if (delay !== undefined) {
+          setTimeout(() => {
+            if (older === link) observer.observe(link);
+          }, delay);
+        }
+      } finally {
+        list.removeAttribute('aria-busy');
+        loading = false;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (changes) => {
+        for (const change of changes) {
+          if (change.isIntersecting) void loadOlder(change.target as HTMLAnchorElement);
+        }
+      },
+      { rootMargin: '0px 0px 1200px 0px' },
+    );
+    observer.observe(older);
+  }
+</script>
+
+<style>
+  .changelog {
+    padding-top: 64px;
+  }
+
+  .head {
+    max-width: 820px;
+  }
+
+  .newer {
+    margin-top: 16px;
+  }
+
+  .newer a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .releases {
+    margin-top: 48px;
+  }
+
+  /* One release: version and date beside its notes on wide screens. */
+  .release {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 72ch);
+    gap: 16px 56px;
+    align-items: start;
+    padding-block: 40px;
+    border-top: 1px solid var(--line);
+  }
+
+  /* Focused only by the infinite scroll, for keyboard and screen reader users. */
+  .release:focus {
+    outline: none;
+  }
+
+  .release h2 {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .release-meta {
+    display: block;
+    margin-top: 6px;
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  /* The release's own headings (Added, Changed, Fixed, Removed) as labels. */
+  .release :global(.prose h3) {
+    margin-top: 32px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+  }
+
+  .release :global(.prose h3 + :is(ul, ol, p)) {
+    margin-top: 12px;
+  }
+
+  /* Where browsers can tie an animation to scrolling, the version and date
+     stay in view beside a long release and fade out as its end nears the
+     site header, before the release's bottom pushes them up underneath it.
+     Elsewhere they scroll with the release. */
+  @media (min-width: 901px) {
+    @supports (animation-timeline: view()) {
+      .release {
+        view-timeline: --release block;
+        view-timeline-inset: calc(var(--header-h) + 24px) 0px;
+      }
+
+      .release-head {
+        position: sticky;
+        top: calc(var(--header-h) + 24px);
+        animation: changelog-release-head-out linear both;
+      }
+
+      /* A rule of its own: the animation shorthand resets the timeline and
+         range, and the CSS minifier would fold them into it. `cover 100%` is
+         the release's bottom edge at the sticky line; the head (about 55px)
+         sits 40px of padding above that edge, so it has faded out by the time
+         the edge starts pushing it up. */
+      .release > .release-head {
+        animation-timeline: --release;
+        animation-range: cover calc(100% - 180px) cover calc(100% - 100px);
+      }
+    }
+  }
+
+  @keyframes changelog-release-head-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  .older {
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+
+  @media (max-width: 900px) {
+    .release {
+      grid-template-columns: minmax(0, 1fr);
+      padding-block: 32px;
+    }
+  }
+</style>

@@ -1,0 +1,272 @@
+---
+// Decorative HTML/CSS recreation of Waycar's CarPlay screen (dark mode):
+// the CarPlay dock on the left and the CPListTemplate built by
+// CarPlayTemplateCoordinator.swift `sections` (Talk, need you, Working).
+// Shared by page A's CarPlay.astro and page B's OnTheDrive.astro. Everything
+// sizes in cqw so the whole display scales down as one landscape screen.
+---
+
+<div class="cp" aria-hidden="true">
+  <div class="screen">
+    <div class="dock">
+      <span class="time">6:01</span>
+      <span class="signal">
+        <svg viewBox="0 0 16 10"><rect x="0" y="7" width="3" height="3" rx="0.6" /><rect x="4.3" y="5" width="3" height="5" rx="0.6" /><rect x="8.6" y="2.5" width="3" height="7.5" rx="0.6" /><rect x="12.9" y="0" width="3" height="10" rx="0.6" /></svg>
+        5G
+      </span>
+      <svg class="battery" viewBox="0 0 24 11"><rect x="0.6" y="0.6" width="20.5" height="9.8" rx="2.6" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.1" /><rect x="2.2" y="2.2" width="14" height="6.6" rx="1.4" /><rect x="22" y="3.6" width="1.6" height="3.8" rx="0.8" fill-opacity="0.45" /></svg>
+      <span class="green"></span>
+      <!-- Stand-in app art (roads, pin, player glyph), not brand values. -->
+      <span class="app maps">
+        <svg viewBox="0 0 40 40"><path d="M-2 26 L42 12" stroke="rgb(255 255 255 / 0.85)" stroke-width="3.5" /><path d="M14 -2 L22 42" stroke="rgb(255 214 90 / 0.9)" stroke-width="3" /><path d="M27 10 l5 12 -5 -3 -5 3 z" fill="rgb(255 255 255)" /></svg>
+      </span>
+      <span class="app music">
+        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="11" fill="none" stroke="rgb(255 255 255)" stroke-width="2.6" /><path d="M17 15 L25.5 20 L17 25 z" fill="rgb(255 255 255)" /></svg>
+      </span>
+      <img class="app waycar" src="/icon-192.png" alt="" width="192" height="192" decoding="async" />
+      <svg class="library" viewBox="0 0 14 14"><circle cx="2" cy="2" r="1.5" /><circle cx="7" cy="2" r="1.5" /><circle cx="12" cy="2" r="1.5" /><circle cx="2" cy="7" r="1.5" /><circle cx="7" cy="7" r="1.5" /><circle cx="12" cy="7" r="1.5" /><circle cx="2" cy="12" r="1.5" /><circle cx="7" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /></svg>
+    </div>
+
+    <div class="list">
+      <p class="title">Waycar</p>
+
+      <div class="row">
+        <span class="icon talk">
+          <svg viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 10.5v3" /><path d="M7 7v10" /><path d="M11 4v16" /><path d="M15 8v8" /><path d="M19 10v4" /></g></svg>
+        </span>
+        <span class="text"><span class="name">Talk to Waycar</span></span>
+      </div>
+
+      <p class="header">2 need you</p>
+      <div class="row">
+        <span class="icon blocked">
+          <svg viewBox="0 0 24 24"><path d="M8 13V7.5a1.2 1.2 0 0 1 2.4 0V12m0-5.5V5.6a1.2 1.2 0 0 1 2.4 0V12m0-5.6a1.2 1.2 0 0 1 2.4 0V12m0-3.6a1.2 1.2 0 0 1 2.4 0v5.4c0 3.4-2.2 5.7-5.3 5.7-2.3 0-3.6-1-4.8-2.8L5.4 13.6a1.2 1.2 0 0 1 2-1.4L8 13" fill="currentColor" stroke="currentColor" stroke-width="0.6" stroke-linejoin="round" /></svg>
+        </span>
+        <span class="text"><span class="name">api · Claude Code</span><span class="detail">Blocked · 2m</span></span>
+      </div>
+      <div class="row">
+        <span class="icon done">
+          <svg viewBox="0 0 24 24"><path d="M6.5 12.5l3.6 3.6 7.4-8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </span>
+        <span class="text"><span class="name">web · Codex</span><span class="detail">Done · now</span></span>
+      </div>
+
+      <p class="header">Working</p>
+      <div class="row">
+        <span class="icon working">
+          <svg viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 4.5v3" /><path d="M12 16.5v3" opacity="0.4" /><path d="M4.5 12h3" opacity="0.55" /><path d="M16.5 12h3" opacity="0.85" /><path d="M6.7 6.7l2.1 2.1" opacity="0.7" /><path d="M15.2 15.2l2.1 2.1" opacity="0.45" /><path d="M6.7 17.3l2.1-2.1" opacity="0.5" /><path d="M15.2 8.8l2.1-2.1" opacity="0.95" /></g></svg>
+        </span>
+        <span class="text"><span class="name">infra · OMP</span><span class="detail">Working</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cp {
+    container-type: inline-size;
+    width: 100%;
+  }
+
+  /* Car display: CarPlay's dark-mode gray-blue wallpaper tone (system chrome, not a brand color).
+     The rgb() grays in this file are neutral CarPlay system chrome, not brand values. */
+  .screen {
+    display: flex;
+    gap: 2.4cqw;
+    aspect-ratio: 2 / 1;
+    padding: 1.6cqw 2.4cqw 1.6cqw 1.6cqw;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    color: var(--white);
+    background: linear-gradient(135deg, rgb(98 106 124), rgb(64 70 86));
+    border: 0.9cqw solid var(--ink);
+    border-radius: 3.2cqw;
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 30px 80px -40px rgb(var(--black-rgb) / 0.9);
+  }
+
+  .dock {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.1cqw;
+    width: 10.5cqw;
+    padding: 1.6cqw 0 1.8cqw;
+    background: rgb(255 255 255 / 0.12); /* CarPlay dock: translucent system gray. */
+    border: 1px solid rgb(255 255 255 / 0.16);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 3cqw;
+  }
+
+  .time {
+    padding: 0.35cqw 1.2cqw;
+    font-size: 2cqw;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--black);
+    background: var(--warn);
+    border-radius: 99px;
+  }
+
+  .signal {
+    display: flex;
+    align-items: center;
+    gap: 0.5cqw;
+    font-size: 1.6cqw;
+    font-weight: 600;
+  }
+
+  .signal svg {
+    width: 2.2cqw;
+    fill: currentColor;
+  }
+
+  .battery {
+    width: 3.2cqw;
+    fill: currentColor;
+    color: var(--white);
+  }
+
+  .green {
+    width: 0.9cqw;
+    height: 0.9cqw;
+    background: var(--done);
+    border-radius: 50%;
+  }
+
+  .app {
+    display: block;
+    flex: none;
+    width: 6.6cqw;
+    height: 6.6cqw;
+    overflow: hidden;
+    border-radius: 1.6cqw;
+  }
+
+  img.app {
+    max-width: none;
+    object-fit: cover;
+  }
+
+  .app svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Generic map and audio app stand-ins: neutral map greens/blues and a red player. */
+  .maps {
+    background: linear-gradient(140deg, rgb(120 196 132), rgb(92 160 214));
+  }
+
+  .music {
+    background: linear-gradient(160deg, rgb(255 92 104), rgb(222 42 62));
+  }
+
+  .library {
+    width: 2.6cqw;
+    margin-top: auto;
+    fill: rgb(var(--white-rgb) / 0.85);
+  }
+
+  .list {
+    flex: 1;
+    min-width: 0;
+    padding-top: 1.4cqw;
+  }
+
+  .title {
+    margin: 0 0 1.2cqw;
+    font-size: 4.6cqw;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .header {
+    margin: 1.4cqw 0 0.4cqw;
+    font-size: 1.9cqw;
+    font-weight: 600;
+    color: rgb(255 255 255 / 0.6); /* CarPlay section header gray. */
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 2cqw;
+  }
+
+  .icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 4.6cqw;
+    height: 4.6cqw;
+    /* Decorative: one light status circle with a dark mark per row. The app
+       draws Done as `checkmark.circle.fill` (looks like this) but Blocked and
+       Working as bare tinted symbols; the circle keeps the three rows alike. */
+    color: var(--bg);
+    border-radius: 50%;
+  }
+
+  .icon svg {
+    width: 64%;
+    height: 64%;
+  }
+
+  .talk {
+    color: var(--white);
+    background: transparent;
+  }
+
+  .talk svg {
+    width: 90%;
+    height: 90%;
+  }
+
+  .blocked {
+    background: var(--blocked);
+  }
+
+  .done {
+    background: var(--done);
+  }
+
+  .working {
+    color: var(--bg);
+    background: var(--working);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3cqw;
+    min-width: 0;
+    min-height: 7cqw;
+    border-bottom: 1px solid rgb(255 255 255 / 0.25); /* CarPlay row separator. */
+  }
+
+  .row:last-child .text {
+    border-bottom: 0;
+  }
+
+  .name {
+    font-size: 2.7cqw;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .detail {
+    font-size: 2.1cqw;
+    line-height: 1.2;
+    color: rgb(255 255 255 / 0.7); /* CarPlay secondary label gray. */
+  }
+</style>

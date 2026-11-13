@@ -1,0 +1,72 @@
+{
+ "exchanges": {
+  "hello": [
+   {
+    "reply_raw": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"e64528f74c3fa8a72bfe141096128536\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}",
+    "request": {
+     "id": 1,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {}
+    }
+   },
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"e64528f74c3fa8a72bfe141096128536\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {
+      "generation": 1
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"this core speaks generation 1\",\"kind\":\"unsupported_generation\"},\"message\":\"protocol generation 2 not supported\"},\"id\":3,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {
+      "generation": 2
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"invalid type: string \\\"yes\\\", expected a boolean\"},\"id\":4,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {
+      "framed": "yes"
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"e64528f74c3fa8a72bfe141096128536\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {
+      "bogus": 1
+     }
+    }
+   },
+   {
+    "reply_raw": "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"e64528f74c3fa8a72bfe141096128536\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "hello",
+     "params": {
+      "framed": false,
+      "generation": 1
+     }
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout)."
+}

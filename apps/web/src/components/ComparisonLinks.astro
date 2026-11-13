@@ -1,0 +1,29 @@
+---
+// Product names as links to their comparisons, in a sentence: "A, B and C".
+import { comparePath, type Comparison } from '../lib/compare';
+
+interface Props {
+  entries: Comparison[];
+  /** The word before the last name. */
+  join: 'and' | 'or';
+}
+
+const { entries, join } = Astro.props;
+---
+
+{
+  entries.map((entry, index) => (
+    <Fragment>
+      {index > 0 && (index === entries.length - 1 ? ` ${join} ` : ', ')}
+      <a href={comparePath(entry.id)}>{entry.data.name}</a>
+    </Fragment>
+  ))
+}
+
+<style>
+  a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

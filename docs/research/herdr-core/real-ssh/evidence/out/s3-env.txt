@@ -1,0 +1,42 @@
+### login PATH probes
+ssh exec PATH     : /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+bash -lc          : /home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+$SHELL -lc        : /home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+sh -lc            : /home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+bash -ilc         : /home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+### A: core first started by ssh exec 'herdr-core server status' (ssh default PATH)
+(no core/holder processes)
+hc: no systemd user manager here: the core ends with whatever started it
+{"core":{"id":"26ff9e2f10201aba107c920e4fc9b643","name":"d04c52cfe1fc"},"finished":0,"holder":null,"holders":[],"installed_by":null,"live":0,"pid":1076,"uptime_ms":6,"version":"0.1.14"}
+exit=0
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin SHELL=/bin/bash HOME=/home/waycar PWD=/home/waycar
+HC_SCOPE=25284191-7720d398db5f90b785004685b809b0db
+HC_TERMINAL_ID=t1
+HC_TERMINAL_SOCKET=/home/waycar/.local/state/herdr-core/default/default.sock
+LANG=C.UTF-8
+LOGNAME=waycar
+TERM=xterm-256color
+TERM_PROGRAM=ghostty
+USER=waycar
+### B: core first started by the connect line WITHOUT a PATH export (hc's own line)
+(no core/holder processes)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin SHELL=/bin/bash HOME=/home/waycar PWD=/home/waycar
+HC_SCOPE=25284358-148c0e95c10150f427527bda458a06b3
+HC_TERMINAL_ID=t1
+HC_TERMINAL_SOCKET=/home/waycar/.local/state/herdr-core/default/default.sock
+LANG=C.UTF-8
+LOGNAME=waycar
+TERM=xterm-256color
+TERM_PROGRAM=ghostty
+USER=waycar
+### C: core first started by the design's connect line exporting the login PATH: /home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+(no core/holder processes)
+PATH=/home/waycar/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin SHELL=/bin/bash HOME=/home/waycar PWD=/home/waycar
+HC_SCOPE=25284508-330bee8d31a6c530550391893c8ffc0c
+HC_TERMINAL_ID=t1
+HC_TERMINAL_SOCKET=/home/waycar/.local/state/herdr-core/default/default.sock
+LANG=C.UTF-8
+LOGNAME=waycar
+TERM=xterm-256color
+TERM_PROGRAM=ghostty
+USER=waycar

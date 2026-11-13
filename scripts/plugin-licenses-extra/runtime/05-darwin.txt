@@ -1,0 +1,3 @@
+Darwin system libraries
+
+The macOS targets link libSystem dynamically; no Apple system library is redistributed.

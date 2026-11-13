@@ -1,0 +1,528 @@
+name: Waycar
+options:
+  bundleIdPrefix: com.otreva
+  deploymentTarget:
+    iOS: "18.0"
+    watchOS: "11.0"
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: "2.42.0"
+
+settings:
+  base:
+    # Swift 6 language mode implies complete strict concurrency checking.
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: 5NWMRTN5BA
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  # Repository-local package owning the libssh2/OpenSSL implementation and
+  # checked-in native artifacts. The one SSH backend (ADR 0011).
+  WaycarSSH:
+    path: Packages/WaycarSSH
+  # Repository-local copy of swift-mosh (MIT, pure Swift): the mosh (UDP)
+  # client protocol, vendored with Waycar's patches (PROVENANCE.md). The SSH
+  # connection bootstraps mosh-server; the session itself runs over UDP.
+  SwiftMosh:
+    path: Packages/SwiftMosh
+  # Repository-local copy of libghostty-spm 1.6.20260909 (7e45d27, MIT): the
+  # Swift/UIKit terminal layer, vendored with Waycar's patches (PROVENANCE.md,
+  # ADR 0022). The native core is Waycar's libintl-free build of Ghostty
+  # 82938b633ba6 (otreva/ghosttykit, 1.6.20260909-82938b6-nointl.1), verified
+  # against the SwiftPM checksum in Packages/GhosttyTerminal/Package.swift.
+  GhosttyTerminal:
+    path: Packages/GhosttyTerminal
+
+  # Anonymous product analytics (PRIVACY.md): the official PostHog iOS SDK,
+  # pinned exactly. App target only; the extensions never link it, and only
+  # `Sources/Waycar/Analytics` imports it (the UI sees the `Analytics` protocol).
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    exactVersion: 3.85.0
+
+  # On-device neural speech for CarPlay's Natural voice (beta,
+  # docs/design/carplay.md §5 TTS): Kokoro-82M through FluidAudio's Core ML
+  # pipeline (Apache-2.0; no espeak or other GPL code). Pinned exactly; its
+  # floor is iOS 17, below ours. App target only; only `Sources/Waycar/Voice`
+  # imports it, and the model is downloaded in Settings, never bundled.
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio
+    exactVersion: 0.17.7
+
+targets:
+  Waycar:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Waycar
+        excludes:
+          # Bundled as a folder reference below so notice files stay under
+          # Notices/ in the app bundle rather than flattening to the root.
+          - Resources/Notices
+      # Notification code shared with the service extension: envelope
+      # decryption, Notification Key store, alert renderer (ADR 0008).
+      - Sources/WaycarNotificationCore
+      # Live Activity attributes + details envelope (shared with WaycarWidgets).
+      - Sources/WaycarActivityCore
+      # Apple Watch wire types, outbox, and silence detector, shared with the
+      # WaycarWatch app (ADR 0029). The app is the watch's bridge to its Hosts.
+      - Sources/WaycarWatchCore
+      # Widget views double-included so Xcode can host their #Preview gallery
+      # in the app target (plain previews are unsupported inside app-extension
+      # targets); the @main WidgetBundle stays extension-only.
+      - Sources/WaycarWidgets/AgentLiveActivityWidget.swift
+      - Sources/WaycarWidgets/AgentActivityDecryptor.swift
+      - Sources/WaycarWidgets/AgentActivityProgressViews.swift
+      # Audited third-party notices + inventory.json (#161). Folder reference
+      # preserves the Notices/ subdirectory the catalogue resolves against.
+      - path: Sources/Waycar/Resources/Notices
+        type: folder
+        buildPhase: resources
+      # In-app Help (#161): the waycar.dev help pages + categories.json,
+      # bundled as help/ so the app reads the same Markdown the site serves.
+      - path: apps/web/src/content/help
+        type: folder
+        buildPhase: resources
+      # Settings › About › Changelog: one Markdown file per release (the
+      # files waycar.dev/changelog renders), bundled as changelog/, plus the
+      # root CHANGELOG.md for its [Unreleased] section.
+      - path: apps/web/src/content/changelog
+        type: folder
+        buildPhase: resources
+      - path: CHANGELOG.md
+        type: file
+        buildPhase: resources
+    info:
+      path: Sources/Waycar/Info.plist
+      properties:
+        # XcodeGen would otherwise hardcode 1.0/1 here, and a file value wins
+        # over the generated one; keep both versions on the build settings.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # A dragged Console row carries this activity; iPadOS creates a new
+        # window from it only for a declared type. The scene manifest
+        # below declares multiple-scene support.
+        NSUserActivityTypes:
+          - com.otreva.waycar.agent
+        # mosh's UDP client dials LAN addresses directly; without the local
+        # network declaration iOS silently drops those datagrams (#mosh).
+        NSLocalNetworkUsageDescription: "Waycar connects to your machines on the local network over SSH and mosh. mosh keeps terminals alive across network changes and sleep."
+        # Copies our Reddit install-validation postbacks to Singular, our
+        # measurement vendor (PRIVACY.md "SKAdNetwork attribution"), per
+        # Singular's own doc:
+        # https://support.singular.net/hc/en-us/articles/4405749380379-How-to-Send-SKAdNetwork-AdAttributionKit-Postbacks-to-Singular
+        # Two keys: one per framework, since each is a separate opt-in
+        # (Apple "Configuring an advertised app", both StoreKit and
+        # AdAttributionKit versions) — whichever framework signs Reddit's
+        # ad, Singular gets a copy.
+        NSAdvertisingAttributionReportEndpoint: "https://singular-bi.net"
+        AttributionCopyEndpoint: "https://singular-bi.net"
+        # Touch and hold the app icon › New Chat (QuickAction.newChatType).
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: com.otreva.waycar.new-chat
+            UIApplicationShortcutItemTitle: New Chat
+            UIApplicationShortcutItemIconSymbolName: square.and.pencil
+        # The scene manifest, written out rather than generated: CarPlay
+        # connects a template scene only to an app whose Info.plist declares
+        # one, and the generated manifest has no build setting for it. The
+        # window role needs no entry; SwiftUI configures its own scenes
+        # (PushRegistrationDelegate picks each role's delegate).
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneClassName: CPTemplateApplicationScene
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
+    entitlements:
+      path: Sources/Waycar/Waycar.entitlements
+      properties:
+        # Waycar in CarPlay as a voice-based conversational app
+        # (docs/design/carplay.md), granted by Apple as a managed capability.
+        com.apple.developer.carplay-voice-based-conversation: true
+        # Development here covers Debug/local device builds (sandbox APNs);
+        # App Store / TestFlight re-signing flips it to production, so the
+        # APNs environment follows the build configuration (#71).
+        aps-environment: development
+        # Shared with the Notification Service Extension; doubles as the
+        # Keychain access group holding the Notification Keys.
+        com.apple.security.application-groups:
+          - group.com.otreva.waycar.shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar
+        # Home-screen name; the App Store listing is "Waycar".
+        INFOPLIST_KEY_CFBundleDisplayName: Waycar
+        # Settings › App Icon (AppIconOption). Every name is an .icon bundle
+        # under Sources/Waycar/AppIcons, written by scripts/generate-app-icons.py.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIconCaboosePhosphor AppIconCabooseTomato AppIconCabooseSignal AppIconCabooseCobalt AppIconCabooseMono AppIconCabooseBlack AppIconCabooseTeal AppIconPromptPhosphor AppIconPromptAmber AppIconPromptMono AppIconPromptBlack AppIconPromptCoral"
+        # Brand violet for Color.accentColor and prominent buttons: the
+        # Sources/Waycar/Design/Brand.xcassets colorset scripts/generate-brand-tokens.py writes.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "167"
+        # Scan to Pair (#62) reads the Pairing Code QR from the computer screen.
+        INFOPLIST_KEY_NSCameraUsageDescription: "Waycar uses the camera to scan the Pairing Code shown on your computer, so you can add that machine without typing anything."
+        # Composer Dictation captures the microphone and transcribes on device
+        # with the system's SpeechAnalyzer models; no speech-recognition key:
+        # SpeechAnalyzer needs no SFSpeechRecognizer authorization. CarPlay
+        # voice uses it too, but the string names no CarPlay: an iPad, which
+        # never connects to CarPlay, shows the same prompt.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Waycar uses the microphone when you tap Dictate or talk to your Agents out loud, turning your speech into messages and answers for them. Speech is transcribed on this device and never leaves it."
+        # Quick Look's share menu offers Save Image / Save Video for chat media
+        # and terminal file previews; saving needs the add-only purpose string.
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Waycar saves an image or video to your photo library when you choose Save Image or Save Video in the share menu."
+        # Only exempt encryption is used (standard SSH algorithms via the
+        # WaycarSSH package's libssh2/OpenSSL, mosh's AES-128-OCB via the
+        # SwiftMosh package over CommonCrypto, OS-provided CryptoKit);
+        # declaring it here keeps every TestFlight upload from stalling on the
+        # Missing Compliance prompt.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        # iPhone and iPad. App Store Connect derives device support from the build.
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # ActivityKit starts Live Activities from the app; WaycarWidgets renders them.
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
+        # Admin panel (Settings › Admin, ADR 0032). Empty here, so a plain
+        # `make archive` (what `make publish` runs) compiles it out; interim
+        # TestFlight archives pass WAYCAR_ADMIN_CONDITION=WAYCAR_ADMIN
+        # (`make testflight`, the CI TestFlight workflow). Debug has DEBUG.
+        WAYCAR_ADMIN_CONDITION: ""
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) $(WAYCAR_ADMIN_CONDITION)"
+    postBuildScripts:
+      - name: Remove unused LuxTTS resources
+        # License-audit LuxTTS finding: Waycar never loads LuxTTS. Strip only
+        # its two G2P data files, after resource copying and before signing.
+        # Re-audit on FluidAudio upgrades; absent files are OK on rebuilds.
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/Waycar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle
+        outputFiles:
+          # codesign opens Info.plist for writing even when its bytes stay unchanged.
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/Info.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/luxtts_en_us_lexicon.tsv.zz
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/luxtts_en_us_g2p_aux.json
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/_CodeSignature
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/_CodeSignature/CodeResources
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/_CodeSignature/CodeDirectory
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/_CodeSignature/CodeRequirements
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FluidAudio_FluidAudio.bundle/_CodeSignature/CodeSignature
+        script: |
+          set -eu
+          bundle="$SCRIPT_INPUT_FILE_1"
+          had_signature=no
+          if [ -d "$bundle/_CodeSignature" ]; then had_signature=yes; fi
+          /usr/bin/python3 - "$SCRIPT_INPUT_FILE_0" "$SCRIPT_INPUT_FILE_1" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          pins = json.loads(pathlib.Path(sys.argv[1]).read_text())["pins"]
+          fluid = next(pin for pin in pins if pin["identity"] == "fluidaudio")
+          if fluid["state"]["revision"] != "503b4bd1bbf7220882de39fe8ae6716aae4132da":
+              sys.exit("error: FluidAudio changed; re-audit the LuxTTS resource exclusions")
+          bundle = pathlib.Path(sys.argv[2])
+          if not bundle.is_dir():
+              sys.exit("error: FluidAudio resource bundle is missing")
+          for name in ("luxtts_en_us_lexicon.tsv.zz", "luxtts_en_us_g2p_aux.json"):
+              (bundle / name).unlink(missing_ok=True)
+          PY
+          # SwiftPM may have signed the bundle before copying it into the app.
+          if [ "$had_signature" = yes ]; then
+            identity="${EXPANDED_CODE_SIGN_IDENTITY:-}"
+            if [ -z "$identity" ] || [ "${CODE_SIGNING_REQUIRED:-YES}" = NO ] || [ "${CODE_SIGNING_ALLOWED:-YES}" = NO ]; then
+              identity=-
+            fi
+            /usr/bin/codesign --force --sign "$identity" --timestamp=none "$bundle"
+            /usr/bin/codesign --verify --strict "$bundle"
+          fi
+    dependencies:
+      - package: WaycarSSH
+      - package: SwiftMosh
+        product: MoshCore
+      - package: GhosttyTerminal
+      - package: GhosttyTerminal
+        product: GhosttyTheme
+      - package: PostHog
+      - package: FluidAudio
+      - target: WaycarNotificationService
+      - target: WaycarWidgets
+      # The Apple Watch companion. XcodeGen embeds a watchOS application
+      # dependency into $(CONTENTS_FOLDER_PATH)/Watch ("Embed Watch Content").
+      - target: WaycarWatch
+      - sdk: WatchConnectivity.framework
+
+  # Decrypts Agent Notifications before display (ADR 0008, #71). A thin
+  # shell: the logic lives in WaycarNotificationCore, tested from the app
+  # suite. The extension cannot link the app, so the shared sources (and the
+  # few app files they lean on) are compiled in directly.
+  WaycarNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/WaycarNotificationService
+      - Sources/WaycarNotificationCore
+      - Sources/Waycar/Support/Base64URL.swift
+      - Sources/Waycar/Transport/SecretStore.swift
+      # For AgentStatus; Foundation-only by construction (JSONValue is the
+      # generated file's one in-repo dependency).
+      - Sources/Waycar/Transport/Generated/HerdrAPITypes.swift
+      - Sources/Waycar/Transport/JSONValue.swift
+    entitlements:
+      path: Sources/WaycarNotificationService/WaycarNotificationService.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.otreva.waycar.shared
+    info:
+      path: Sources/WaycarNotificationService/Info.plist
+      properties:
+        # An app extension's versions must match its containing app's, or
+        # App Store validation rejects the bundle. XcodeGen would otherwise
+        # hardcode its own 1.0/1 defaults here; point at the build settings
+        # so both bundles stay in lockstep.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # App Store validation (code 90360) requires a display name on
+        # every embedded appex; never user-visible for this extension.
+        CFBundleDisplayName: Waycar Notification Service
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.NotificationService
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "167"
+        # Match the containing app's iPhone and iPad device family.
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Lock-screen / Dynamic Island Live Activity (docs/agents/live-activity-contract.md).
+  # Thin WidgetKit shell: attributes, envelope open, and Notification Key
+  # selection live in WaycarActivityCore / WaycarNotificationCore, compiled
+  # in the same way as the notification service extension (the appex cannot
+  # link the app). @main is the WidgetBundle; there is no principal class.
+  WaycarWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/WaycarWidgets
+      - Sources/WaycarActivityCore
+      - Sources/WaycarNotificationCore
+      - Sources/Waycar/Support/Base64URL.swift
+      - Sources/Waycar/Transport/SecretStore.swift
+      # For AgentStatus; Foundation-only by construction (JSONValue is the
+      # generated file's one in-repo dependency). NotificationEnvelope in
+      # WaycarNotificationCore needs it.
+      - Sources/Waycar/Transport/Generated/HerdrAPITypes.swift
+      - Sources/Waycar/Transport/JSONValue.swift
+      # Shared with the app Console; reads the generated StatusPaletteTokens
+      # (WaycarActivityCore), the single hex owner for status colors (#247).
+      - Sources/Waycar/Console/AgentStatusPalette.swift
+      # Foundation-only Agent progress estimate (#189), carried in the envelope.
+      - Sources/Waycar/Console/AgentProgress.swift
+    entitlements:
+      path: Sources/WaycarWidgets/WaycarWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.otreva.waycar.shared
+    info:
+      path: Sources/WaycarWidgets/Info.plist
+      properties:
+        # An app extension's versions must match its containing app's, or
+        # App Store validation rejects the bundle. XcodeGen would otherwise
+        # hardcode its own 1.0/1 defaults here; point at the build settings
+        # so both bundles stay in lockstep.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # App Store validation (code 90360) requires a display name on
+        # every embedded appex. Also the counts-only lock-screen fallback.
+        CFBundleDisplayName: Waycar
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.Widgets
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "167"
+        # Match the containing app's iPhone and iPad device family.
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Apple Watch companion (ADR 0029, docs/design/apple-watch-v0.md): a
+  # single-target SwiftUI watch app, embedded in Waycar. It holds no
+  # credentials and opens no connection of its own: every Host action goes
+  # through the iPhone over WatchConnectivity. It links no SSH, mosh, or
+  # terminal package, and no PostHog or FluidAudio.
+  WaycarWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - Sources/WaycarWatch
+      # Wire types, outbox, and silence detector, shared with the app.
+      - Sources/WaycarWatchCore
+      # Live Activity attributes (the Smart Stack launch key below), the
+      # status vocabulary, and StatusPaletteTokens. The details envelope
+      # stays out: the watch holds no Notification Keys.
+      - path: Sources/WaycarActivityCore
+        excludes:
+          - AgentActivityEnvelope.swift
+      # Notification category and action ids, shared with the app and the
+      # notification service extension.
+      - Sources/WaycarNotificationCore/AgentNotificationCategories.swift
+      # Foundation-only Agent progress estimate (#189): the watch's bar
+      # fraction, label, and spoken label (#199).
+      - Sources/Waycar/Console/AgentProgress.swift
+      # The state machine protocol (docs/design/state-machines.md), for the
+      # watch's machines in WaycarWatchCore and WaycarWatch.
+      - Sources/Waycar/Support/StateMachine.swift
+    info:
+      path: Sources/WaycarWatch/Resources/Info.plist
+      properties:
+        # The watch app's versions must match its containing app's, or App
+        # Store validation rejects the bundle; same lockstep as the appexes.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: Waycar
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.otreva.waycar
+        # Everything goes through the iPhone, so it ships with the iOS app.
+        WKRunsIndependentlyOfCompanionApp: false
+        # Voice messages record on the watch; the iPhone transcribes them.
+        NSMicrophoneUsageDescription: "Waycar uses the microphone when you record a voice message for an Agent. Your iPhone turns the recording into text on the device, then deletes it."
+        # "Supports Launch for Live Activity Attribute Types" (watchOS 11.1+;
+        # ignored on 11.0): tapping Waycar's Live Activity in the Smart Stack
+        # launches this app instead of a full-screen wrapper.
+        WKSupportsLiveActivityLaunchAttributeTypes:
+          - AgentActivityAttributes
+        # Handoff from an Agent screen to the iPhone (waycar://agent/...).
+        NSUserActivityTypes:
+          - com.otreva.waycar.agent
+        # waycar://agent/... links (Live Activity widgetURL, simctl openurl)
+        # reach the app's onOpenURL only for a registered scheme.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.otreva.waycar.watch
+            CFBundleURLSchemes:
+              - waycar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.watchkitapp
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "167"
+        TARGETED_DEVICE_FAMILY: "4"
+        # Sources/WaycarWatch/Resources/Assets.xcassets: the single-size icon,
+        # and the AccentColor colorset scripts/generate-brand-tokens.py writes.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - sdk: WatchConnectivity.framework
+      - sdk: AVFAudio.framework
+      - sdk: UserNotifications.framework
+      - sdk: WatchKit.framework
+
+  WaycarTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/WaycarTests
+      # Shared Pairing Code vectors (ADR 0007): the same file the Node plugin
+      # tests consume, bundled so the Swift tests cannot drift from it.
+      - path: plugin/test-vectors/pairing-code-v1.json
+        buildPhase: resources
+      # Shared notification envelope vectors (ADR 0008), same arrangement.
+      - path: plugin/test-vectors/notification-payload-v1.json
+        buildPhase: resources
+      # Shared Live Activity details envelope vectors, same arrangement.
+      - path: plugin/test-vectors/live-activity-content-v1.json
+        buildPhase: resources
+      # Shared sidebar layout snapshot vectors, consumed by Node and Swift.
+      - path: plugin/test-vectors/sidebar-layout-v1.json
+        buildPhase: resources
+      # Shared chat transcript reader vectors (Chat Mode), same arrangement.
+      - path: plugin/test-vectors/chat-transcript-v1.json
+        buildPhase: resources
+      # Shared tmux pane option vectors (tmux backend §4.6), same arrangement.
+      - path: plugin/test-vectors/tmux-pane-options-v1.json
+        buildPhase: resources
+      # Shared Zellij pane-state contract, consumed by Rust and Swift.
+      - path: plugin/test-vectors/zellij-pane-state-v1.json
+        buildPhase: resources
+      - path: plugin/test-vectors/agent-summary-store-v1.json
+        buildPhase: resources
+      # Shared harness launch vectors (issue #172): the argv/env/files each
+      # kind's launch builders produce, replayed by the lab suite.
+      - path: plugin/test-vectors/harness-launch-v1.json
+        buildPhase: resources
+      # Shared agent kind catalog, pinned against the plugin's kind lists.
+      - path: plugin/test-vectors/agent-kinds-v1.json
+        buildPhase: resources
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.tests
+    dependencies:
+      - target: Waycar
+      - package: WaycarSSH
+      - package: SwiftMosh
+        product: MoshCore
+      - package: GhosttyTerminal
+
+  # README screenshots: drives the app's DEBUG simulator demo composition
+  # (`--demo-screenshots`) and writes PNGs. Only `make screenshots` runs it;
+  # it is deliberately absent from the Waycar scheme's test action.
+  WaycarScreenshots:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/WaycarScreenshots
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.otreva.waycar.screenshots
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - target: Waycar
+
+schemes:
+  Waycar:
+    build:
+      targets:
+        Waycar: all
+    test:
+      targets:
+        - WaycarTests
+      # The only variable the app test process needs from the invoking shell.
+      # The fixture itself arrives through the Simulator's launchd environment
+      # as WAYCAR_SSH_E2E_CONFIG / WAYCAR_SSH_JUMP_E2E_CONFIG /
+      # WAYCAR_PAIRING_E2E_CONFIG, which must stay off this list: an entry here
+      # is forwarded unconditionally, substituting an empty string when the
+      # shell has not exported it, and would shadow the launchd value.
+      environmentVariables:
+        WAYCAR_SSH_E2E_REQUIRED: $(WAYCAR_SSH_E2E_REQUIRED)
+    run:
+      config: Debug
+
+  WaycarScreenshots:
+    build:
+      targets:
+        Waycar: all
+    test:
+      config: Debug
+      targets:
+        - WaycarScreenshots
+      environmentVariables:
+        WAYCAR_SCREENSHOT_DIR: $(WAYCAR_SCREENSHOT_DIR)
+
+  # Runs the watch app on its own in a watch simulator. Tick the demo
+  # argument in the scheme editor for the design's sample data (DEBUG only).
+  WaycarWatch:
+    build:
+      targets:
+        WaycarWatch: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "-WaycarWatchDemo YES": false

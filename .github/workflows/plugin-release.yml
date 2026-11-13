@@ -1,0 +1,101 @@
+# Publish a GitHub release for each new plugin version.
+#
+# On a push to main that touches plugin/, package the plugin with
+# scripts/package-plugin.sh (the same script the waycar.dev build runs) and,
+# when no `plugin-v<version>` release exists yet, create it with the four
+# per-target tarballs, their checksums and the rendered install.sh attached.
+# Users install from
+# https://waycar.dev/install.sh (deployed by web.yml on the same push); the
+# release is the versioned record.
+#
+# Bump `version` in plugin/herdr-plugin.toml, plugin/Cargo.toml and the
+# `waycar` entry of plugin/Cargo.lock together to cut a new release; pushes
+# without a bump are no-ops here.
+#
+# The plugin version guard (scripts/check-plugin-version.sh, see ci-node.yml)
+# runs first in its own read-only job, so a shipped-file change under an
+# already released version fails here instead of being tagged.
+
+name: Plugin release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - plugin/**
+      - scripts/package-plugin.sh
+      - scripts/build-plugin-binaries.sh
+      - scripts/ci/provision-plugin-build.sh
+      - .github/workflows/plugin-release.yml
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Full history brings the plugin-v* tags and the baseline (the push's
+  # previous commit); the read-only token lets the script ask origin for a
+  # tag missing locally.
+  plugin-version:
+    name: Plugin version guard
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check plugin version and release guard
+        run: sh scripts/check-plugin-version.sh
+        env:
+          PLUGIN_BASE: ${{ github.event.before }}
+
+  release:
+    name: Release
+    needs: plugin-version
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # ci-node.yml's plugin-rust runs the same tests on a pull request; this
+      # push-to-main release has no `needs` on that workflow, so it tests the
+      # crate itself before it tags anything.
+      - name: Provision the toolchain
+        run: sh scripts/ci/provision-plugin-build.sh --github
+
+      - name: Test plugin
+        working-directory: plugin
+        run: cargo test --locked
+
+      - name: Package
+        run: sh scripts/package-plugin.sh "$RUNNER_TEMP/plugin-dist"
+
+      - name: The packages carry no Node
+        run: sh scripts/ci/package-clean-check.sh "$RUNNER_TEMP/plugin-dist"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' plugin/herdr-plugin.toml)
+          tag="plugin-v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already released; nothing to do"
+            exit 0
+          fi
+          dist="$RUNNER_TEMP/plugin-dist"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "Waycar plugin $version" \
+            --notes "Install or update: \`curl -fsSL https://waycar.dev/install.sh | sh\`" \
+            "$dist"/plugin/waycar-"$version"-*.tar.gz \
+            "$dist"/plugin/waycar-"$version"-*.tar.gz.sha256 \
+            "$dist/install.sh"

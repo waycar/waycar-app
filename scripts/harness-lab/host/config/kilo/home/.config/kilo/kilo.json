@@ -1,0 +1,23 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "model": "mock/mock-model",
+  "small_model": "mock/mock-model",
+  "autoupdate": false,
+  "share": "disabled",
+  "permission": {
+    "external_directory": { "/tmp/*": "allow" }
+  },
+  "provider": {
+    "mock": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Waycar harness lab mock",
+      "options": {
+        "baseURL": "http://mock:8080/v1",
+        "apiKey": "waycar-lab-dummy-key"
+      },
+      "models": {
+        "mock-model": { "name": "mock-model" }
+      }
+    }
+  }
+}

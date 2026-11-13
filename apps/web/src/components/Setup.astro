@@ -1,0 +1,146 @@
+---
+import AppStoreCta from './AppStoreCta.astro';
+import CodeBlock from './CodeBlock.astro';
+
+const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
+
+const requirements = [
+  'iOS / iPadOS 18+',
+  'Android: coming soon',
+  'herdr ≥ 0.7.5',
+  'or tmux ≥ 3.2',
+  'No Node needed on the Host',
+  'OpenSSH · streamlocal on, for herdr',
+  'macOS: Remote Login on',
+  'mosh-server + UDP, for mosh',
+];
+---
+
+<section id="setup" class="section" aria-labelledby="setup-title">
+  <div class="wrap setup-grid">
+    <div>
+      <span class="kicker">Setup</span>
+      <h2 id="setup-title" class="sec-title">Get the app. Run one command. <span class="muted">Scan.</span></h2>
+      <ol class="steps">
+        <li>
+          <div>
+            <h3>Get Waycar</h3>
+            <div class="line">
+              <AppStoreCta kind="text" ct="site-closing">Get Waycar</AppStoreCta>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Install on your Mac or Linux box</h3>
+            <p>Works with herdr, tmux, or both.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Scan the code</h3>
+            <p>Say yes to show a QR, then scan it in Waycar. Run it again to pair another device.</p>
+          </div>
+        </li>
+      </ol>
+      <ul class="reqs" aria-label="Requirements">
+        {requirements.map((item) => <li>{item}</li>)}
+      </ul>
+    </div>
+
+    <div class="term-col" data-ph-copy-event="install_command_copied">
+      <CodeBlock
+        title="you@studio-mac — zsh"
+        label="Command to install Waycar for herdr or tmux"
+        copy={installCmd}
+        lines={[
+          { kind: 'cmd', text: installCmd, arg: 'https://waycar.dev/install.sh' },
+          { kind: 'comment', text: '# answer Y to show a pairing QR' },
+        ]}
+      />
+    </div>
+  </div>
+</section>
+
+<style>
+  .setup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    gap: 56px;
+    align-items: center;
+  }
+
+  .steps {
+    display: grid;
+    gap: 22px;
+    margin-top: 36px;
+    counter-reset: s;
+  }
+
+  .steps li {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    counter-increment: s;
+  }
+
+  .steps li::before {
+    content: counter(s);
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    font: 600 13px var(--font-mono);
+    color: var(--text);
+    background: rgb(var(--white-rgb) / 0.03);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+  }
+
+  h3 {
+    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .steps p,
+  .steps .line {
+    margin-top: 4px;
+    font-size: 14.5px;
+    color: var(--text-2);
+  }
+
+  .steps a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .reqs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 32px;
+  }
+
+  .reqs li {
+    padding: 5px 10px;
+    font: 12px var(--font-mono);
+    color: var(--text-2);
+    background: rgb(var(--white-rgb) / 0.02);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .term-col {
+    min-width: 0;
+  }
+
+  @media (max-width: 1080px) {
+    .setup-grid {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+  }
+</style>

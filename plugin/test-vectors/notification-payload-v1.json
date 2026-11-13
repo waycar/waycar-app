@@ -1,0 +1,359 @@
+{
+  "description": "Shared notification envelope v1 test vectors (ADR 0008). Single source of truth for the encrypted Agent Notification payload, consumed by both the Node plugin tests (encrypt direction) and the Swift app tests (decrypt direction). Envelopes were generated with raw AES-256-GCM calls, independent of both implementations, and resealed the same way when `paneId` values were updated to observed-family herdr identifiers (opaque alphanumeric `w…:p…` strings, uppercase included — not tmux-style `%N`). `key` is the 32-byte Notification Key and `keyId` its derived id, both unpadded base64url. `envelope` is the exact canonical envelope string; non-`decodeOnly` valid vectors must be reproduced byte-for-byte by the encrypt side. `decodeOnly: true` marks envelopes that must decrypt to `payload` but are not a canonical encoding of it. `project` and `title` are the optional display fields, omitted from the plaintext when absent; `attention` is the optional per-Host badge count (Blocked + Done agents), omitted when absent but sent when 0. `reply` is a Chat Mode Agent's final reply, given raw in `payload`; the encrypt side normalizes it (CRLF to LF, C0 controls other than tab and newline stripped, lone surrogates replaced with U+FFFD, trimmed, capped at 1000 bytes of JSON-escaped UTF-8 on a grapheme boundary with `…`; when the sealed `ct` would exceed 2,800 bytes it is re-capped at 500 bytes, and then dropped), and `expectedReply` is the normalized value the plaintext carries. `expectedBody`, when present, is the alert body the app must render. Invalid vectors must fail decryption with the given typed error.",
+  "valid": [
+    {
+      "name": "blocked claude agent",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600
+      }
+    },
+    {
+      "name": "done codex agent under a second key",
+      "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+      "keyId": "GGXACDHnP34",
+      "envelope": "{\"v\":1,\"kid\":\"GGXACDHnP34\",\"n\":\"sLGys7S1tre4ubq7\",\"ct\":\"X0YPya_g5HL27fjRu1nCY0QFTwgeaNzOVPHsMNS06oaXSj0aMD2bDUR4M0B-mJaMupRuiCIbk7gCFSYwADjU7BMgYzMewVePaReZg_O46C0\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000
+      }
+    },
+    {
+      "name": "unrecognized status string passes through leniently",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"wMHCw8TFxsfIycrL\",\"ct\":\"e2pXBhkdtGS6rq-YQu_Kem4YilFYwCWYSa8qf1MYXZqe5ePGBq42IfJvMWGQsADtr0n9DqHvmiizEB3j0tINLTxR1F4hLgQXitwkp7EQP7VZlg\"}",
+      "payload": {
+        "paneId": "wR:pC",
+        "agentKind": "claude",
+        "status": "exited",
+        "timestamp": 1753305601
+      }
+    },
+    {
+      "name": "blocked agent with a project and a task title",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"ICEiIyQlJicoKSor\",\"ct\":\"qRjWEQL9ODQ4CxT0sSnW1fIihfLjolnMD5oNZy3vfCVX_ZFl-lBG-C7fDP43anSthgjArO5PD1v_VUouf4I_6-gW4Snm5Yr87gmdBYF_egCh8kFpldekaqY7rk84Jrw6jMbIyW2gIV0sOCkn0IahegSxac4YNz2jcKdOLxI8Ec6iYJQJlQehKUfygRJAiXWOW5WR_7e_z6tCEw\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600,
+        "project": "Caterm",
+        "title": "排查修复 split 按钮 UI 结构问题"
+      }
+    },
+    {
+      "name": "blocked agent carrying its Host's attention count",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"MDEyMzQ1Njc4OTo7\",\"ct\":\"yBdBoYcKaDkIRNjWYqgcRL5MJjmnHH4nRNIwOYzWXBJhE3gFWLXohZQGcCUVpbhIym5xa1_C5x2cd1Rnc3hkwmBWkq313UNanm_wOQhNRvNBNhwZFg7wJ6SMUoBpKu1EjA\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600,
+        "attention": 3
+      }
+    },
+    {
+      "name": "a zero attention count is a real count, sent after the display fields",
+      "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+      "keyId": "GGXACDHnP34",
+      "envelope": "{\"v\":1,\"kid\":\"GGXACDHnP34\",\"n\":\"QEFCQ0RFRkdISUpL\",\"ct\":\"hpGZVU57LSHhZU0sX_WywWqZTsaHY2q-DedLDeCx70tNO2AFuBXsqhdMdO9-SjqeEjVLFCJW4E73WauiYPzFJR4deosRcUpc5wMgOz2BeKUp1BHXjsi1FTOLv4z8EI4QjaLiW1r4j-YcoaDo2AX4furWlP_u5d5mclKPZmLaztR6oVE\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "project": "Caterm",
+        "title": "ship it",
+        "attention": 0
+      }
+    },
+    {
+      "name": "blocked agent with an Agent Summary, between the title and the attention count",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"UFFSU1RVVldYWVpb\",\"ct\":\"6QVGFYo1m9x-wWtfvdCh-cFElIVGU6AAR-WBrpQlt1hznP68H1PgllP4h_K64ZKytQlaO15ucFeu8dE3nPkxpABa8Lj5gXgbR5SQLaRkCSLzmO1q1tokGJkPIaQ8Kq5Aztx6tjKZ0UN7T1KLShJrLZJyPTa0OGk-hb63X5e18Pe-y-lpZX8Bbb65e2CjozoGdFspmx76h1NbmoeWy9gYlbRVzXuy9Sfr50LGvB7eTLlhTYoIrM0\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600,
+        "project": "Caterm",
+        "title": "Fix the flaky test",
+        "summary": "approve merge of PR #512",
+        "attention": 2
+      }
+    },
+    {
+      "name": "done agent carrying only an Agent Summary",
+      "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+      "keyId": "GGXACDHnP34",
+      "envelope": "{\"v\":1,\"kid\":\"GGXACDHnP34\",\"n\":\"YGFiY2RlZmdoaWpr\",\"ct\":\"8OlnbnKOt_GRBmNShWJtpBy0MRpscbHiD7L2Pg1autAqPoxZnmWrZdrVUDAI9egbp6PP6MhOqLqNX8qnNGjq3ApRrObuID6iA_jhDOLlNt3EiX7VBSG0y9SREZVfv8_WeXrzDksjVzg-POSsP8Xq8UhiXogxHecqdCpRPhw\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "summary": "added upload retries, tests pass"
+      }
+    },
+    {
+      "name": "done chat agent carrying a multi-line reply, CRLF normalized and trimmed",
+      "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+      "keyId": "GGXACDHnP34",
+      "envelope": "{\"v\":1,\"kid\":\"GGXACDHnP34\",\"n\":\"cHFyc3R1dnd4eXp7\",\"ct\":\"KjLtbarQpreBbEZ-cSnO3G3d_0z3wSwc0WA1bMug4cV_nipm20SiDAjVLpkwg1DWHjQ8oe_rmrvlRMOhGGTi9ZcP7Ipuozm5KmujOmgez8QfKiUCUcLFcHNjWmKidTT4kXL9G63_i0zywsqhD50maWzlZle52w5JFsnvdGCOnrp-VYDYzAyHHRGu6JBEPrGjyoB_4-sWhJbmcCuNd-ePy5doNI7G13o\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "project": "Caterm",
+        "reply": "  Fixed the upload retry.\r\n\r\n- Tests pass\r\n- Pushed to main\r\n  "
+      },
+      "expectedReply": "Fixed the upload retry.\n\n- Tests pass\n- Pushed to main",
+      "expectedBody": "Fixed the upload retry.\n\n- Tests pass\n- Pushed to main"
+    },
+    {
+      "name": "reply capped at 1000 UTF-8 bytes without splitting the emoji at the boundary",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"gIGCg4SFhoeIiYqL\",\"ct\":\"G4ceei93w6u8_EMKNkKICYU13JFukjcoTpHhvdKZH9gL_uB2xMzaAL8kwiIxC9O5jpWXckCwVLqFfPbVzZahTxh0_lH1a4UVh3CYYexEn0H0D-vTVvLJIu_Bq5lHTbA4nBa7FgXego7t9OY7t0fyUrDbkm9LIh5fuu1AgZuKfGAmqKpBmwKQSVCSYeFlwXKwdZcsRgK6ikJieoe4K0zDrBYqaF1Ko_SSYprhG6G_j4Uru2LBhFje6c1wXK9RpzO0IXUrurtWYUUX0KSSotq0lFMTBnvWM7r4MYKWaNXbBBebZzUOMEJl9yaj3iwqcVKVlsHEbL2d3hprE-kHlRaKux8EY4nxdVoLARUODI7uxzLvZYbkK_SeC85Ws_IB1ZywOWBP1GUp1AAVW28krQoDBifm1q2qiqJj8hn99Egmo1FlZ4jHYWItqcya7BSX4qYDMfTZmY-BvCStNy7SBOTgpJjsPJGLH1fKyTcV2685xNJEe9N1Rp0J35NUIUC6iI4ZQkjqFlwdI88GTRHPDUMq6AQ7AsJjlwq8qUwPBnGa2q2OYRtWi0toTyL7MMZ54DAp28g7ByDZCrbVxAXuJVeuGPM-CTwlrC3ISnqkdDi9EiwRHHgR3MKQV-LQWXbMWnuxdnj8xqn3lbXoh5Qy_UL-sw8HxtvGBtgLw51NPvIgHFkaMlBMRODvRu1R2d7mI0mWNNOZ9XTCDBWwh_GWeCDqkdKeT0lzM42EgVvowQSbhs4AN0HLkgw5EEz0Y7Bq_7btx8Gdmj2dVZEo9SKuTCCxlv8d4EC05pP0LOJeyW9ul4Ui6wfnlSc2j8VvzTZatOe3dpv0Uw2SBXf5iq4kOj0abxox0dgWTK00t2UThRoCU2cktTQ3ZN1jcMV3O8LuxoJ0PcMjOw5e__fm3t0GT8Zk4Ll8SftgWk7oJRVds0UkFMwb6rwHiFYzV4HqYrpNwoxn1aeXV_OhhsaLj0YruAgjjVLYjHqkrRurNxDDnvNgXCCtE6zyJ0ZPa4P73fyLo8ngJgAwlKD_J64Gtiz2cxR1FYVE2TcyOoBBGCsMJ1gaqaH2FP_JwRtekqCBRrRCKSLVheesB1ipJx7jx1NHpYPss3Y_d8Bj078to06CGQ3khqDYAEl1UWt1FYdpi9QRudwuTfXPvVID8x-IAtEd63pJiAnhcNajKXUTQueN7Y0FzaTWTkZEUmP0k959RS1G7uy20X2c2q707W30UMnCcDMgGo5Hend0kZt-ERQdm5_s_V7xFdLPrvb0Cx3lDb9HZfWhtXHHp8vaYHz5BYgXcnLboXUrgOFkWd_lMcc8Z8mUtWjb5IrTgibqXEybe748qTKoAnbfdtxnzKlueYUhm2P8ELsyFjJ5s75x4bK2v_hwv_BxM8AFhxN9bLLF3oWH_fb5QiRV2AfjmpFXP1Ka9twL3CMlym3W-ipeAiTz_D5ucqEvOA\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "done",
+        "timestamp": 1753305600,
+        "reply": "Done.\r\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa👍🏽 and more text after the cut"
+      },
+      "expectedReply": "Done.\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
+      "expectedBody": "Done.\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
+    },
+    {
+      "name": "reply on a non-done status is carried but the body keeps its usual wording",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"kJGSk5SVlpeYmZqb\",\"ct\":\"jeiFXlb83MVtixYZGkjNckhy3GJGnKQh73Uhg4rXyJgKMV6dRhhTI8tD9Tw4jLCck8jtd7m3eAoMaBi1SSwsz5uhu_nCh3dEoiPM6N65psu6zwBhazdmj3IoJcCeoVJkyb_wMtTDkh6CPC4zq6fmzal5kwYesHm0MuERwqDqPd8dqrzJlledv39ZjWf6iUvVs9FppFU\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600,
+        "summary": "approve merge of PR #512",
+        "reply": "Should I merge it?"
+      },
+      "expectedReply": "Should I merge it?",
+      "expectedBody": "Blocked: approve merge of PR #512"
+    },
+    {
+      "name": "reply capped by its JSON-escaped size, C0 controls other than tab and newline stripped",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"ISEhISEhISEhISEh\",\"ct\":\"xtj_8WpvmNtKrz4MoLitrAHdjeRfILiLbu3rHVHR_woqN5-JoCl9LE4gZ1_oQbbN3E_dW2iHyNz-Gech_tM66wK-tz7NnoITZnkG3o1jA0CeLrjZtXGRCwXWAW9zLemMQA2iMG6GAbZvYEDalMVMbMom8fkPY5VbUlC_HwZltWrEzz4-ciL9zY3e4qXmL1Nj-zlN7F7yz-4VJT8LGVwTE-lkAz-K35SPBc7DzKZXGYmI21qyRa12_Q7AHXa_v7iai7EkgVJ99i-g8ZHdqylI3_63-_I4dyqhnkl2Elbc7R83RlFz9VCJs4ab1hze0VTu4oAut-rYkt2_fgUTMtZJBnJMgHlGzc_mEjLyTEQlVcRx9Xz3AE42VjlG726oDGIKgR11RUwet4zVTLXyjfFIOaRz9XgyGQdlmUmjGFRB36qlkP53GOU75H9kzOuJFsRdJTXT6nFzH-Wz77Ztc5yaiYOiP8dKB06ApHUgfvBnbnvuNOV2reNkUMzlKjmTSnGXgmN6vZSbd1_qjVzJYjYD6FOtDaRxdTslo17ezifmKntQr3qkF84Z9fWge_LFSS6BM2ODOShRNeomtwntYeaMwg_ldf_sR5JKCmff0PslCsDiM6FFTkVYiKmRqJ231pxTq2250zF06N-cJ4Dp2ErPe1-PeCqTcGjXQjK-O59b1CeMD7SFGvcyHN7ntZ1ssNWSyuwkNwd6LRhR61Q37a2PIjkDFrwWbPOPwWOOwkScZHIcY9hBQL1h05Gl_MyTdMm_uVAv275Ty0Sn2cHQDmTJ2mfDBF4r5v4LmgPQxfpesBLZcitCkocpzwy8nOnlGaNM3Ybv1XTOovjmvmhAiRqLLIweNNNyjol_mX_H3aDKORoFAzYvwd_xZRwFX_gSohxSD30WMq487LXvA_4_adng0O-iyGEr1PAq2rYHEKllgcsU7F1wHeCFApCengv8j0fqufuB71xZrHHcKIFFHf-WgRECNT-kcj_ydj_50Q3u4cqERlvb7JSt8cdCFyez8WSEFOpbGT8HxBq2cM3OGDI_XGxWbNCLnu9KzoWkKlWrewWPNX6gKcZXCKkMwD2L74QKITtBao-AP3M-tZ7JGTeY3x6n1kL-tgU8OLKmmX9fcoekLKaPdIxVbb-K4jbZXEkCcY7M8CN82XEOrfr8gIt3pT2GvrqEPEZUn_04fBWltjlQXGWY64Fcf2VFjxCscmIV7kT9PQEveDV6yZIJy9d01MEUID_KH6SRfgy0xLJaqPyuf5Z5OuWY6n7G1DQEH2qx7b00L3XOerEsAjK430gC5UOWwHJ3j2QYQECTi__95PNpLSFvEQooZqnWGMPqlrc4Aviir4PERd-45QDSG2OWPa7RRaIhdYgUY8FI7ytKFAJBvi2pRC5QPQIK9HZTDC9jSekSOKp2D8EQi21GLHPo81_wcqr7b8t1v-Z9ETLzayCrlCQ\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "reply": "Said \u0007\"ok\"\u001b[0m\tthen \\ quoted:\r\n\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+      },
+      "expectedReply": "Said \"ok\"[0m\tthen \\ quoted:\n\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"…"
+    },
+    {
+      "name": "reply halved when the sealed envelope would exceed the APNs ciphertext budget",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"IiIiIiIiIiIiIiIi\",\"ct\":\"BjZOpwCVuCCl6tmQ_8iqX-pEDGR14PeNhJFLzu3Rk0fvr2xHaA7Rc4cQ8u5ArYBnHRCkNpKKJx2ltX7LpvAFPvMKG0LVGA7ApWOXGpqxrRu0VUdkGfsRLbvpHT7NYSll9145lfAmxoVr0Xc1y9aboJ_mC2dqlap9RV3PcuPBEUM9Ec4FVmXxqo4tv05ew7qgsTML79ty0XQZxBYkBvLTJdzGx47s6BRwZRlBlElZug_qsdb2qFFwP9lzDp-OfDpQJZNZGNOwC9kzvabH2WVxzY5fcnAfK6lqD4h8pBS5Yd197xPnXpJpD2wE732yLHC31VDumSMnF3CcDYuJZpRQy1M8Dz7AF5g3ZqOrfxNg3_rybbhN2EhUNkweQm0-3d32zwhZfNccLXjlCmJNsdNtqca7YSGRNow8nVBuywT2PcCII-i27nIA0zMUD7yzs-mHFI1tPRRhuNr-DZpZyXgCDCzQr3haIY3R_h7stxPf47ZCh5OieJnuXNp27NJDaYLTOO4GekYz9UQLpIsdm2oSWn9670BqH48J08i-OzKJ7qFAxiWUPu9PSUEiA32mVxc3WT1VGQ0Lnmr3IPF6EI7hmE9Zrp_J3BQDQPOPYIh_J6aWdugqFSAHUG5Z-npgWuChPXzqPxWYsxMSpb31RUfhiWRhIW8_-WNX_f6jJML2EHaVDy010M8PwYGaRuc3KF997ijEKbz3u8V63LEpsH57K8OIu0Kj0xXSYR1lSLwyGAObr_zfPzJ43L-kYUBjZf9_nOC-OH0GiWgQHouSeNCF03kKoGPyOvjB-RuUAdNp48_GjkZhe15tPDTQK4OPEN9jZDHhZmOqrHd7g5R2ybyKNzxJILdNJH6-8W-4JkrxsV1tYv9Kl8WNLgC3iMI4v6EJhfNRwt3vVK0EH3w9vWvoMPX-Iaw_LHnpW8oi_fV2m7HJLVcvt8T1Fe8piIvCkMJC7bgbVgXC2ppxw5YoOE3cYwpuqOTIovETz5p3Hhkqa-_ELW6YIVTU37qGqyZKG7NdyIeHCPziNWcrhw_C4a1-WlqpnhRJ30k88ckPxxrUPpFWiLbI5R3CrIQibwGMrVLJUf8behvTSGWAdsRIdrVWOmgE-MyeIxlgMPSC77v3YzLGjo0yjDQr49K7ofufCA2dIu441mMTzKJJXmTiJBwuDYsxXzUkm9RFEKf1nRWGwzYrPQq22uB1JxdebfX4IYKHy56EHGzSPYMOrpn80pdXST8ZEZPrksdAkJQlg7bJfXP6A_foLzx3xemPIpbGuJKPrZ6Zztjubj83aZCps-hGI_koYdJW0neKC3bgg4zoZmXT_XPGStALiQzjiiGbT57EyuS6lQf66aBmyZH1tGns8nN9FfKIcv7LzdcdKeX2lfbWlLGgiHFtaU6Sh7PpWg7YXdkEwJwBcprAvPvcHbNeMICH8FPMh9enOu4Ya4C5SxW4gDIrPoBQ6tRAkZiQvUipz-R8G5mKWFdR2wqoQ33T3KwHMkWaFyVTYWIfsxsZz2Af-nGO-UTEccK6r-fHAbaf5iGvBgGR5K1gW4SYYbiBkI0bZQbr1S-Ei7yg8vLu_zfByFgdVol2_6MOU3tIpuS9ecfgb2sjatp_dhEckyuEf5S9aIEntAgvLIVAAH-OZ_Qhw9M_w5hwFerOuNisXm6uAZKhYKVBq9XM-RKvfCue5iWGTnDwT-YcwciVa-uEhOteuFYjzgexvZ5aoYDTJzEil0lMcWkLRwPQA6ClG1X_MGxKhD19Hl_TDgO26pGemVoCHCA-Ec-Dz5PDSy5XDYiopSFzZh9hUiInTjAlvUtrwQ4YAkGc2qyOhcSFWiYWo1ureW0V4bJCaIG7kBhOlw7v780S29ZKdIN2PeOLtW1do4DPhZ3RvShhHKSqkjFDqkStXylZ69QqwJE3HdhNoIv1GTI-keB0dm8vXnJOEZSalvc-gqlT5hTFPH_e73t7dxH-jwZvh9702nyX3WBJv1-BvNBjzj1AxZ46Q1acbdePcsFs016G20m2L15NgcEnrhwu8XxICbrn1yKS9pDxyYtOdNGXeMOayY2-PygRxHqsb7FvvBPJExVLECKPk6ETGBFxzkKa6skzg2LmPOLl0M6huW0gmxjFhJiOHKI_nsPb7kvRLxTLZrhh0dYd8QoYHJDunlDYZmRKufX_6oYzv9L4jz8NWl_rouvYMl4lVCCO0fyCP-esN9p3GN1USMqTLT81pcEROyjWyu2s5Q7NLkqHSdinvWRPveMf8z7N95Z-3xvXEUShyVjhNzrNAia3CGfxgJ4ORDFMIh8ITTFbYlawuScn9Q-4XukEtkz1pO7rlkSMsAWDzwWN1YkQZftQNuiKtlwf8XSqkYyLZSICJOAo8H_kUGTafzKBWA5hUaMneKKkcbTunJYcHlKGKh-DzMjfPzQxtA\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "title": "修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修",
+        "summary": "复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复",
+        "reply": "答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答"
+      },
+      "expectedReply": "答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答…"
+    },
+    {
+      "name": "reply dropped when even the halved reply would exceed the APNs ciphertext budget",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"IyMjIyMjIyMjIyMj\",\"ct\":\"xC8QkNBovK0HvPfEYuAGkS02YprUR25ERLEcKqTFnV4kGE2Wek_SIJi92PyOcGK6xjoJUtLMkqiYYMM1T5akjqF0qe4w6Ig-tNEpv8VD0VGY1JD3p78NhGa_ScuqM8YZRvQ9WZeXzGQH9TssAGHkUs7UtqkbEVXYRbCrr9vGE9RwihgJins8Y5fn1T2JsMJBNAWA2DAIc5yLh2_jGK9wVHyidOjGCsYrWlED4UvsyKA7OEglKbzX-apfOMebnQ0yDvUby41IosmVAYlV91x1_7zTNZcyKKDaIhjqUzeItVhNaoOYGyiqNt0YyfwElV1Xt1vD86mO3_d_O6PQr-2BzfMEi8Qn316j6dJLQm--Wo_SxcZMtITq6rG5J-R_4pqRTDvw9hh443oDI6zJfcNjPVdj5k63S_dyNYjTdhYsGAk-Zb-R5aSP1FPQpJ4LvMLYt3e_ELvAJ6R6bwU5Navkb2sawYldn1zUktSl0SPSRm3AB8gRQKTR2VEnyfQKvqk9Ov_yuncrCoqCs90QLSqELvalU2-StpaiLcEMoAt5MGI39a30bb0Fe8yZjDrSLTx4yostlXkH6mUzECUNiEK1Gz_qK2h-yRqWIR3hxYyZgoGfe0z8qszfe7LlCSLmIMRIvi-gMX9VmmyT44glZHiE43tOV1g1GtkxnMfKWVZqWQqcyJ3aFlH-eAvPT6ei3oAuZW05ou6Pds3qMUqXLCFKOlBc9DJRzoObhxCE_DJzqWnetlu0uxo2xBv10rnGcJVu8bAHocYWBEoplcBNBwHku8dQst26qd0FgClyNx5cgeFtexc7i7xHznwVSO6VDMOedszUeeNolozXCnsIGlrgqs3P3gl8r2nm_6arGh0Ay2_TksFwY7V3PGmz0ceiP6q7DIBK8C5orrr-2aqyzSSFAtiqEFCBv6yX1WSWoAh75U9RCRTIEqze7ORwEQyj71oYDUt9gxlHUStkVpcsAGzuUpeKkqvRVRt9tBub4e9GxzLgSRAfmR707pNByKbx_n8pcLH5Ho0zON1xHx7_5jxqEvaN0ZZyu2tkiYpvLSXUzTtG6Eenw_yh9XeTjGHOKPnpljoiwfOyEHQx61LwbJAkd801C-gEsaN2wO0BmRxNbUsEsZkevlMG9QeaUytyFL5rLdzttzVB1FMymBTcSQPBPIxEYyic8fhsjlpNrOpljo6dsGCLCb0WAPyarEkXyXhyUTQOFKcr8pMjyDAa-PYxXjWUlDoWW7tJCOrLn5kJgKPSLOq9ldRHLWPSpZbEZ3-eD8mXvxduvc-5kesSHn-i1hy_0WCnl2Bkc2PH8kkIKddOLxMoS6HyY37znmRtibcNrdvPMn6V_lwRPZOzhkmIu91rmowPHN7mJe8pe9bTrrzrqj4QmrZ_ZAldvtDMcmusrHfNfyW1WlRVUd9vUzCU5zHr3vbwYk1JCs2UdGi5Bg_ew8N7hKtarOV3xAbGqmsF1cSof4RCUt_KBYIQKzGH6PhoU7yoHeboDjDMEn6xZih0jE8YsW6wEMfnqt6S9kGVurexy8zATDAN5ZzGFK99xIcPSsPcUX9UxunMFgxTDGGGw_aFCijOuim41Heqe51Ir-DmsKb58FIvbAf0MB-Z1Uk6ocpi-bv3I7EolqBt9e407YOQNhyPqkdGrB9u1eoJGefApn41Twfk2J-izW5jNk1tUGgyEUTs87W5_fhwTeAvYU4QLNnIHJyVhqpFNNiQkbd1dZRdDbMuM5Z83pAAMTQWPc-1mCZ66AHaLuhJ-LraogAMymzabw5OxEQkN4aJA4coGkJl_Qgb6CIm9Eg8u8K_XvS44bwdsnznHliF7dcMjQUh-_R_cgqmUR-cVJ2B-iIv92wwiv-_MdmZl3_gg8l9JQS6G_H6w5PcKT4HbXnKxO5bp-jK38bn7xn1QRRDBAJQtfJvA8cQiXd0GMzaqQFpXJZfylsqvEaymBeAL90Y6RvfFg_vemWkzLrF0LvnVT4LezxhFnCljciVSgw1WxwyytKOOj8fd1maSGevflYKklQWhQ6X10p8UzorwBUU1dgxL5PSU4Jxfjk80jIOVEQU8oPFmQzZOC0SSoirWecb-MwwbvVGQalny9-ojg7uL_lgJv17ZfgATDL5sZO-ZxsbmBmC2sOTAgd5G8fL9m9kgqP6csHcbqR2rzm0NCom6SMOe6ZY8ZlwyzJ8Wi2UjCR0TQI_v1gTQvm7ufPvNrjte770QppAolmbOxBY1i3NtQ6rjGqvCsXej-qRKYGQnR2UhXnVlFdeaHuDBnTtRfcpQsByrbKeanRmw_sQ_4bXMZM_pJh0_fZvoa0z14lZWOOXZs5oqcVLfQPUt9JexA9C6gtzOiX6ixpk7_G0nSduM8ow00UjTYp73dDsomAhT-vby1ebhclfpeMQm1jLVAVIDMWCZzrtCKwxTrGIj2A1Jc8drl_sNaS1RmqOcLnscpXohjQ1AaqrCPCyjJHRn_2f2WcOoiUMG95uZlnZKooIhqVxIzb3g6vOAOMXeTrBoJ1GUHybP2rZn0VkG-vH0bxQljCpLPTgomIdJd54jyVWrR5E4YYWdCQzKcjGQ8sR_HdMVklL85XMpvUpRZb95n-rAHN_2DyAIhAy9fR1iEIhCqm1AQGKrYlsDDpVMJA8aNPon68NWLkvONEmUPE-c3yL7MZoA_cV-ZI0hRNu\"}",
+      "payload": {
+        "paneId": "wV:p1H",
+        "agentKind": "codex",
+        "status": "done",
+        "timestamp": 1766000000,
+        "project": "项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项项",
+        "title": "修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修修",
+        "summary": "复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复复",
+        "reply": "答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答答"
+      }
+    },
+    {
+      "name": "unknown plaintext field is ignored (additive v1 metadata)",
+      "decodeOnly": true,
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"0NHS09TV1tfY2drb\",\"ct\":\"V4WWDwbC05t6KH6Fhuelze1hNLskv4JkUOYv42tWDOv-ZBVt1mtMSxuGTpcWZe9saz5eIuCMm2Qdmrd8ze_s7ro0Nw0Xxqh0waa3NBXwqmdgufo8xWwQNscyO2tCQA2wrPHF5WWWULRV7OtC\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600
+      }
+    },
+    {
+      "name": "unknown envelope field is ignored (additive v1 metadata)",
+      "decodeOnly": true,
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "keyId": "Yw3NKWbEM2Y",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\",\"future_field\":\"ignored\"}",
+      "payload": {
+        "paneId": "wV:p1",
+        "agentKind": "claude",
+        "status": "blocked",
+        "timestamp": 1753305600
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "envelope is not JSON",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "not json at all",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "envelope is a JSON array",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "[1,2]",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "missing kid",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "version is a string",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":\"1\",\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "unsupported version 2",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":2,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "nonce is not base64url",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"!!!not-base64url!!!\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "nonce is not 12 bytes",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgc\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "ciphertext is not base64url",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"!!!not-base64url!!!\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "ciphertext shorter than the GCM tag",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"AAECAwQFBgc\"}",
+      "error": "bad_envelope"
+    },
+    {
+      "name": "tampered ciphertext byte",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PSCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "decrypt_failed"
+    },
+    {
+      "name": "tampered GCM tag",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoE\"}",
+      "error": "decrypt_failed"
+    },
+    {
+      "name": "tampered nonce",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"sLGys7S1tre4ubq7\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "decrypt_failed"
+    },
+    {
+      "name": "wrong key",
+      "key": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"PCCmequA4CGvNsGxwdhaQaG97lqUWWVeWwuE8HkMIp4jY9qd27Rhuk6GHYHn5ENdintMry6lgeAOoB8qK9PA2MAMuzdIhrCX9Pe8ULSdr7PHvoA\"}",
+      "error": "decrypt_failed"
+    },
+    {
+      "name": "plaintext is not JSON",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"Wq29o5-z5UXgYgpuP3CUkLsAZfw5MLZIiSLCz45x6g\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext missing pane",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-Ci6pukqBHiYBIvK3idoemHSJOf8LhrvrtIH2BeS-E2hsPeW9GLQgv_koUIaTO0UmLgOqaBLM-fZgavGOFZuqsXYSk\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext empty status",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBHidCh0Li3ar-fOUomapvc6_-0LCGhUCqZxkZWTDdCLQgvsh5wZLnCjXmPnci7QK6X1iYnatTIdHwdpP6cXRen_1pnd7Q\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext fractional timestamp",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBHidCh0Li3ar-fOUomapvc6_-0LCGhUCqZxkZWTDdCLQgvsx9xUOWjkAHD8ZWmQOaryjpeSj8aISQq1tQ5AdOHCxIt1Et0\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext pane is not a string",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBH1L1wlN3Kcof-HWIuf8al9vq1IDnhQXP8gwNvQG8mXA1qrwZIXeHfyRmjhcCjQKKD2j4mXj7Vo5KonO0Z3u_OFw_h0pV4\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext negative attention",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBHidCh0Li3ar-fOUomapvc6_-0LCGhUCqZxkZWTDdCLQgvsx9xUOWjkAHD8ZWmQOaryjoyUwYe_G8QCxfWrgEUTgPbStCTfeiop2Zl3jPbUBPrHMR0w4FTrb3U\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext fractional attention",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBHidCh0Li3ar-fOUomapvc6_-0LCGhUCqZxkZWTDdCLQgvsx9xUOWjkAHD8ZWmQOaryjoyUwYe_G8QCxfWrgEUTgPbStCTfejY2kZos4Jtmoxvmo5xKGkqisZ2y\"}",
+      "error": "bad_payload"
+    },
+    {
+      "name": "plaintext attention is not a number",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "envelope": "{\"v\":1,\"kid\":\"Yw3NKWbEM2Y\",\"n\":\"4OHi4-Tl5ufo6err\",\"ct\":\"T-C54pulqBHidCh0Li3ar-fOUomapvc6_-0LCGhUCqZxkZWTDdCLQgvsx9xUOWjkAHD8ZWmQOaryjoyUwYe_G8QCxfWrgEUTgPbStCTfeiUrhppav1RY2c2PVrAXDf3Auc6S\"}",
+      "error": "bad_payload"
+    }
+  ]
+}

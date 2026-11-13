@@ -1,0 +1,62 @@
+---
+import PhoneShot from './PhoneShot.astro';
+import { iphone } from '../../data/screens';
+---
+
+<section id="start" class="section" aria-labelledby="start-title">
+  <div class="wrap grid">
+    <PhoneShot image={iphone.newAgent.image} alt={iphone.newAgent.alt} />
+    <div class="text">
+      <div class="sec-head">
+        <span class="kicker">Start anywhere</span>
+        <h2 id="start-title" class="sec-title">Got an idea while you're out?<br /> <span class="muted">Start it right there.</span></h2>
+      </div>
+      <p class="sec-lede">
+        Open New Agent and choose a Host. Use a folder you already have, or turn on New Worktree for a fresh git checkout
+        on its own branch. Pick the agent, add arguments if you want, and it starts on your computer. Then talk to it.
+      </p>
+      <p class="fields" aria-hidden="true">
+        <span class="kbd">Host</span>
+        <span class="kbd">Workspace</span>
+        <span class="kbd">New Worktree</span>
+        <span class="kbd">Agent</span>
+        <span class="kbd">Arguments</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 520px);
+    justify-content: center;
+    align-items: center;
+    gap: 56px;
+  }
+
+  .text .sec-head {
+    margin-bottom: 0;
+  }
+
+
+  .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+
+  @media (max-width: 720px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: 36px;
+    }
+
+    .text {
+      order: -1;
+    }
+
+  }
+</style>

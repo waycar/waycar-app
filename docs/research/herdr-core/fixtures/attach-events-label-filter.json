@@ -1,0 +1,176 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 93,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAiZXZlbnRzLnN1YnNjcmliZSIsICJwYXJhbXMiOiB7ImxhYmVscyI6IHsiZ3JwIjogImEifX19"
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 72,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJzZXEiOjEzMiwidGVybWluYWxzIjpbXX19",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "seq": 132,
+     "terminals": []
+    }
+   }
+  },
+  {
+   "t": 0.781,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 672,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJsYWJlbHMiOnsiZ3JwIjoiYSJ9LCJyZWNvcmQiOnsiYWRkcmVzcyI6InQxaCIsImFyZ3YiOlsic2giLCItYyIsInNsZWVwIDMwMDAiXSwiY29scyI6MjAwLCJjcmVhdGVkX21zIjoxNzkzMzA5MTkyNjg4LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi1jIiwic2xlZXAgMzAwMCJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzNDA3M30sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnsiZ3JwIjoiYSJ9LCJuYW1lIjoibGFiMSIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzQwNzMsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjEyMCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfX0sInNlcSI6MTM0LCJ0ZXJtaW5hbCI6InQxaCIsInR5cGUiOiJsYWJlbHMifX0K",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "labels": {
+        "grp": "a"
+       },
+       "record": {
+        "address": "t1h",
+        "argv": [
+         "sh",
+         "-c",
+         "sleep 3000"
+        ],
+        "cols": 200,
+        "created_ms": 1793309192688,
+        "cwd": "/tmp/hcna/proj",
+        "die_with_parent": false,
+        "exit_code": null,
+        "finished_ms": null,
+        "foreground": {
+         "argv": [
+          "sh",
+          "-c",
+          "sleep 3000"
+         ],
+         "cwd": "/tmp/hcna/proj",
+         "name": "sh",
+         "pid": 2534073
+        },
+        "identity": "ghostty",
+        "keep": false,
+        "labels": {
+         "grp": "a"
+        },
+        "name": "lab1",
+        "notify": true,
+        "parent": null,
+        "pid": 2534073,
+        "reason": null,
+        "reported": false,
+        "rm": false,
+        "rows": 120,
+        "screen": "exact",
+        "signal": null,
+        "state": "live",
+        "status": null,
+        "status_ms": null,
+        "template": null,
+        "title": "",
+        "turn": 0
+       }
+      },
+      "seq": 134,
+      "terminal": "t1h",
+      "type": "labels"
+     }
+    }
+   ]
+  },
+  {
+   "t": 1.284,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 119,
+   "payload_b64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoiZXZlbnQiLCJwYXJhbXMiOnsiZGF0YSI6eyJsYWJlbHMiOnsiZ3JwIjoiYiJ9fSwic2VxIjoxMzUsInRlcm1pbmFsIjoidDFoIiwidHlwZSI6ImxhYmVscyJ9fQo=",
+   "lines": [
+    {
+     "jsonrpc": "2.0",
+     "method": "event",
+     "params": {
+      "data": {
+       "labels": {
+        "grp": "b"
+       }
+      },
+      "seq": 135,
+      "terminal": "t1h",
+      "type": "labels"
+     }
+    }
+   ]
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

@@ -1,0 +1,155 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 145,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAid2luY2giLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 602,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDFiIiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL3dpbmNoLnNoIl0sImNvbHMiOjUyLCJjcmVhdGVkX21zIjoxNzkzMzA5MTExNTY5LCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsImRpZV93aXRoX3BhcmVudCI6ZmFsc2UsImV4aXRfY29kZSI6bnVsbCwiZmluaXNoZWRfbXMiOm51bGwsImZvcmVncm91bmQiOnsiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL3dpbmNoLnNoIl0sImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwibmFtZSI6InNoIiwicGlkIjoyNTMyNTUxfSwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJ3aW5jaCIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzI1NTEsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjI4LCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9fX0=",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t1b",
+      "argv": [
+       "sh",
+       "/tmp/hcna/s/winch.sh"
+      ],
+      "cols": 52,
+      "created_ms": 1793309111569,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+       "argv": [
+        "sh",
+        "/tmp/hcna/s/winch.sh"
+       ],
+       "cwd": "/tmp/hcna/proj",
+       "name": "sh",
+       "pid": 2532551
+      },
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {},
+      "name": "winch",
+      "notify": true,
+      "parent": null,
+      "pid": 2532551,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 251,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbM2cbWzlHG0gbWzE3RxtIG1syNUcbSBtbMzNHG0gbWzQxRxtIG1s0OUcbSBtbSFNJWkUgMTIwIDIwMA0KU0laRSA0MCAxMjAbWzM7MUgbWzBtG1s/OTAwMWw="
+  },
+  {
+   "t": 0.08,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 12,
+   "payload_b64": "U0laRSAyOCA1Mg0K"
+  },
+  {
+   "t": 2.052,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": ""
+  },
+  {
+   "t": 2.052,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": "",
+   "reason": null
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

@@ -1,0 +1,110 @@
+---
+// /articles: every published article, newest first.
+import Layout from '../../layouts/Layout.astro';
+import { articlePath, getArticles } from '../../lib/articles';
+import { formatReleaseDate } from '../../lib/changelog.mjs';
+
+const articles = await getArticles();
+---
+
+<Layout
+  title="Articles · Waycar"
+  description="Notes from the maker of Waycar on running coding agents, keeping them in check, and reaching them from your phone."
+  markdown="/articles.md"
+>
+  <section class="section articles-index" aria-labelledby="articles-title">
+    <div class="wrap">
+      <header class="head">
+        <span class="kicker">Articles</span>
+        <h1 id="articles-title" class="sec-title">Notes on coding agents</h1>
+        <p class="sec-lede">What we learn running coding agents, in plain words. Newest first.</p>
+      </header>
+
+      {
+        articles.length > 0 ? (
+          <ul class="list">
+            {articles.map((article) => (
+              <li>
+                <a class="glass card" href={articlePath(article.id)}>
+                  <time class="card-date" datetime={article.data.date}>
+                    {formatReleaseDate(article.data.date)}
+                  </time>
+                  <span class="card-title">{article.data.title}</span>
+                  <span class="card-text">{article.data.description}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="empty">No articles yet.</p>
+        )
+      }
+
+      <p class="more">
+        Looking for how a feature works? Start with <a href="/help">Waycar Help</a>.
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .articles-index {
+    padding-top: 64px;
+  }
+
+  .head {
+    max-width: 820px;
+  }
+
+  .list {
+    display: grid;
+    gap: 12px;
+    max-width: 820px;
+    margin-top: 48px;
+  }
+
+  .card {
+    display: grid;
+    gap: 6px;
+    padding: 20px 22px;
+    border-radius: var(--radius-control-lg);
+  }
+
+  .card:hover {
+    border-color: var(--line-2);
+  }
+
+  .card-date {
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .card-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .card-text {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text-3);
+  }
+
+  .empty {
+    margin-top: 48px;
+    color: var(--text-2);
+  }
+
+  .more {
+    margin-top: 64px;
+    color: var(--text-2);
+  }
+
+  .more a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

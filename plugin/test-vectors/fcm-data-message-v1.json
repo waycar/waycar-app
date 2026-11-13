@@ -1,0 +1,115 @@
+{
+  "v": 1,
+  "description": "FCM data-only messages the relay builds from provider=fcm requests (README 6.1, C35). Consumed by relay and plugin tests; Kotlin parses the same data keys.",
+  "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+  "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}",
+  "cases": [
+    {
+      "name": "alert",
+      "request": {
+        "provider": "fcm",
+        "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+        "env": "production",
+        "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+      },
+      "fcmMessage": {
+        "message": {
+          "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+          "data": {
+            "v": "1",
+            "t": "alert",
+            "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+          },
+          "android": {
+            "priority": "HIGH",
+            "ttl": "3600s"
+          }
+        }
+      }
+    },
+    {
+      "name": "live-update-blocked",
+      "request": {
+        "provider": "fcm",
+        "kind": "liveactivity",
+        "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+        "env": "production",
+        "event": "update",
+        "priority": 10,
+        "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+      },
+      "fcmMessage": {
+        "message": {
+          "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+          "data": {
+            "v": "1",
+            "t": "la",
+            "event": "update",
+            "prio": "10",
+            "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+          },
+          "android": {
+            "priority": "HIGH",
+            "ttl": "300s"
+          }
+        }
+      }
+    },
+    {
+      "name": "live-update-routine",
+      "request": {
+        "provider": "fcm",
+        "kind": "liveactivity",
+        "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+        "env": "production",
+        "event": "update",
+        "priority": 5,
+        "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+      },
+      "fcmMessage": {
+        "message": {
+          "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+          "data": {
+            "v": "1",
+            "t": "la",
+            "event": "update",
+            "prio": "5",
+            "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+          },
+          "android": {
+            "priority": "NORMAL",
+            "ttl": "300s"
+          }
+        }
+      }
+    },
+    {
+      "name": "live-update-end",
+      "request": {
+        "provider": "fcm",
+        "kind": "liveactivity",
+        "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+        "env": "production",
+        "event": "end",
+        "priority": 5,
+        "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+      },
+      "fcmMessage": {
+        "message": {
+          "token": "fcmTestToken01:APA91bHxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_-.z",
+          "data": {
+            "v": "1",
+            "t": "la",
+            "event": "end",
+            "prio": "5",
+            "envelope": "{\"v\":1,\"kid\":\"5-CJJlt5uLU\",\"n\":\"AAECAwQFBgcICQoL\",\"ct\":\"opaque\"}"
+          },
+          "android": {
+            "priority": "NORMAL",
+            "ttl": "3600s"
+          }
+        }
+      }
+    }
+  ]
+}

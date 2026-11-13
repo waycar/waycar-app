@@ -1,0 +1,56 @@
+[package]
+name = "waycar"
+version = "2.6.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0"
+description = "Waycar Host Tools: the `waycar` command and agent hooks"
+publish = false
+# The Rust sources live in rust/, not src/, so nothing is discovered by
+# convention.
+autobins = false
+autolib = false
+autotests = false
+autoexamples = false
+autobenches = false
+
+[lib]
+name = "waycar"
+path = "rust/lib.rs"
+
+[[bin]]
+name = "waycar"
+path = "rust/main.rs"
+
+[dependencies]
+libc = "0.2"
+# `preserve_order`: the hook files keep their keys in the order they were read.
+# `float_roundtrip`: numbers past u64 read and print like V8.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+# SHA-256, AES-256-GCM, Ed25519 and the system RNG: the same ring that rustls
+# uses, so the crypto code is linked once.
+ring = "0.17"
+# The Pairing Code QR (the `qrcode` package's counterpart).
+qrcode = { version = "0.14", default-features = false }
+# Reading TOML (agent config files); writing is hand-made text edits.
+toml = { version = "0.9", default-features = false, features = ["parse", "std", "serde"] }
+# JS regex features (lookaround) that the `regex` crate lacks.
+fancy-regex = "0.16"
+# JS regexes the ports keep as regexes. No perf feature (size). Classes that
+# differ between the engines are written out: \s is JS space, \d \w are ASCII.
+regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
+# Grapheme clusters, for what `Intl.Segmenter` splits in the JS.
+unicode-segmentation = "1"
+# NFC for the Live Activity row keys (`String.prototype.normalize`).
+unicode-normalization = "0.1"
+# HTTPS with the root certificates built in (webpki-roots): no host CA bundle.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+# A panic aborts the process (exit 134). Unwinding costs 229 KiB (8%) of the
+# 2.68 MiB binary, and no code relies on catching a panic: do not add any.
+panic = "abort"
+strip = true

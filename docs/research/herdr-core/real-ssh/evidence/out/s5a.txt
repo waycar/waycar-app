@@ -1,0 +1,17 @@
+t=0 attached A 80x24: size=(80, 24) core client conns=1 remote 'herdr-core attach' procs=2 sshd established=1
+SIGSTOP ssh client pid 7399
+t= 0 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t= 5 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=10 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=15 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=20 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=25 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=31 B attaches 60x30 (newest viewer): size=(60, 30)
+t=30 size=(60, 30) core client conns=2 attach procs=3 sshd established=2
+t=36 size=(60, 30) core client conns=2 attach procs=3 sshd established=2
+t=41 B detaches: size=(80, 24)  <- ghost A (stopped) pins it
+t=41 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=46 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=51 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+t=56 size=(80, 24) core client conns=1 attach procs=2 sshd established=1
+SIGKILL ssh client: rc=-9; core size back to 200x120 after 0.002 s; conns=0 attach procs=1; size=(200, 120)

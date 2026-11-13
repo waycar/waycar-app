@@ -1,0 +1,12 @@
+{
+  "project": {
+    "root": "/Users/me/src/ultimate"
+  },
+  "process": {
+    "pid": 79327
+  },
+  "persistence": {
+    "kind": "sqlite",
+    "path": "/Users/me/.ultimate/projects/ultimate-ff98e6ca/state.sqlite"
+  }
+}

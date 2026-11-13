@@ -1,0 +1,6 @@
+{
+  "modelProvider": "gemini",
+  "trustedWorkspaces": [
+    "/home/waycar/work/demo"
+  ]
+}

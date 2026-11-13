@@ -1,0 +1,487 @@
+Waycar patch for libssh2 c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f.
+
+channel: pipelined channel opens
+
+ssh2_channel_open() keeps an unfinished open in session state (open_state,
+open_channel, open_packet, open_data, open_packet_requirev_state, and
+direct_state/direct_message for direct-tcpip and direct-streamlocal), so a
+second open entered during the first one's EAGAIN would resume the first:
+only one open can be in flight per session.
+
+New libssh2_channel_open_start(), libssh2_channel_direct_tcpip_start() and
+libssh2_channel_direct_streamlocal_start() allocate the channel, register
+it, and build its CHANNEL_OPEN request in per-channel state (openNB_*)
+without any I/O. libssh2_channel_open_finish() sends that request and
+waits for the reply matching this channel's local id only, so any number
+of opens can await their replies at once. Stock opens are untouched and
+can interleave with pipelined ones.
+
+A refused or failed open is marked closed locally; libssh2_channel_free()
+still owns releasing it. Freeing an open the server may have seen (fully
+sent, or partially held by the transport) first waits for its reply and
+then sends the ordinary CHANNEL_CLOSE if it was confirmed, so no channel
+is left open on the server; an open never handed to the transport is just
+discarded. libssh2_channel_close() refuses a channel whose open has not
+completed, since it has no remote id yet.
+
+diff --git a/include/libssh2.h b/include/libssh2.h
+index 4966161..6a5e623 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -824,6 +824,35 @@ LIBSSH2_API LIBSSH2_CHANNEL *libssh2_channel_direct_streamlocal_ex(
+     const char *socket_path,
+     const char *shost, int sport);
+ 
++/* Waycar patch: pipelined channel opens. The stock open functions keep an
++   unfinished open in session state, so only one can be in flight. The
++   *_start() functions only build the CHANNEL_OPEN request (no I/O) and return
++   the channel, or NULL on bad input or allocation failure.
++   libssh2_channel_open_finish() sends that request and waits for this
++   channel's reply only; non-blocking callers repeat it while it returns
++   LIBSSH2_ERROR_EAGAIN, so several opens can await their replies at once.
++   It returns 0 once the server confirmed (and for any channel that is not a
++   pending pipelined open); a refusal returns LIBSSH2_ERROR_CHANNEL_FAILURE
++   with the reason in the last error message. Until it has returned 0, call
++   only libssh2_channel_open_finish() and libssh2_channel_free() on the
++   channel. Every started channel, refused ones included, must be freed with
++   libssh2_channel_free(); freeing an open the server may already have seen
++   first waits for its reply, then closes it if it was confirmed.
++   A request the transport holds partially sent blocks every other send
++   until its own libssh2_channel_open_finish() (or free) resumes it. */
++LIBSSH2_API LIBSSH2_CHANNEL *libssh2_channel_open_start(
++    LIBSSH2_SESSION *session, const char *channel_type,
++    unsigned int channel_type_len,
++    unsigned int window_size, unsigned int packet_size,
++    const char *message, unsigned int message_len);
++LIBSSH2_API LIBSSH2_CHANNEL *libssh2_channel_direct_tcpip_start(
++    LIBSSH2_SESSION *session, const char *host,
++    int port, const char *shost, int sport);
++LIBSSH2_API LIBSSH2_CHANNEL *libssh2_channel_direct_streamlocal_start(
++    LIBSSH2_SESSION *session, const char *socket_path,
++    const char *shost, int sport);
++LIBSSH2_API int libssh2_channel_open_finish(LIBSSH2_CHANNEL *channel);
++
+ LIBSSH2_API LIBSSH2_LISTENER *libssh2_channel_forward_listen_ex(
+     LIBSSH2_SESSION *session, const char *host,
+     int port, int *bound_port,
+diff --git a/src/channel.c b/src/channel.c
+index eb3f0e8..fec27c2 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -489,6 +489,358 @@ LIBSSH2_CHANNEL *libssh2_channel_direct_streamlocal_ex(
+     return ptr;
+ }
+ 
++/*
++ * Waycar patch: pipelined channel opens.
++ *
++ * ssh2_channel_open() keeps an unfinished open in session state (open_*), so
++ * a second open entered during the first one's EAGAIN would resume the first.
++ * These keep the request on the channel instead: _start builds it without any
++ * I/O, _finish sends it and then waits for this channel's reply only, so
++ * several opens can be awaiting their replies at once. Sends still go through
++ * the one session transport, so a request the transport holds partially sent
++ * must be resumed (by its own _finish) before any other packet can go out.
++ */
++static void channel_open_nb_release(LIBSSH2_CHANNEL *channel)
++{
++    LIBSSH2_SESSION *session = channel->session;
++
++    if(channel->openNB_packet)
++        SSH2_SAFEFREE(session, channel->openNB_packet);
++    if(channel->openNB_message)
++        SSH2_SAFEFREE(session, channel->openNB_message);
++}
++
++/* Refused or failed: nothing to close on the server, only free locally. */
++static int channel_open_nb_fail(LIBSSH2_CHANNEL *channel, int errcode,
++                                const char *errmsg)
++{
++    channel_open_nb_release(channel);
++    channel->openNB_state = ssh2_NB_state_end;
++    channel->local.close = 1;
++    channel->remote.close = 1;
++    return ssh2_err(channel->session, errcode, errmsg);
++}
++
++/* Takes ownership of message, which must come from SSH2_ALLOC. */
++static LIBSSH2_CHANNEL *channel_open_start(LIBSSH2_SESSION *session,
++                                           const char *channel_type,
++                                           uint32_t channel_type_len,
++                                           uint32_t window_size,
++                                           uint32_t packet_size,
++                                           unsigned char *message,
++                                           size_t message_len)
++{
++    LIBSSH2_CHANNEL *channel;
++    unsigned char *s;
++
++    channel = SSH2_CALLOC(session, sizeof(LIBSSH2_CHANNEL));
++    if(!channel) {
++        if(message)
++            SSH2_FREE(session, message);
++        ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                 "Unable to allocate space for channel data");
++        return NULL;
++    }
++    channel->session = session;
++    channel->openNB_message = message;
++    channel->openNB_message_len = message_len;
++    channel->channel_type_len = channel_type_len;
++    channel->channel_type = SSH2_ALLOC(session, channel_type_len);
++    /* 17 = packet_type(1) + channel_type_len(4) + sender_channel(4) +
++       window_size(4) + packet_size(4) */
++    channel->openNB_packet_len = channel_type_len + 17;
++    channel->openNB_packet = SSH2_ALLOC(session, channel->openNB_packet_len);
++    if(!channel->channel_type || !channel->openNB_packet) {
++        channel_open_nb_release(channel);
++        if(channel->channel_type)
++            SSH2_FREE(session, channel->channel_type);
++        SSH2_FREE(session, channel);
++        ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                 "Unable to allocate memory for channel-open request");
++        return NULL;
++    }
++    memcpy(channel->channel_type, channel_type, channel_type_len);
++
++    /* REMEMBER: local as in locally sourced */
++    channel->local.id = ssh2_channel_nextid(session);
++    channel->remote.window_size = window_size;
++    channel->remote.window_size_initial = window_size;
++    channel->remote.packet_size = packet_size;
++
++    s = channel->openNB_packet;
++    *(s++) = SSH_MSG_CHANNEL_OPEN;
++    ssh2_store_str(&s, channel_type, channel_type_len);
++    ssh2_store_u32(&s, channel->local.id);
++    ssh2_store_u32(&s, window_size);
++    ssh2_store_u32(&s, packet_size);
++
++    channel->openNB_state = ssh2_NB_state_created;
++    ssh2_list_add(&session->channels, &channel->node);
++
++    ssh2_deb((session, LIBSSH2_TRACE_CONN,
++              "Prepared pipelined channel open %u - win %u pack %u",
++              channel->local.id, window_size, packet_size));
++    return channel;
++}
++
++static int channel_open_finish(LIBSSH2_CHANNEL *channel)
++{
++    static const unsigned char reply_codes[3] = {
++        SSH_MSG_CHANNEL_OPEN_CONFIRMATION,
++        SSH_MSG_CHANNEL_OPEN_FAILURE,
++        0
++    };
++
++    LIBSSH2_SESSION *session = channel->session;
++    unsigned char local_channel[4];
++    unsigned char *data;
++    size_t data_len;
++    uint32_t reason_code;
++    int rc;
++
++    if(channel->openNB_state == ssh2_NB_state_idle)
++        return 0;
++    if(channel->openNB_state == ssh2_NB_state_end)
++        return ssh2_err(session, LIBSSH2_ERROR_BAD_USE,
++                        "Channel open was refused or failed");
++
++    if(channel->openNB_state == ssh2_NB_state_created)
++        channel->openNB_state = ssh2_NB_state_sent;
++
++    if(channel->openNB_state == ssh2_NB_state_sent) {
++        rc = ssh2_transport_send(session, channel->openNB_packet,
++                                 channel->openNB_packet_len,
++                                 channel->openNB_message,
++                                 channel->openNB_message_len);
++        if(rc == LIBSSH2_ERROR_EAGAIN) {
++            ssh2_err(session, rc, "Would block sending channel-open request");
++            return rc;
++        }
++        else if(rc)
++            return channel_open_nb_fail(channel, rc,
++                                        "Unable to send channel-open request");
++
++        channel_open_nb_release(channel);
++        memset(&channel->openNB_requirev_state, 0,
++               sizeof(channel->openNB_requirev_state));
++        channel->openNB_state = ssh2_NB_state_sent1;
++    }
++
++    ssh2_htonu32(local_channel, channel->local.id);
++    rc = ssh2_packet_requirev(session, reply_codes, &data, &data_len,
++                              1, local_channel, 4,
++                              &channel->openNB_requirev_state);
++    if(rc == LIBSSH2_ERROR_EAGAIN) {
++        ssh2_err(session, rc, "Would block waiting for channel-open reply");
++        return rc;
++    }
++    else if(rc)
++        return channel_open_nb_fail(channel, rc,
++                                    "Failed waiting for channel-open reply");
++
++    if(data_len >= 17 && data[0] == SSH_MSG_CHANNEL_OPEN_CONFIRMATION) {
++        channel->remote.id = ssh2_ntohu32(data + 5);
++        channel->local.window_size = ssh2_ntohu32(data + 9);
++        channel->local.window_size_initial = ssh2_ntohu32(data + 9);
++        channel->local.packet_size = ssh2_ntohu32(data + 13);
++        SSH2_FREE(session, data);
++        channel->openNB_state = ssh2_NB_state_idle;
++        ssh2_deb((session, LIBSSH2_TRACE_CONN,
++                  "Connection Established - ID: %u/%u win: %u/%u"
++                  " pack: %u/%u",
++                  channel->local.id, channel->remote.id,
++                  channel->local.window_size, channel->remote.window_size,
++                  channel->local.packet_size, channel->remote.packet_size));
++        return 0;
++    }
++
++    if(data_len < 9 || data[0] != SSH_MSG_CHANNEL_OPEN_FAILURE) {
++        SSH2_FREE(session, data);
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_PROTO,
++                                    "Unexpected packet size");
++    }
++
++    reason_code = ssh2_ntohu32(data + 5);
++    SSH2_FREE(session, data);
++    switch(reason_code) {
++    case SSH_OPEN_ADMINISTRATIVELY_PROHIBITED:
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_CHANNEL_FAILURE,
++            "Channel open failure (administratively prohibited)");
++    case SSH_OPEN_CONNECT_FAILED:
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_CHANNEL_FAILURE,
++            "Channel open failure (connect failed)");
++    case SSH_OPEN_UNKNOWN_CHANNELTYPE:
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_CHANNEL_FAILURE,
++            "Channel open failure (unknown channel type)");
++    case SSH_OPEN_RESOURCE_SHORTAGE:
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_CHANNEL_FAILURE,
++            "Channel open failure (resource shortage)");
++    default:
++        return channel_open_nb_fail(channel, LIBSSH2_ERROR_CHANNEL_FAILURE,
++            "Channel open failure");
++    }
++}
++
++/*
++ * Free-time handling of a pipelined open that has not settled. An open the
++ * server may have seen is driven to its reply, so a confirmed channel gets
++ * the ordinary CHANNEL_CLOSE instead of staying open on the server. One the
++ * server cannot have seen is only discarded. Returns EAGAIN or 0.
++ */
++static int channel_open_nb_settle(LIBSSH2_CHANNEL *channel)
++{
++    LIBSSH2_SESSION *session = channel->session;
++    int seen;
++    int rc;
++
++    if(channel->openNB_state == ssh2_NB_state_idle ||
++       channel->openNB_state == ssh2_NB_state_end)
++        return 0;
++
++    seen = channel->openNB_state == ssh2_NB_state_sent1 ||
++        (channel->openNB_state == ssh2_NB_state_sent &&
++         session->packet.olen &&
++         session->packet.odata == channel->openNB_packet);
++    if(seen && session->socket_state == SSH2_SOCKET_CONNECTED) {
++        rc = channel_open_finish(channel);
++        if(rc == LIBSSH2_ERROR_EAGAIN)
++            return rc;
++        /* confirmed: idle, closed below like any channel; otherwise end */
++        return 0;
++    }
++
++    channel_open_nb_release(channel);
++    channel->openNB_state = ssh2_NB_state_end;
++    channel->local.close = 1;
++    channel->remote.close = 1;
++    return 0;
++}
++
++LIBSSH2_CHANNEL *libssh2_channel_open_start(LIBSSH2_SESSION *session,
++                                            const char *channel_type,
++                                            unsigned int channel_type_len,
++                                            unsigned int window_size,
++                                            unsigned int packet_size,
++                                            const char *message,
++                                            unsigned int message_len)
++{
++    unsigned char *copy = NULL;
++
++    if(!session)
++        return NULL;
++    if(!channel_type || (message_len && !message)) {
++        ssh2_err(session, LIBSSH2_ERROR_BAD_USE, "Invalid channel-open input");
++        return NULL;
++    }
++    if(message_len) {
++        copy = SSH2_ALLOC(session, message_len);
++        if(!copy) {
++            ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                     "Unable to allocate memory for channel-open message");
++            return NULL;
++        }
++        memcpy(copy, message, message_len);
++    }
++    return channel_open_start(session, channel_type, channel_type_len,
++                              window_size, packet_size, copy, message_len);
++}
++
++LIBSSH2_CHANNEL *libssh2_channel_direct_tcpip_start(LIBSSH2_SESSION *session,
++                                                    const char *host,
++                                                    int port,
++                                                    const char *shost,
++                                                    int sport)
++{
++    unsigned char *message;
++    unsigned char *s;
++    size_t host_len;
++    size_t shost_len;
++    size_t message_len;
++
++    if(!session)
++        return NULL;
++    if(!host || !shost) {
++        ssh2_err(session, LIBSSH2_ERROR_BAD_USE, "Invalid direct-tcpip input");
++        return NULL;
++    }
++    host_len = strlen(host);
++    shost_len = strlen(shost);
++    /* host_len(4) + port(4) + shost_len(4) + sport(4) */
++    message_len = host_len + shost_len + 16;
++    s = message = SSH2_ALLOC(session, message_len);
++    if(!message) {
++        ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                 "Unable to allocate memory for direct-tcpip connection");
++        return NULL;
++    }
++    ssh2_store_str(&s, host, host_len);
++    ssh2_store_u32(&s, port);
++    ssh2_store_str(&s, shost, shost_len);
++    ssh2_store_u32(&s, sport);
++
++    ssh2_deb((session, LIBSSH2_TRACE_CONN,
++              "Requesting pipelined direct-tcpip session from %s:%d to %s:%d",
++              shost, sport, host, port));
++    return channel_open_start(session, "direct-tcpip",
++                              sizeof("direct-tcpip") - 1,
++                              LIBSSH2_CHANNEL_WINDOW_DEFAULT,
++                              LIBSSH2_CHANNEL_PACKET_DEFAULT,
++                              message, message_len);
++}
++
++LIBSSH2_CHANNEL *libssh2_channel_direct_streamlocal_start(
++    LIBSSH2_SESSION *session,
++    const char *socket_path, const char *shost, int sport)
++{
++    unsigned char *message;
++    unsigned char *s;
++    size_t path_len;
++    size_t shost_len;
++    size_t message_len;
++
++    if(!session)
++        return NULL;
++    if(!socket_path || !shost) {
++        ssh2_err(session, LIBSSH2_ERROR_BAD_USE,
++                 "Invalid direct-streamlocal input");
++        return NULL;
++    }
++    path_len = strlen(socket_path);
++    shost_len = strlen(shost);
++    /* path_len(4) + shost_len(4) + sport(4) */
++    message_len = path_len + shost_len + 12;
++    s = message = SSH2_ALLOC(session, message_len);
++    if(!message) {
++        ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                 "Unable to allocate memory "
++                 "for direct-streamlocal connection");
++        return NULL;
++    }
++    ssh2_store_str(&s, socket_path, path_len);
++    ssh2_store_str(&s, shost, shost_len);
++    ssh2_store_u32(&s, sport);
++
++    ssh2_deb((session, LIBSSH2_TRACE_CONN,
++              "Requesting pipelined direct-streamlocal session to %s",
++              socket_path));
++    return channel_open_start(session, "direct-streamlocal@openssh.com",
++                              sizeof("direct-streamlocal@openssh.com") - 1,
++                              LIBSSH2_CHANNEL_WINDOW_DEFAULT,
++                              LIBSSH2_CHANNEL_PACKET_DEFAULT,
++                              message, message_len);
++}
++
++int libssh2_channel_open_finish(LIBSSH2_CHANNEL *channel)
++{
++    int rc;
++
++    if(!channel)
++        return LIBSSH2_ERROR_BAD_USE;
++
++    BLOCK_ADJUST(rc, channel->session, channel_open_finish(channel));
++    return rc;
++}
++
+ /*
+  * Bind a port on the remote host and listen for connections
+  */
+@@ -2675,6 +3027,11 @@ int ssh2_channel_close(LIBSSH2_CHANNEL *channel)
+         return 0;
+     }
+ 
++    /* Waycar patch: no remote id to close until a pipelined open settles */
++    if(channel->openNB_state != ssh2_NB_state_idle)
++        return ssh2_err(session, LIBSSH2_ERROR_BAD_USE,
++                        "Channel open has not completed");
++
+     if(!channel->local.eof) {
+         rc = channel_send_eof(channel);
+         if(rc) {
+@@ -2829,6 +3186,11 @@ int ssh2_channel_free(LIBSSH2_CHANNEL *channel)
+         channel->free_state = ssh2_NB_state_created;
+     }
+ 
++    /* Waycar patch: a pipelined open must settle before it can be closed */
++    rc = channel_open_nb_settle(channel);
++    if(rc == LIBSSH2_ERROR_EAGAIN)
++        return rc;
++
+     /* Allow channel freeing even when the socket has lost its connection */
+     if(!channel->local.close &&
+        (session->socket_state == SSH2_SOCKET_CONNECTED)) {
+@@ -2876,6 +3238,7 @@ int ssh2_channel_free(LIBSSH2_CHANNEL *channel)
+         SSH2_FREE(session, channel->reqX11_packet);
+     if(channel->process_packet)
+         SSH2_FREE(session, channel->process_packet);
++    channel_open_nb_release(channel);
+ 
+     /* Free some entries in session-structure, if channel found */
+     if(session->open_channel == channel) {
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index 5d24403..1777368 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -518,6 +518,21 @@ struct _LIBSSH2_CHANNEL {
+     ssh2_NB_states reqPTYProcess_state;
+     int reqPTYProcess_denied;
+ 
++    /* Waycar patch: libssh2_channel_open_start()/libssh2_channel_open_finish()
++       keep the open request on the channel rather than in the session's
++       open_* state, so several opens can wait for their replies at once.
++       idle: not a pending open (never was one, or confirmed);
++       created: request built, never handed to the transport;
++       sent: handed to the transport, which may hold it partially sent;
++       sent1: fully sent, waiting for the reply;
++       end: refused or failed, the channel can only be freed. */
++    ssh2_NB_states openNB_state;
++    unsigned char *openNB_packet;
++    size_t openNB_packet_len;
++    unsigned char *openNB_message;
++    size_t openNB_message_len;
++    struct packet_requirev_state openNB_requirev_state;
++
+     /* State variables used in libssh2_channel_flush_ex() */
+     ssh2_NB_states flush_state;
+     size_t flush_refund_bytes;

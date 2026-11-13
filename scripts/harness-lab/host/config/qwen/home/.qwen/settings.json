@@ -1,0 +1,23 @@
+{
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "mock-model",
+        "name": "mock-model (Waycar harness lab mock)",
+        "baseUrl": "http://mock:8080/v1",
+        "envKey": "WAYCAR_LAB_QWEN_KEY"
+      }
+    ]
+  },
+  "env": {
+    "WAYCAR_LAB_QWEN_KEY": "waycar-lab-dummy-key"
+  },
+  "security": {
+    "auth": { "selectedType": "openai" },
+    "folderTrust": { "enabled": false }
+  },
+  "model": { "name": "mock-model" },
+  "privacy": { "usageStatisticsEnabled": false },
+  "general": { "disableAutoUpdate": true, "disableUpdateNag": true },
+  "ide": { "enabled": false, "hasSeenNudge": true }
+}

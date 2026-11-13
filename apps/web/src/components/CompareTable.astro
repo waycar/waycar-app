@@ -1,0 +1,120 @@
+---
+// Waycar beside one other product, on every row in src/lib/compare-rows.mjs,
+// grouped. A real table (caption, column and row headers) so assistive tech
+// can read it cell by cell. On a phone the columns narrow and the text wraps.
+import { WAYCAR_ROWS } from '../data/compare-waycar';
+import { CAPABILITIES, GROUPS, type Cell } from '../lib/compare-rows.mjs';
+import CompareCell from './CompareCell.astro';
+
+interface Props {
+  /** The other product's name. */
+  name: string;
+  /** Its cell for every row id. */
+  rows: Record<string, Cell>;
+}
+
+const { name, rows } = Astro.props;
+---
+
+<div class="scroll">
+  <table>
+    <caption class="visually-hidden">Waycar and {name} compared on {CAPABILITIES.length} points</caption>
+    <thead>
+      <tr>
+        <th scope="col"><span class="visually-hidden">Point of comparison</span></th>
+        <th scope="col">Waycar</th>
+        <th scope="col">{name}</th>
+      </tr>
+    </thead>
+    {
+      GROUPS.map((group) => (
+        <tbody>
+          <tr class="group">
+            <th scope="rowgroup" colspan="3">
+              {group.label}
+            </th>
+          </tr>
+          {CAPABILITIES.filter((row) => row.group === group.id).map((row) => (
+            <tr>
+              <th scope="row">{row.label}</th>
+              <td>
+                <CompareCell cell={WAYCAR_ROWS[row.id]} />
+              </td>
+              <td>
+                <CompareCell cell={rows[row.id]} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      ))
+    }
+  </table>
+</div>
+
+<style>
+  .scroll {
+    overflow-x: auto;
+    background: var(--glass-fill);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glass);
+  }
+
+  table {
+    width: 100%;
+    font-size: 14.5px;
+    line-height: 1.5;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 11px 16px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+
+  thead th {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    border-bottom-color: var(--line-2);
+  }
+
+  tbody th[scope='row'] {
+    width: 30%;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  td {
+    width: 35%;
+    color: var(--text-2);
+  }
+
+  .group th {
+    padding-top: 22px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+    background: rgb(var(--white-rgb) / 0.02);
+  }
+
+  tbody:last-of-type tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  @media (max-width: 600px) {
+    table {
+      font-size: 13.5px;
+    }
+
+    th,
+    td {
+      padding: 10px 10px;
+    }
+  }
+</style>

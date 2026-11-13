@@ -1,0 +1,83 @@
+# gitleaks configuration for this repository: gitleaks' default rules, plus
+# narrow allowlists for test fixtures and public client keys that the
+# default rules mistake for secrets. Each allowlist needs both its path and
+# its exact value (condition AND), so a real secret in any other file, or a
+# different value in these files, still fails.
+#
+#   gitleaks dir . --config .gitleaks.toml
+#
+# .github/workflows/secret-scan.yml runs it on every pull request and push to
+# main. Add an entry only for a value that is public or fake, with a comment
+# saying which.
+
+title = "Waycar"
+
+[extend]
+useDefault = true
+
+# A Swift type annotation (`let privateKey: Curve25519.Signing.PrivateKey`),
+# not a value.
+[[allowlists]]
+description = "CryptoKit type name"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''\.swift$''']
+regexes = ['''^Curve25519\.Signing\.PrivateKey$''']
+
+# Mosh session keys in unit tests: base64 of "0123456789abcdef",
+# "ABCDEFGHIJKLMNOP" and "qrstuvwxyz012345", and two of those decoded
+# strings, which gitleaks reports after decoding.
+[[allowlists]]
+description = "fake mosh session keys in unit tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)Tests/WaycarTests/''']
+regexes = ['''^(?:MDEyMzQ1Njc4OWFiY2RlZg|QUJDREVGR0hJSktMTU5PUA|cXJzdHV2d3h5ejAxMjM0NQ|0123456789abcdef|qrstuvwxyz012345)$''']
+
+# Notification Keys and device tokens in the shared test vectors, the plugin
+# README's example and the install checks: bytes 0x00-0x1f and 0xff-0xe0 in
+# base64url, and counting-pattern hex tokens.
+[[allowlists]]
+description = "fake Notification Keys and device tokens in vectors and checks"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(?:^|/)plugin/test-vectors/(?:notification-payload|live-activity-content)-v1\.json$''',
+  '''(?:^|/)plugin/README\.md$''',
+  '''(?:^|/)scripts/ci/(?:bare-install|core-distro|native-install|tmux-distro|node-era-upgrade)-check\.sh$''',
+]
+regexes = [
+  '''^(?:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8|__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA)$''',
+  '''^(?:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90|c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3)$''',
+]
+
+# PostHog's project key is a client key: it ships in the app binary and the
+# site's JavaScript by design.
+[[allowlists]]
+description = "PostHog project client key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(?:^|/)Sources/Waycar/Analytics/PostHogAnalytics\.swift$''',
+  '''(?:^|/)apps/web/src/worker\.ts$''',
+]
+regexes = ['''^phc_[A-Za-z0-9]{44}$''']
+
+# PEM framing in the relay tests around a key generated at run time (a JS
+# template string): no key bytes are in the files.
+[[allowlists]]
+description = "PEM framing around keys generated at run time"
+targetRules = ["private-key"]
+condition = "AND"
+paths = ['''(?:^|/)relay/test/(?:apns-jwt|worker)\.test\.js$''']
+regexes = ['''^-----BEGIN [A-Z ]*PRIVATE KEY-----\\n\$\{''']
+
+# The Node-era upgrade check's Python helper prints PEM framing around a key
+# it derives at run time from a seed it generates: the lines between the
+# markers are code, not key bytes.
+[[allowlists]]
+description = "PEM framing printed around a key derived at run time"
+targetRules = ["private-key"]
+condition = "AND"
+paths = ['''(?:^|/)scripts/ci/node-era-upgrade-check\.sh$''']
+regexes = ['''^-----BEGIN[ ]OPENSSH[ ]PRIVATE[ ]KEY-----"\)\nfor i in range\(0, len\(b64\), 70\): print\(b64''']

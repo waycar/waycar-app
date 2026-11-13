@@ -1,0 +1,111 @@
+---
+import AppStoreCta from '../components/AppStoreCta.astro';
+import QaList from '../components/QaList.astro';
+import Layout from '../layouts/Layout.astro';
+
+const questions = [
+  {
+    q: 'Is it really free?',
+    a: 'Yes. Waycar\'s developer built it for his own use and shares it for free. The app has no ads. Usage analytics are opt-in; the privacy policy explains what the app and website collect.',
+  },
+  {
+    q: 'Do I need a Waycar account?',
+    a: 'No. Connect your own machines over SSH. If you want to sync Hosts, keys and settings between your iPhone and iPad, turn on iCloud Sync with the same Apple Account and iCloud Keychain.',
+  },
+  {
+    q: 'What do I still pay for?',
+    a: 'Your own machines and any AI providers you use. Waycar does not include AI credits or a hosted machine.',
+  },
+];
+---
+
+<Layout
+  title="Free · Waycar"
+  description="Waycar is free on iPhone and iPad. Every feature included, unlimited agent and shell launches, no account and no subscription."
+>
+  <section class="section pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <div class="sec-head center">
+        <span class="kicker">Pricing</span>
+        <h1 id="pricing-title" class="sec-title">Waycar is <span class="grad-text">free.</span></h1>
+        <p class="sec-lede">Everything included. No account. No subscription.</p>
+      </div>
+
+      <div class="glass included" aria-labelledby="included-title">
+        <h2 id="included-title" class="kicker">Everything included</h2>
+        <ul class="points">
+          <li><strong>Every feature.</strong> Console, Chat Mode, terminals, notifications and the rest.</li>
+          <li><strong>Launch as much as you want.</strong> Start and resume agents and shells with no limit.</li>
+          <li><strong>iPhone and iPad.</strong> Optional sync through end-to-end encrypted iCloud Keychain.</li>
+        </ul>
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+      </div>
+    </div>
+  </section>
+
+  <section class="section qa" aria-labelledby="qa-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="kicker">Questions</span>
+        <h2 id="qa-title" class="sec-title">No catch.</h2>
+      </div>
+      <QaList items={questions} />
+      <p class="hint">Read the <a href="/privacy">privacy policy</a> or ask us at <a href="/support">Support</a>.</p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .included {
+    display: grid;
+    gap: 24px;
+    max-width: 640px;
+    margin-inline: auto;
+    padding: 28px 24px;
+  }
+
+  .points {
+    display: grid;
+    gap: 10px;
+    color: var(--text-2);
+  }
+
+  .points li {
+    position: relative;
+    padding-left: 18px;
+  }
+
+  .points li::before {
+    content: '';
+    position: absolute;
+    top: 0.6em;
+    left: 0;
+    width: 8px;
+    height: 1px;
+    background: var(--grad);
+  }
+
+  .points strong {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .qa {
+    padding-top: 0;
+  }
+
+  .qa .wrap {
+    max-width: 820px;
+  }
+
+  .hint {
+    margin-top: 20px;
+    font-size: var(--fs-button);
+    color: var(--text-3);
+  }
+
+  .hint a {
+    color: var(--text-2);
+    text-decoration: underline;
+  }
+</style>

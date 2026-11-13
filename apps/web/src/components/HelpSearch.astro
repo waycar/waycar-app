@@ -1,0 +1,536 @@
+---
+// Help search: the header's search trigger and the palette it opens. Without
+// JavaScript the trigger is a plain link to /help. The script makes it (and
+// any other `[data-help-search-open]`, such as the field on /help) open the
+// <dialog> instead; the link stays a link, marked as opening a dialog, so
+// Enter opens it and a modified click still opens /help. ⌘K / Ctrl+K and `/`
+// outside a text field open it too. The palette fetches /help/search.json
+// the first time it opens and ranks pages with src/lib/help-search.mjs as you
+// type.
+---
+
+<a class="search-trigger" href="/help" data-help-search-open aria-label="Search help">
+  <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <circle cx="11" cy="11" r="7"></circle>
+    <path d="m20 20-3.5-3.5"></path>
+  </svg>
+  <span class="search-text">Search help</span>
+  <kbd class="search-key" data-help-search-key hidden></kbd>
+</a>
+
+<dialog class="help-search" data-help-search aria-labelledby="help-search-label">
+  <div class="field">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="11" cy="11" r="7"></circle>
+      <path d="m20 20-3.5-3.5"></path>
+    </svg>
+    <label id="help-search-label" class="visually-hidden" for="help-search-input">Search help</label>
+    <input
+      id="help-search-input"
+      type="text"
+      inputmode="search"
+      enterkeyhint="go"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls="help-search-results"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      placeholder="Search help"
+    />
+    <button type="button" class="close" data-help-search-close aria-label="Esc, close search">Esc</button>
+  </div>
+  <div class="results" id="help-search-results" role="listbox" aria-label="Help pages"></div>
+  <p class="note" data-help-search-note>Type to search every help page.</p>
+  <p class="visually-hidden" role="status" data-help-search-status></p>
+  <div class="foot">
+    <span class="hints" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>↵</kbd> to open <kbd>esc</kbd> to close</span>
+    <a class="browse" href="/help">Browse all help</a>
+  </div>
+</dialog>
+
+<script>
+  import { helpPath } from '../data/help-paths';
+  import {
+    createSearchIndex,
+    excerpt,
+    highlight,
+    searchHelp,
+    type HelpSearchIndex,
+  } from '../lib/help-search.mjs';
+
+  const LIMIT = 10;
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[data-help-search]');
+  const input = dialog?.querySelector<HTMLInputElement>('input[role="combobox"]');
+  const list = dialog?.querySelector<HTMLElement>('[role="listbox"]');
+  const note = dialog?.querySelector<HTMLElement>('[data-help-search-note]');
+  const status = dialog?.querySelector<HTMLElement>('[data-help-search-status]');
+
+  if (dialog && input && list && note && status) {
+    // Every Apple platform's user agent names it (iPadOS reports "Macintosh").
+    const apple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+    for (const key of document.querySelectorAll<HTMLElement>('[data-help-search-key]')) {
+      key.textContent = apple ? '⌘K' : 'Ctrl K';
+      key.hidden = false;
+    }
+    for (const opener of document.querySelectorAll<HTMLElement>('[data-help-search-open]')) {
+      opener.hidden = false;
+      opener.setAttribute('aria-haspopup', 'dialog');
+      opener.setAttribute('aria-keyshortcuts', apple ? 'Meta+K /' : 'Control+K /');
+      opener.addEventListener('click', (event) => {
+        // A modified click on a link still opens /help in a new tab; a button has no default to fall back on.
+        const modified = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+        if (modified && opener instanceof HTMLAnchorElement) return;
+        event.preventDefault();
+        open();
+      });
+    }
+
+    // Fetched on first open, then kept; a failed fetch is retried next time.
+    let index: Promise<HelpSearchIndex> | undefined;
+    const load = () =>
+      (index ??= fetch('/help/search.json')
+        .then((response) => {
+          if (!response.ok) throw new Error(`search.json: HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(createSearchIndex)
+        .catch((error: unknown) => {
+          index = undefined;
+          throw error;
+        }));
+
+    let restoreFocus: HTMLElement | null = null;
+    let options: HTMLAnchorElement[] = [];
+    let active = -1;
+    let generation = 0;
+
+    function open() {
+      if (dialog!.open) {
+        input!.focus();
+        input!.select();
+        return;
+      }
+      restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dialog!.showModal();
+      input!.select();
+      load().catch(() => {});
+      void update();
+    }
+
+    dialog.addEventListener('close', () => {
+      restoreFocus?.focus();
+      restoreFocus = null;
+    });
+    // A click on the backdrop lands on the <dialog> itself. Close only when the press started
+    // there too, so a text drag from the input that ends on the backdrop keeps the palette open.
+    let pressedBackdrop = false;
+    dialog.addEventListener('pointerdown', (event) => {
+      pressedBackdrop = event.target === dialog;
+    });
+    dialog.addEventListener('click', (event) => {
+      if (pressedBackdrop && event.target === dialog) dialog.close();
+      pressedBackdrop = false;
+    });
+    dialog.querySelector('[data-help-search-close]')?.addEventListener('click', () => dialog.close());
+
+    function setActive(next: number) {
+      options[active]?.setAttribute('aria-selected', 'false');
+      active = next;
+      const option = options[active];
+      if (option) {
+        option.setAttribute('aria-selected', 'true');
+        input!.setAttribute('aria-activedescendant', option.id);
+        option.scrollIntoView({ block: 'nearest' });
+      } else {
+        input!.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    function showNote(text: string, browse = false) {
+      note!.replaceChildren(text);
+      if (browse) {
+        const link = document.createElement('a');
+        link.href = '/help';
+        link.textContent = 'Browse all help';
+        note!.append(' ', link, '.');
+      }
+      note!.hidden = false;
+    }
+
+    function appendHighlighted(parent: HTMLElement, parts: { text: string; match: boolean }[]) {
+      for (const part of parts) {
+        if (!part.match) {
+          parent.append(part.text);
+          continue;
+        }
+        const mark = document.createElement('mark');
+        mark.textContent = part.text;
+        parent.append(mark);
+      }
+    }
+
+    async function update() {
+      const query = input!.value;
+      const run = ++generation;
+      if (!query.trim()) {
+        render(query, []);
+        return;
+      }
+      let loaded: HelpSearchIndex;
+      try {
+        loaded = await load();
+      } catch {
+        if (run !== generation) return;
+        render(query, []);
+        showNote("Search couldn't load.", true);
+        status!.textContent = "Search couldn't load.";
+        return;
+      }
+      if (run !== generation) return;
+      render(query, searchHelp(loaded, query, { limit: LIMIT }));
+    }
+
+    function render(query: string, results: ReturnType<typeof searchHelp>) {
+      options = results.map((result, position) => {
+        const option = document.createElement('a');
+        option.className = 'result';
+        option.id = `help-search-option-${position}`;
+        option.href = helpPath(result.page.slug);
+        option.tabIndex = -1;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', 'false');
+
+        const head = document.createElement('span');
+        head.className = 'result-head';
+        const title = document.createElement('span');
+        title.className = 'result-title';
+        appendHighlighted(title, highlight(result.page.title, query, result.words));
+        const category = document.createElement('span');
+        category.className = 'result-category';
+        category.textContent = result.page.category;
+        head.append(title, category);
+
+        const text = document.createElement('span');
+        text.className = 'result-text';
+        appendHighlighted(text, highlight(excerpt(result.page, query, result.words), query, result.words));
+
+        option.append(head, text);
+        return option;
+      });
+      list!.replaceChildren(...options);
+      active = -1;
+      setActive(options.length > 0 ? 0 : -1);
+      input!.setAttribute('aria-expanded', String(options.length > 0));
+      list!.hidden = options.length === 0;
+      if (options.length > 0) {
+        note!.hidden = true;
+        status!.textContent = `${options.length} ${options.length === 1 ? 'result' : 'results'}`;
+      } else if (query.trim()) {
+        showNote(`No help pages match “${query.trim()}”.`, true);
+        status!.textContent = 'No results';
+      } else {
+        showNote('Type to search every help page.');
+        status!.textContent = '';
+      }
+    }
+
+    input.addEventListener('input', () => void update());
+    input.addEventListener('keydown', (event) => {
+      if (event.isComposing) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (options.length === 0) return;
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setActive((active + step + options.length) % options.length);
+      } else if (event.key === 'Enter') {
+        const option = options[active];
+        if (!option) return;
+        event.preventDefault();
+        if (event.metaKey || event.ctrlKey) window.open(option.href, '_blank', 'noopener');
+        else location.assign(option.href);
+      }
+    });
+    list.addEventListener('pointermove', (event) => {
+      const option = (event.target as Element | null)?.closest<HTMLAnchorElement>('[role="option"]');
+      const position = option ? options.indexOf(option) : -1;
+      if (position !== -1 && position !== active) setActive(position);
+    });
+
+    const editable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.matches('input, textarea, select'));
+    document.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        if (dialog.open) dialog.close();
+        else open();
+      } else if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey && !dialog.open && !editable(event.target)) {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+</script>
+
+<style>
+  .search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 8px 0 12px;
+    font-size: 14px;
+    color: var(--text-3);
+    white-space: nowrap;
+    background: rgb(var(--white-rgb) / 0.03);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-control);
+  }
+
+  .search-trigger:hover {
+    color: var(--text-2);
+    background: rgb(var(--white-rgb) / 0.06);
+  }
+
+  .search-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .search-text {
+    min-width: 6.5em;
+  }
+
+  .search-key,
+  .hints kbd {
+    padding: 2px 6px;
+    font: 500 11.5px / 1.3 var(--font-mono);
+    color: var(--text-3);
+    background: rgb(var(--white-rgb) / 0.04);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-code);
+  }
+
+  .search-key[hidden] {
+    display: none;
+  }
+
+  /* The header has room for the label only beside the full link row. */
+  @media (max-width: 1080px) {
+    .search-text {
+      display: none;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .search-trigger {
+      justify-content: center;
+      width: 40px;
+      padding: 0;
+    }
+
+    .search-key {
+      display: none;
+    }
+  }
+
+  /* ---------- Palette ---------- */
+
+  .help-search {
+    width: min(640px, 100% - 32px);
+    max-width: none;
+    max-height: min(580px, 100dvh - 96px);
+    margin: 12vh auto auto;
+    padding: 0;
+    overflow: hidden;
+    color: var(--text);
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-window);
+  }
+
+  .help-search[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .help-search::backdrop {
+    background: rgb(var(--black-rgb) / 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .help-search[open] {
+      animation: palette-in 0.16s ease-out;
+    }
+
+    @keyframes palette-in {
+      from {
+        opacity: 0;
+        translate: 0 -8px;
+      }
+    }
+  }
+
+  :global(html:has(dialog.help-search[open])) {
+    overflow: hidden;
+  }
+
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px 0 18px;
+    color: var(--text-3);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .field input {
+    flex: 1;
+    min-width: 0;
+    min-height: 56px;
+    font: 17px var(--font-sans);
+    color: var(--text);
+    background: none;
+    border: 0;
+    outline: none;
+  }
+
+  .field input::placeholder {
+    color: var(--text-3);
+  }
+
+  .close {
+    padding: 4px 8px;
+    font: 500 11.5px / 1.3 var(--font-mono);
+    color: var(--text-3);
+    background: rgb(var(--white-rgb) / 0.04);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-code);
+    cursor: pointer;
+  }
+
+  .close:hover {
+    color: var(--text);
+  }
+
+  .results {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px;
+  }
+
+  .results[hidden] {
+    display: none;
+  }
+
+  .results :global(.result) {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: var(--radius-control);
+    scroll-margin-block: 8px;
+  }
+
+  .results :global(.result[aria-selected='true']) {
+    background: rgb(var(--white-rgb) / 0.06);
+    box-shadow: inset 2px 0 0 var(--violet-soft);
+  }
+
+  .results :global(.result-head) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+
+  .results :global(.result-title) {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .results :global(.result-category) {
+    font: var(--fs-caption) var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .results :global(.result-text) {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-2);
+  }
+
+  .results :global(mark) {
+    color: var(--text);
+    background: rgb(var(--violet-soft-rgb) / 0.22);
+    border-radius: 3px;
+  }
+
+  .note {
+    flex: 1;
+    padding: 28px 20px;
+    font-size: 15px;
+    color: var(--text-2);
+    text-align: center;
+  }
+
+  .note[hidden] {
+    display: none;
+  }
+
+  .note :global(a),
+  .browse {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--text-3);
+    border-top: 1px solid var(--line);
+  }
+
+  .hints {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .browse {
+    margin-left: auto;
+  }
+
+  @media (max-width: 600px) {
+    .help-search {
+      width: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .hints {
+      display: none;
+    }
+  }
+</style>

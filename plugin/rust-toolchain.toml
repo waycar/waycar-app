@@ -1,0 +1,13 @@
+# The Rust toolchain every Host Tools build uses (CI, packaging, local).
+# Linux musl and macOS targets are cross-built from Linux with zig and
+# cargo-zigbuild: see scripts/build-plugin-binaries.sh.
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = [
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]

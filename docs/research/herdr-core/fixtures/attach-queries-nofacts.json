@@ -1,0 +1,1018 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 142,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAicW4iLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 499,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDE1IiwiYXJndiI6WyJzaCIsIi90bXAvaGNuYS9zL3F1ZXJ5Mi5zaCJdLCJjb2xzIjo1MiwiY3JlYXRlZF9tcyI6MTc5MzMwOTA3NTUyOCwiY3dkIjoiL3RtcC9oY25hL3Byb2oiLCJkaWVfd2l0aF9wYXJlbnQiOmZhbHNlLCJleGl0X2NvZGUiOm51bGwsImZpbmlzaGVkX21zIjpudWxsLCJpZGVudGl0eSI6Imdob3N0dHkiLCJrZWVwIjpmYWxzZSwibGFiZWxzIjp7fSwibmFtZSI6InFuIiwibm90aWZ5Ijp0cnVlLCJwYXJlbnQiOm51bGwsInBpZCI6MjUzMTY4NSwicmVhc29uIjpudWxsLCJyZXBvcnRlZCI6ZmFsc2UsInJtIjpmYWxzZSwicm93cyI6MjgsInNjcmVlbiI6ImV4YWN0Iiwic2lnbmFsIjpudWxsLCJzdGF0ZSI6ImxpdmUiLCJzdGF0dXMiOm51bGwsInN0YXR1c19tcyI6bnVsbCwidGVtcGxhdGUiOm51bGwsInRpdGxlIjoiIiwidHVybiI6MH19fQ==",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t15",
+      "argv": [
+       "sh",
+       "/tmp/hcna/s/query2.sh"
+      ],
+      "cols": 52,
+      "created_ms": 1793309075528,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {},
+      "name": "qn",
+      "notify": true,
+      "parent": null,
+      "pid": 2531685,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.002,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 226,
+   "payload_b64": "G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8xMDAzbBtbPzEwMDRsG1s/MTAwNWwbWz8xMDA2bBtbPzEwMTVsG1s/MTAxNmwbWz8yMDA0bBtbPzFsG1s/NjZsG1s/MjAzMWwbWz8yMDQ4bBtbPTA7MXUbWz8xMDQ5bBtbPzEwNDdsG1s/NDdsG1tIG1syShtbM2cbWzlHG0gbWzE3RxtIG1syNUcbSBtbMzNHG0gbWzQxRxtIG1s0OUcbSBtbSBtbMTsxSBtbMG0bWz85MDAxbA=="
+  },
+  {
+   "t": 1.48,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.48,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVkCg=="
+  },
+  {
+   "t": 1.482,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.482,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMwCg=="
+  },
+  {
+   "t": 1.483,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.484,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDcyCg=="
+  },
+  {
+   "t": 1.485,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY3Cg=="
+  },
+  {
+   "t": 1.486,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYyCg=="
+  },
+  {
+   "t": 1.487,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNhCg=="
+  },
+  {
+   "t": 1.488,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.488,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.489,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.49,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.491,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.492,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.493,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.494,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.494,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.495,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.496,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.497,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.498,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.499,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.499,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.5,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVjCg=="
+  },
+  {
+   "t": 1.501,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.502,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVkCg=="
+  },
+  {
+   "t": 1.503,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.503,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.504,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.505,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDcyCg=="
+  },
+  {
+   "t": 1.506,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY3Cg=="
+  },
+  {
+   "t": 1.507,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYyCg=="
+  },
+  {
+   "t": 1.507,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNhCg=="
+  },
+  {
+   "t": 1.508,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.509,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM4Cg=="
+  },
+  {
+   "t": 1.51,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.511,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM4Cg=="
+  },
+  {
+   "t": 1.511,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.512,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.513,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYzCg=="
+  },
+  {
+   "t": 1.514,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.514,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYzCg=="
+  },
+  {
+   "t": 1.515,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.516,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMzCg=="
+  },
+  {
+   "t": 1.517,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM0Cg=="
+  },
+  {
+   "t": 1.518,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMzCg=="
+  },
+  {
+   "t": 1.518,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM0Cg=="
+  },
+  {
+   "t": 1.519,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.52,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVjCg=="
+  },
+  {
+   "t": 1.521,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.522,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVkCg=="
+  },
+  {
+   "t": 1.522,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.523,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.524,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.525,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDcyCg=="
+  },
+  {
+   "t": 1.526,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY3Cg=="
+  },
+  {
+   "t": 1.527,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYyCg=="
+  },
+  {
+   "t": 1.528,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNhCg=="
+  },
+  {
+   "t": 1.528,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.529,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.53,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.532,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.532,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.533,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.533,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.534,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.535,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.536,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDJmCg=="
+  },
+  {
+   "t": 1.537,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.538,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.538,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.539,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDY2Cg=="
+  },
+  {
+   "t": 1.54,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.541,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDVjCg=="
+  },
+  {
+   "t": 1.542,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.542,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDViCg=="
+  },
+  {
+   "t": 1.543,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM2Cg=="
+  },
+  {
+   "t": 1.544,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.545,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.545,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMwCg=="
+  },
+  {
+   "t": 1.546,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.547,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.548,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMwCg=="
+  },
+  {
+   "t": 1.548,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDc0Cg=="
+  },
+  {
+   "t": 1.549,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.55,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDViCg=="
+  },
+  {
+   "t": 1.551,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM4Cg=="
+  },
+  {
+   "t": 1.552,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.552,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.553,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM4Cg=="
+  },
+  {
+   "t": 1.554,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.555,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM1Cg=="
+  },
+  {
+   "t": 1.556,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.556,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDc0Cg=="
+  },
+  {
+   "t": 1.557,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.558,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDViCg=="
+  },
+  {
+   "t": 1.559,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNmCg=="
+  },
+  {
+   "t": 1.56,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDM2Cg=="
+  },
+  {
+   "t": 1.561,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.561,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.562,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.563,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMyCg=="
+  },
+  {
+   "t": 1.564,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDYzCg=="
+  },
+  {
+   "t": 1.565,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDFiCg=="
+  },
+  {
+   "t": 1.565,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDViCg=="
+  },
+  {
+   "t": 1.566,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.567,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDNiCg=="
+  },
+  {
+   "t": 1.568,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDMxCg=="
+  },
+  {
+   "t": 1.569,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4,
+   "payload_b64": "IDUyCg=="
+  },
+  {
+   "t": 3.052,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": ""
+  },
+  {
+   "t": 3.052,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": "",
+   "reason": null
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ }
+}

@@ -1,0 +1,206 @@
+# Ubuntu jobs that used to live in ci.yml: the pairing plugin, the push
+# relay, and codegen drift: wire types (refs #286), the OMP demo terminal, and
+# the brand tokens (design/tokens.json, see DESIGN.md).
+#
+# Split out so a plugin/relay/LICENSE change cannot start the macos-26
+# simulator jobs. iOS CI stays in ci.yml; the marketing site (apps/web/)
+# stays in web.yml.
+#
+# Wire-type codegen drift is checked against a committed schema snapshot
+# (scripts/herdr-schema.json), captured from herdr 0.8.2 via
+# `herdr api schema --json`. CI has no herdr binary, so `--schema` feeds the
+# snapshot instead of shelling out. The snapshot also pins the exact schema
+# version the generated types were built from.
+#
+# The plugin version guard (scripts/check-plugin-version.sh) keeps the
+# plugin's three version fields and the app's
+# WaycarPluginRequirement.currentVersion in step, its minimums
+# (WaycarPlugin.swift, hence that path below) at or under the plugin version,
+# and a released version frozen:
+# shipped plugin files (plugin/ and scripts/package-plugin.sh, hence that
+# path below) that differ from `plugin-v<version>`, or from the PR base /
+# previous push when it already declares this version (PLUGIN_BASE), fail
+# until the version is bumped.
+#
+# plugin-binaries builds the native waycar binary for all four targets on
+# every plugin change, logs the sizes, packages the four tarballs, checks that
+# none of them carries anything of the Node version
+# (scripts/ci/package-clean-check.sh) and installs the Linux x86_64 one the way
+# a user does (scripts/ci/native-install-check.sh, on the runner with a
+# throwaway HOME, so it needs no Docker).
+# plugin-rust runs the crate's fmt, clippy and tests and checks the shipped
+# third-party licenses. Both install their toolchain through
+# scripts/ci/provision-plugin-build.sh. Nothing passes the binaries between
+# jobs as an artifact: the repository's artifact storage quota is spent, and
+# an upload failure here would otherwise take the site deploy down with it.
+#
+# The Host Tools need no Node. Node is installed (actions/setup-node) only
+# where something Node remains: relay-test, the push relay (a Cloudflare
+# Worker), and plugin-rust's test of the opencode extension, which runs in
+# OpenCode's own JavaScript runtime on the Host. The install check's stand-in
+# relay is a Python script (scripts/ci/relay-standin.py) that the runner
+# already has.
+#
+# Positive `paths`: one matching path starts every job here. Ubuntu is cheap,
+# so a plugin-only PR may also run relay + codegen. plugin/test-vectors/**
+# is under plugin/**, so those edits also start ci.yml (the Swift suites
+# consume the same vectors). A change to this file always runs.
+
+name: CI (Node)
+
+on:
+  pull_request:
+    paths:
+      - plugin/**
+      - scripts/check-plugin-version.sh
+      - scripts/package-plugin.sh
+      - scripts/build-plugin-binaries.sh
+      - scripts/ci/provision-plugin-build.sh
+      - scripts/ci/native-install-check.sh
+      - scripts/ci/package-clean-check.sh
+      - scripts/ci/relay-standin.py
+      - Sources/Waycar/Transport/WaycarPlugin.swift
+      - relay/**
+      - scripts/generate-wire-types.py
+      - scripts/herdr-schema.json
+      - Sources/Waycar/Transport/Generated/**
+      - scripts/demo-terminal/**
+      - Sources/Waycar/Demo/DemoTerminalFrames.swift
+      - design/tokens.json
+      - scripts/generate-brand-tokens.py
+      - apps/web/src/styles/tokens.css
+      - apps/web/src/styles/tokens.ts
+      - Sources/Waycar/Design/BrandTokens.swift
+      - Sources/Waycar/Design/Brand.xcassets/**
+      - DESIGN.md
+      - .github/workflows/ci-node.yml
+  push:
+    branches: [main]
+    paths:
+      - plugin/**
+      - scripts/check-plugin-version.sh
+      - scripts/package-plugin.sh
+      - scripts/build-plugin-binaries.sh
+      - scripts/ci/provision-plugin-build.sh
+      - scripts/ci/native-install-check.sh
+      - scripts/ci/package-clean-check.sh
+      - scripts/ci/relay-standin.py
+      - Sources/Waycar/Transport/WaycarPlugin.swift
+      - relay/**
+      - scripts/generate-wire-types.py
+      - scripts/herdr-schema.json
+      - Sources/Waycar/Transport/Generated/**
+      - scripts/demo-terminal/**
+      - Sources/Waycar/Demo/DemoTerminalFrames.swift
+      - design/tokens.json
+      - scripts/generate-brand-tokens.py
+      - apps/web/src/styles/tokens.css
+      - apps/web/src/styles/tokens.ts
+      - Sources/Waycar/Design/BrandTokens.swift
+      - Sources/Waycar/Design/Brand.xcassets/**
+      - DESIGN.md
+      - .github/workflows/ci-node.yml
+
+# Per-workflow group so this can run alongside ci.yml on the same SHA
+# (plugin/test-vectors starts both). A new push still cancels a stale
+# Node run on this ref.
+concurrency:
+  group: ci-node-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin-binaries:
+    name: Plugin binaries (4 targets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # Sizes go to the step summary (a markdown table) as well as the log.
+      - name: Build the four targets
+        run: sh scripts/build-plugin-binaries.sh "$RUNNER_TEMP/plugin-binaries"
+      - name: Package
+        run: sh scripts/package-plugin.sh "$RUNNER_TEMP/plugin-dist"
+        env:
+          WAYCAR_PLUGIN_BINARIES: ${{ runner.temp }}/plugin-binaries
+      - name: The packages carry no Node
+        run: sh scripts/ci/package-clean-check.sh "$RUNNER_TEMP/plugin-dist"
+      - name: Install and check
+        run: sh scripts/ci/native-install-check.sh --host "$RUNNER_TEMP/plugin-dist"
+
+  plugin-rust:
+    name: Pairing plugin (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # Installs the pinned Rust toolchain and puts it on later steps' PATH;
+      # a no-op when the runner's cache already has it.
+      - name: Provision the toolchain
+        working-directory: .
+        run: sh scripts/ci/provision-plugin-build.sh --github
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --locked
+      # bin/waycar-hook tries tmux, then herdr-core: which half a hook reaches,
+      # against a fake tmux and a stub waycar.
+      - name: Status Hook dispatch (tmux, then herdr-core)
+        run: sh test/waycar-hook-dispatch.sh
+      # The opencode extension's OpenCode 2 pushes: one per event across
+      # every Location's instance, approvals of subagents on their root.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: OpenCode 2 pushes (opencode extension)
+        run: node --test test/opencode-v2-pushes.test.mjs
+      # The tarball ships the license text of every linked crate.
+      - name: Third-party licenses are current
+        run: python3 ../scripts/plugin-licenses.py --check
+
+  plugin-version:
+    name: Plugin version guard
+    runs-on: ubuntu-latest
+    steps:
+      # Full history brings every plugin-v* tag for the shipped-files diff
+      # (the script can also fetch the one tag it needs into a shallow clone).
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check plugin version and release guard
+        run: sh scripts/check-plugin-version.sh
+        env:
+          PLUGIN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  relay-test:
+    name: Push relay (Node)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # The relay has zero dependencies, so there is no install step.
+      - name: Run relay tests
+        run: npm test
+
+  codegen-drift:
+    name: Codegen drift (wire types, demo terminal)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check generated wire types are up to date
+        run: scripts/generate-wire-types.py --check --schema scripts/herdr-schema.json
+      - name: Check the OMP demo terminal frames are up to date
+        run: python3 scripts/demo-terminal/make_omp_frames.py --check
+      - name: Check the brand tokens are up to date
+        run: python3 scripts/generate-brand-tokens.py --check

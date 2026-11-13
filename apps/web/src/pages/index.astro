@@ -1,0 +1,51 @@
+---
+import Faq from '../components/Faq.astro';
+import Features from '../components/Features.astro';
+import Security from '../components/Security.astro';
+import Setup from '../components/Setup.astro';
+import JustTalk from '../components/b/JustTalk.astro';
+import OutcomeClosing from '../components/b/OutcomeClosing.astro';
+import OnTheDrive from '../components/b/OnTheDrive.astro';
+import OutcomeHero from '../components/b/OutcomeHero.astro';
+import PickUp from '../components/b/PickUp.astro';
+import StartAnywhere from '../components/b/StartAnywhere.astro';
+import StepAway from '../components/b/StepAway.astro';
+import YourSetup from '../components/b/YourSetup.astro';
+import Layout from '../layouts/Layout.astro';
+
+const title = 'Waycar: talk to the coding agents on your own computer (Android coming soon)';
+const description =
+  'Talk to your phone (iOS 26+) and the coding agents on your own Mac or Linux box keep building. Step away, then come back and pick right up. iPhone and iPad.';
+const faqExtra = [
+  {
+    q: 'What happens to the terminal I already have open at my desk?',
+    a: 'On herdr, opening an agent in Waycar takes over its terminal, and the herdr client at your desk gets disconnected. Reattach at your desk when you sit back down. On tmux, nothing is taken over: your desk and phone can both watch the same window.',
+  },
+  {
+    q: 'Where does my voice go when I dictate?',
+    a: "Nowhere. Dictation (iOS 26 or later) uses Apple's on-device speech model. Your audio is never recorded or sent. Only the text goes to your Host, and only when you send it.",
+  },
+];
+---
+
+<Layout title={title} description={description} markdown="/index.md" canonicalPath="/" homePage>
+  <OutcomeHero />
+  <div class="wrap"><div class="divider"></div></div>
+  <JustTalk />
+  <div class="wrap"><div class="divider"></div></div>
+  <YourSetup />
+  <div class="wrap"><div class="divider"></div></div>
+  <StepAway />
+  <div class="wrap"><div class="divider"></div></div>
+  <OnTheDrive />
+  <div class="wrap"><div class="divider"></div></div>
+  <StartAnywhere />
+  <div class="wrap"><div class="divider"></div></div>
+  <PickUp />
+  <div class="wrap"><div class="divider"></div></div>
+  <Features compact />
+  <Security />
+  <Setup />
+  <Faq extra={faqExtra} />
+  <OutcomeClosing />
+</Layout>

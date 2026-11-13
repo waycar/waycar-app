@@ -1,0 +1,2 @@
+pipe DATA frames 503 total bytes 262144 first lens [16384, 11856, 1010, 606, 606, 606] last [1212, 796]
+ssh DATA frames 835 total bytes 262144 first lens [16384, 9432, 202, 202, 202, 202] last [202, 392]

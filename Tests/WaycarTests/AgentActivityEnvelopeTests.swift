@@ -1,0 +1,133 @@
+import Foundation
+import Testing
+
+@testable import Waycar
+
+/// Open and seal tests for the Live Activity details envelope v1, driven by
+/// the shared vectors in `plugin/test-vectors/live-activity-content-v1.json`.
+/// Non-`decodeOnly` valid vectors must seal byte-for-byte; every valid
+/// vector must open; invalid vectors (including the cross-AAD case) must
+/// fail with the given typed error.
+@Suite("Agent activity envelope")
+struct AgentActivityEnvelopeTests {
+    private static let vectors = LiveActivityVectorFile.shared
+
+    @Test func sharedVectorFileHasCases() {
+        #expect(Self.vectors.valid.count >= 4)
+        #expect(Self.vectors.invalid.count >= 5)
+        #expect(Self.vectors.valid.contains { $0.decodeOnly })
+        #expect(
+            Self.vectors.invalid.contains {
+                $0.error == "decrypt_failed" && $0.name.contains("domain separation")
+            })
+        // Progress (#189): one sealed case and one malformed decode-only case.
+        #expect(
+            Self.vectors.valid.contains { vector in
+                !vector.decodeOnly && vector.payload.agents.contains { $0.progress != nil }
+            })
+        #expect(Self.vectors.valid.contains { $0.name == "malformed progress is ignored" })
+    }
+
+    @Test(arguments: vectors.valid)
+    func opensValidVector(vector: LiveActivityVectorFile.Valid) throws {
+        let key = try #require(Data(base64URLEncoded: vector.key))
+
+        let details = try AgentActivityEnvelope.open(Data(vector.envelope.utf8), using: key)
+
+        #expect(details.hostName == vector.payload.host)
+        #expect(details.agents.count == vector.payload.agents.count)
+        for (got, expected) in zip(details.agents, vector.payload.agents) {
+            #expect(got.paneID == expected.pane)
+            #expect(got.kind == expected.kind)
+            #expect(got.name == expected.name)
+            #expect(got.status == expected.status)
+            #expect(got.title == expected.title)
+            #expect(got.workspace == expected.workspace)
+            #expect(got.rows == expected.rows)
+            #expect(got.progress == expected.agentProgress, "\(vector.name) \(expected.pane)")
+        }
+    }
+
+    @Test(arguments: vectors.valid)
+    func derivesKeyID(vector: LiveActivityVectorFile.Valid) throws {
+        let key = try #require(Data(base64URLEncoded: vector.key))
+        #expect(AgentActivityEnvelope.keyID(for: key) == vector.keyId)
+    }
+
+    @Test(arguments: vectors.valid.filter { !$0.decodeOnly })
+    func sealsValidVectorByteForByte(vector: LiveActivityVectorFile.Valid) throws {
+        let key = try #require(Data(base64URLEncoded: vector.key))
+        let nonce = try nonce(in: vector.envelope)
+        let details = AgentActivityDetails(
+            hostName: vector.payload.host,
+            agents: vector.payload.agents.map {
+                AgentActivityDetails.AgentDetail(
+                    paneID: $0.pane, kind: $0.kind, name: $0.name,
+                    workspace: $0.workspace, status: $0.status,
+                    title: $0.title, rows: $0.rows, progress: $0.agentProgress)
+            })
+
+        let sealed = try AgentActivityEnvelope.seal(details, using: key, nonce: nonce)
+
+        #expect(String(data: sealed, encoding: .utf8) == vector.envelope, "\(vector.name)")
+    }
+
+    @Test func sealPreservesCallerSuppliedAgentOrder() throws {
+        let key = Data(0..<32)
+        let nonce = Data(176..<188)
+        let details = AgentActivityDetails(
+            hostName: "mbp",
+            agents: [
+                .init(
+                    paneID: "w1:p-work", kind: "claude", name: "builder",
+                    status: "working", title: "still going"),
+                .init(
+                    paneID: "w1:p-block", kind: "claude", name: "reviewer",
+                    status: "blocked", title: "needs review"),
+            ])
+
+        let sealed = try AgentActivityEnvelope.seal(details, using: key, nonce: nonce)
+        let opened = try AgentActivityEnvelope.open(sealed, using: key)
+
+        #expect(opened.agents.map(\.paneID) == ["w1:p-work", "w1:p-block"])
+        #expect(opened.agents.map(\.status) == ["working", "blocked"])
+    }
+
+    @Test(arguments: vectors.invalid)
+    func rejectsInvalidVector(vector: LiveActivityVectorFile.Invalid) throws {
+        let key = try #require(Data(base64URLEncoded: vector.key))
+        do {
+            _ = try AgentActivityEnvelope.open(Data(vector.envelope.utf8), using: key)
+            Issue.record("unexpectedly opened \(vector.name)")
+        } catch {
+            #expect(error.wireCode == vector.error, "\(vector.name)")
+        }
+    }
+
+    private func nonce(in envelope: String) throws -> Data {
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: Data(envelope.utf8)) as? [String: Any])
+        let text = try #require(object["n"] as? String)
+        return try #require(Data(base64URLEncoded: text))
+    }
+
+    @Test func progressRoundTripsBesideAnAgentWithout() throws {
+        let key = Data(0..<32)
+        let details = AgentActivityDetails(
+            hostName: "mbp",
+            agents: [
+                .init(
+                    paneID: "w1:p1", kind: "codex", status: "working", title: nil,
+                    progress: AgentProgress(steps: .init(done: 3, total: 7), phase: .verifying)),
+                .init(
+                    paneID: "w1:p2", kind: "omp", status: "working", title: nil,
+                    progress: AgentProgress(steps: nil, phase: .wrappingUp)),
+                .init(paneID: "w1:p3", kind: "claude", status: "done", title: nil),
+            ])
+
+        let opened = try AgentActivityEnvelope.open(
+            try AgentActivityEnvelope.seal(details, using: key), using: key)
+
+        #expect(opened == details)
+    }
+}

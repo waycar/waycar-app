@@ -1,0 +1,106 @@
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+--- [none] 
+(a) ssh -T host '<connect line>' ; stdin = framed hello; stdout bytes before the first '{':
+0000000   {   "   i   d   "   :   0   ,   "   j   s   o   n   r   p   c
+0000020   "   :   "   2   .   0   "   ,   "   r   e   s   u   l   t   "
+0000040   :   {   "   c   o   r   e   "   :   {   "   i   d   "   :   "
+0000060   5   4   4   8   c   8   6   6   d   7   0   5   5   c   f   6
+   stderr: 
+(b) ssh -T host 'echo X'  ->
+0000000   X  \n
+0000002
+(c) printf 'echo X
+' | ssh -T host (login shell reads stdin) ->
+0000000   W   e   l   c   o   m   e       t   o       U   b   u   n   t
+0000020   u       2   4   .   0   4   .   5       L   T   S       (   G
+0000040   N   U   /   L   i   n   u   x       7   .   0   .   0   -   3
+0000060   8   -   g   e   n   e   r   i   c       x   8   6   _   6   4
+(d) printf 'echo X
+' | ssh -T host sh -s ->
+0000000   X  \n
+0000002
+--- [profile] 
+(a) ssh -T host '<connect line>' ; stdin = framed hello; stdout bytes before the first '{':
+0000000   {   "   i   d   "   :   0   ,   "   j   s   o   n   r   p   c
+0000020   "   :   "   2   .   0   "   ,   "   r   e   s   u   l   t   "
+0000040   :   {   "   c   o   r   e   "   :   {   "   i   d   "   :   "
+0000060   5   4   4   8   c   8   6   6   d   7   0   5   5   c   f   6
+   stderr: 
+(b) ssh -T host 'echo X'  ->
+0000000   X  \n
+0000002
+(c) printf 'echo X
+' | ssh -T host (login shell reads stdin) ->
+0000000   W   e   l   c   o   m   e       t   o       U   b   u   n   t
+0000020   u       2   4   .   0   4   .   5       L   T   S       (   G
+0000040   N   U   /   L   i   n   u   x       7   .   0   .   0   -   3
+0000060   8   -   g   e   n   e   r   i   c       x   8   6   _   6   4
+(d) printf 'echo X
+' | ssh -T host sh -s ->
+0000000   X  \n
+0000002
+--- [bashrctop] 
+(a) ssh -T host '<connect line>' ; stdin = framed hello; stdout bytes before the first '{':
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   {   "   i   d   "   :   0   ,   "   j   s   o   n   r   p
+0000040   c   "   :   "   2   .   0   "   ,   "   r   e   s   u   l   t
+0000060   "   :   {   "   c   o   r   e   "   :   {   "   i   d   "   :
+   stderr: 
+(b) ssh -T host 'echo X'  ->
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   X  \n
+0000023
+(c) printf 'echo X
+' | ssh -T host (login shell reads stdin) ->
+0000000   W   e   l   c   o   m   e       t   o       U   b   u   n   t
+0000020   u       2   4   .   0   4   .   5       L   T   S       (   G
+0000040   N   U   /   L   i   n   u   x       7   .   0   .   0   -   3
+0000060   8   -   g   e   n   e   r   i   c       x   8   6   _   6   4
+(d) printf 'echo X
+' | ssh -T host sh -s ->
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   X  \n
+0000023
+--- [bashrcafter] 
+(a) ssh -T host '<connect line>' ; stdin = framed hello; stdout bytes before the first '{':
+0000000   {   "   i   d   "   :   0   ,   "   j   s   o   n   r   p   c
+0000020   "   :   "   2   .   0   "   ,   "   r   e   s   u   l   t   "
+0000040   :   {   "   c   o   r   e   "   :   {   "   i   d   "   :   "
+0000060   5   4   4   8   c   8   6   6   d   7   0   5   5   c   f   6
+   stderr: 
+(b) ssh -T host 'echo X'  ->
+0000000   X  \n
+0000002
+(c) printf 'echo X
+' | ssh -T host (login shell reads stdin) ->
+0000000   W   e   l   c   o   m   e       t   o       U   b   u   n   t
+0000020   u       2   4   .   0   4   .   5       L   T   S       (   G
+0000040   N   U   /   L   i   n   u   x       7   .   0   .   0   -   3
+0000060   8   -   g   e   n   e   r   i   c       x   8   6   _   6   4
+(d) printf 'echo X
+' | ssh -T host sh -s ->
+0000000   X  \n
+0000002
+--- [all] 
+(a) ssh -T host '<connect line>' ; stdin = framed hello; stdout bytes before the first '{':
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   {   "   i   d   "   :   0   ,   "   j   s   o   n   r   p
+0000040   c   "   :   "   2   .   0   "   ,   "   r   e   s   u   l   t
+0000060   "   :   {   "   c   o   r   e   "   :   {   "   i   d   "   :
+   stderr: 
+(b) ssh -T host 'echo X'  ->
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   X  \n
+0000023
+(c) printf 'echo X
+' | ssh -T host (login shell reads stdin) ->
+0000000   W   e   l   c   o   m   e       t   o       U   b   u   n   t
+0000020   u       2   4   .   0   4   .   5       L   T   S       (   G
+0000040   N   U   /   L   i   n   u   x       7   .   0   .   0   -   3
+0000060   8   -   g   e   n   e   r   i   c       x   8   6   _   6   4
+(d) printf 'echo X
+' | ssh -T host sh -s ->
+0000000   N   O   I   S   E   -   B   A   S   H   R   C   -   T   O   P
+0000020  \n   X  \n
+0000023

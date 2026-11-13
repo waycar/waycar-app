@@ -1,0 +1,8 @@
+# plain-mode (no hello framed) events.subscribe over `hc connect`; filter {"terminal":"wire2"}. columns: seconds-since-start TAB raw line (one JSON-RPC message per line)
+# -> {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"terminal":"wire2"}}
+0.002	{"id":1,"jsonrpc":"2.0","result":{"channel":null,"seq":137,"terminals":[{"address":"t1j","argv":["sh","-c","echo hi; exec cat"],"cols":200,"created_ms":1793309195575,"cwd":"/tmp/hcna/proj","die_with_parent":false,"exit_code":null,"finished_ms":null,"identity":"ghostty","keep":false,"labels":{},"name":"wire2","notify":true,"parent":null,"pid":2534129,"reason":null,"reported":false,"rm":false,"rows":120,"screen":"exact","signal":null,"state":"live","status":null,"status_ms":null,"template":null,"title":"","turn":0}]}}
+0.073	{"jsonrpc":"2.0","method":"event","params":{"data":{"argv":["cat"],"cwd":"/tmp/hcna/proj","name":"cat","pid":2534129},"seq":138,"terminal":"t1j","type":"foreground"}}
+1.004	{"jsonrpc":"2.0","method":"event","params":{"data":{"labels":{"k":"v"}},"seq":139,"terminal":"t1j","type":"labels"}}
+2.009	{"jsonrpc":"2.0","method":"event","params":{"data":{"exit_code":null,"finished_ms":1793309197600,"reason":"killed","signal":1},"seq":140,"terminal":"t1j","type":"finished"}}
+3.014	{"jsonrpc":"2.0","method":"event","params":{"data":{},"seq":141,"terminal":"t1j","type":"removed"}}
+15.003	{"jsonrpc":"2.0","method":"heartbeat","params":{"seq":141}}

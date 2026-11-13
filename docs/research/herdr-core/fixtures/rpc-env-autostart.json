@@ -1,0 +1,71 @@
+{
+ "cold_start_seconds": 0.012,
+ "exec_env_given_to_hc_connect": {
+  "HOME": "/tmp/hc-neutral/home",
+  "LANG": "C.UTF-8",
+  "LOGNAME": "node",
+  "PATH": "/usr/bin:/bin",
+  "SHELL": "/bin/bash",
+  "SSH_CLIENT": "1.2.3.4 5555 22",
+  "SSH_CONNECTION": "1.2.3.4 5555 5.6.7.8 22",
+  "SSH_TTY": "/dev/pts/9",
+  "USER": "node",
+  "XDG_CONFIG_HOME": "/tmp/hc-neutral/config",
+  "XDG_RUNTIME_DIR": "/tmp/hc-neutral/run",
+  "XDG_STATE_HOME": "/tmp/hc-neutral/state"
+ },
+ "first_connect": [
+  {
+   "note": "hello on a never-started session (hc connect auto-starts the core)",
+   "received": [
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"core\":{\"id\":\"a92dbff1599e56d3b468feddd561cad7\",\"name\":\"6a09d8670141\"},\"features\":[\"framed\",\"attach\",\"events\",\"status\",\"shell\"],\"framed\":false,\"generation\":1,\"methods\":[\"hello\",\"server.status\",\"server.stop\",\"server.restart\",\"terminal.run\",\"templates.list\",\"terminal.list\",\"terminal.get\",\"terminal.kill\",\"terminal.rm\",\"terminal.keep\",\"terminal.label\",\"terminal.read\",\"terminal.attach\",\"terminal.send\",\"terminal.wait\",\"terminal.keys\",\"terminal.interrupt\",\"terminal.put\",\"machine.exec\",\"file.read\",\"file.write\",\"file.edit\",\"doc.get\",\"doc.set\",\"events.subscribe\",\"machine.add\",\"machine.list\",\"machine.connect\",\"machine.rename\",\"machine.rm\",\"rpc.discover\"],\"version\":\"0.1.14\"}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"hello\",\"params\":{}}"
+  },
+  {
+   "note": "env as programs see it: core env = env of the FIRST hc connect (here a minimal ssh-like env); SSH_* removed; HC_* added",
+   "received": [
+    "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"echo PATH=$PATH SHELL=$SHELL HOME=$HOME USER=$USER LANG=$LANG; env | grep -E '^(SSH_|XDG_RUNTIME|HC_|TERM|PWD)' | sort | cut -c1-100; command -v claude codex node || echo NOT_FOUND\"],\"cols\":200,\"created_ms\":1793309003490,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"PATH=/usr/bin:/bin SHELL=/bin/bash HOME=/tmp/hc-neutral/home USER=node LANG=C.UTF-8\\nHC_SCOPE=25055730-39b9980561f5999743e80df90b9e6d93\\nHC_SESSION=env1\\nHC_TERMINAL_ID=t1\\nHC_TERMINAL_SOCKET=/tmp/hc-neutral/run/herdr-core/env1.sock\\nPWD=/tmp/hc-neutral/proj\\nTERM=xterm-256color\\nTERM_PROGRAM=ghostty\\nXDG_RUNTIME_DIR=/tmp/hc-neutral/run\\nNOT_FOUND\",\"parent\":null,\"pid\":2530681,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t1\",\"turn\":0}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"terminal.run\",\"params\":{\"line\":\"echo PATH=$PATH SHELL=$SHELL HOME=$HOME USER=$USER LANG=$LANG; env | grep -E '^(SSH_|XDG_RUNTIME|HC_|TERM|PWD)' | sort | cut -c1-100; command -v claude codex node || echo NOT_FOUND\",\"wait\":true,\"timeout\":10}}"
+  },
+  {
+   "note": "argv program not on core PATH -> spawn_failed",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the program name and cwd\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start \\\"claude\\\": No such file or directory (os error 2)\"},\"id\":3,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"claude\",\"--version\"],\"wait\":true,\"timeout\":10}}"
+  },
+  {
+   "note": "same with env.PATH override: lookup uses the NEW PATH",
+   "received": [
+    "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t3\",\"argv\":[\"claude\",\"--version\"],\"cols\":200,\"created_ms\":1793309003499,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"2.1.311 (Claude Code)\",\"parent\":null,\"pid\":2530690,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t3\",\"turn\":0}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"claude\",\"--version\"],\"wait\":true,\"timeout\":10,\"env\":{\"PATH\":\"/usr/local/bin:/usr/bin:/bin\"}}}"
+  },
+  {
+   "note": "shell line: sh -c, non-login, so ~/.profile PATH is not applied",
+   "received": [
+    "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t4\",\"argv\":[\"sh\",\"-c\",\"fakeclaude\"],\"cols\":200,\"created_ms\":1793309003513,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"sh: 1: fakeclaude: not found\",\"parent\":null,\"pid\":2530694,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":127,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t4\",\"turn\":0}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"terminal.run\",\"params\":{\"line\":\"fakeclaude\",\"wait\":true,\"timeout\":10}}"
+  },
+  {
+   "note": "login shell through argv: picks up ~/.profile PATH",
+   "received": [
+    "{\"id\":6,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t5\",\"argv\":[\"bash\",\"-lc\",\"fakeclaude\"],\"cols\":200,\"created_ms\":1793309003518,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"fakeclaude running from /tmp/hc-neutral/proj PATH=/tmp/hc-neutral/home/.fakebin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games\",\"parent\":null,\"pid\":2530698,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t5\",\"turn\":0}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"bash\",\"-lc\",\"fakeclaude\"],\"wait\":true,\"timeout\":10}}"
+  }
+ ],
+ "note": "sshenv = HOME,SHELL=/bin/bash,USER,LOGNAME,PATH=/usr/bin:/bin,SSH_CONNECTION,SSH_CLIENT,SSH_TTY,LANG,XDG_*(scratch). cold start to first hello reply: 0.012 s",
+ "second_connect": [
+  {
+   "note": "second hc connect with a different env: ignored by the running core",
+   "received": [
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t6\",\"argv\":[\"sh\",\"-c\",\"echo PATH=$PATH MARKER=$MARKER\"],\"cols\":200,\"created_ms\":1793309003528,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":null,\"notify\":true,\"output\":\"PATH=/usr/bin:/bin MARKER=\",\"parent\":null,\"pid\":2530709,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":0,\"reason\":\"exit\",\"signal\":null,\"status\":null,\"terminal\":\"t6\",\"turn\":0}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"terminal.run\",\"params\":{\"line\":\"echo PATH=$PATH MARKER=$MARKER\",\"wait\":true,\"timeout\":10}}"
+  }
+ ]
+}

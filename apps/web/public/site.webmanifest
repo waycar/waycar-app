@@ -1,0 +1,13 @@
+{
+  "name": "Waycar",
+  "short_name": "Waycar",
+  "description": "Your coding agents on iPhone and iPad, over mosh and SSH.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#07080b",
+  "theme_color": "#07080b",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

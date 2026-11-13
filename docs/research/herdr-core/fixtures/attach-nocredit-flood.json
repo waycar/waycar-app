@@ -1,0 +1,707 @@
+{
+ "frames": [
+  {
+   "t": 0.002,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 145,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDEsICJtZXRob2QiOiAidGVybWluYWwuYXR0YWNoIiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAiZmxvb2QiLCAiY29scyI6IDUyLCAicm93cyI6IDI4LCAib2JzZXJ2ZSI6IGZhbHNlLCAiaGlzdG9yeSI6IDB9fQ=="
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 545,
+   "payload_b64": "eyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJjaGFubmVsIjoxLCJ0ZXJtaW5hbCI6eyJhZGRyZXNzIjoidDE5IiwiYXJndiI6WyJzaCIsIi1jIiwieWVzIFwiZmxvb2QgbGluZSAwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5XCIiXSwiY29scyI6NTIsImNyZWF0ZWRfbXMiOjE3OTMzMDkxMDY5MTQsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiaWRlbnRpdHkiOiJnaG9zdHR5Iiwia2VlcCI6ZmFsc2UsImxhYmVscyI6e30sIm5hbWUiOiJmbG9vZCIsIm5vdGlmeSI6dHJ1ZSwicGFyZW50IjpudWxsLCJwaWQiOjI1MzI0OTUsInJlYXNvbiI6bnVsbCwicmVwb3J0ZWQiOmZhbHNlLCJybSI6ZmFsc2UsInJvd3MiOjI4LCJzY3JlZW4iOiJleGFjdCIsInNpZ25hbCI6bnVsbCwic3RhdGUiOiJsaXZlIiwic3RhdHVzIjpudWxsLCJzdGF0dXNfbXMiOm51bGwsInRlbXBsYXRlIjpudWxsLCJ0aXRsZSI6IiIsInR1cm4iOjB9fX0=",
+   "json": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+     "channel": 1,
+     "terminal": {
+      "address": "t19",
+      "argv": [
+       "sh",
+       "-c",
+       "yes \"flood line 0123456789012345678901234567890123456789\""
+      ],
+      "cols": 52,
+      "created_ms": 1793309106914,
+      "cwd": "/tmp/hcna/proj",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {},
+      "name": "flood",
+      "notify": true,
+      "parent": null,
+      "pid": 2532495,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 28,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+     }
+    }
+   }
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 9877,
+   "payload_b64": "(repaint/first paint, see .bin) G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8x..."
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 13071,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.004,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.005,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 7547,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.006,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 9023,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.007,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 4095,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 0.008,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 1496,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 3.052,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CREDIT",
+   "len": 4,
+   "payload_b64": "AAABAA=="
+  },
+  {
+   "t": 3.052,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 16384,
+   "payload_b64": "(repaint/first paint, see .bin) G1shcBtbPzIwMjZsG1s/OWwbWz8xMDAwbBtbPzEwMDFsG1s/MTAwMmwbWz8x..."
+  },
+  {
+   "t": 3.053,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 16384,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 3.053,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 16384,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 3.053,
+   "dir": "in",
+   "ch": 1,
+   "kind": "DATA",
+   "len": 16384,
+   "payload_b64": "(elided)"
+  },
+  {
+   "t": 4.052,
+   "dir": "out",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 86,
+   "payload_b64": "eyJqc29ucnBjIjogIjIuMCIsICJpZCI6IDIsICJtZXRob2QiOiAidGVybWluYWwuZ2V0IiwgInBhcmFtcyI6IHsidGVybWluYWwiOiAiZmxvb2QifX0="
+  },
+  {
+   "t": 4.053,
+   "dir": "in",
+   "ch": 0,
+   "kind": "DATA",
+   "len": 665,
+   "payload_b64": "eyJpZCI6MiwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJhZGRyZXNzIjoidDE5IiwiYXJndiI6WyJzaCIsIi1jIiwieWVzIFwiZmxvb2QgbGluZSAwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5XCIiXSwiY29scyI6NTIsImNyZWF0ZWRfbXMiOjE3OTMzMDkxMDY5MTQsImN3ZCI6Ii90bXAvaGNuYS9wcm9qIiwiZGllX3dpdGhfcGFyZW50IjpmYWxzZSwiZXhpdF9jb2RlIjpudWxsLCJmaW5pc2hlZF9tcyI6bnVsbCwiZm9yZWdyb3VuZCI6eyJhcmd2IjpbInNoIiwiLWMiLCJ5ZXMgXCJmbG9vZCBsaW5lIDAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODlcIiJdLCJjd2QiOiIvdG1wL2hjbmEvcHJvaiIsIm5hbWUiOiJzaCIsInBpZCI6MjUzMjQ5NX0sImlkZW50aXR5IjoiZ2hvc3R0eSIsImtlZXAiOmZhbHNlLCJsYWJlbHMiOnt9LCJuYW1lIjoiZmxvb2QiLCJub3RpZnkiOnRydWUsInBhcmVudCI6bnVsbCwicGlkIjoyNTMyNDk1LCJyZWFzb24iOm51bGwsInJlcG9ydGVkIjpmYWxzZSwicm0iOmZhbHNlLCJyb3dzIjoyOCwic2NyZWVuIjoiZXhhY3QiLCJzaWduYWwiOm51bGwsInN0YXRlIjoibGl2ZSIsInN0YXR1cyI6bnVsbCwic3RhdHVzX21zIjpudWxsLCJ0ZW1wbGF0ZSI6bnVsbCwidGl0bGUiOiIiLCJ0dXJuIjowfX0=",
+   "json": {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result": {
+     "address": "t19",
+     "argv": [
+      "sh",
+      "-c",
+      "yes \"flood line 0123456789012345678901234567890123456789\""
+     ],
+     "cols": 52,
+     "created_ms": 1793309106914,
+     "cwd": "/tmp/hcna/proj",
+     "die_with_parent": false,
+     "exit_code": null,
+     "finished_ms": null,
+     "foreground": {
+      "argv": [
+       "sh",
+       "-c",
+       "yes \"flood line 0123456789012345678901234567890123456789\""
+      ],
+      "cwd": "/tmp/hcna/proj",
+      "name": "sh",
+      "pid": 2532495
+     },
+     "identity": "ghostty",
+     "keep": false,
+     "labels": {},
+     "name": "flood",
+     "notify": true,
+     "parent": null,
+     "pid": 2532495,
+     "reason": null,
+     "reported": false,
+     "rm": false,
+     "rows": 28,
+     "screen": "exact",
+     "signal": null,
+     "state": "live",
+     "status": null,
+     "status_ms": null,
+     "template": null,
+     "title": "",
+     "turn": 0
+    }
+   }
+  },
+  {
+   "t": 4.103,
+   "dir": "out",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": ""
+  },
+  {
+   "t": 4.109,
+   "dir": "in",
+   "ch": 1,
+   "kind": "CLOSE",
+   "len": 0,
+   "payload_b64": "",
+   "reason": null
+  }
+ ],
+ "hello_reply": {
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+   "core": {
+    "id": "b16ea0348871a1e21dd8773e29771545",
+    "name": "6a09d8670141"
+   },
+   "features": [
+    "framed",
+    "attach",
+    "events",
+    "status",
+    "shell"
+   ],
+   "framed": true,
+   "generation": 1,
+   "methods": [
+    "hello",
+    "server.status",
+    "server.stop",
+    "server.restart",
+    "terminal.run",
+    "templates.list",
+    "terminal.list",
+    "terminal.get",
+    "terminal.kill",
+    "terminal.rm",
+    "terminal.keep",
+    "terminal.label",
+    "terminal.read",
+    "terminal.attach",
+    "terminal.send",
+    "terminal.wait",
+    "terminal.keys",
+    "terminal.interrupt",
+    "terminal.put",
+    "machine.exec",
+    "file.read",
+    "file.write",
+    "file.edit",
+    "doc.get",
+    "doc.set",
+    "events.subscribe",
+    "machine.add",
+    "machine.list",
+    "machine.connect",
+    "machine.rename",
+    "machine.rm",
+    "rpc.discover"
+   ],
+   "version": "0.1.14"
+  }
+ },
+ "note": "no CREDIT sent: first 262144 bytes (256 KiB) delivered in DATA frames then silence; after credit:65536 the next frame is a full repaint (ESC[!p), then 65536 more bytes. .bin keeps only frames 0,1, the repaint and the last. total ch1 DATA bytes in this capture: 327680"
+}

@@ -1,0 +1,140 @@
+---
+// /solutions: every solution page, a card each, in index order.
+import AppStoreCta from '../../components/AppStoreCta.astro';
+import Layout from '../../layouts/Layout.astro';
+import { getSolutions, solutionPath } from '../../lib/solutions';
+
+const solutions = await getSolutions();
+---
+
+<Layout
+  title="Reach your coding agents from an iPhone · Waycar"
+  description="Plain answers for running Claude Code from an iPhone, using a mosh client or tmux on iOS, and checking on an AI agent remotely, with Waycar."
+  markdown="/solutions.md"
+>
+  <section class="section solutions-index" aria-labelledby="solutions-title">
+    <div class="wrap">
+      <header class="head">
+        <span class="kicker">Solutions</span>
+        <h1 id="solutions-title" class="sec-title">Reach your coding agents from your phone</h1>
+        <p class="sec-lede">
+          Questions people ask when an agent is running on a machine and they are not at it. Each page says what you need,
+          how Waycar answers it, and what it cannot do.
+        </p>
+      </header>
+
+      <ul class="list">
+        {
+          solutions.map((entry) => (
+            <li>
+              <a class="glass card" href={solutionPath(entry.id)}>
+                <span class="card-kind">{entry.data.query}</span>
+                <h2 class="card-title">{entry.data.title}</h2>
+                <span class="card-text">{entry.data.summary}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      <p class="more">
+        Weighing Waycar against another app? See <a href="/compare">how Waycar compares</a>.
+      </p>
+
+      <section class="glass closing" aria-labelledby="closing-title">
+        <h2 id="closing-title">Try Waycar on your own machine</h2>
+        <p>
+          Waycar is <a href="/pricing">free</a>. Every feature included, unlimited launches, no account or subscription.
+        </p>
+        <div class="actions">
+          <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+          <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
+        </div>
+      </section>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .solutions-index {
+    padding-top: 64px;
+  }
+
+  .head {
+    max-width: 820px;
+  }
+
+  .list {
+    display: grid;
+    gap: 12px;
+    max-width: 820px;
+    margin-top: 48px;
+  }
+
+  .card {
+    display: grid;
+    gap: 6px;
+    padding: 20px 22px;
+    border-radius: var(--radius-control-lg);
+  }
+
+  .card:hover {
+    border-color: var(--line-2);
+  }
+
+  .card-kind {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    color: var(--violet-soft);
+  }
+
+  .card-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .card-text {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text-3);
+  }
+
+  .more {
+    margin-top: 48px;
+    color: var(--text-2);
+  }
+
+  .more a,
+  .closing p a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .closing {
+    max-width: 820px;
+    margin-top: 48px;
+    padding: 28px 28px 30px;
+  }
+
+  .closing h2 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .closing p {
+    max-width: 62ch;
+    margin-top: 10px;
+    color: var(--text-2);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+  }
+</style>

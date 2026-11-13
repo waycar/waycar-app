@@ -1,0 +1,37 @@
+---
+// The key under a comparison table. "Not documented" is the one that needs
+// saying: it means the maker's own pages are silent, so the page claims nothing
+// (it is not a No). The slot takes a closing sentence, such as the check date.
+import LevelMark from './LevelMark.astro';
+---
+
+<p class="legend">
+  <span class="item"><LevelMark level="yes" />Yes</span>{' '}
+  <span class="item"><LevelMark level="partial" />Partial</span>{' '}
+  <span class="item"><LevelMark level="no" />No</span>{' '}
+  <span class="item"><LevelMark level="unknown" />Not documented: the maker's own pages say nothing either way, so we claim nothing.</span>{' '}
+  <slot />
+</p>
+
+<style>
+  .legend {
+    max-width: 82ch;
+    font-size: var(--fs-caption);
+    line-height: 1.8;
+    color: var(--text-3);
+  }
+
+  .item {
+    margin-right: 14px;
+    white-space: nowrap;
+  }
+
+  .item :global(.mark) {
+    margin-right: 6px;
+  }
+
+  /* The last item is a sentence, so it wraps. */
+  .item:last-of-type {
+    white-space: normal;
+  }
+</style>

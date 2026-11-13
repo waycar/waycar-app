@@ -1,0 +1,94 @@
+{
+ "HAND_MADE": true,
+ "doc_get_exchange": [
+  {
+   "note": "doc.get herdr-app (hand-made document written by this research with doc.set; the real app writes the same shape)",
+   "received": [
+    "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"value\":{\"spaces\":[{\"folder\":\"/home/u/src/waycar\",\"id\":\"s0a1b2c3d4e5f60718293a4b5c6d7e8f\",\"name\":\"waycar\",\"tabs\":[{\"id\":\"tab01\",\"name\":\"main\",\"root\":{\"children\":[{\"content\":{\"terminal\":\"t1\"},\"id\":\"p1\",\"size\":{\"weight\":2.0},\"type\":\"block\"},{\"children\":[{\"content\":{\"terminal\":\"t2\"},\"id\":\"p2\",\"type\":\"block\"},{\"content\":{\"terminal\":\"t3\"},\"id\":\"p3\",\"type\":\"block\"}],\"id\":\"col1\",\"size\":{\"weight\":1.0},\"type\":\"column\"}],\"id\":\"tab01\",\"type\":\"row\"}},{\"id\":\"tab02\",\"name\":\"review\",\"root\":{\"children\":[{\"content\":{\"terminal\":\"t4\"},\"id\":\"p4\",\"type\":\"block\"}],\"id\":\"tab02\",\"type\":\"row\"}}]},{\"folder\":\"/srv/api\",\"id\":\"s9f\",\"name\":\"\",\"tabs\":[]}]},\"version\":1}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"doc.get\",\"params\":{\"name\":\"herdr-app\"}}"
+  }
+ ],
+ "document": {
+  "spaces": [
+   {
+    "folder": "/home/u/src/waycar",
+    "id": "s0a1b2c3d4e5f60718293a4b5c6d7e8f",
+    "name": "waycar",
+    "tabs": [
+     {
+      "id": "tab01",
+      "name": "main",
+      "root": {
+       "children": [
+        {
+         "content": {
+          "terminal": "t1"
+         },
+         "id": "p1",
+         "size": {
+          "weight": 2.0
+         },
+         "type": "block"
+        },
+        {
+         "children": [
+          {
+           "content": {
+            "terminal": "t2"
+           },
+           "id": "p2",
+           "type": "block"
+          },
+          {
+           "content": {
+            "terminal": "t3"
+           },
+           "id": "p3",
+           "type": "block"
+          }
+         ],
+         "id": "col1",
+         "size": {
+          "weight": 1.0
+         },
+         "type": "column"
+        }
+       ],
+       "id": "tab01",
+       "type": "row"
+      }
+     },
+     {
+      "id": "tab02",
+      "name": "review",
+      "root": {
+       "children": [
+        {
+         "content": {
+          "terminal": "t4"
+         },
+         "id": "p4",
+         "type": "block"
+        }
+       ],
+       "id": "tab02",
+       "type": "row"
+      }
+     }
+    ]
+   },
+   {
+    "folder": "/srv/api",
+    "id": "s9f",
+    "name": "",
+    "tabs": []
+   }
+  ]
+ },
+ "note": "The `document` below is HAND-MADE from herdr-app src/mirror.rs (Document/SharedSpace/SharedTab) and src/layout.rs (Node/Kind/Content). It is not captured from the desktop app. The doc.get exchange IS real (document stored in a scratch core with doc.set version 0 -> 1).",
+ "source": [
+  "herdr-app/src/mirror.rs:9-33",
+  "herdr-app/src/layout.rs (Node, Kind, Content)"
+ ]
+}

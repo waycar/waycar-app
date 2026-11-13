@@ -1,0 +1,18 @@
+---
+// A terminal-window frame: title bar with decorative traffic-light dots, then
+// whatever the slot renders (a code block, a readout).
+interface Props {
+  title: string;
+  class?: string;
+}
+
+const { title, class: className } = Astro.props;
+---
+
+<div class:list={['window', className]}>
+  <div class="window-bar">
+    <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="window-title">{title}</span>
+  </div>
+  <slot />
+</div>

@@ -1,0 +1,282 @@
+{
+ "entries": [
+  {
+   "data": {
+    "reason": "error",
+    "cause": "Summary request did not finish",
+    "model": "openai-codex/gpt-6-luna",
+    "at": 1793548428529
+   },
+   "kind": "conversations.summary-discarded",
+   "id": 85,
+   "conversationId": 39,
+   "byTaskId": 83
+  },
+  {
+   "model": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "pong"
+      }
+     ],
+     "api": "anthropic-messages",
+     "provider": "anthropic",
+     "model": "claude-haiku-4-5",
+     "usage": {
+      "input": 6,
+      "output": 5,
+      "cacheRead": 20236,
+      "cacheWrite": 65,
+      "totalTokens": 20312,
+      "cost": {
+       "input": 6e-06,
+       "output": 2.5e-05,
+       "cacheRead": 0.0020236,
+       "cacheWrite": 8.125e-05,
+       "total": 0.0021358500000000003
+      },
+      "cacheWrite1h": 0
+     },
+     "stopReason": "stop",
+     "timestamp": 1793548427559,
+     "responseId": "msg_011CgcUh1Wjt7UjCoww46vXp",
+     "responseModel": "claude-haiku-4-5-20251001",
+     "rawStopReason": "end_turn",
+     "durationMs": 829,
+     "thinkingLevel": "off"
+    }
+   ],
+   "kind": "pi.assistant",
+   "id": 84,
+   "conversationId": 39,
+   "byTaskId": 82
+  },
+  {
+   "model": [
+    {
+     "role": "toolResult",
+     "toolCallId": "toolu_01HqBzHXJWy93dFzosfgcw3X",
+     "toolName": "bash",
+     "content": [
+      {
+       "type": "text",
+       "text": "hi\n"
+      }
+     ],
+     "isError": false,
+     "durationMs": 16,
+     "timestamp": 1793548427519
+    }
+   ],
+   "data": {
+    "diagnostics": []
+   },
+   "kind": "pi.tool-result",
+   "id": 81,
+   "conversationId": 39,
+   "byTaskId": 79
+  },
+  {
+   "model": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "toolCall",
+       "id": "toolu_01HqBzHXJWy93dFzosfgcw3X",
+       "name": "bash",
+       "arguments": {
+        "command": "echo hi"
+       }
+      }
+     ],
+     "api": "anthropic-messages",
+     "provider": "anthropic",
+     "model": "claude-haiku-4-5",
+     "usage": {
+      "input": 3,
+      "output": 54,
+      "cacheRead": 0,
+      "cacheWrite": 20236,
+      "totalTokens": 20293,
+      "cost": {
+       "input": 3e-06,
+       "output": 0.00027,
+       "cacheRead": 0,
+       "cacheWrite": 0.025295,
+       "total": 0.025568
+      },
+      "cacheWrite1h": 0
+     },
+     "stopReason": "toolUse",
+     "timestamp": 1793548425175,
+     "responseId": "msg_011CgcUgqax5Bd3SBvRQoLUx",
+     "responseModel": "claude-haiku-4-5-20251001",
+     "rawStopReason": "tool_use",
+     "durationMs": 2313,
+     "thinkingLevel": "off"
+    }
+   ],
+   "kind": "pi.assistant",
+   "id": 78,
+   "conversationId": 39,
+   "byTaskId": 76
+  },
+  {
+   "kind": "pi.user",
+   "input": true,
+   "model": [
+    {
+     "role": "user",
+     "content": "Run the shell command echo hi with your bash tool, then reply with just the word pong.",
+     "timestamp": 1793548423900
+    }
+   ],
+   "id": 74,
+   "conversationId": 39
+  },
+  {
+   "model": [
+    {
+     "role": "assistant",
+     "content": [],
+     "api": "openai-codex-responses",
+     "provider": "openai-codex",
+     "model": "gpt-5.6-luna",
+     "usage": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "cost": {
+       "input": 0,
+       "output": 0,
+       "cacheRead": 0,
+       "cacheWrite": 0,
+       "total": 0
+      }
+     },
+     "stopReason": "error",
+     "errorMessage": "OAuth refresh failed for openai-codex: OpenAI Codex token refresh failed (401): {\n  \"error\": {\n    \"message\": \"Could not validate your refresh token. Please try signing in again.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_refresh_token\"\n  }\n}",
+     "timestamp": 1793548386598,
+     "durationMs": 201,
+     "thinkingLevel": "off"
+    }
+   ],
+   "kind": "pi.assistant",
+   "id": 73,
+   "conversationId": 39,
+   "byTaskId": 71
+  },
+  {
+   "kind": "pi.user",
+   "input": true,
+   "model": [
+    {
+     "role": "user",
+     "content": "Reply with just the word pong.",
+     "timestamp": 1793548386534
+    }
+   ],
+   "id": 69,
+   "conversationId": 39
+  },
+  {
+   "data": {
+    "reason": "error",
+    "cause": "Summary request did not finish",
+    "model": "openai-codex/gpt-6-luna",
+    "at": 1793548339916
+   },
+   "kind": "conversations.summary-discarded",
+   "id": 68,
+   "conversationId": 39,
+   "byTaskId": 65
+  },
+  {
+   "model": [
+    {
+     "role": "assistant",
+     "content": [],
+     "api": "google-generative-ai",
+     "provider": "google",
+     "model": "gemini-3.1-pro-preview",
+     "usage": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "cost": {
+       "input": 0,
+       "output": 0,
+       "cacheRead": 0,
+       "cacheWrite": 0,
+       "total": 0
+      }
+     },
+     "stopReason": "error",
+     "errorMessage": "Provider is not configured: google",
+     "timestamp": 1793548339718,
+     "durationMs": 0,
+     "thinkingLevel": "off"
+    }
+   ],
+   "kind": "pi.assistant",
+   "id": 66,
+   "conversationId": 39,
+   "byTaskId": 60
+  },
+  {
+   "kind": "pi.system",
+   "id": 63,
+   "conversationId": 39,
+   "model": "(elided: system prompt sections)"
+  },
+  {
+   "kind": "pi.user",
+   "input": true,
+   "model": [
+    {
+     "role": "user",
+     "content": "Reply with just the word pong.",
+     "timestamp": 1793548339609
+    }
+   ],
+   "id": 58,
+   "conversationId": 39
+  },
+  {
+   "kind": "conversations.identity",
+   "model": [
+    {
+     "role": "user",
+     "content": "You are conversation #39.",
+     "timestamp": 1793548339668
+    }
+   ],
+   "id": 57,
+   "conversationId": 39
+  },
+  {
+   "kind": "models.fallback",
+   "data": {
+    "from": "google/gemini-3.1-pro-preview",
+    "reason": "none"
+   },
+   "model": [
+    {
+     "role": "user",
+     "content": "Model google/gemini-3.1-pro-preview has no login here and no subscription login can replace it, so this conversation keeps it until the user logs in to google or picks another model.",
+     "timestamp": 1793548339667
+    }
+   ],
+   "id": 56,
+   "conversationId": 39
+  }
+ ]
+}

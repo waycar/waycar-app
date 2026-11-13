@@ -1,0 +1,73 @@
+{
+ "lines": [
+  {
+   "dir": "->",
+   "line": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"events.subscribe\",\"params\":{}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"channel\":null,\"seq\":0,\"terminals\":[]}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"r(){ printf '\\\\033]7501;%s\\\\033\\\\\\\\' \\\"$1\\\"; }\\nr state=idle:app=zoo; sleep 1\\nr \\\"state=working:app=zoo:progress=40:title=$(printf 'Refactoring' | base64):msg=$(printf 'step 1' | base64)\\\"; sleep 1\\nr \\\"state=working:app=zoo:id=sub1:msg=$(printf 'subtask' | base64)\\\"; sleep 1\\nr \\\"state=done:app=zoo:msg=$(printf 'All done' | base64)\\\"; sleep 1\\nr \\\"state=blocked:kind=permission:app=zoo:msg=$(printf 'Allow rm -rf /tmp/x?' | base64)\\\"; sleep 1\\nr \\\"state=error:app=zoo:msg=$(printf 'It broke' | base64)\\\"; sleep 1\\nprintf '\\\\033]0;my title\\\\007'; sleep 1\\nr state=idle:app=zoo; sleep 2; exit 7\"],\"cols\":200,\"created_ms\":1793309168251,\"cwd\":\"/tmp\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"zoo\",\"notify\":true,\"parent\":null,\"pid\":2533596,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0},\"seq\":1,\"terminal\":\"t1\",\"type\":\"created\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{},\"reported\":true,\"status\":{\"app\":\"zoo\",\"state\":\"idle\"}},\"seq\":2,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"name\":\"herdr-app\",\"version\":1},\"seq\":3,\"type\":\"doc\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"argv\":[\"sh\",\"-c\",\"r(){ printf '\\\\033]7501;%s\\\\033\\\\\\\\' \\\"$1\\\"; }\\nr state=idle:app=zoo; sleep 1\\nr \\\"state=working:app=zoo:progress=40:title=$(printf 'Refactoring' | base64):msg=$(printf 'step 1' | base64)\\\"; sleep 1\\nr \\\"state=working:app=zoo:id=sub1:msg=$(printf 'subtask' | base64)\\\"; sleep 1\\nr \\\"state=done:app=zoo:msg=$(printf 'All done' | base64)\\\"; sleep 1\\nr \\\"state=blocked:kind=permission:app=zoo:msg=$(printf 'Allow rm -rf /tmp/x?' | base64)\\\"; sleep 1\\nr \\\"state=error:app=zoo:msg=$(printf 'It broke' | base64)\\\"; sleep 1\\nprintf '\\\\033]0;my title\\\\007'; sleep 1\\nr state=idle:app=zoo; sleep 2; exit 7\"],\"cwd\":\"/tmp\",\"name\":\"sh\",\"pid\":2533596},\"seq\":4,\"terminal\":\"t1\",\"type\":\"foreground\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{},\"reported\":true,\"status\":{\"app\":\"zoo\",\"msg\":\"step 1\",\"progress\":40,\"state\":\"working\",\"title\":\"Refactoring\"}},\"seq\":5,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{\"sub1\":{\"app\":\"zoo\",\"msg\":\"subtask\",\"state\":\"working\"}},\"reported\":true,\"status\":{\"app\":\"zoo\",\"msg\":\"step 1\",\"progress\":40,\"state\":\"working\",\"title\":\"Refactoring\"}},\"seq\":6,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{\"sub1\":{\"app\":\"zoo\",\"msg\":\"subtask\",\"state\":\"working\"}},\"reported\":true,\"status\":{\"app\":\"zoo\",\"msg\":\"All done\",\"state\":\"done\"}},\"seq\":7,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"state\":\"done\",\"turn\":1},\"seq\":8,\"terminal\":\"t1\",\"type\":\"turn\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{\"sub1\":{\"app\":\"zoo\",\"msg\":\"subtask\",\"state\":\"working\"}},\"reported\":true,\"status\":{\"app\":\"zoo\",\"kind\":\"permission\",\"msg\":\"Allow rm -rf /tmp/x?\",\"state\":\"blocked\"}},\"seq\":9,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{\"sub1\":{\"app\":\"zoo\",\"msg\":\"subtask\",\"state\":\"working\"}},\"reported\":true,\"status\":{\"app\":\"zoo\",\"msg\":\"It broke\",\"state\":\"error\"}},\"seq\":10,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"title\":\"my title\"},\"seq\":11,\"terminal\":\"t1\",\"type\":\"title\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{\"sub1\":{\"app\":\"zoo\",\"msg\":\"subtask\",\"state\":\"working\"}},\"reported\":true,\"status\":{\"app\":\"zoo\",\"state\":\"idle\"}},\"seq\":12,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"records\":{},\"reported\":true,\"status\":null},\"seq\":13,\"terminal\":\"t1\",\"type\":\"status\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":{\"data\":{\"exit_code\":7,\"finished_ms\":1793309177277,\"reason\":\"exited\",\"signal\":null},\"seq\":14,\"terminal\":\"t1\",\"type\":\"finished\"}}"
+  },
+  {
+   "dir": "<-",
+   "line": "{\"jsonrpc\":\"2.0\",\"method\":\"heartbeat\",\"params\":{\"seq\":14}}"
+  }
+ ],
+ "note": "Plain-mode events.subscribe on its own connection (no filter), then terminals created/driven from another connection. dir \"->\" is what the client sent, \"<-\" what came back. Includes the zoo status sequence, a doc event and a heartbeat."
+}

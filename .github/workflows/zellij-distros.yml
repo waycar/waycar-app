@@ -1,0 +1,88 @@
+# Real Zellij panes, installed Host Tools and relay pushes, as a non-root
+# user on each distro. Shares the tmux/core musl build cache; no Node on Hosts.
+name: zellij distros
+
+on:
+  pull_request:
+    paths:
+      - plugin/**
+      - scripts/ci/zellij-distro-check.sh
+      - scripts/ci/zellij-contract.py
+      - scripts/ci/relay-standin.py
+      - .github/workflows/zellij-distros.yml
+  push:
+    branches: [main]
+    paths:
+      - plugin/**
+      - scripts/ci/zellij-distro-check.sh
+      - scripts/ci/zellij-contract.py
+      - scripts/ci/relay-standin.py
+      - .github/workflows/zellij-distros.yml
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1"
+
+concurrency:
+  group: zellij-distros-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-binary:
+    name: Native waycar (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Cache key
+        id: key
+        run: echo "key=native-waycar-${{ hashFiles('plugin/Cargo.toml', 'plugin/Cargo.lock', 'plugin/rust-toolchain.toml', 'plugin/rust/**', 'scripts/ci/provision-plugin-build.sh') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: native-bin
+          key: ${{ steps.key.outputs.key }}
+      - name: Build musl binary
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          eval "$(sh scripts/ci/provision-plugin-build.sh)"
+          (cd plugin && cargo zigbuild --release --locked --target x86_64-unknown-linux-musl)
+          install -D plugin/target/x86_64-unknown-linux-musl/release/waycar native-bin/waycar
+
+  zellij-distro:
+    name: Zellij on ${{ matrix.image }}${{ matrix.tmux == '1' && ' nested with tmux' || '' }}
+    needs: native-binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "ubuntu:24.04", tmux: "" }
+          - { image: "debian:12", tmux: "" }
+          - { image: "fedora:latest", tmux: "" }
+          - { image: "ubuntu:24.04", tmux: "1" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install zstd (match builder cache compression)
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install -y zstd
+          else
+            dnf -y install zstd
+          fi
+      - uses: actions/cache/restore@v4
+        with:
+          path: native-bin
+          key: ${{ needs.native-binary.outputs.key }}
+          fail-on-cache-miss: true
+      - name: Check installed Host Tools in real Zellij panes
+        run: bash scripts/ci/zellij-distro-check.sh
+        env:
+          WAYCAR_NATIVE_BIN: ${{ github.workspace }}/native-bin/waycar
+          WAYCAR_CI_WITH_TMUX: ${{ matrix.tmux }}

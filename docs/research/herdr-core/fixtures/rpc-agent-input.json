@@ -1,0 +1,110 @@
+{
+ "exchanges": [
+  {
+   "note": "launch fake agent from a template (first_message.sent)",
+   "received": [
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309186272,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"first_message\":{\"sent\":true,\"started\":true,\"turn\":0},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"waycar\":\"agent\"},\"name\":\"agx\",\"notify\":true,\"parent\":null,\"pid\":2533910,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":\"fake\",\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"fake\",\"first task\"],\"name\":\"agx\",\"cwd\":\"/tmp/hc-neutral/proj\",\"labels\":{\"waycar\":\"agent\"}}}"
+  },
+  {
+   "note": "get while idle after first task",
+   "received": [
+    "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309186272,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sh\",\"pid\":2533910},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"waycar\":\"agent\"},\"name\":\"agx\",\"notify\":true,\"parent\":null,\"pid\":2533910,\"reason\":null,\"reported\":true,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":{\"app\":\"fakeagent\",\"progress\":30,\"state\":\"working\",\"title\":\"Working on it\"},\"status_ms\":1793309189106,\"template\":\"fake\",\"title\":\"\",\"turn\":2}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"agx\"}}"
+  },
+  {
+   "note": "send to idle agent",
+   "received": [
+    "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"working\",\"turn\":2}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"second task\"}}"
+  },
+  {
+   "note": "get while working",
+   "received": [
+    "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309186272,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sh\",\"pid\":2533910},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"waycar\":\"agent\"},\"name\":\"agx\",\"notify\":true,\"parent\":null,\"pid\":2533910,\"reason\":null,\"reported\":true,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":{\"app\":\"fakeagent\",\"progress\":30,\"state\":\"working\",\"title\":\"Working on it\"},\"status_ms\":1793309190152,\"template\":\"fake\",\"title\":\"\",\"turn\":3}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"agx\"}}"
+  },
+  {
+   "note": "send --wait (blocks until the turn ends)",
+   "received": [
+    "{\"id\":5,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"idle\",\"turn\":4,\"wait\":{\"children\":[],\"ended\":true,\"exit_code\":null,\"reason\":\"status\",\"signal\":null,\"status\":\"done\",\"terminal\":\"t1\",\"turn\":5}}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"third task\",\"wait\":true,\"timeout\":10}}"
+  },
+  {
+   "note": "send if=working but idle -> status_mismatch",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"nothing was typed\",\"kind\":\"status_mismatch\"},\"message\":\"t1 is idle, not working\"},\"id\":6,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"x\",\"if\":\"working\"}}"
+  },
+  {
+   "note": "prompt that makes the agent report blocked (started=false after 5 s)",
+   "received": [
+    "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"started\":false,\"status\":\"idle\",\"turn\":5}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"please block\"}}"
+  },
+  {
+   "note": "get while blocked (kind=permission, msg decoded)",
+   "received": [
+    "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309186272,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sh\",\"pid\":2533910},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"waycar\":\"agent\"},\"name\":\"agx\",\"notify\":true,\"parent\":null,\"pid\":2533910,\"reason\":null,\"reported\":true,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":{\"app\":\"fakeagent\",\"kind\":\"permission\",\"msg\":\"Run rm -rf?\",\"state\":\"blocked\"},\"status_ms\":1793309194381,\"template\":\"fake\",\"title\":\"\",\"turn\":5}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"agx\"}}"
+  },
+  {
+   "note": "send while blocked -> blocked error",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"typing would answer its dialog; read its screen first (hc read t1), or --force\",\"kind\":\"blocked\"},\"message\":\"t1 is blocked (permission)\"},\"id\":9,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"yes\"}}"
+  },
+  {
+   "note": "send --force while blocked",
+   "received": [
+    "{\"id\":10,\"jsonrpc\":\"2.0\",\"result\":{\"started\":true,\"status\":\"blocked\",\"turn\":5}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"yes\",\"force\":true}}"
+  },
+  {
+   "note": "keys after block",
+   "received": [
+    "{\"id\":11,\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"idle\",\"turn\":6}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"terminal.keys\",\"params\":{\"terminal\":\"agx\",\"keys\":[\"enter\"]}}"
+  },
+  {
+   "note": "interrupt (esc for reporting programs)",
+   "received": [
+    "{\"id\":12,\"jsonrpc\":\"2.0\",\"result\":{\"key\":\"esc\",\"outcome\":\"stopped\"}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"terminal.interrupt\",\"params\":{\"terminal\":\"agx\",\"timeout\":1.5}}"
+  },
+  {
+   "note": "send an error-making prompt",
+   "received": [
+    "{\"id\":13,\"jsonrpc\":\"2.0\",\"result\":{\"started\":false,\"status\":\"idle\",\"turn\":7}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"agx\",\"text\":\"trigger error\"}}"
+  },
+  {
+   "note": "get while error",
+   "received": [
+    "{\"id\":14,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cols\":200,\"created_ms\":1793309186272,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"foreground\":{\"argv\":[\"sh\",\"-c\",\"/tmp/hc-neutral/home/.fakebin/fakeagent\"],\"cwd\":\"/tmp/hc-neutral/proj\",\"name\":\"sh\",\"pid\":2533910},\"identity\":\"ghostty\",\"keep\":false,\"labels\":{\"waycar\":\"agent\"},\"name\":\"agx\",\"notify\":true,\"parent\":null,\"pid\":2533910,\"reason\":null,\"reported\":true,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":{\"app\":\"fakeagent\",\"msg\":\"boom\",\"state\":\"error\"},\"status_ms\":1793309203001,\"template\":\"fake\",\"title\":\"\",\"turn\":7}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"agx\"}}"
+  },
+  {
+   "note": "read (screen)",
+   "received": [
+    "{\"id\":15,\"jsonrpc\":\"2.0\",\"result\":{\"complete\":true,\"how\":\"screen\",\"text\":\"fakeagent ready in /tmp/hc-neutral/proj\\nYou are a fake agent. Be brief.\\n\\nfirst taskGOT: You are a fake agent. Be brief.\\n\\nGOT:\\nGOT: first task\\nsecond task\\nGOT: second task\\nthird task\\nGOT: third task\\nplease block\\nGOT: please block\\nyes\\nANSWER: yes\\n\\nGOT:\\n^[trigger error\\nGOT: rigger error\"}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"terminal.read\",\"params\":{\"terminal\":\"agx\"}}"
+  }
+ ],
+ "note": "Fake agent (sh script printing OSC 7501) started from a template; see hc_probe.py osc7501()."
+}

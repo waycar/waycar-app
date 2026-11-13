@@ -1,0 +1,208 @@
+{
+ "exchanges": [
+  {
+   "note": "not JSON",
+   "received": [
+    "{\"error\":{\"code\":-32700,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"parse_error\"},\"message\":\"expected ident at line 1 column 2\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "not json"
+  },
+  {
+   "note": "no method",
+   "received": [
+    "{\"error\":{\"code\":-32600,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_request\"},\"message\":\"missing method\"},\"id\":9,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":9}"
+  },
+  {
+   "note": "unknown method",
+   "received": [
+    "{\"error\":{\"code\":-32601,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"unknown_method\"},\"message\":\"unknown method \\\"nope.method\\\"\"},\"id\":1,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"nope.method\",\"params\":{}}"
+  },
+  {
+   "note": "params is array",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"invalid length 0, expected struct TerminalParams with 2 elements\"},\"id\":10,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"terminal.get\",\"params\":[]}"
+  },
+  {
+   "note": "missing required param",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"missing field `terminal`\"},\"id\":2,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"terminal.get\",\"params\":{}}"
+  },
+  {
+   "note": "wrong param type",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"invalid type: integer `5`, expected a string\"},\"id\":3,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"t1\",\"text\":5}}"
+  },
+  {
+   "note": "hello unsupported generation",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"this core speaks generation 1\",\"kind\":\"unsupported_generation\"},\"message\":\"protocol generation 2 not supported\"},\"id\":4,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"hello\",\"params\":{\"generation\":2}}"
+  },
+  {
+   "note": "not_found",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"see `hc ls --all`\",\"kind\":\"not_found\"},\"message\":\"no terminal \\\"t99999\\\"\"},\"id\":5,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"t99999\"}}"
+  },
+  {
+   "note": "machine_unknown",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"no machines yet: hc machine add <ssh-target>\",\"kind\":\"machine_unknown\"},\"message\":\"unknown machine \\\"foo\\\"\"},\"id\":6,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"foo/t1\"}}"
+  },
+  {
+   "note": "bad address",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"bad terminal address \\\"\\\"\"},\"id\":7,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"terminal.get\",\"params\":{\"terminal\":\"\"}}"
+  },
+  {
+   "note": "name_taken: first",
+   "received": [
+    "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sleep\",\"60\"],\"cols\":200,\"created_ms\":1793309003561,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":null,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"dupname\",\"notify\":true,\"parent\":null,\"pid\":2530727,\"reason\":null,\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":null,\"state\":\"live\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"60\"],\"name\":\"dupname\"}}"
+  },
+  {
+   "note": "name_taken: duplicate",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"pick another name, or kill the one holding it\",\"kind\":\"name_taken\"},\"message\":\"a live terminal is already named \\\"dupname\\\"\"},\"id\":9,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"sleep\",\"60\"],\"name\":\"dupname\"}}"
+  },
+  {
+   "note": "invalid name",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"bad name \\\"Bad Name\\\": use 1-32 of a-z 0-9 - _ . starting with a letter or digit, not shaped like an id (t7)\"},\"id\":10,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"true\"],\"name\":\"Bad Name\"}}"
+  },
+  {
+   "note": "spawn_failed unknown program",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the program name and cwd\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start \\\"no-such-program-xyz\\\": No such file or directory (os error 2)\"},\"id\":11,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"no-such-program-xyz\"]}}"
+  },
+  {
+   "note": "spawn_failed bad cwd (message names the program, not the cwd)",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the program name and cwd\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start \\\"true\\\": No such file or directory (os error 2)\"},\"id\":12,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"true\"],\"cwd\":\"/no/such/dir\"}}"
+  },
+  {
+   "note": "invalid_params argv+line",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"give argv or line, not both\"},\"id\":13,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"terminal.run\",\"params\":{\"argv\":[\"true\"],\"line\":\"true\"}}"
+  },
+  {
+   "note": "live: rm a running terminal",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"kill it first: hc kill t1\",\"kind\":\"live\"},\"message\":\"t1 is still running\"},\"id\":14,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"terminal.rm\",\"params\":{\"terminal\":\"dupname\"}}"
+  },
+  {
+   "note": "unknown key",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"unknown key \\\"hello\\\" (try enter, esc, up, ctrl+c, alt+x, f5, a)\"},\"id\":15,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"terminal.keys\",\"params\":{\"terminal\":\"dupname\",\"keys\":[\"hello\"]}}"
+  },
+  {
+   "note": "kill",
+   "received": [
+    "{\"id\":16,\"jsonrpc\":\"2.0\",\"result\":{\"address\":\"t1\",\"argv\":[\"sleep\",\"60\"],\"cols\":200,\"created_ms\":1793309003561,\"cwd\":\"/tmp/hc-neutral/proj\",\"die_with_parent\":false,\"exit_code\":null,\"finished_ms\":1793309003569,\"identity\":\"ghostty\",\"keep\":false,\"labels\":{},\"name\":\"dupname\",\"notify\":true,\"parent\":null,\"pid\":2530727,\"reason\":\"killed\",\"reported\":false,\"rm\":false,\"rows\":120,\"screen\":\"exact\",\"signal\":1,\"state\":\"finished\",\"status\":null,\"status_ms\":null,\"template\":null,\"title\":\"\",\"turn\":0}}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"terminal.kill\",\"params\":{\"terminal\":\"dupname\"}}"
+  },
+  {
+   "note": "finished: send",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t1\",\"kind\":\"finished\"},\"message\":\"t1 has finished\"},\"id\":17,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"dupname\",\"text\":\"x\"}}"
+  },
+  {
+   "note": "finished: keys",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t1\",\"kind\":\"finished\"},\"message\":\"t1 has finished\"},\"id\":18,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":18,\"method\":\"terminal.keys\",\"params\":{\"terminal\":\"dupname\",\"keys\":[\"a\"]}}"
+  },
+  {
+   "note": "finished: interrupt",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"hc read t1\",\"kind\":\"finished\"},\"message\":\"t1 has finished\"},\"id\":19,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"terminal.interrupt\",\"params\":{\"terminal\":\"dupname\"}}"
+  },
+  {
+   "note": "conflict: stale doc.set",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"read doc.get and retry with its version\",\"kind\":\"conflict\"},\"message\":\"document \\\"errdoc\\\" is at version 0, not 5\"},\"id\":20,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"doc.set\",\"params\":{\"name\":\"errdoc\",\"value\":1,\"version\":5}}"
+  },
+  {
+   "note": "edit_failed",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"read it again: exact text\",\"kind\":\"edit_failed\"},\"message\":\"the old text is not in the file\"},\"id\":21,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"file.edit\",\"params\":{\"path\":\"/tmp/hc-neutral/proj/a.txt\",\"edits\":[{\"old\":\"absent\",\"new\":\"x\"}]}}"
+  },
+  {
+   "note": "file not_found",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"check the path, or hc exec ls\",\"kind\":\"not_found\"},\"message\":\"no file /no/such/file\"},\"id\":22,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"file.read\",\"params\":{\"path\":\"/no/such/file\"}}"
+  },
+  {
+   "note": "file is dir",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"/tmp/hc-neutral/proj is not a regular file\"},\"id\":23,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":23,\"method\":\"file.read\",\"params\":{\"path\":\"/tmp/hc-neutral/proj\"}}"
+  },
+  {
+   "note": "exec spawn_failed",
+   "received": [
+    "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"\",\"kind\":\"spawn_failed\"},\"message\":\"cannot start no-such-program-xyz: No such file or directory (os error 2)\"},\"id\":24,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":24,\"method\":\"machine.exec\",\"params\":{\"argv\":[\"no-such-program-xyz\"]}}"
+  },
+  {
+   "note": "exec timeout out of range",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"timeout must be more than 0 and at most 600 s, not 601\"},\"id\":25,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"machine.exec\",\"params\":{\"argv\":[\"true\"],\"timeout\":601}}"
+  },
+  {
+   "note": "status_mismatch needs a reporting agent (see rpc-agent-input.json); invalid `if` word here",
+   "received": [
+    "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"unknown variant `blocked`, expected `idle` or `working`\"},\"id\":26,\"jsonrpc\":\"2.0\"}"
+   ],
+   "sent": "{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"terminal.send\",\"params\":{\"terminal\":\"dupname\",\"text\":\"x\",\"if\":\"blocked\"}}"
+  }
+ ],
+ "note": "Real request/reply pairs captured over hc connect (plain mode)."
+}

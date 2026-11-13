@@ -1,0 +1,34 @@
+{
+  "name": "waycar-web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Marketing site for Waycar (waycar.dev), built with Astro and deployed to Cloudflare Workers",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "package-plugin": "sh ../../scripts/package-plugin.sh public",
+    "prebuild": "npm run package-plugin",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "node --test --test-concurrency=1 scripts/*.test.mjs",
+    "generate-llms-txt": "node scripts/generate-llms-txt.mjs",
+    "deploy": "wrangler deploy --var POSTHOG_ENV:release"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.5",
+    "@astrojs/markdown-satteri": "0.4.2",
+    "@types/node": "^24.19.2",
+    "astro": "^7.2.1",
+    "qrcode-generator": "^2.0.4",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.122.0"
+  },
+  "dependencies": {
+    "posthog-js": "^1.434.15"
+  }
+}

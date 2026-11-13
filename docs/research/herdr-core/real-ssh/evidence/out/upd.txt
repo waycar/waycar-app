@@ -1,0 +1,21 @@
+before: core pid 13996 uptime_ms 33050 live 11 holder pid 1820
+before: terminals ['dt1', 'two', 'alpha:idle', 'bravo:working', 'charlie:blocked', 'delta:done', 'echo:error', 'shell', 'sp1-tb1:idle', 'sp1-tb2:idle', 'sp2-tb1:idle']
+=== official installer, 2nd+ run with a RUNNING core, ssh exec, no tty
+rc=0 time=0.694s
+--stdout
+hc updated to 0.1.14.
+Add /home/waycar/.local/bin to your PATH to use hc.
+Agents: hc --skill. People: hc --help.
+--stderr
+hc: no systemd user manager here: the core ends with whatever started it
+after: core pid 14571 uptime_ms 27 live 11 holder pid 1820
+agent pids CHANGED: 14482 6362 9470 9477 9481 9489 9499 9509 9533 9540 9547  -> 14585 6362 9470 9477 9481 9489 9499 9509 9533 9540 9547 
+--- subscriber that was open during the update:
+[  1.644] EOF on hc stdout (connection closed)
+[  1.744] connect process exit code 0
+1a4919b72d8c2c0bb528b963fc3aa7c873ada6f93ff9680767efa8d7f4724c00  /home/waycar/.local/bin/herdr-core
+total 6548
+drwxrwxr-x 2 waycar waycar    4096 Oct 29 21:53 .
+drwxrwxr-x 4 waycar waycar    4096 Oct 29 21:37 ..
+lrwxrwxrwx 1 waycar waycar      10 Oct 29 21:37 hc -> herdr-core
+-rwxr-xr-x 1 waycar waycar 6694040 Oct 29 21:53 herdr-core

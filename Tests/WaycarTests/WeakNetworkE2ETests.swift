@@ -1,0 +1,518 @@
+import Foundation
+import Synchronization
+import Testing
+
+@testable import Waycar
+
+/// The product driven over a link the test degrades on purpose.
+///
+/// The merge gate runs unprivileged, which rules out `pfctl`/`dummynet` and the
+/// machine-wide Network Link Conditioner. Instead the fixture puts an
+/// unprivileged TCP proxy in front of the disposable sshd
+/// (`scripts/fixtures/weak-network-proxy.py`) and these suites steer it: added
+/// latency, a bandwidth cap, mid-stream fragmentation, and abrupt severance.
+/// Every impairment is a fixed duration or a byte count, so a profile treats
+/// the link the same way on every run and a failure here means a defect rather
+/// than a bad draw.
+///
+/// `.timeLimit` is the deadlock instrument. Everything these tests exercise is
+/// bounded by the product's own deadlines, so a run that has not finished
+/// inside the limit is a stalled loop, and it must fail in bounded time rather
+/// than hang the runner.
+@Suite(
+    "Weak network e2e",
+    .enabled(
+        if: RealSSHFixture.gate(WaycarSSHTransportBehaviorEnvironment.current != nil),
+        "requires the disposable impairment proxy fixture"),
+    .serialized,
+    .timeLimit(.minutes(2)))
+struct WeakNetworkE2ETests {
+    @Test("concurrent RPCs survive latency, a bandwidth cap, and fragmentation")
+    func concurrentRPCsSurviveADegradedLink() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        let transport = try await WaycarSSHTransport.connect(settings: fixture.settings())
+        try await AsyncDeadline.run(for: .seconds(45)) {
+            try await withThrowingTaskGroup(of: ServerInfo.self) { group in
+                for _ in 0..<WaycarSSHTransport.maxConcurrentForwardingChannels {
+                    group.addTask { try await transport.ping() }
+                }
+                for try await server in group {
+                    #expect(server.protocolVersion == 17)
+                }
+            }
+        }
+        // The budget released every slot, so the connection is still usable.
+        #expect(try await transport.ping().protocolVersion == 17)
+
+        let stats = try await fixture.control.stats()
+        #expect(stats.bytesToServer > 0)
+        #expect(stats.bytesToClient > 0)
+        try await transport.close()
+    }
+
+    @Test("Events and Attach stay live while SFTP stages over a degraded link")
+    func eventsAndAttachStayLiveDuringDegradedStaging() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        let prepared = try makePreparedImage(byteCount: 256 * 1_024)
+        defer { try? FileManager.default.removeItem(at: prepared.image.fileURL) }
+        let transport = try await WaycarSSHTransport.connect(settings: fixture.settings())
+        let events = try await transport.subscribeToEvents([.global(.paneCreated)])
+        var eventIterator = events.events.makeAsyncIterator()
+        let attach = try await transport.attachTerminal(
+            TerminalAttachRequest(target: "fixture:weak", cols: 80, rows: 24))
+        var attachIterator = attach.output.makeAsyncIterator()
+
+        let staging = Task { try await transport.stageImage(prepared.image) { _ in } }
+        try await AsyncDeadline.run(for: .seconds(45)) {
+            try await withThrowingTaskGroup(of: ServerInfo.self) { group in
+                for _ in 0..<4 {
+                    group.addTask { try await transport.ping() }
+                }
+                for try await server in group {
+                    #expect(server.protocolVersion == 17)
+                }
+            }
+        }
+
+        let staged = try await staging.value
+        let parentDirectory = staged.fileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: parentDirectory) }
+        // A fragmented, rate-limited link must not corrupt or truncate SFTP.
+        #expect(try Data(contentsOf: staged.fileURL) == prepared.bytes)
+
+        let event = try await eventIterator.next()
+        #expect(event?.kind == HerdrEventKind(name: "future_herdr_event"))
+        attach.send(Data("probe-over-weak-link\n".utf8))
+        var attachOutput = ""
+        while !attachOutput.contains("GOT:probe-over-weak-link") {
+            let chunk = try #require(try await attachIterator.next())
+            attachOutput += String(decoding: chunk, as: UTF8.self)
+        }
+
+        await attach.end()
+        await events.end()
+        try await transport.close()
+    }
+
+    @Test("cancelling a rate-starved upload frees only its own channel")
+    func cancellationUnderBackpressureKeepsTheConnectionUsable() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        // Connection and remote staging-directory setup stay on the degraded
+        // profile. Applying `.severe` before that races the setup exec against
+        // the product's request deadline, and a loaded runner fails with
+        // `.remoteTemporaryDirectoryFailed` before cancellation-under-backpressure
+        // is exercised.
+        try await fixture.control.apply(.degraded)
+
+        let prepared = try makePreparedImage(byteCount: 1_024 * 1_024)
+        defer { try? FileManager.default.removeItem(at: prepared.image.fileURL) }
+        let transport = try await WaycarSSHTransport.connect(settings: fixture.settings())
+
+        let setupGate = CancellablePhaseGate()
+        let payloadReadyGate = CancellablePhaseGate()
+        let backpressureGate = CancellablePhaseGate()
+        let failures = StagingFailureSignal()
+
+        await transport.holdStagingPhaseForTesting(.remoteParentReady) {
+            await setupGate.enterAndHold()
+        }
+        await transport.holdStagingPhaseForTesting(.payloadWriteReady) {
+            await payloadReadyGate.enterAndHold()
+        }
+
+        let staging = Task {
+            do {
+                let staged = try await transport.stageImage(prepared.image) { _ in }
+                await failures.recordSuccess()
+                await setupGate.release()
+                await payloadReadyGate.release()
+                await backpressureGate.release()
+                return staged
+            } catch {
+                await failures.record(error)
+                await setupGate.release()
+                await payloadReadyGate.release()
+                await backpressureGate.release()
+                throw error
+            }
+        }
+
+        do {
+            try await StagingPhaseWait.awaitEntry(
+                "remote staging setup",
+                gate: setupGate,
+                failures: failures)
+
+            do {
+                try await fixture.control.apply(.severe)
+            } catch {
+                await finishStaging(
+                    staging,
+                    gates: setupGate, payloadReadyGate, backpressureGate)
+                throw StagingBarrierError.failed(
+                    phase: "arming severe profile",
+                    detail: String(describing: error))
+            }
+            await setupGate.release()
+
+            try await StagingPhaseWait.awaitEntry(
+                "severe-profile payload write",
+                gate: payloadReadyGate,
+                failures: failures)
+
+            // Arm the park observer only once payload writes are about to
+            // start, so an earlier openSFTP/mkdir park cannot satisfy it.
+            await transport.holdNextOutboundWriteParkForTesting {
+                await backpressureGate.enterAndHold()
+            }
+            await payloadReadyGate.release()
+
+            try await StagingPhaseWait.awaitEntry(
+                "severe-profile payload backpressure",
+                gate: backpressureGate,
+                failures: failures)
+
+            // Cancellation itself is honoured promptly even while the write is
+            // blocked on the link, and "promptly" is asserted rather than asserted
+            // in prose: the compensation path spends at most its two two-second
+            // SFTP closes, so anything approaching ten seconds means the cancel is
+            // waiting on the link instead of abandoning it.
+            let cancelledAt = ContinuousClock.now
+            staging.cancel()
+            await backpressureGate.release()
+            await #expect(throws: AttachmentStagingError.cancelled) {
+                _ = try await staging.value
+            }
+            #expect(cancelledAt.duration(to: .now) < .seconds(10))
+        } catch {
+            await finishStaging(
+                staging,
+                gates: setupGate, payloadReadyGate, backpressureGate)
+            throw error
+        }
+
+        try await fixture.control.apply(.degraded)
+        // The reuse property is what a cancelled upload owes the rest of the
+        // Host: Events and Attach share this connection.
+        //
+        // The two rates are both load-bearing and neither may be relaxed to
+        // make this pass. The cancellation above has to happen at 16 KiB/s,
+        // because that is the rate at which the compensation path's two
+        // two-second SFTP closes cannot drain and so expire — the defect this
+        // regression-tests (#136). The ping has to happen at 256 KiB/s, because
+        // at 16 KiB/s a ping is slow enough to time out on its own and this
+        // would stop being a session-invalidation detector.
+        //
+        // What used to fail here: `SessionDriver.closeSFTP`/`closeSFTPFile`
+        // treated any error from that close — a mere deadline expiry included —
+        // as grounds for `invalidateResources()`, which is one-way, so the
+        // whole SSH session died at cancel time and this ping never reached the
+        // network. `cancelImageStage` swallows the throw with `try?`, so the
+        // next RPC was the first sign of it. `teardownFailure` now spares the
+        // session when only the clock ran out.
+        let server = try await transport.ping()
+        #expect(server.protocolVersion == 17)
+        try? await transport.close()
+    }
+
+    @Test("bandwidth starvation times out instead of wedging the connection")
+    func starvedLinkTimesOutAndRecovers() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        var settings = fixture.settings()
+        settings.requestTimeout = .seconds(4)
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        #expect(try await transport.ping().protocolVersion == 17)
+
+        // 64 bytes per second cannot carry a request, so the product's own
+        // per-request deadline is what must end this — not a hung channel.
+        try await fixture.control.apply(.starved)
+        let started = ContinuousClock.now
+        await #expect(throws: TransportError.timedOut) { _ = try await transport.ping() }
+        #expect(started.duration(to: .now) < .seconds(20))
+
+        try await fixture.control.apply(.degraded)
+        #expect(try await transport.ping().protocolVersion == 17)
+        try await transport.close()
+    }
+
+    /// `EventsSession.ensureTransport` chooses between resubscribing in place
+    /// and redialling on this one property. If it stays true on a dead
+    /// connection, Events resubscribes forever onto nothing — the failure
+    /// User Story 11 exists to prevent. Every other assertion of it in the repo
+    /// is positive, so nothing pinned the transition until this test.
+    @Test("a severed link makes the transport report itself disconnected")
+    func severedLinkReportsTheTransportDisconnected() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        var settings = fixture.settings()
+        settings.requestTimeout = .seconds(10)
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        // Anti-vacuity. A property that were false from birth would satisfy the
+        // closing assertion for free, so pin it true on arrival and again after
+        // traffic that proves the connection genuinely came up.
+        #expect(await transport.isConnected)
+        #expect(try await transport.ping().protocolVersion == 17)
+        #expect(await transport.isConnected)
+
+        // Guarded: a cut that severed nothing would leave the rest of this
+        // test asserting against a perfectly healthy link.
+        #expect(try await fixture.control.cut() > 0)
+        // Path-dependent, so the case is deliberately not pinned — only that
+        // the dead link stops the request.
+        await #expect(throws: (any Error).self) { _ = try await transport.ping() }
+
+        // No `close()` above this line, and that absence is the test. The
+        // property must go false because the SSH layer died, not because it was
+        // told to. Nothing else enforces it: move a close up here in a future
+        // tidy-up and this test silently stops proving anything.
+        #expect(await transport.isConnected == false)
+        try? await transport.close()
+    }
+
+    @Test("an abruptly severed link surfaces and a fresh connection recovers")
+    func abruptLinkLossSurfacesAndRecovers() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        var settings = fixture.settings()
+        settings.requestTimeout = .seconds(10)
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        #expect(try await transport.ping().protocolVersion == 17)
+
+        #expect(try await fixture.control.cut() > 0)
+        await #expect(throws: (any Error).self) { _ = try await transport.ping() }
+        try? await transport.close()
+
+        let recovered = try await WaycarSSHTransport.connect(settings: settings)
+        #expect(try await recovered.ping().protocolVersion == 17)
+        try await recovered.close()
+    }
+
+    /// A first-connect prompt holds the handshake that presented the key open
+    /// until the user answers, and the server does not wait: sshd drops a
+    /// connection still unauthenticated after `LoginGraceTime` (60 s on a hardened
+    /// test Host), and a network change can drop it sooner. Cutting the link
+    /// while the policy is still "asking" stands in for both. Answering Trust
+    /// must still connect, on a fresh connection that does not ask again.
+    @Test("a key trusted after its waiting connection dropped still connects")
+    func trustAfterTheWaitingConnectionDroppedStillConnects() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+
+        let control = fixture.control
+        let askedFor = Mutex<[HostKeyCandidate]>([])
+        let severed = Mutex(0)
+        var settings = fixture.settings()
+        settings.requestTimeout = .seconds(10)
+        settings.hostKeyPolicy = HostKeyPolicy(knownHosts: InMemoryKnownHostsStore()) {
+            candidate in
+            askedFor.withLock { $0.append(candidate) }
+            let cut = (try? await control.cut()) ?? 0
+            severed.withLock { $0 += cut }
+            return true
+        }
+
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        // Guarded: a cut that severed nothing would prove nothing.
+        #expect(severed.withLock { $0 } > 0)
+        #expect(try await transport.ping().protocolVersion == 17)
+        #expect(askedFor.withLock { $0.count } == 1)
+        try await transport.close()
+    }
+
+    @Test("the events session survives a cut and a background round trip")
+    func eventsSessionRecoversAcrossBackgroundingOnADegradedLink() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+
+        var settings = fixture.settings()
+        settings.requestTimeout = .seconds(10)
+        let capturedSettings = settings
+        let session = EventsSession(
+            subscriptions: [.global(.paneCreated)],
+            connect: { try await WaycarSSHTransport.connect(settings: capturedSettings) })
+        let recorder = StatusRecorder()
+        let consumer = Task {
+            for await update in session.updates {
+                if case .status(let status) = update { await recorder.record(status) }
+            }
+        }
+        defer { consumer.cancel() }
+
+        await session.resume()
+        try await waitUntil("the degraded link should connect", timeout: .seconds(30)) {
+            await recorder.count(of: .connected) >= 1
+        }
+
+        // The link dies mid-session, exactly as a mobile network does.
+        #expect(try await fixture.control.cut() > 0)
+        try await waitUntil("the loss should surface as a reconnect", timeout: .seconds(30)) {
+            await recorder.hasReconnected
+        }
+        try await waitUntil("the session should reconnect itself", timeout: .seconds(60)) {
+            await recorder.count(of: .connected) >= 2
+        }
+
+        // Backgrounding past the grace period, then foregrounding again.
+        // `suspend()` returning means the teardown is done, not that the
+        // consumer draining `updates` has been scheduled yet, so the terminal
+        // status is asserted through a bounded wait like every other one here.
+        await session.suspend()
+        try await waitUntil("backgrounding should suspend the session") {
+            await recorder.statuses.last == .suspended
+        }
+        await session.resume()
+        try await waitUntil("foregrounding should reconnect", timeout: .seconds(30)) {
+            await recorder.count(of: .connected) >= 3
+        }
+
+        await session.end()
+        try await waitUntil("the session should end") {
+            await recorder.statuses.last == .ended
+        }
+    }
+
+    /// The leak instrument. Every round takes a connection through the whole
+    /// channel repertoire and gives it back; a session, channel, or socket that
+    /// is not reclaimed shows up as descriptor growth proportional to the round
+    /// count, which one-off warm-up allocation cannot imitate.
+    @Test("repeated degraded rounds reclaim every file descriptor")
+    func degradedStressRoundsReclaimEveryDescriptor() async throws {
+        let fixture = try #require(WeakNetworkFixture.current)
+        try await fixture.control.reset()
+        try await fixture.control.apply(.degraded)
+        let rounds = 5
+
+        // One warm-up round first: the first connection on a fresh process
+        // allocates caches and resolver state that never come back, and that
+        // is not what this measures. The rounds share one settings value, so
+        // one known-hosts store: only the warm-up trusts the key on first
+        // connect, and with it takes the redial that follows a trust.
+        let settings = fixture.settings()
+        try await exerciseOneRound(fixture: fixture, settings: settings)
+        let baseline = OpenFileDescriptorCount.current
+        let before = try await fixture.control.stats()
+        for _ in 0..<rounds {
+            try await exerciseOneRound(fixture: fixture, settings: settings)
+        }
+        let final = OpenFileDescriptorCount.current
+        print(
+            "[weak-network] open descriptors: baseline \(baseline), "
+                + "after \(rounds) rounds \(final)")
+
+        // A per-round leak of even one descriptor would be `rounds` of growth.
+        #expect(
+            final <= baseline + 2,
+            "descriptors grew from \(baseline) to \(final) across \(rounds) rounds")
+        // A census over rounds that never opened anything would also be flat,
+        // so count the connections the proxy actually accepted: one per round,
+        // since every channel a round opens rides the same TCP connection.
+        let after = try await fixture.control.stats()
+        #expect(after.acceptedConnections - before.acceptedConnections == rounds)
+    }
+
+    private func exerciseOneRound(
+        fixture: WeakNetworkFixture, settings: SSHTransportSettings
+    ) async throws {
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        try await AsyncDeadline.run(for: .seconds(45)) {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for _ in 0..<4 {
+                    group.addTask { _ = try await transport.ping() }
+                }
+                try await group.waitForAll()
+            }
+        }
+        let events = try await transport.subscribeToEvents([.global(.paneCreated)])
+        let attach = try await transport.attachTerminal(
+            TerminalAttachRequest(target: "fixture:weak-round", cols: 80, rows: 24))
+        await attach.end()
+        await events.end()
+        try await transport.close()
+        // The proxy tears its half down asynchronously once both directions
+        // see EOF; wait for it so the descriptor census is not racing it.
+        try await waitUntil("the proxy should release the severed links") {
+            (try? await fixture.control.stats().liveConnections) == 0
+        }
+    }
+
+    private func makePreparedImage(byteCount: Int) throws -> (image: PreparedImage, bytes: Data) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("image-weak-\(UUID().uuidString).png")
+        let bytes = Data((0..<byteCount).map { UInt8(truncatingIfNeeded: $0) })
+        try bytes.write(to: url)
+        return (
+            PreparedImage(
+                fileURL: url,
+                format: .png,
+                pixelWidth: 2_048,
+                pixelHeight: 1_024,
+                byteCount: Int64(bytes.count)),
+            bytes)
+    }
+
+    private func finishStaging<Success: Sendable>(
+        _ staging: Task<Success, any Error>,
+        gates: CancellablePhaseGate...
+    ) async {
+        for gate in gates {
+            await gate.release()
+        }
+        staging.cancel()
+        _ = await staging.result
+    }
+
+    private actor StatusRecorder {
+        private(set) var statuses: [EventsSessionStatus] = []
+
+        func record(_ status: EventsSessionStatus) { statuses.append(status) }
+
+        func count(of status: EventsSessionStatus) -> Int {
+            statuses.filter { $0 == status }.count
+        }
+
+        var hasReconnected: Bool {
+            statuses.contains { if case .reconnecting = $0 { true } else { false } }
+        }
+    }
+}
+
+/// The impairment proxy the merge fixture stands up, plus the settings that
+/// route the product through it.
+struct WeakNetworkFixture: Sendable {
+    let environment: WaycarSSHTransportBehaviorEnvironment
+    let port: UInt16
+    let control: WeakNetworkProxyControl
+
+    static var current: WeakNetworkFixture? {
+        guard
+            let environment = WaycarSSHTransportBehaviorEnvironment.current,
+            let port = environment.weakNetworkPort,
+            let controlPort = environment.weakNetworkControlPort
+        else { return nil }
+        return WeakNetworkFixture(
+            environment: environment,
+            port: port,
+            control: WeakNetworkProxyControl(host: environment.host, port: controlPort))
+    }
+
+    func settings() -> SSHTransportSettings {
+        environment.weakNetworkSettings(port: port)
+    }
+}

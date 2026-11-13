@@ -1,0 +1,34 @@
+
+### exit: program exits 3 while attached
+  ssh rc=0 at 1.519s; tail=2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\x1b\\\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\\x1b]22;\x1b\\\r\n[ex1 finished: exited]\r\nConnection to 127.0.0.1 closed.\r\r\n
+
+### exit: terminal killed (herdr-core kill) while attached
+  ssh rc=0 0.121s after kill; tail=2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\x1b\\\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\\x1b]22;\x1b\\\r\n[kl1 finished: killed]\r\nConnection to 127.0.0.1 closed.\r\r\n
+
+### exit: detached with ctrl+\ (0x1c)
+  ssh rc=0 0.015s after ^\; tail=\x1b[?2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\x1b\\\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\\x1b]22;\x1b\\\r\n[detached from dt1]\r\nConnection to 127.0.0.1 closed.\r\r\n; core size now (200, 120)
+
+### exit: unknown terminal / finished terminal
+  unknown: rc=3 tail=@@WAYCAR-ATTACH@@\r\n\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\\x1b[16t\x1b[cerror: no terminal "nope"\r\nhint: see `hc ls --all`\r\nConnection to 127.0.0.1 closed.\r\r\n
+  finished: rc=11 tail=@@WAYCAR-ATTACH@@\r\n\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\\x1b[16t\x1b[cerror: t11 has finished\r\nhint: read what it left: hc read t11\r\nConnection to 127.0.0.1 closed.\r\r\n
+
+### exit: herdr-core not installed (PATH without it) -> 127
+  rc=127 tail=herdr-core is not installed here\r\nConnection to 127.0.0.1 closed.\r\r\n
+
+### two attaches from two ssh sessions at once (sizes seen by core)
+  A(80x24) attached           -> (80, 24)
+  B(52x28) attached           -> (52, 28)
+  A types                     -> (80, 24)
+  B types                     -> (52, 28)
+  B resize 60x30              -> (60, 30) after 0.007922731980215758
+  B ssh gone                  -> (80, 24)
+  A ssh gone                  -> (200, 120)
+  program saw (read screen): 'SIZE 120 200\nSIZE 24 80\nSIZE 28 52\naSIZE 24 80\nbSIZE 28 52\nSIZE 24 80\nSIZE 120 200\n'
+
+### vim-tiny (alt screen) attach
+  first paint @0.19444307699450292 s; bytes=6827; core size=(100, 30)
+  contains ESC[?1049h (alt screen): True | contains 'line one': True
+  chunks (t,len): [(0.192, 19), (0.193, 32), (0.194, 8), (0.194, 6768)]
+  resize 60x20: core saw after 0.09372199000790715 s; bytes after resize: 1200; vim redraw chunk starts: \x1b[27m\x1b[23m\x1b[29m\x1b[m\x1b[H\x1b[2J\x1b[?25l\x1b[1;1Hline one\r\nline two\r\n\x1b[94m~                                                           \x1b[4;1H~                               
+  after :q! -> ssh rc=0 tail=2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\x1b\\\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\\x1b]22;\x1b\\\r\n[vi1 finished: exited]\r\nConnection to 127.0.0.1 closed.\r\r\n
+  record: {"address":"t15","argv":["vi","-u","NONE","-N","/home/waycar/work/s4/note.txt"],"cols":60,"created_ms":1793310317539,"cwd":"/home/waycar/work/s4","die_with_parent":false,"exit_code":0,"finished_ms":17

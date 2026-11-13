@@ -1,0 +1,48 @@
+# Zellij's CLI/JSON contract (Z1–Z16). The script owns the release and binary
+# checksum pins. Every scenario uses a scratch HOME/socket directory, then stops
+# only its own processes and deletes its files. No secrets or stored artifacts.
+# PRs run strictly; weekly/dispatch also check latest as non-blocking drift.
+name: Zellij contract
+
+on:
+  pull_request:
+    paths:
+      - scripts/ci/zellij-contract.py
+      - .github/workflows/zellij-contract.yml
+      - Sources/Waycar/Transport/Zellij/**
+      - docs/research/zellij-backend-2026-11.md
+  workflow_dispatch:
+  schedule:
+    - cron: "37 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zellij-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned:
+    name: Pinned Zellij
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check the pinned Zellij
+        run: python3 scripts/ci/zellij-contract.py --version "$(python3 scripts/ci/zellij-contract.py --print-pin)"
+
+  latest:
+    name: Latest Zellij (warn only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check the latest Zellij
+        run: python3 scripts/ci/zellij-contract.py --latest --warn

@@ -1,0 +1,118 @@
+# herdr-core Hosts: a Host that has only herdr-core (no herdr TUI, no tmux)
+# installs the standalone Host Tools, and agent hooks that run inside core
+# terminals start notifications (plugin/: install.sh, `waycar`, the
+# waycar-hook Status Hook). scripts/ci/core-distro-check.sh does the work in a
+# container per distribution: herdr-core from its own installer at the version
+# scripts/ci/core-contract.py pins, install.sh with no flag from a package
+# assembled out of plugin/ and the native binary, and a hook smoke as a
+# non-root user. A fake agent prints OSC 7501 inside a real core terminal and
+# runs the installed Claude hook commands; a Blocked and a Done change must
+# each push, for pane hc:<address>, to a local stand-in for the relay
+# (scripts/ci/relay-standin.py; the distro's Python runs that test server
+# only). No Node is installed.
+#
+# One job also installs tmux and starts the core from inside a tmux pane, so
+# every core terminal inherits a stale TMUX_PANE: the tmux agent and the core
+# agent must each push once, for their own pane.
+#
+# Its own workflow beside tmux-distros.yml, for the same reasons: these jobs
+# need Docker, so they run on
+# GitHub-hosted ubuntu-latest. The native binary is built by the same job
+# definition and shares tmux-distros.yml's Actions cache key, so whichever
+# workflow runs first builds it and the other restores it. It runs weekly too,
+# like tmux-distros.yml.
+#
+# fail-fast is off: one distribution's failure says nothing about the others.
+
+name: core distros
+
+on:
+  pull_request:
+    paths:
+      - plugin/**
+      - scripts/ci/core-distro-check.sh
+      - scripts/ci/core-contract.py
+      - scripts/ci/relay-standin.py
+      - .github/workflows/core-distros.yml
+  push:
+    branches: [main]
+    paths:
+      - plugin/**
+      - scripts/ci/core-distro-check.sh
+      - scripts/ci/core-contract.py
+      - scripts/ci/relay-standin.py
+      - .github/workflows/core-distros.yml
+  workflow_dispatch:
+  schedule:
+    - cron: "57 6 * * 1"
+
+# A new push cancels a superseded run on the same ref.
+concurrency:
+  group: core-distros-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-binary:
+    name: Native waycar (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Cache key
+        id: key
+        run: echo "key=native-waycar-${{ hashFiles('plugin/Cargo.toml', 'plugin/Cargo.lock', 'plugin/rust-toolchain.toml', 'plugin/rust/**', 'scripts/ci/provision-plugin-build.sh') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: native-bin
+          key: ${{ steps.key.outputs.key }}
+      - name: "Build it (zig and cargo-zigbuild, because the TLS crate needs a musl C compiler)"
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          eval "$(sh scripts/ci/provision-plugin-build.sh)"
+          (cd plugin && cargo zigbuild --release --locked --target x86_64-unknown-linux-musl)
+          install -D plugin/target/x86_64-unknown-linux-musl/release/waycar native-bin/waycar
+
+  core-distro:
+    name: core on ${{ matrix.image }}${{ matrix.tmux == '1' && ' with tmux' || '' }}
+    needs: native-binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "ubuntu:24.04", tmux: "0" }
+          - { image: "debian:12", tmux: "0" }
+          - { image: "fedora:latest", tmux: "0" }
+          - { image: "ubuntu:24.04", tmux: "1" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      # The images have tar but no git, so checkout fetches the tree through
+      # the API. The script needs no git.
+      - uses: actions/checkout@v5
+      # actions/cache hashes the compression tool into the cache version: the
+      # builder saves with zstd (present on ubuntu-latest), so an image
+      # without zstd computes a gzip version and misses the key. Install it.
+      - name: Install zstd (the cache version must match the builder's)
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install -y zstd
+          else
+            dnf -y install zstd
+          fi
+      - uses: actions/cache/restore@v4
+        with:
+          path: native-bin
+          key: ${{ needs.native-binary.outputs.key }}
+          fail-on-cache-miss: true
+      - name: Check the Host Tools on a herdr-core Host
+        run: bash scripts/ci/core-distro-check.sh
+        env:
+          WAYCAR_NATIVE_BIN: ${{ github.workspace }}/native-bin/waycar
+          WAYCAR_CI_WITH_TMUX: ${{ matrix.tmux }}

@@ -1,0 +1,140 @@
+{
+ "exchanges": {
+  "put": [
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":67,\"path\":\"/tmp/hc-neutral/state/herdr-core/put1/files/t1/shot.png\"}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAAB4iG8MwAAAABJRU5ErkJggg==",
+      "name": "shot.png",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_8MiB": [
+   {
+    "reply_raw": "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":8388608,\"path\":\"/tmp/hc-neutral/state/herdr-core/put1/files/t1/put_8MiB.bin\"}}",
+    "request": {
+     "id": 8,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "<elided: base64 of 8388608 bytes>",
+      "name": "put_8MiB.bin",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_8MiB_plus_1": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"at most 8 MB per put\"},\"id\":9,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 9,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "<elided: base64 of 8388609 bytes>",
+      "name": "put_8MiB_plus_1.bin",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_dup": [
+   {
+    "reply_raw": "{\"id\":3,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":67,\"path\":\"/tmp/hc-neutral/state/herdr-core/put1/files/t1/shot-2.png\"}}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAAB4iG8MwAAAABJRU5ErkJggg==",
+      "name": "shot.png",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_empty": [
+   {
+    "reply_raw": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":0,\"path\":\"/tmp/hc-neutral/state/herdr-core/put1/files/t1/e.bin\"}}",
+    "request": {
+     "id": 7,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "",
+      "name": "e.bin",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_finished": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"nothing there to read it\",\"kind\":\"finished\"},\"message\":\"t1 has finished\"},\"id\":11,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 11,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAAB4iG8MwAAAABJRU5ErkJggg==",
+      "name": "x.png",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_newline_b64": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"data is not base64\"},\"id\":5,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "iVBORw0KGgoAAAANSUhE\nUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAAB4iG8MwAAAABJRU5ErkJggg==",
+      "name": "n.bin",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_path": [
+   {
+    "reply_raw": "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"bytes\":67,\"path\":\"/tmp/hc-neutral/state/herdr-core/put1/files/t1/pa_ss_wd.PNG\"}}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgAAACAAAB4iG8MwAAAABJRU5ErkJggg==",
+      "name": "../../etc/pa ss wd.PNG",
+      "terminal": "putt"
+     }
+    }
+   }
+  ],
+  "put_urlsafe": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"data is not base64\"},\"id\":6,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "terminal.put",
+     "params": {
+      "data": "-__-",
+      "name": "u.bin",
+      "terminal": "putt"
+     }
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout). The two 8 MiB request bodies are elided here; replies are real."
+}

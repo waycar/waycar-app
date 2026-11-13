@@ -1,0 +1,364 @@
+---
+// /compare/<slug>: one honest comparison, rendered from
+// src/content/compare/<slug>.md. The front matter carries the verdicts, the
+// table rows, the questions and the sources; the Markdown body is the
+// walkthrough between the table and the questions.
+import { render } from 'astro:content';
+import AppStoreCta from '../../components/AppStoreCta.astro';
+import CompareLegend from '../../components/CompareLegend.astro';
+import CompareTable from '../../components/CompareTable.astro';
+import Prose from '../../components/Prose.astro';
+import Layout from '../../layouts/Layout.astro';
+import { formatReleaseDate } from '../../lib/changelog.mjs';
+import { comparePath, compareMarkdownPath, getComparisons } from '../../lib/compare';
+import { KIND_LABELS, documentTitle } from '../../lib/compare-rows.mjs';
+import { byId, landingSchema } from '../../lib/landing';
+import { getSolutions, solutionPath } from '../../lib/solutions';
+
+export async function getStaticPaths() {
+  const comparisons = await getComparisons();
+  return comparisons.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const { title, metaTitle, description, summary, name, kind, keywords, checked, rows, pickWaycar, pickThem, faq, sources } = entry.data;
+
+// The pages this one links to, in the order its front matter lists them.
+const comparisons = await getComparisons();
+const solutions = await getSolutions();
+const relatedComparisons = byId(comparisons, entry.data.related);
+const relatedSolutions = byId(solutions, entry.data.solutions);
+
+const schema = landingSchema({
+  path: comparePath(entry.id),
+  name: title,
+  crumb: name,
+  description,
+  keywords,
+  modified: checked,
+  section: { name: 'Compare', path: '/compare' },
+  faq,
+});
+---
+
+<Layout
+  title={documentTitle(title, metaTitle)}
+  description={description}
+  markdown={compareMarkdownPath(entry.id)}
+  schema={schema}
+>
+  <div class="wrap page">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/compare">Compare</a></li>
+        <li aria-current="page">{name}</li>
+      </ol>
+    </nav>
+
+    <header class="hero">
+      <span class="kicker">{KIND_LABELS[kind]}</span>
+      <h1>{title}</h1>
+      <p class="lead">{summary}</p>
+      <p class="checked">
+        Facts checked <time datetime={checked}>{formatReleaseDate(checked)}</time>. <a href="#sources">See the sources</a>.
+      </p>
+      <div class="actions">
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+        <a class="btn btn-ghost btn-lg" href="#table">Side by side</a>
+      </div>
+    </header>
+
+    <section class="block" aria-labelledby="short-title">
+      <h2 id="short-title">The short version</h2>
+      <div class="picks">
+        <div class="glass pick pick-us">
+          <h3>Pick Waycar if</h3>
+          <ul>{pickWaycar.map((item) => <li>{item}</li>)}</ul>
+        </div>
+        <div class="glass pick">
+          <h3>Pick {name} if</h3>
+          <ul>{pickThem.map((item) => <li>{item}</li>)}</ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="table" class="block" aria-labelledby="table-title">
+      <h2 id="table-title">Side by side</h2>
+      <CompareTable name={name} rows={rows} />
+      <CompareLegend />
+    </section>
+
+    <section class="block body">
+      <Prose>
+        <Content />
+      </Prose>
+    </section>
+
+    <section id="faq" class="block" aria-labelledby="faq-title">
+      <h2 id="faq-title">Questions people ask</h2>
+      <div class="faq">
+        {
+          faq.map(({ q, a }) => (
+            <div class="qa">
+              <h3>{q}</h3>
+              <p>{a}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section id="sources" class="block" aria-labelledby="sources-title">
+      <h2 id="sources-title">Sources and how we checked</h2>
+      <p>
+        We checked the sources listed below on {formatReleaseDate(checked)}. A row says "Not documented" when those pages are silent.
+        Products change. If something here is out of date, email <a href="mailto:support@waycar.dev">support@waycar.dev</a> and we will fix it.
+      </p>
+      <ul class="sources">
+        {sources.map((source) => <li><a href={source.url}>{source.label}</a></li>)}
+      </ul>
+      <p class="fine">
+        Product names are trademarks of their owners. Waycar is an independent app from OTREVA, LLC. It is not affiliated
+        with or endorsed by {name}.
+      </p>
+    </section>
+
+    <section class="glass closing" aria-labelledby="closing-title">
+      <h2 id="closing-title">Try Waycar on your own machine</h2>
+      <p>
+        Waycar is <a href="/pricing">free</a>. Every feature included, unlimited launches, no account or subscription.
+      </p>
+      <div class="actions">
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+        <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
+      </div>
+    </section>
+
+    <nav class="block more" aria-labelledby="more-title">
+      <h2 id="more-title">Keep reading</h2>
+      <ul>
+        {relatedComparisons.map((other) => <li><a href={comparePath(other.id)}>{other.data.title}</a></li>)}
+        {relatedSolutions.map((other) => <li><a href={solutionPath(other.id)}>{other.data.title}</a></li>)}
+        <li><a href="/compare">All comparisons</a></li>
+      </ul>
+    </nav>
+  </div>
+</Layout>
+
+<style>
+  .page {
+    max-width: 960px;
+    padding-block: 32px 96px;
+  }
+
+  .crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .crumbs li {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  .crumbs li + li::before {
+    content: '/';
+    content: '/' / '';
+    margin-right: 6px;
+  }
+
+  .crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--violet-soft);
+  }
+
+  .crumbs a:hover {
+    color: var(--text);
+  }
+
+  .hero {
+    margin-top: 16px;
+    max-width: 780px;
+  }
+
+  h1 {
+    margin-top: 18px;
+    font-size: clamp(32px, 4.8vw, 52px);
+    font-weight: var(--fw-title);
+    line-height: 1.06;
+    letter-spacing: var(--ls-title);
+  }
+
+  .lead {
+    margin-top: 18px;
+    font-size: var(--fs-lede);
+    color: var(--text-2);
+  }
+
+  .checked {
+    margin-top: 14px;
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .checked a,
+  .sources a,
+  .fine a,
+  .closing p a,
+  .block > p a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .block {
+    margin-top: 64px;
+  }
+
+  .block > h2 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .picks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .pick {
+    padding: 22px 24px;
+  }
+
+  .pick-us {
+    border-color: rgb(var(--violet-soft-rgb) / 0.4);
+  }
+
+  .pick h3 {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+  }
+
+  .pick ul {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding-left: 20px;
+    list-style: disc;
+    color: var(--text-2);
+  }
+
+  .pick li::marker {
+    color: var(--violet-soft);
+  }
+
+  #table > :global(.scroll),
+  #table > :global(.legend) {
+    margin-top: 20px;
+  }
+
+  .body {
+    margin-top: 8px;
+    max-width: 72ch;
+  }
+
+  .faq {
+    display: grid;
+    gap: 28px;
+    max-width: 72ch;
+    margin-top: 24px;
+  }
+
+  .qa h3 {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .qa p {
+    margin-top: 8px;
+    color: var(--text-2);
+  }
+
+  #sources > p {
+    max-width: 72ch;
+    margin-top: 14px;
+    color: var(--text-2);
+  }
+
+  .sources {
+    display: grid;
+    gap: 6px;
+    margin-top: 14px;
+    padding-left: 20px;
+    list-style: disc;
+    color: var(--text-2);
+  }
+
+  .sources li::marker {
+    color: var(--violet-soft);
+  }
+
+  #sources > .fine {
+    font-size: var(--fs-caption);
+    color: var(--text-3);
+  }
+
+  .closing {
+    margin-top: 64px;
+    padding: 28px 28px 30px;
+  }
+
+  .closing h2 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .closing p {
+    max-width: 62ch;
+    margin-top: 10px;
+    color: var(--text-2);
+  }
+
+  .more ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    margin-top: 16px;
+  }
+
+  .more a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  @media (max-width: 720px) {
+    .picks {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

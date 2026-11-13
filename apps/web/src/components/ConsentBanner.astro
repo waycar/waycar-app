@@ -1,0 +1,62 @@
+---
+// One-line cookie choice, bottom corner. Hidden until the analytics script in
+// Layout.astro sees no stored choice where consent is required, or the
+// footer's "Cookie settings" is clicked (everywhere), so it never shows
+// without JavaScript.
+// Until a visitor chooses, and after "Decline", analytics stay cookieless where
+// consent is required, and the Reddit and X ad pixels do not load;
+// "Allow" lets PostHog keep a first-party cookie so return visits are
+// recognized, and loads the Reddit and X ad pixels (never under Global
+// Privacy Control).
+---
+
+<aside class="consent" data-consent-banner hidden aria-label="Cookie choice">
+  <p>Allow analytics cookies and Reddit and X ad measurement? <a href="/privacy#this-website">Details</a></p>
+  <button type="button" class="consent-btn" data-consent-choice="accept">Allow</button>
+  <button type="button" class="consent-btn" data-consent-choice="reject">Decline</button>
+</aside>
+
+<style>
+  .consent {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 32px);
+    padding: 6px 6px 6px 14px;
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--text-2);
+    background: rgb(var(--bg-rgb) / 0.92);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    box-shadow: var(--shadow-glass);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+  }
+  .consent[hidden] {
+    display: none;
+  }
+  .consent p {
+    margin: 0;
+  }
+  .consent a {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .consent-btn {
+    min-height: 28px;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    background: rgb(var(--white-rgb) / 0.06);
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+</style>

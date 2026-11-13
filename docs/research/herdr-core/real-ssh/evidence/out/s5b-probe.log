@@ -1,0 +1,7 @@
+[  0.192] PLAIN <- {"id":0,"jsonrpc":"2.0","result":{"core":{"id":"73722ea3e24fff22b8f6907e2a1729f6","name":"bf6c156225fa"},"features":["framed","attach","events","status","shell"],"framed":true,"generation":1,"methods":["hello","server.status","server.stop","server.restart","terminal.run","templates.list","terminal.l
+[  0.193] -> ch=0 DATA len=71 {"jsonrpc": "2.0", "id": 1, "method": "events.subscribe", "params": {}}
+[  0.194] <- ch=0 DATA {"id": 1, "jsonrpc": "2.0", "result": {"channel": 1, "seq": 484, "terminals": [{"address": "t1", "argv": ["sh", "-c", "echo PATH=$PATH SHELL=$SHELL HOME=$HOME PWD=$PWD; env | grep -E '^(SSH_|XDG_|HC_|LANG|TERM|USER|LOGNAME|MAIL)' | sort"], "cols": 200, "created_ms": 1793310063546, "cwd": "/home/waycar", "die_with_parent": false, "exit_code": 0, "finished_ms": 1793310063551, "identity": "ghostty", "keep": false, "labels": {}, "name": null, "notify": true, "parent": null, "pid"
+[  0.965] <- ch=1 EVENT {"jsonrpc": "2.0", "method": "event", "params": {"data": {"records": {}, "reported": true, "status": {"app": "bravo", "msg": "bravo step 70", "progress": 70, "state": "working"}}, "seq": 485, "terminal": "t17", "type": "status"}}
+[ 66.643] EOF on hc stdout (connection closed)
+[ 66.743] RX bytes per channel: {}
+[ 66.744] connect process exit code -9

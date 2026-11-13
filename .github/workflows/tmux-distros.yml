@@ -1,0 +1,114 @@
+# tmux Hosts run whatever tmux their distribution ships, so the Host Tools
+# (plugin/: install.sh tmux mode, `waycar`, the waycar-hook Status Hook) are
+# checked in a container per distribution against that distribution's own
+# tmux package. scripts/ci/tmux-distro-check.sh does the work: the tmux
+# package, then install.sh --tmux from a package assembled out of plugin/ and
+# the native binary, and a real-tmux hook smoke as a non-root user. No Node
+# is installed: the Host Tools are one static binary. The smoke runs the
+# installed Claude hook commands, and a Blocked and a Done change must push to
+# a local stand-in for the relay (scripts/ci/relay-standin.py; the distro's
+# Python runs that test server only).
+#
+# Its own workflow, not a ci-node.yml job: ci-node.yml starts on relay and
+# codegen paths too, and these five jobs need Docker. They run on
+# GitHub-hosted ubuntu-latest, where `container:` jobs can start.
+#
+# The native-binary job builds the static Linux x86_64 `waycar` once and the
+# five jobs fetch it from the Actions cache (WAYCAR_NATIVE_BIN), not as an
+# artifact: the repository's artifact storage quota is spent.
+#
+# The weekly run catches the images and runners drifting between plugin
+# changes.
+#
+# fail-fast is off: one distribution's failure says nothing about the others.
+
+name: tmux distros
+
+on:
+  pull_request:
+    paths:
+      - plugin/**
+      - scripts/ci/tmux-distro-check.sh
+      - scripts/ci/relay-standin.py
+      - .github/workflows/tmux-distros.yml
+  push:
+    branches: [main]
+    paths:
+      - plugin/**
+      - scripts/ci/tmux-distro-check.sh
+      - scripts/ci/relay-standin.py
+      - .github/workflows/tmux-distros.yml
+  workflow_dispatch:
+  schedule:
+    - cron: "47 6 * * 1"
+
+# A new push cancels a superseded run on the same ref.
+concurrency:
+  group: tmux-distros-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-binary:
+    name: Native waycar (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Cache key
+        id: key
+        run: echo "key=native-waycar-${{ hashFiles('plugin/Cargo.toml', 'plugin/Cargo.lock', 'plugin/rust-toolchain.toml', 'plugin/rust/**', 'scripts/ci/provision-plugin-build.sh') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: native-bin
+          key: ${{ steps.key.outputs.key }}
+      - name: "Build it (zig and cargo-zigbuild, because the TLS crate needs a musl C compiler)"
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          eval "$(sh scripts/ci/provision-plugin-build.sh)"
+          (cd plugin && cargo zigbuild --release --locked --target x86_64-unknown-linux-musl)
+          install -D plugin/target/x86_64-unknown-linux-musl/release/waycar native-bin/waycar
+
+  tmux-distro:
+    name: tmux on ${{ matrix.image }}
+    needs: native-binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:24.04
+          - ubuntu:22.04
+          - debian:12
+          - fedora:latest
+          - rockylinux:9
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      # The images have tar but no git, so checkout fetches the tree through
+      # the API. The script needs no git.
+      - uses: actions/checkout@v5
+      # actions/cache hashes the compression tool into the cache version: the
+      # builder saves with zstd (present on ubuntu-latest), so an image
+      # without zstd computes a gzip version and misses the key. Install it.
+      - name: Install zstd (the cache version must match the builder's)
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install -y zstd
+          else
+            dnf -y install zstd
+          fi
+      - uses: actions/cache/restore@v4
+        with:
+          path: native-bin
+          key: ${{ needs.native-binary.outputs.key }}
+          fail-on-cache-miss: true
+      - name: Check the Host Tools against this distribution's tmux
+        run: bash scripts/ci/tmux-distro-check.sh
+        env:
+          WAYCAR_NATIVE_BIN: ${{ github.workspace }}/native-bin/waycar

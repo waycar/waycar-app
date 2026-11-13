@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  /* X profile header, 1500x500. The avatar covers the bottom-left, and X
+     trims the top and bottom on some screens, so the phone sits left (it may
+     be covered) and the copy sits right, inside the middle 80-420 band. */
+  html, body { width: 1500px; height: 500px; }
+  .grid { -webkit-mask-image: radial-gradient(ellipse 60% 90% at 65% 50%, #000 5%, transparent 80%); }
+  .glow {
+    position: absolute; left: 120px; top: -60px; width: 560px; height: 560px;
+    background: radial-gradient(closest-side, rgb(139 92 246 / 0.42), rgb(34 211 238 / 0.15) 55%, transparent 82%);
+    filter: blur(34px);
+  }
+  .phone {
+    position: absolute; z-index: 1; left: 250px; top: 56px; width: 330px; height: 740px;
+    padding: 9px; border-radius: 52px; background: var(--bezel-phone);
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.16), 0 50px 90px -20px rgb(0 0 0 / 0.95), 0 0 90px -20px rgb(34 211 238 / 0.4);
+  }
+  .phone img { display: block; width: 100%; border-radius: 44px; }
+  .fade { position: absolute; z-index: 1; left: 0; width: 760px; bottom: 0; height: 110px;
+    background: linear-gradient(180deg, transparent, rgb(7 8 11 / 0.9)); }
+  .copy { position: absolute; z-index: 2; left: 700px; right: 70px; top: 0; bottom: 0;
+    display: flex; flex-direction: column; justify-content: center; }
+  h1 { font-size: 66px; white-space: nowrap; font-weight: 650; line-height: 1.04; letter-spacing: -0.045em; }
+  h1 span { display: block; padding-bottom: 3px; }
+  .sub { margin-top: 26px; font-size: 28px; line-height: 1.3; color: var(--text-2); letter-spacing: -0.01em; }
+  .sub b { font-weight: 500; color: var(--text); }
+</style></head>
+<body>
+  <div class="grid"></div><div class="glow"></div>
+  <div class="phone"><img src="../src/assets/screens/iphone-console.png" alt=""></div>
+  <div class="fade"></div>
+  <div class="copy">
+    <h1><span class="title-text">Your agents</span><span class="title-text">stay attached.</span><span class="grad-text">Over mosh, and SSH.</span></h1>
+    <p class="sub">Every <b>herdr</b> and <b>tmux</b> coding agent on your machines,<br>in one list on iPhone and iPad.</p>
+  </div>
+</body></html>

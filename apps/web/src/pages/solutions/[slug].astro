@@ -1,0 +1,301 @@
+---
+// /solutions/<slug>: one landing page for one thing people search, rendered
+// from src/content/solutions/<slug>.md. The front matter carries the short
+// answer, what the reader needs and the questions; the Markdown body is the
+// walkthrough between them.
+import { render } from 'astro:content';
+import AppStoreCta from '../../components/AppStoreCta.astro';
+import Prose from '../../components/Prose.astro';
+import Layout from '../../layouts/Layout.astro';
+import { formatReleaseDate } from '../../lib/changelog.mjs';
+import { comparePath, getComparisons } from '../../lib/compare';
+import { documentTitle } from '../../lib/compare-rows.mjs';
+import { byId, landingSchema } from '../../lib/landing';
+import { getSolutions, solutionMarkdownPath, solutionPath } from '../../lib/solutions';
+import { getHelpPages } from '../../lib/help';
+
+export async function getStaticPaths() {
+  const solutions = await getSolutions();
+  return solutions.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const { title, metaTitle, description, summary, answer, needs, keywords, updated, faq } = entry.data;
+
+// The pages this one links to, in the order its front matter lists them.
+const comparisons = await getComparisons();
+const helpPages = await getHelpPages();
+const relatedComparisons = byId(comparisons, entry.data.compare);
+const relatedHelp = byId(helpPages, entry.data.help);
+
+const schema = landingSchema({
+  path: solutionPath(entry.id),
+  name: title,
+  crumb: title,
+  description,
+  keywords,
+  modified: updated,
+  section: { name: 'Solutions', path: '/solutions' },
+  faq,
+});
+---
+
+<Layout
+  title={documentTitle(title, metaTitle)}
+  description={description}
+  markdown={solutionMarkdownPath(entry.id)}
+  schema={schema}
+>
+  <div class="wrap page">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/solutions">Solutions</a></li>
+        <li aria-current="page">{title}</li>
+      </ol>
+    </nav>
+
+    <header class="hero">
+      <span class="kicker">Solution</span>
+      <h1>{title}</h1>
+      <p class="lead">{summary}</p>
+      <p class="checked">Updated <time datetime={updated}>{formatReleaseDate(updated)}</time></p>
+      <div class="actions">
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+        <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
+      </div>
+    </header>
+
+    <section class="glass answer" aria-labelledby="answer-title">
+      <h2 id="answer-title">Short answer</h2>
+      <p>{answer}</p>
+    </section>
+
+    <section class="needs" aria-labelledby="needs-title">
+      <h2 id="needs-title">What you need</h2>
+      <ul>{needs.map((need) => <li>{need}</li>)}</ul>
+    </section>
+
+    <section class="body">
+      <Prose>
+        <Content />
+      </Prose>
+    </section>
+
+    <section id="faq" class="block" aria-labelledby="faq-title">
+      <h2 id="faq-title">Questions people ask</h2>
+      <div class="faq">
+        {
+          faq.map(({ q, a }) => (
+            <div class="qa">
+              <h3>{q}</h3>
+              <p>{a}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="glass closing" aria-labelledby="closing-title">
+      <h2 id="closing-title">Try Waycar on your own machine</h2>
+      <p>
+        Waycar is <a href="/pricing">free</a>. Every feature included, unlimited launches, no account or subscription.
+      </p>
+      <div class="actions">
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+        <a class="btn btn-ghost btn-lg" href="/solutions">More solutions</a>
+      </div>
+    </section>
+
+    <nav class="block more" aria-labelledby="more-title">
+      <h2 id="more-title">Keep reading</h2>
+      <ul>
+        {relatedComparisons.map((other) => <li><a href={comparePath(other.id)}>{other.data.title}</a></li>)}
+        {relatedHelp.map((page) => <li><a href={`/help/${page.id}`}>Help: {page.data.title}</a></li>)}
+      </ul>
+    </nav>
+  </div>
+</Layout>
+
+<style>
+  .page {
+    max-width: 960px;
+    padding-block: 32px 96px;
+  }
+
+  .crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .crumbs li {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  .crumbs li + li::before {
+    content: '/';
+    content: '/' / '';
+    margin-right: 6px;
+  }
+
+  .crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--violet-soft);
+  }
+
+  .crumbs a:hover {
+    color: var(--text);
+  }
+
+  .hero {
+    margin-top: 16px;
+    max-width: 780px;
+  }
+
+  h1 {
+    margin-top: 18px;
+    font-size: clamp(32px, 4.8vw, 52px);
+    font-weight: var(--fw-title);
+    line-height: 1.06;
+    letter-spacing: var(--ls-title);
+  }
+
+  .lead {
+    margin-top: 18px;
+    font-size: var(--fs-lede);
+    color: var(--text-2);
+  }
+
+  .checked {
+    margin-top: 14px;
+    font: var(--fs-caption) / 1.5 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .answer {
+    max-width: 780px;
+    margin-top: 48px;
+    padding: 22px 26px 24px;
+    border-color: rgb(var(--violet-soft-rgb) / 0.4);
+  }
+
+  .answer h2,
+  .needs h2 {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+  }
+
+  .answer p {
+    margin-top: 12px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .needs {
+    max-width: 780px;
+    margin-top: 32px;
+  }
+
+  .needs ul {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding-left: 20px;
+    list-style: disc;
+    color: var(--text-2);
+  }
+
+  .needs li::marker {
+    color: var(--violet-soft);
+  }
+
+  .body {
+    max-width: 72ch;
+    margin-top: 24px;
+  }
+
+  .block {
+    margin-top: 64px;
+  }
+
+  .block > h2 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .faq {
+    display: grid;
+    gap: 28px;
+    max-width: 72ch;
+    margin-top: 24px;
+  }
+
+  .qa h3 {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .qa p {
+    margin-top: 8px;
+    color: var(--text-2);
+  }
+
+  .closing {
+    margin-top: 64px;
+    padding: 28px 28px 30px;
+  }
+
+  .closing h2 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .closing p {
+    max-width: 62ch;
+    margin-top: 10px;
+    color: var(--text-2);
+  }
+
+  .closing p a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .more ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    margin-top: 16px;
+  }
+
+  .more a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

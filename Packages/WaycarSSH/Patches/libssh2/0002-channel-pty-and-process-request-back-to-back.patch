@@ -1,0 +1,298 @@
+Waycar patch for libssh2 c7557852f1b7c0d3b9cffd5390eb33fdf93fb17f.
+
+channel: send pty-req and a process request back to back
+
+libssh2_channel_request_pty_ex() waits for the pty-req reply before
+libssh2_channel_process_startup() can send exec, so starting a command
+on a PTY costs two round trips after the channel is open.
+
+New libssh2_channel_request_pty_process_startup() builds both requests
+into the channel's existing reqPTY_* and process_* state, sends them back
+to back, then collects the replies in request order (RFC 4254 section
+5.4: the server answers channel requests in order). It is non-blocking
+and EAGAIN-safe: every send resumes with the buffer it started with, and
+each reply wait has its own packet_requirev_state. Refusals are reported
+distinctly: LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED plus *denied set to
+LIBSSH2_CHANNEL_DENIED_PTY and/or LIBSSH2_CHANNEL_DENIED_PROCESS.
+
+diff --git a/include/libssh2.h b/include/libssh2.h
+index 3ef8b1d..4966161 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -902,6 +902,27 @@ LIBSSH2_API int libssh2_channel_process_startup(LIBSSH2_CHANNEL *channel,
+                                     sizeof("subsystem") - 1, subsystem, \
+                                     (unsigned int)strlen(subsystem))
+ 
++/* Waycar patch: send pty-req and a process request ("exec", "shell" or
++   "subsystem") back to back on an open channel, then collect both replies in
++   request order, saving the pty-req round trip. Non-blocking callers repeat
++   the call with the same arguments while it returns LIBSSH2_ERROR_EAGAIN.
++   Returns 0 when both were granted. When either was refused it returns
++   LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED and sets *denied (if not NULL) to the
++   LIBSSH2_CHANNEL_DENIED_* bits of the refused requests; every other
++   non-EAGAIN return sets *denied to 0. The server may run the process even
++   though it refused the PTY, so close the channel on any failure. Like
++   libssh2_channel_process_startup(), it can succeed once per channel. */
++#define LIBSSH2_CHANNEL_DENIED_PTY      0x01
++#define LIBSSH2_CHANNEL_DENIED_PROCESS  0x02
++LIBSSH2_API int libssh2_channel_request_pty_process_startup(
++    LIBSSH2_CHANNEL *channel,
++    const char *term, unsigned int term_len,
++    const char *modes, unsigned int modes_len,
++    int width, int height, int width_px, int height_px,
++    const char *request, unsigned int request_len,
++    const char *message, unsigned int message_len,
++    int *denied);
++
+ LIBSSH2_API ssize_t libssh2_channel_read_ex(LIBSSH2_CHANNEL *channel,
+                                             int stream_id, char *buf,
+                                             size_t buflen);
+diff --git a/src/channel.c b/src/channel.c
+index 4854c21..eb3f0e8 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -1519,6 +1519,227 @@ int libssh2_channel_process_startup(LIBSSH2_CHANNEL *channel,
+     return rc;
+ }
+ 
++/*
++ * Waycar patch: pty-req and a process request sent back to back, both
++ * replies collected in request order (RFC 4254 5.4: the server answers
++ * channel requests in the order it receives them). Builds both packets
++ * into the reqPTY_* and process_* channel state that channel_request_pty()
++ * and ssh2_channel_process_startup() use, so every send can be resumed with
++ * the very buffer it started with.
++ */
++static int
++channel_request_pty_process_startup(LIBSSH2_CHANNEL *channel,
++                                    const char *term, unsigned int term_len,
++                                    const char *modes, unsigned int modes_len,
++                                    int width, int height,
++                                    int width_px, int height_px,
++                                    const char *request, size_t request_len,
++                                    const char *message, size_t message_len,
++                                    int *denied)
++{
++    static const unsigned char reply_codes[3] =
++        { SSH_MSG_CHANNEL_SUCCESS, SSH_MSG_CHANNEL_FAILURE, 0 };
++
++    LIBSSH2_SESSION *session = channel->session;
++    unsigned char *s;
++    unsigned char *data;
++    size_t data_len;
++    int rc;
++
++    if(denied)
++        *denied = 0;
++
++    if(channel->reqPTYProcess_state == ssh2_NB_state_idle) {
++        if(channel->reqPTY_state != ssh2_NB_state_idle ||
++           channel->process_state != ssh2_NB_state_idle)
++            return ssh2_err(session, LIBSSH2_ERROR_BAD_USE,
++                            "Channel has a PTY or process request pending "
++                            "or can not be reused");
++        /* 41: see channel_request_pty() */
++        if(term_len + modes_len > 256)
++            return ssh2_err(session, LIBSSH2_ERROR_INVAL,
++                            "term + mode lengths too large");
++
++        ssh2_deb((session, LIBSSH2_TRACE_CONN,
++                  "Allocating tty and starting request(%s) on channel %u/%u",
++                  request, channel->local.id, channel->remote.id));
++
++        /* 10: see ssh2_channel_process_startup() */
++        channel->process_packet_len = request_len + 10 + (message ? 4 : 0);
++        s = channel->process_packet =
++            SSH2_ALLOC(session, channel->process_packet_len);
++        if(!channel->process_packet)
++            return ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                            "Unable to allocate memory "
++                            "for channel-process request");
++        *(s++) = SSH_MSG_CHANNEL_REQUEST;
++        ssh2_store_u32(&s, channel->remote.id);
++        ssh2_store_str(&s, request, request_len);
++        *(s++) = 0x01;
++        if(message)
++            ssh2_store_u32(&s, (uint32_t)message_len);
++
++        channel->reqPTY_packet_len = term_len + modes_len + 41;
++        s = channel->reqPTY_packet;
++        *(s++) = SSH_MSG_CHANNEL_REQUEST;
++        ssh2_store_u32(&s, channel->remote.id);
++        ssh2_store_str(&s, "pty-req", sizeof("pty-req") - 1);
++        *(s++) = 0x01;
++        ssh2_store_str(&s, term, term_len);
++        ssh2_store_u32(&s, width);
++        ssh2_store_u32(&s, height);
++        ssh2_store_u32(&s, width_px);
++        ssh2_store_u32(&s, height_px);
++        ssh2_store_str(&s, modes, modes_len);
++
++        memset(&channel->reqPTY_packet_requirev_state, 0,
++               sizeof(channel->reqPTY_packet_requirev_state));
++        memset(&channel->process_packet_requirev_state, 0,
++               sizeof(channel->process_packet_requirev_state));
++        ssh2_htonu32(channel->reqPTY_local_channel, channel->local.id);
++        ssh2_htonu32(channel->process_local_channel, channel->local.id);
++
++        channel->reqPTYProcess_denied = 0;
++        channel->reqPTY_state = ssh2_NB_state_created;
++        channel->process_state = ssh2_NB_state_created;
++        channel->reqPTYProcess_state = ssh2_NB_state_created;
++    }
++
++    if(channel->reqPTYProcess_state == ssh2_NB_state_created) {
++        rc = ssh2_transport_send(session, channel->reqPTY_packet,
++                                 channel->reqPTY_packet_len, NULL, 0);
++        if(rc == LIBSSH2_ERROR_EAGAIN) {
++            ssh2_err(session, rc, "Would block sending pty request");
++            return rc;
++        }
++        else if(rc) {
++            SSH2_SAFEFREE(session, channel->process_packet);
++            channel->reqPTY_state = ssh2_NB_state_idle;
++            channel->process_state = ssh2_NB_state_end;
++            channel->reqPTYProcess_state = ssh2_NB_state_idle;
++            return ssh2_err(session, rc, "Unable to send pty-request packet");
++        }
++        channel->reqPTY_state = ssh2_NB_state_sent;
++        channel->reqPTYProcess_state = ssh2_NB_state_sent;
++    }
++
++    if(channel->reqPTYProcess_state == ssh2_NB_state_sent) {
++        rc = ssh2_transport_send(session, channel->process_packet,
++                                 channel->process_packet_len,
++                                 (const unsigned char *)message,
++                                 message_len);
++        if(rc == LIBSSH2_ERROR_EAGAIN) {
++            ssh2_err(session, rc, "Would block sending channel request");
++            return rc;
++        }
++        SSH2_SAFEFREE(session, channel->process_packet);
++        if(rc) {
++            channel->reqPTY_state = ssh2_NB_state_idle;
++            channel->process_state = ssh2_NB_state_end;
++            channel->reqPTYProcess_state = ssh2_NB_state_idle;
++            return ssh2_err(session, rc, "Unable to send channel request");
++        }
++        channel->process_state = ssh2_NB_state_sent;
++        channel->reqPTYProcess_state = ssh2_NB_state_sent1;
++    }
++
++    if(channel->reqPTYProcess_state == ssh2_NB_state_sent1) {
++        /* The first reply on this channel answers the pty-req. */
++        rc = ssh2_packet_requirev(session, reply_codes, &data, &data_len,
++                                  1, channel->reqPTY_local_channel, 4,
++                                  &channel->reqPTY_packet_requirev_state);
++        if(rc == LIBSSH2_ERROR_EAGAIN)
++            return rc;
++        if(!rc && data_len < 1) {
++            SSH2_FREE(session, data);
++            rc = LIBSSH2_ERROR_PROTO;
++        }
++        channel->reqPTY_state = ssh2_NB_state_idle;
++        if(rc) {
++            channel->process_state = ssh2_NB_state_end;
++            channel->reqPTYProcess_state = ssh2_NB_state_idle;
++            return ssh2_err(session, rc, "Failed waiting for pty-req reply");
++        }
++        if(data[0] != SSH_MSG_CHANNEL_SUCCESS)
++            channel->reqPTYProcess_denied |= LIBSSH2_CHANNEL_DENIED_PTY;
++        SSH2_FREE(session, data);
++        channel->reqPTYProcess_state = ssh2_NB_state_sent2;
++    }
++
++    if(channel->reqPTYProcess_state == ssh2_NB_state_sent2) {
++        /* The second reply answers the process request. */
++        rc = ssh2_packet_requirev(session, reply_codes, &data, &data_len,
++                                  1, channel->process_local_channel, 4,
++                                  &channel->process_packet_requirev_state);
++        if(rc == LIBSSH2_ERROR_EAGAIN)
++            return rc;
++        if(!rc && data_len < 1) {
++            SSH2_FREE(session, data);
++            rc = LIBSSH2_ERROR_PROTO;
++        }
++        channel->process_state = ssh2_NB_state_end;
++        channel->reqPTYProcess_state = ssh2_NB_state_idle;
++        if(rc)
++            return ssh2_err(session, rc,
++                            "Failed waiting for channel request reply");
++        if(data[0] != SSH_MSG_CHANNEL_SUCCESS)
++            channel->reqPTYProcess_denied |= LIBSSH2_CHANNEL_DENIED_PROCESS;
++        SSH2_FREE(session, data);
++    }
++
++    if(denied)
++        *denied = channel->reqPTYProcess_denied;
++
++    switch(channel->reqPTYProcess_denied) {
++    case 0:
++        return 0;
++    case LIBSSH2_CHANNEL_DENIED_PTY:
++        return ssh2_err(session, LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED,
++                        "Unable to complete request for channel request-pty");
++    case LIBSSH2_CHANNEL_DENIED_PROCESS:
++        return ssh2_err(session, LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED,
++                        "Unable to complete request for "
++                        "channel-process-startup");
++    default:
++        return ssh2_err(session, LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED,
++                        "Unable to complete request for channel request-pty "
++                        "and channel-process-startup");
++    }
++}
++
++/*
++ * Waycar patch: see libssh2.h
++ */
++int libssh2_channel_request_pty_process_startup(LIBSSH2_CHANNEL *channel,
++                                                const char *term,
++                                                unsigned int term_len,
++                                                const char *modes,
++                                                unsigned int modes_len,
++                                                int width, int height,
++                                                int width_px, int height_px,
++                                                const char *request,
++                                                unsigned int request_len,
++                                                const char *message,
++                                                unsigned int message_len,
++                                                int *denied)
++{
++    int rc;
++
++    if(!channel || !request)
++        return LIBSSH2_ERROR_BAD_USE;
++
++    BLOCK_ADJUST(rc, channel->session,
++                 channel_request_pty_process_startup(channel,
++                                                     term, term_len,
++                                                     modes, modes_len,
++                                                     width, height,
++                                                     width_px, height_px,
++                                                     request, request_len,
++                                                     message, message_len,
++                                                     denied));
++    return rc;
++}
++
+ /*
+  * Set a channel's BEHAVIOR blocking on or off. The socket remains non-
+  * blocking.
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index 3ac96bc..5d24403 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -512,6 +512,12 @@ struct _LIBSSH2_CHANNEL {
+     unsigned char process_local_channel[4];
+     struct packet_requirev_state process_packet_requirev_state;
+ 
++    /* Waycar patch: libssh2_channel_request_pty_process_startup(). It drives
++       the reqPTY_* and process_* state above; this records which phase it
++       is in and which of the two requests the server refused. */
++    ssh2_NB_states reqPTYProcess_state;
++    int reqPTYProcess_denied;
++
+     /* State variables used in libssh2_channel_flush_ex() */
+     ssh2_NB_states flush_state;
+     size_t flush_refund_bytes;

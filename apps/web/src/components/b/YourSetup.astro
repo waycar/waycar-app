@@ -1,0 +1,275 @@
+---
+const hostAgents = ['claude', 'codex', 'omp', 'gemini', 'opencode', 'pi'];
+---
+
+<section id="how" class="section" aria-labelledby="your-setup-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Same setup</span>
+      <h2 id="your-setup-title" class="sec-title">Same harness. Same models.<br /> <span class="grad-text">Same machine.</span></h2>
+      <p class="sec-lede">
+        Your agents run on your own Mac or Linux box, in herdr or tmux. Waycar connects straight to it over SSH, with no
+        account and no cloud in the middle of your sessions. Your CLI, config, tools, repos, models and API accounts stay
+        exactly where they are, and your phone shows the agent's real terminal.
+      </p>
+      <p class="sec-lede note">One catch: your computer does the work, so leave it on and awake.</p>
+    </div>
+
+    <div class="glass diagram">
+      <div class="node">
+        <p class="node-label">Your phone</p>
+        <h3>Waycar</h3>
+        <ul>
+          <li class="hl">SSH key made on device</li>
+          <li>iPhone · iPad</li>
+        </ul>
+      </div>
+
+      <div class="link" aria-hidden="true">
+        <p class="wire-top"><b>ssh</b> · straight to your machine</p>
+        <div class="wire"></div>
+        <p class="wire-bot"><b class="mosh">mosh</b> · for live terminals</p>
+        <p class="nocloud"><s>cloud</s> · <s>account</s></p>
+      </div>
+      <p class="visually-hidden">
+        Waycar connects to your machine over SSH, and live agent terminals can also run over mosh. No cloud service or
+        account sits in between.
+      </p>
+
+      <div class="node">
+        <p class="node-label">Your machine</p>
+        <h3>herdr or tmux</h3>
+        <ul>
+          <li class="hl">your CLI and config</li>
+          <li>your repos and files</li>
+          <li>your models and API accounts</li>
+        </ul>
+        <p class="agents-mini">{hostAgents.map((cli) => <code>{cli}</code>)}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Diagram rules copied from page A's HowItWorks.astro on purpose, for A/B test isolation. */
+  .note {
+    margin-top: 12px;
+  }
+
+  .diagram {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr 1.15fr;
+    align-items: center;
+    padding: 44px;
+    overflow: hidden;
+  }
+
+  .diagram::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(600px 240px at 50% 0%, rgb(var(--violet-rgb) / 0.1), transparent 70%);
+    pointer-events: none;
+  }
+
+  .node {
+    position: relative;
+    z-index: 1;
+    padding: 22px;
+    background: var(--panel);
+    border: 1px solid var(--line-2);
+    border-radius: 14px;
+  }
+
+  .node-label {
+    font: 500 11.5px var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .node h3 {
+    margin: 8px 0 12px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .node ul {
+    display: grid;
+    gap: 7px;
+    font: 13px var(--font-mono);
+    color: var(--text-2);
+  }
+
+  .node li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .node li::before {
+    content: '';
+    flex: none;
+    width: 5px;
+    height: 5px;
+    background: var(--text-3);
+    border-radius: 50%;
+  }
+
+  .node li.hl {
+    color: var(--text);
+  }
+
+  .node li.hl::before {
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+  }
+
+  .agents-mini {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .agents-mini code {
+    padding: 3px 8px;
+    font-size: 11.5px;
+    color: var(--text-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  .link {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    padding: 0 8px;
+  }
+
+  .wire {
+    position: relative;
+    width: 100%;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, rgb(var(--violet-soft-rgb) / 0.9) 0 8px, transparent 8px 14px);
+  }
+
+  .wire::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+    background: var(--grad);
+    filter: blur(10px);
+    opacity: 0.45;
+  }
+
+  .wire::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -2px;
+    border: 6px solid transparent;
+    border-right: 0;
+    border-left: 9px solid var(--cyan);
+  }
+
+  .wire-top,
+  .wire-bot {
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+    color: var(--text-2);
+  }
+
+  .wire-top {
+    margin-bottom: 14px;
+  }
+
+  .wire-top b {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .wire-bot {
+    margin-top: 10px;
+    color: var(--text-3);
+  }
+
+  .wire-bot .mosh {
+    font-weight: 500;
+    color: var(--cyan);
+  }
+
+  .nocloud {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    padding: 5px 10px;
+    font: 11.5px var(--font-mono);
+    white-space: nowrap;
+    color: var(--text-3);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    transform: translateX(-50%);
+  }
+
+  .nocloud s {
+    color: var(--danger);
+    text-decoration-thickness: 1.5px;
+  }
+
+  @media (max-width: 720px) {
+    .diagram {
+      grid-template-columns: 1fr;
+      padding: 28px;
+    }
+
+    .link {
+      height: auto;
+      padding: 18px 0;
+    }
+
+    .wire {
+      width: 2px;
+      height: 70px;
+      background: repeating-linear-gradient(180deg, rgb(var(--violet-soft-rgb) / 0.9) 0 8px, transparent 8px 14px);
+    }
+
+    .wire::before {
+      inset: 0 -6px;
+    }
+
+    .wire::after {
+      top: auto;
+      right: auto;
+      bottom: -3px;
+      left: -5px;
+      border: 6px solid transparent;
+      border-bottom: 0;
+      border-top: 9px solid var(--cyan);
+    }
+
+    .wire-top {
+      margin-bottom: 10px;
+    }
+
+    .nocloud {
+      position: static;
+      margin-top: 10px;
+      transform: none;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .wire-top,
+    .wire-bot {
+      white-space: normal;
+      text-align: center;
+    }
+  }
+</style>

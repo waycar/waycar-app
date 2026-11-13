@@ -1,0 +1,7 @@
+restart command issued at 2.009s after the subscriber process started (its log clock starts ~0.03 s later)
+`ssh host 'herdr-core server restart'`: rc=0 in 0.317s stdout='{"core":{"id":"73722ea3e24fff22b8f6907e2a1729f6","name":"bf6c156225fa"},"finished":9,"holder":{"current":true,"instance":"0d41037578be14b
+attach PTY ssh: rc=0 exited 0.332s after the restart command started; last bytes: 1016l\x1b[?2004l\x1b[?2031l\x1b[?2033l\x1b[?2048l\x1b[?7h\x1b[?25h\x1b[?1007h\x1b[r\x1b8\x1b[0 q\x1b(B\x1b[0m\x1b]104\
+[  2.279] EOF on hc stdout (connection closed)
+[  2.482] connect process exit code 0
+[  2.279] EOF on hc stdout (connection closed)
+[  2.482] connect process exit code 0

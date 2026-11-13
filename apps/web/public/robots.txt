@@ -1,0 +1,14 @@
+# waycar.dev welcomes search engines and AI agents.
+# Agent overview: https://waycar.dev/llms.txt
+# Full product guide in Markdown: https://waycar.dev/index.md
+# Help docs, one page per feature, in Markdown: https://waycar.dev/help.md
+# Articles in Markdown: https://waycar.dev/articles.md
+# Comparisons with other apps, in Markdown: https://waycar.dev/compare.md
+# Solutions for reaching coding agents from a phone, in Markdown: https://waycar.dev/solutions.md
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+# Every GET of the installer logs a plugin install event; crawlers have no use for it.
+Disallow: /install.sh
+
+Sitemap: https://waycar.dev/sitemap.xml

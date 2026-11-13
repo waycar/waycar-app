@@ -1,0 +1,39 @@
+# Cloudflare Workers deployment for the Waycar marketing site.
+#
+# The static build in ./dist is served through the ASSETS binding. The Worker
+# (src/worker.ts) runs first on every request so it can 301 the secondary
+# hostnames to https://waycar.dev before any asset lookup. Deploy with
+# `npm run build && npm run deploy`, or let .github/workflows/web.yml do it on
+# a push to main.
+
+name = "waycar-web"
+main = "src/worker.ts"
+compatibility_date = "2026-07-01"
+workers_dev = false
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
+# `dist/404.html` answers unmatched paths (astro build format = "file").
+not_found_handling = "404-page"
+
+# `npm run deploy` (and CI) passes `--var POSTHOG_ENV:release`.
+
+# Custom domains: Cloudflare creates the DNS records on first deploy. Both
+# zones (waycar.dev, waycar.app) must be in the deploying account.
+[[routes]]
+pattern = "waycar.dev"
+custom_domain = true
+
+[[routes]]
+pattern = "www.waycar.dev"
+custom_domain = true
+
+[[routes]]
+pattern = "waycar.app"
+custom_domain = true
+
+[[routes]]
+pattern = "www.waycar.app"
+custom_domain = true

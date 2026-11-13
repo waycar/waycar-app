@@ -1,0 +1,426 @@
+{
+  "description": "Hook payloads captured live in the harness lab on 2026-10-12 (docs/research/harnesses/<kind>.md; raw captures in /tmp/waycar-harness-captures/<kind>/ on the Mac, `source` relative to it), trimmed of bulky fields. `env` holds only the hook environment variables the code reads.",
+  "payloads": {
+    "claude": {
+      "SessionStart": {
+        "source": "claude/hooks/1791823011.326705482-SessionStart.txt",
+        "input": {
+          "session_id": "d609d33a-3274-4c3f-9b62-0e438e21e67f",
+          "transcript_path": "/home/waycar/.claude/projects/-home-waycar-work-demo/d609d33a-3274-4c3f-9b62-0e438e21e67f.jsonl",
+          "cwd": "/home/waycar/work/demo",
+          "hook_event_name": "SessionStart",
+          "source": "startup",
+          "model": "claude-opus-5-5"
+        },
+        "env": {
+          "CLAUDECODE": "1",
+          "CLAUDE_PID": "108570",
+          "CLAUDE_CODE_SESSION_ID": "d609d33a-3274-4c3f-9b62-0e438e21e67f"
+        }
+      }
+    },
+    "grok": {
+      "SessionStart": {
+        "source": "grok/hooks/20261012T163238.703958957-SessionStart.txt",
+        "input": {
+          "hookEventName": "session_start",
+          "sessionId": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "cwd": "/home/waycar/work/demo",
+          "workspaceRoot": "/home/waycar/work/demo/",
+          "timestamp": "2026-10-12T16:32:38.700854721+00:00",
+          "permissionMode": "default",
+          "source": "new",
+          "hook_event_name": "SessionStart",
+          "session_id": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "permission_mode": "default"
+        },
+        "env": {
+          "GROK_HOOK_EVENT": "session_start",
+          "GROK_SESSION_ID": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "CLAUDE_PROJECT_DIR": "/home/waycar/work/demo/"
+        }
+      },
+      "UserPromptSubmit": {
+        "source": "grok/hooks/20261012T163300.302351659-UserPromptSubmit.txt",
+        "input": {
+          "hookEventName": "user_prompt_submit",
+          "sessionId": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "cwd": "/home/waycar/work/demo",
+          "workspaceRoot": "/home/waycar/work/demo/",
+          "timestamp": "2026-10-12T16:33:00.298998128+00:00",
+          "transcriptPath": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f5-82fd-79c3-b63d-a2aa609ea70e/updates.jsonl",
+          "promptId": "17cb5d36-2a28-47d8-b553-f8f3def06d20",
+          "permissionMode": "default",
+          "hook_event_name": "UserPromptSubmit",
+          "session_id": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "transcript_path": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f5-82fd-79c3-b63d-a2aa609ea70e/updates.jsonl",
+          "permission_mode": "default"
+        },
+        "env": {
+          "GROK_HOOK_EVENT": "user_prompt_submit",
+          "GROK_SESSION_ID": "01a130f5-82fd-79c3-b63d-a2aa609ea70e"
+        }
+      },
+      "Notification": {
+        "source": "grok/hooks/20261012T163302.041688978-Notification.txt",
+        "input": {
+          "hookEventName": "notification",
+          "sessionId": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "cwd": "/home/waycar/work/demo",
+          "workspaceRoot": "/home/waycar/work/demo/",
+          "timestamp": "2026-10-12T16:33:02.039197289+00:00",
+          "transcriptPath": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f5-82fd-79c3-b63d-a2aa609ea70e/updates.jsonl",
+          "permissionMode": "default",
+          "notificationType": "permission_prompt",
+          "message": "Tool permission requested",
+          "level": "info",
+          "hook_event_name": "Notification",
+          "session_id": "01a130f5-82fd-79c3-b63d-a2aa609ea70e",
+          "transcript_path": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f5-82fd-79c3-b63d-a2aa609ea70e/updates.jsonl",
+          "permission_mode": "default"
+        },
+        "env": {
+          "GROK_HOOK_EVENT": "notification",
+          "GROK_SESSION_ID": "01a130f5-82fd-79c3-b63d-a2aa609ea70e"
+        }
+      },
+      "SessionEnd": {
+        "source": "grok/hooks/20261012T163435.189572882-SessionEnd.txt",
+        "input": {
+          "hookEventName": "session_end",
+          "sessionId": "01a130f7-4334-7781-86bb-d1d0f32278bb",
+          "cwd": "/home/waycar/work/demo",
+          "workspaceRoot": "/home/waycar/work/demo/",
+          "timestamp": "2026-10-12T16:34:35.187407215+00:00",
+          "transcriptPath": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f7-4334-7781-86bb-d1d0f32278bb/updates.jsonl",
+          "permissionMode": "default",
+          "reason": "shutdown",
+          "hook_event_name": "SessionEnd",
+          "session_id": "01a130f7-4334-7781-86bb-d1d0f32278bb",
+          "transcript_path": "/home/waycar/.grok/sessions/%2Fhome%2Fwaycar%2Fwork%2Fdemo/01a130f7-4334-7781-86bb-d1d0f32278bb/updates.jsonl",
+          "permission_mode": "default"
+        },
+        "env": {
+          "GROK_HOOK_EVENT": "session_end",
+          "GROK_SESSION_ID": "01a130f7-4334-7781-86bb-d1d0f32278bb"
+        }
+      }
+    },
+    "copilot": {
+      "SessionStart": {
+        "source": "copilot/163207.286672172-pc-SessionStart.stdin",
+        "input": {
+          "hook_event_name": "SessionStart",
+          "session_id": "f18f4b89-a0d3-4347-b145-43cedeede722",
+          "timestamp": "2026-10-12T16:32:07.284Z",
+          "cwd": "/home/waycar/work/probe-copilot",
+          "source": "new",
+          "initial_prompt": "first message FIRSTMSG-COPILOT"
+        },
+        "env": {
+          "COPILOT_CLI": "1",
+          "CLAUDE_PROJECT_DIR": "/home/waycar/work/probe-copilot"
+        }
+      },
+      "Notification": {
+        "source": "copilot/163346.453457570-pc-Notification.stdin",
+        "input": {
+          "sessionId": "f18f4b89-a0d3-4347-b145-43cedeede722",
+          "timestamp": 1791822826442,
+          "cwd": "/home/waycar/work/probe-copilot",
+          "message": "Run command: rm -f /tmp/probe-copilot-none && echo waycar-tool-ok",
+          "title": "Permission needed",
+          "hook_event_name": "Notification",
+          "notification_type": "permission_prompt"
+        },
+        "env": {
+          "COPILOT_CLI": "1"
+        }
+      },
+      "SessionEnd": {
+        "source": "copilot/163235.877430462-pc-SessionEnd.stdin",
+        "input": {
+          "hook_event_name": "SessionEnd",
+          "session_id": "f18f4b89-a0d3-4347-b145-43cedeede722",
+          "timestamp": "2026-10-12T16:32:35.875Z",
+          "cwd": "/home/waycar/work/probe-copilot",
+          "reason": "user_exit"
+        },
+        "env": {
+          "COPILOT_CLI": "1"
+        }
+      },
+      "SessionEndPhantom": {
+        "source": "copilot/163238.036930327-pc-SessionEnd.stdin",
+        "input": {
+          "hook_event_name": "SessionEnd",
+          "session_id": "e98ed8fc-4ea3-4563-856a-6431589b2fd3",
+          "timestamp": "2026-10-12T16:32:38.033Z",
+          "cwd": "/home/waycar/work/probe-copilot",
+          "reason": "user_exit"
+        },
+        "env": {
+          "COPILOT_CLI": "1"
+        }
+      }
+    },
+    "qwen": {
+      "SessionStart": {
+        "source": "qwen/163941.701078309-SessionStart.stdin",
+        "input": {
+          "session_id": "5f3ac653-68b1-402c-a823-936a1885e013",
+          "transcript_path": "/home/waycar/.qwen/projects/-home-waycar-work-probe-qwen/chats/5f3ac653-68b1-402c-a823-936a1885e013.jsonl",
+          "cwd": "/home/waycar/work/probe-qwen",
+          "hook_event_name": "SessionStart",
+          "timestamp": "2026-10-12T16:39:41.696Z",
+          "permission_mode": "auto",
+          "source": "startup",
+          "model": "mock-model"
+        },
+        "env": {
+          "QWEN_CODE_SESSION_ID": "5f3ac653-68b1-402c-a823-936a1885e013"
+        }
+      }
+    },
+    "gemini": {
+      "SessionStartResume": {
+        "source": "gemini/163700.784608628-SessionStart.stdin",
+        "input": {
+          "session_id": "01ccc475-d9df-4b1a-8b1e-ebddc21cd237",
+          "transcript_path": "/home/waycar/.gemini/tmp/probe-gemini/chats/session-2026-10-12T16-37-01ccc475.jsonl",
+          "cwd": "/home/waycar/work/probe-gemini",
+          "hook_event_name": "SessionStart",
+          "timestamp": "2026-10-12T16:37:00.780Z",
+          "source": "resume"
+        },
+        "env": {
+          "GEMINI_SESSION_ID": "01ccc475-d9df-4b1a-8b1e-ebddc21cd237"
+        }
+      },
+      "BeforeAgent": {
+        "source": "gemini/163706.515467885-BeforeAgent.stdin",
+        "input": {
+          "session_id": "01ccc475-d9df-4b1a-8b1e-ebddc21cd237",
+          "transcript_path": "/home/waycar/.gemini/tmp/probe-gemini/chats/session-2026-10-12T16-35-01ccc475.jsonl",
+          "cwd": "/home/waycar/work/probe-gemini",
+          "hook_event_name": "BeforeAgent",
+          "timestamp": "2026-10-12T16:37:06.512Z",
+          "prompt": "third WAYCAR_TOOL blocked"
+        }
+      },
+      "Notification": {
+        "source": "gemini/163708.136419715-Notification.stdin",
+        "input": {
+          "session_id": "01ccc475-d9df-4b1a-8b1e-ebddc21cd237",
+          "transcript_path": "/home/waycar/.gemini/tmp/probe-gemini/chats/session-2026-10-12T16-35-01ccc475.jsonl",
+          "cwd": "/home/waycar/work/probe-gemini",
+          "hook_event_name": "Notification",
+          "timestamp": "2026-10-12T16:37:08.132Z",
+          "notification_type": "ToolPermission",
+          "message": "Tool Confirm Shell Command requires execution",
+          "details": {
+            "type": "exec",
+            "title": "Confirm Shell Command",
+            "command": "rm -f /tmp/probe-none && echo waycar-tool-ok",
+            "rootCommand": "rm, echo"
+          }
+        }
+      }
+    },
+    "agy": {
+      "PreInvocation": {
+        "source": "agy/hooks/163011.384486023-PreInvocation.txt",
+        "input": {
+          "artifactDirectoryPath": "/home/waycar/.gemini/antigravity-cli/brain/8e00464e-4412-4944-91be-b38078c432d6",
+          "conversationId": "8e00464e-4412-4944-91be-b38078c432d6",
+          "initialNumSteps": 1,
+          "invocationNum": 0,
+          "modelName": "gemini-3.1-pro-low",
+          "transcriptPath": "/home/waycar/.gemini/antigravity-cli/brain/8e00464e-4412-4944-91be-b38078c432d6/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": [
+            "/home/waycar/work/demo"
+          ]
+        },
+        "env": {
+          "ANTIGRAVITY_CONVERSATION_ID": "8e00464e-4412-4944-91be-b38078c432d6"
+        }
+      },
+      "Stop": {
+        "source": "agy/hooks/163012.941599295-Stop.txt",
+        "input": {
+          "artifactDirectoryPath": "/home/waycar/.gemini/antigravity-cli/brain/8e00464e-4412-4944-91be-b38078c432d6",
+          "conversationId": "8e00464e-4412-4944-91be-b38078c432d6",
+          "error": "",
+          "executionNum": 0,
+          "fullyIdle": true,
+          "modelName": "gemini-3.1-pro-low",
+          "terminationReason": "NO_TOOL_CALL",
+          "transcriptPath": "/home/waycar/.gemini/antigravity-cli/brain/8e00464e-4412-4944-91be-b38078c432d6/.system_generated/logs/transcript_full.jsonl",
+          "workspacePaths": [
+            "/home/waycar/work/demo"
+          ]
+        },
+        "env": {
+          "ANTIGRAVITY_CONVERSATION_ID": "8e00464e-4412-4944-91be-b38078c432d6"
+        }
+      }
+    },
+    "hermes": {
+      "pre_llm_call": {
+        "source": "hermes/hooks/164123.526323472-pre_llm_call.txt",
+        "input": {
+          "hook_event_name": "pre_llm_call",
+          "tool_name": null,
+          "tool_input": null,
+          "session_id": "20261012_164012_b4df59",
+          "cwd": "/home/waycar/work/demo",
+          "profile": "default",
+          "extra": {
+            "task_id": "20261012_164012_b4df59",
+            "turn_id": "20261012_164012_b4df59:20261012_164012_b4df59:7c14609e",
+            "is_first_turn": true,
+            "model": "mock-model",
+            "platform": "cli",
+            "sender_id": "",
+            "telemetry_schema_version": "hermes.observer.v1"
+          }
+        },
+        "env": {
+          "HERMES_SESSION_ID": "20261012_164012_b4df59"
+        }
+      },
+      "on_session_end": {
+        "source": "hermes/hooks/164125.304166326-on_session_end.txt",
+        "input": {
+          "hook_event_name": "on_session_end",
+          "tool_name": null,
+          "tool_input": null,
+          "session_id": "20261012_164012_b4df59",
+          "cwd": "/home/waycar/work/demo",
+          "profile": "default",
+          "extra": {
+            "task_id": "20261012_164012_b4df59",
+            "turn_id": "20261012_164012_b4df59:20261012_164012_b4df59:7c14609e",
+            "completed": true,
+            "failed": false,
+            "interrupted": false,
+            "turn_exit_reason": "text_response(finish_reason=stop)",
+            "model": "mock-model",
+            "platform": "cli",
+            "telemetry_schema_version": "hermes.observer.v1"
+          }
+        },
+        "env": {
+          "HERMES_SESSION_ID": "20261012_164012_b4df59"
+        }
+      },
+      "on_session_end_interrupted": {
+        "source": "hermes/hooks/164306.556435727-on_session_end.txt",
+        "input": {
+          "hook_event_name": "on_session_end",
+          "tool_name": null,
+          "tool_input": null,
+          "session_id": "20261012_164012_b4df59",
+          "cwd": "/home/waycar/work/demo",
+          "profile": "default",
+          "extra": {
+            "task_id": "20261012_164012_b4df59",
+            "turn_id": "20261012_164012_b4df59:20261012_164012_b4df59:c7c40b12",
+            "completed": false,
+            "failed": false,
+            "interrupted": true,
+            "turn_exit_reason": "interrupted_during_api_call",
+            "model": "mock-model",
+            "platform": "cli",
+            "telemetry_schema_version": "hermes.observer.v1"
+          }
+        },
+        "env": {
+          "HERMES_SESSION_ID": "20261012_164012_b4df59"
+        }
+      }
+    },
+    "cline": {
+      "TaskStart": {
+        "source": "cline/hooks.jsonl 2026-10-12T16:46:54.438086Z",
+        "input": {
+          "clineVersion": "",
+          "timestamp": "2026-10-12T16:46:54.408Z",
+          "taskId": "conv_1791823614404_pp2unsm",
+          "sessionContext": {
+            "rootSessionId": "1791823611117_cn4fd"
+          },
+          "workspaceRoots": [
+            "/home/waycar/work/demo"
+          ],
+          "workspaceInfo": {
+            "rootPath": "/home/waycar/work/demo",
+            "hint": "demo",
+            "latestGitCommitHash": "f4beb8c0e470b4cae0701a156a5f27313913df70",
+            "latestGitBranchName": "main"
+          },
+          "userId": "waycar",
+          "agent_id": "agent_29e8e79a-c6a2-4c88-a73d-2dfd9ab6c6d5",
+          "parent_agent_id": null,
+          "hookName": "agent_start",
+          "taskStart": {
+            "taskMetadata": {}
+          }
+        },
+        "env": {
+          "CLINE_SESSION_DATA_DIR": "/home/waycar/.cline/data/sessions"
+        }
+      },
+      "TaskResume": {
+        "source": "cline/hooks.jsonl 2026-10-12T17:07:17.441345Z",
+        "input": {
+          "clineVersion": "",
+          "timestamp": "2026-10-12T17:07:17.419Z",
+          "taskId": "conv_1791824832898_1n4jrof",
+          "sessionContext": {
+            "rootSessionId": "1791823632626_6jtha"
+          },
+          "workspaceRoots": [
+            "/home/waycar/work/demo"
+          ],
+          "workspaceInfo": {
+            "rootPath": "/home/waycar/work/demo",
+            "hint": "demo",
+            "latestGitCommitHash": "f4beb8c0e470b4cae0701a156a5f27313913df70",
+            "latestGitBranchName": "main"
+          },
+          "userId": "waycar",
+          "agent_id": "agent_1ca0dcd1-045e-46ba-a6f5-b305772b4205",
+          "parent_agent_id": null,
+          "hookName": "agent_resume",
+          "taskResume": {
+            "taskMetadata": {},
+            "previousState": {}
+          }
+        },
+        "env": {
+          "CLINE_SESSION_DATA_DIR": "/home/waycar/.cline/data/sessions"
+        }
+      }
+    },
+    "muse": {
+      "UserPromptSubmit": {
+        "source": "muse/hooks/UserPromptSubmit.json",
+        "input": {
+          "cwd": "/home/waycar/work/demo",
+          "hook_event_name": "UserPromptSubmit",
+          "model": "mock-model",
+          "model_provider": "meta",
+          "permission_mode": "default",
+          "prompt": "hello WAYCAR_HK",
+          "session_id": "01a131b6-7791-7721-9945-869757c6177d",
+          "transcript_path": null,
+          "turn_id": "f167b4c7-15ba-4a2f-9dbb-ae8a07e2a7d8"
+        },
+        "env": {
+          "MUSE_SESSION_ID": "01a131b6-7791-7721-9945-869757c6177d"
+        }
+      }
+    }
+  }
+}

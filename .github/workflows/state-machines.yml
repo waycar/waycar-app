@@ -1,0 +1,47 @@
+# docs/design/state-machines.md indexes every type that conforms to
+# StateMachine (Swift) or implements the plugin's StateMachine trait (Rust),
+# and its Catalogue names only files that exist. The check is standard-library
+# Python, takes seconds, and needs no simulator.
+name: State machines
+
+on:
+  pull_request:
+    paths:
+      - Sources/**
+      - Packages/*/Sources/**
+      - plugin/rust/**
+      - docs/design/state-machines.md
+      - scripts/check-state-machines.py
+      - scripts/test-check-state-machines.py
+      - .github/workflows/state-machines.yml
+  push:
+    branches: [main]
+    paths:
+      - Sources/**
+      - Packages/*/Sources/**
+      - plugin/rust/**
+      - docs/design/state-machines.md
+      - scripts/check-state-machines.py
+      - scripts/test-check-state-machines.py
+      - .github/workflows/state-machines.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: state-machines-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  index:
+    name: State machine index
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Test the checker
+        run: python3 scripts/test-check-state-machines.py
+      - name: Check the state machine index
+        run: python3 scripts/check-state-machines.py

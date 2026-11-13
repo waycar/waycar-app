@@ -1,0 +1,3052 @@
+musl libc 1.2.5 (Zig 0.17.0 distribution; Linux release targets)
+
+Source: Zig 0.17.0 lib/libc/musl/; src/internal/version.h defines 1.2.5.
+Both Linux release link commands select Zig's cached libc.a and crt1.o,
+not Rust's lib/rustlib/<target>/lib/self-contained/libc.a or CRT objects.
+The complete upstream COPYRIGHT follows, then the distinct copyright/license
+headers of the third-party source families it identifies (including families
+that link-time garbage collection may omit).
+
+musl as a whole is licensed under the following standard MIT license:
+
+----------------------------------------------------------------------
+Copyright © 2005-2020 Rich Felker, et al.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+----------------------------------------------------------------------
+
+Authors/contributors include:
+
+A. Wilcox
+Ada Worcester
+Alex Dowad
+Alex Suykov
+Alexander Monakov
+Andre McCurdy
+Andrew Kelley
+Anthony G. Basile
+Aric Belsito
+Arvid Picciani
+Bartosz Brachaczek
+Benjamin Peterson
+Bobby Bingham
+Boris Brezillon
+Brent Cook
+Chris Spiegel
+Clément Vasseur
+Daniel Micay
+Daniel Sabogal
+Daurnimator
+David Carlier
+David Edelsohn
+Denys Vlasenko
+Dmitry Ivanov
+Dmitry V. Levin
+Drew DeVault
+Emil Renner Berthing
+Fangrui Song
+Felix Fietkau
+Felix Janda
+Gianluca Anzolin
+Hauke Mehrtens
+He X
+Hiltjo Posthuma
+Isaac Dunham
+Jaydeep Patil
+Jens Gustedt
+Jeremy Huntwork
+Jo-Philipp Wich
+Joakim Sindholt
+John Spencer
+Julien Ramseier
+Justin Cormack
+Kaarle Ritvanen
+Khem Raj
+Kylie McClain
+Leah Neukirchen
+Luca Barbato
+Luka Perkov
+M Farkas-Dyck (Strake)
+Mahesh Bodapati
+Markus Wichmann
+Masanori Ogino
+Michael Clark
+Michael Forney
+Mikhail Kremnyov
+Natanael Copa
+Nicholas J. Kain
+orc
+Pascal Cuoq
+Patrick Oppenlander
+Petr Hosek
+Petr Skocik
+Pierre Carrier
+Reini Urban
+Rich Felker
+Richard Pennington
+Ryan Fairfax
+Samuel Holland
+Segev Finer
+Shiz
+sin
+Solar Designer
+Stefan Kristiansson
+Stefan O'Rear
+Szabolcs Nagy
+Timo Teräs
+Trutz Behn
+Valentin Ochs
+Will Dietz
+William Haddon
+William Pitcock
+
+Portions of this software are derived from third-party works licensed
+under terms compatible with the above MIT license:
+
+The TRE regular expression implementation (src/regex/reg* and
+src/regex/tre*) is Copyright © 2001-2008 Ville Laurikari and licensed
+under a 2-clause BSD license (license text in the source files). The
+included version has been heavily modified by Rich Felker in 2012, in
+the interests of size, simplicity, and namespace cleanliness.
+
+Much of the math library code (src/math/* and src/complex/*) is
+Copyright © 1993,2004 Sun Microsystems or
+Copyright © 2003-2011 David Schultz or
+Copyright © 2003-2009 Steven G. Kargl or
+Copyright © 2003-2009 Bruce D. Evans or
+Copyright © 2008 Stephen L. Moshier or
+Copyright © 2017-2018 Arm Limited
+and labelled as such in comments in the individual source files. All
+have been licensed under extremely permissive terms.
+
+The ARM memcpy code (src/string/arm/memcpy.S) is Copyright © 2008
+The Android Open Source Project and is licensed under a two-clause BSD
+license. It was taken from Bionic libc, used on Android.
+
+The AArch64 memcpy and memset code (src/string/aarch64/*) are
+Copyright © 1999-2019, Arm Limited.
+
+The implementation of DES for crypt (src/crypt/crypt_des.c) is
+Copyright © 1994 David Burren. It is licensed under a BSD license.
+
+The implementation of blowfish crypt (src/crypt/crypt_blowfish.c) was
+originally written by Solar Designer and placed into the public
+domain. The code also comes with a fallback permissive license for use
+in jurisdictions that may not recognize the public domain.
+
+The smoothsort implementation (src/stdlib/qsort.c) is Copyright © 2011
+Valentin Ochs and is licensed under an MIT-style license.
+
+The x86_64 port was written by Nicholas J. Kain and is licensed under
+the standard MIT terms.
+
+The mips and microblaze ports were originally written by Richard
+Pennington for use in the ellcc project. The original code was adapted
+by Rich Felker for build system and code conventions during upstream
+integration. It is licensed under the standard MIT terms.
+
+The mips64 port was contributed by Imagination Technologies and is
+licensed under the standard MIT terms.
+
+The powerpc port was also originally written by Richard Pennington,
+and later supplemented and integrated by John Spencer. It is licensed
+under the standard MIT terms.
+
+All other files which have no copyright comments are original works
+produced specifically for use as part of this library, written either
+by Rich Felker, the main author of the library, or by one or more
+contibutors listed above. Details on authorship of individual files
+can be found in the git version control history of the project. The
+omission of copyright and license comments in each file is in the
+interest of source tree size.
+
+In addition, permission is hereby granted for all public header files
+(include/* and arch/*/bits/*) and crt files intended to be linked into
+applications (crt/*, ldso/dlstart.c, and arch/*/crt_arch.h) to omit
+the copyright notice and permission notice otherwise required by the
+license, and to use these files without any requirement of
+attribution. These files include substantial contributions from:
+
+Bobby Bingham
+John Spencer
+Nicholas J. Kain
+Rich Felker
+Richard Pennington
+Stefan Kristiansson
+Szabolcs Nagy
+
+all of whom have explicitly granted such permission.
+
+This file previously contained text expressing a belief that most of
+the files covered by the above exception were sufficiently trivial not
+to be subject to copyright, resulting in confusion over whether it
+negated the permissions granted in the license. In the spirit of
+permissive licensing, and of not having licensing issues being an
+obstacle to adoption, that text has been removed.
+
+src/complex/__cexp.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_exp.c */
+/*-
+ * Copyright (c) 2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/__cexpf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_expf.c */
+/*-
+ * Copyright (c) 2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/catan.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/s_catan.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Complex circular arc tangent
+ *
+ *
+ * SYNOPSIS:
+ *
+ * double complex catan();
+ * double complex z, w;
+ *
+ * w = catan (z);
+ *
+ *
+ * DESCRIPTION:
+ *
+ * If
+ *     z = x + iy,
+ *
+ * then
+ *          1       (    2x     )
+ * Re w  =  - arctan(-----------)  +  k PI
+ *          2       (     2    2)
+ *                  (1 - x  - y )
+ *
+ *               ( 2         2)
+ *          1    (x  +  (y+1) )
+ * Im w  =  - log(------------)
+ *          4    ( 2         2)
+ *               (x  +  (y-1) )
+ *
+ * Where k is an arbitrary integer.
+ *
+ * catan(z) = -i catanh(iz).
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    DEC       -10,+10      5900       1.3e-16     7.8e-18
+ *    IEEE      -10,+10     30000       2.3e-15     8.5e-17
+ * The check catan( ctan(z) )  =  z, with |x| and |y| < PI/2,
+ * had peak relative error 1.5e-16, rms relative error
+ * 2.9e-17.  See also clog().
+ */
+
+src/complex/catanf.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/s_catanf.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Complex circular arc tangent
+ *
+ *
+ * SYNOPSIS:
+ *
+ * float complex catanf();
+ * float complex z, w;
+ *
+ * w = catanf( z );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * If
+ *     z = x + iy,
+ *
+ * then
+ *          1       (    2x     )
+ * Re w  =  - arctan(-----------)  +  k PI
+ *          2       (     2    2)
+ *                  (1 - x  - y )
+ *
+ *               ( 2         2)
+ *          1    (x  +  (y+1) )
+ * Im w  =  - log(------------)
+ *          4    ( 2         2)
+ *               (x  +  (y-1) )
+ *
+ * Where k is an arbitrary integer.
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE      -10,+10     30000        2.3e-6      5.2e-8
+ */
+
+src/complex/catanl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/s_catanl.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Complex circular arc tangent
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double complex catanl();
+ * long double complex z, w;
+ *
+ * w = catanl( z );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * If
+ *     z = x + iy,
+ *
+ * then
+ *          1       (    2x     )
+ * Re w  =  - arctan(-----------)  +  k PI
+ *          2       (     2    2)
+ *                  (1 - x  - y )
+ *
+ *               ( 2         2)
+ *          1    (x  +  (y+1) )
+ * Im w  =  - log(------------)
+ *          4    ( 2         2)
+ *               (x  +  (y-1) )
+ *
+ * Where k is an arbitrary integer.
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    DEC       -10,+10      5900       1.3e-16     7.8e-18
+ *    IEEE      -10,+10     30000       2.3e-15     8.5e-17
+ * The check catan( ctan(z) )  =  z, with |x| and |y| < PI/2,
+ * had peak relative error 1.5e-16, rms relative error
+ * 2.9e-17.  See also clog().
+ */
+
+src/complex/ccosh.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_ccosh.c */
+/*-
+ * Copyright (c) 2005 Bruce D. Evans and Steven G. Kargl
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic cosine of a complex argument z = x + i y.
+ *
+ * cosh(z) = cosh(x+iy)
+ *         = cosh(x) cos(y) + i sinh(x) sin(y).
+ *
+ * Exceptional values are noted in the comments within the source code.
+ * These values and the return value were taken from n1124.pdf.
+ */
+
+src/complex/ccoshf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_ccoshf.c */
+/*-
+ * Copyright (c) 2005 Bruce D. Evans and Steven G. Kargl
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic cosine of a complex argument.  See s_ccosh.c for details.
+ */
+
+src/complex/cexp.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_cexp.c */
+/*-
+ * Copyright (c) 2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/cexpf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_cexpf.c */
+/*-
+ * Copyright (c) 2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/csinh.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_csinh.c */
+/*-
+ * Copyright (c) 2005 Bruce D. Evans and Steven G. Kargl
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic sine of a complex argument z = x + i y.
+ *
+ * sinh(z) = sinh(x+iy)
+ *         = sinh(x) cos(y) + i cosh(x) sin(y).
+ *
+ * Exceptional values are noted in the comments within the source code.
+ * These values and the return value were taken from n1124.pdf.
+ */
+
+src/complex/csinhf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_csinhf.c */
+/*-
+ * Copyright (c) 2005 Bruce D. Evans and Steven G. Kargl
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic sine of a complex argument z.  See s_csinh.c for details.
+ */
+
+src/complex/csqrt.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_csqrt.c */
+/*-
+ * Copyright (c) 2007 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/csqrtf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_csqrtf.c */
+/*-
+ * Copyright (c) 2007 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/complex/ctanh.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_ctanh.c */
+/*-
+ * Copyright (c) 2011 David Schultz
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic tangent of a complex argument z = x + i y.
+ *
+ * The algorithm is from:
+ *
+ *   W. Kahan.  Branch Cuts for Complex Elementary Functions or Much
+ *   Ado About Nothing's Sign Bit.  In The State of the Art in
+ *   Numerical Analysis, pp. 165 ff.  Iserles and Powell, eds., 1987.
+ *
+ * Method:
+ *
+ *   Let t    = tan(x)
+ *       beta = 1/cos^2(y)
+ *       s    = sinh(x)
+ *       rho  = cosh(x)
+ *
+ *   We have:
+ *
+ *   tanh(z) = sinh(z) / cosh(z)
+ *
+ *             sinh(x) cos(y) + i cosh(x) sin(y)
+ *           = ---------------------------------
+ *             cosh(x) cos(y) + i sinh(x) sin(y)
+ *
+ *             cosh(x) sinh(x) / cos^2(y) + i tan(y)
+ *           = -------------------------------------
+ *                    1 + sinh^2(x) / cos^2(y)
+ *
+ *             beta rho s + i t
+ *           = ----------------
+ *               1 + beta s^2
+ *
+ * Modifications:
+ *
+ *   I omitted the original algorithm's handling of overflow in tan(x) after
+ *   verifying with nearpi.c that this can't happen in IEEE single or double
+ *   precision.  I also handle large x differently.
+ */
+
+src/complex/ctanhf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_ctanhf.c */
+/*-
+ * Copyright (c) 2011 David Schultz
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
+ * Hyperbolic tangent of a complex argument z.  See s_ctanh.c for details.
+ */
+
+src/crypt/crypt_blowfish.c
+
+/* Modified by Rich Felker in for inclusion in musl libc, based on
+ * Solar Designer's second size-optimized version sent to the musl
+ * mailing list. */
+
+/*
+ * The crypt_blowfish homepage is:
+ *
+ *	http://www.openwall.com/crypt/
+ *
+ * This code comes from John the Ripper password cracker, with reentrant
+ * and crypt(3) interfaces added, but optimizations specific to password
+ * cracking removed.
+ *
+ * Written by Solar Designer <solar at openwall.com> in 1998-2012.
+ * No copyright is claimed, and the software is hereby placed in the public
+ * domain.  In case this attempt to disclaim copyright and place the software
+ * in the public domain is deemed null and void, then the software is
+ * Copyright (c) 1998-2014 Solar Designer and it is hereby released to the
+ * general public under the following terms:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted.
+ *
+ * There's ABSOLUTELY NO WARRANTY, express or implied.
+ *
+ * It is my intent that you should be able to use this on your system,
+ * as part of a software package, or anywhere else to improve security,
+ * ensure compatibility, or for any other purpose.  I would appreciate
+ * it if you give credit where it is due and keep your modifications in
+ * the public domain as well, but I don't require that in order to let
+ * you place this code and any modifications you make under a license
+ * of your choice.
+ *
+ * This implementation is fully compatible with OpenBSD's bcrypt.c for prefix
+ * "$2b$", originally by Niels Provos <provos at citi.umich.edu>, and it uses
+ * some of his ideas.  The password hashing algorithm was designed by David
+ * Mazieres <dm at lcs.mit.edu>.  For information on the level of
+ * compatibility for bcrypt hash prefixes other than "$2b$", please refer to
+ * the comments in BF_set_key() below and to the included crypt(3) man page.
+ *
+ * There's a paper on the algorithm that explains its design decisions:
+ *
+ *	http://www.usenix.org/events/usenix99/provos.html
+ *
+ * Some of the tricks in BF_ROUND might be inspired by Eric Young's
+ * Blowfish library (I can't be sure if I would think of something if I
+ * hadn't seen his code).
+ */
+
+src/crypt/crypt_des.c
+
+/*
+ * This version has been further modified by Rich Felker, primary author
+ * and maintainer of musl libc, to remove table generation code and
+ * replaced all runtime-generated constant tables with static-initialized
+ * tables in the binary, in the interest of minimizing non-shareable
+ * memory usage and stack size requirements.
+ */
+/*
+ * This version is derived from the original implementation of FreeSec
+ * (release 1.1) by David Burren.  I've made it reentrant, reduced its memory
+ * usage from about 70 KB to about 7 KB (with only minimal performance impact
+ * and keeping code size about the same), made the handling of invalid salts
+ * mostly UFC-crypt compatible, added a quick runtime self-test (which also
+ * serves to zeroize the stack from sensitive data), and added optional tests.
+ * - Solar Designer <solar at openwall.com>
+ */
+
+/*
+ * FreeSec: libcrypt for NetBSD
+ *
+ * Copyright (c) 1994 David Burren
+ * Copyright (c) 2000,2002,2010,2012 Solar Designer
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the author nor the names of other contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ *	$Owl: Owl/packages/glibc/crypt_freesec.c,v 1.6 2010/02/20 14:45:06 solar Exp $
+ *	$Id: crypt.c,v 1.15 1994/09/13 04:58:49 davidb Exp $
+ *
+ * This is an original implementation of the DES and the crypt(3) interfaces
+ * by David Burren.  It has been heavily re-worked by Solar Designer.
+ */
+
+src/crypt/crypt_sha256.c
+
+/*
+ * public domain sha256 crypt implementation
+ *
+ * original sha crypt design: http://people.redhat.com/drepper/SHA-crypt.txt
+ * in this implementation at least 32bit int is assumed,
+ * key length is limited, the $5$ prefix is mandatory, '\n' and ':' is rejected
+ * in the salt and rounds= setting must contain a valid iteration count,
+ * on error "*" is returned.
+ */
+
+src/crypt/crypt_sha512.c
+
+/*
+ * public domain sha512 crypt implementation
+ *
+ * original sha crypt design: http://people.redhat.com/drepper/SHA-crypt.txt
+ * in this implementation at least 32bit int is assumed,
+ * key length is limited, the $6$ prefix is mandatory, '\n' and ':' is rejected
+ * in the salt and rounds= setting must contain a valid iteration count,
+ * on error "*" is returned.
+ */
+
+src/math/__cos.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_cos.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * __cos( x,  y )
+ * kernel cos function on [-pi/4, pi/4], pi/4 ~ 0.785398164
+ * Input x is assumed to be bounded by ~pi/4 in magnitude.
+ * Input y is the tail of x.
+ *
+ * Algorithm
+ *      1. Since cos(-x) = cos(x), we need only to consider positive x.
+ *      2. if x < 2^-27 (hx<0x3e400000 0), return 1 with inexact if x!=0.
+ *      3. cos(x) is approximated by a polynomial of degree 14 on
+ *         [0,pi/4]
+ *                                       4            14
+ *              cos(x) ~ 1 - x*x/2 + C1*x + ... + C6*x
+ *         where the remez error is
+ *
+ *      |              2     4     6     8     10    12     14 |     -58
+ *      |cos(x)-(1-.5*x +C1*x +C2*x +C3*x +C4*x +C5*x  +C6*x  )| <= 2
+ *      |                                                      |
+ *
+ *                     4     6     8     10    12     14
+ *      4. let r = C1*x +C2*x +C3*x +C4*x +C5*x  +C6*x  , then
+ *             cos(x) ~ 1 - x*x/2 + r
+ *         since cos(x+y) ~ cos(x) - sin(x)*y
+ *                        ~ cos(x) - x*y,
+ *         a correction term is necessary in cos(x) and hence
+ *              cos(x+y) = 1 - (x*x/2 - (r - x*y))
+ *         For better accuracy, rearrange to
+ *              cos(x+y) ~ w + (tmp + (r-x*y))
+ *         where w = 1 - x*x/2 and tmp is a tiny correction term
+ *         (1 - x*x/2 == w + tmp exactly in infinite precision).
+ *         The exactness of w + tmp in infinite precision depends on w
+ *         and tmp having the same precision as x.  If they have extra
+ *         precision due to compiler bugs, then the extra precision is
+ *         only good provided it is retained in all terms of the final
+ *         expression for cos().  Retention happens in all cases tested
+ *         under FreeBSD, so don't pessimize things by forcibly clipping
+ *         any extra precision in w.
+ */
+
+src/math/__cosdf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_cosf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Debugged and optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/__polevll.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/polevll.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Evaluate polynomial
+ *
+ *
+ * SYNOPSIS:
+ *
+ * int N;
+ * long double x, y, coef[N+1], polevl[];
+ *
+ * y = polevll( x, coef, N );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Evaluates polynomial of degree N:
+ *
+ *                     2          N
+ * y  =  C  + C x + C x  +...+ C x
+ *        0    1     2          N
+ *
+ * Coefficients are stored in reverse order:
+ *
+ * coef[0] = C  , ..., coef[N] = C  .
+ *            N                   0
+ *
+ *  The function p1evll() assumes that coef[N] = 1.0 and is
+ * omitted from the array.  Its calling arguments are
+ * otherwise the same as polevll().
+ *
+ *
+ * SPEED:
+ *
+ * In the interest of speed, there are no checks for out
+ * of bounds arithmetic.  This routine is used by most of
+ * the functions in the library.  Depending on available
+ * equipment features, the user may wish to rewrite the
+ * program in microcode or assembly language.
+ *
+ */
+
+src/math/__rem_pio2.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_rem_pio2.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ * Optimized by Bruce D. Evans.
+ */
+/* __rem_pio2(x,y)
+ *
+ * return the remainder of x rem pi/2 in y[0]+y[1]
+ * use __rem_pio2_large() for large x
+ */
+
+src/math/__rem_pio2_large.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_rem_pio2.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * __rem_pio2_large(x,y,e0,nx,prec)
+ * double x[],y[]; int e0,nx,prec;
+ *
+ * __rem_pio2_large return the last three digits of N with
+ *              y = x - N*pi/2
+ * so that |y| < pi/2.
+ *
+ * The method is to compute the integer (mod 8) and fraction parts of
+ * (2/pi)*x without doing the full multiplication. In general we
+ * skip the part of the product that are known to be a huge integer (
+ * more accurately, = 0 mod 8 ). Thus the number of operations are
+ * independent of the exponent of the input.
+ *
+ * (2/pi) is represented by an array of 24-bit integers in ipio2[].
+ *
+ * Input parameters:
+ *      x[]     The input value (must be positive) is broken into nx
+ *              pieces of 24-bit integers in double precision format.
+ *              x[i] will be the i-th 24 bit of x. The scaled exponent
+ *              of x[0] is given in input parameter e0 (i.e., x[0]*2^e0
+ *              match x's up to 24 bits.
+ *
+ *              Example of breaking a double positive z into x[0]+x[1]+x[2]:
+ *                      e0 = ilogb(z)-23
+ *                      z  = scalbn(z,-e0)
+ *              for i = 0,1,2
+ *                      x[i] = floor(z)
+ *                      z    = (z-x[i])*2**24
+ *
+ *
+ *      y[]     ouput result in an array of double precision numbers.
+ *              The dimension of y[] is:
+ *                      24-bit  precision       1
+ *                      53-bit  precision       2
+ *                      64-bit  precision       2
+ *                      113-bit precision       3
+ *              The actual value is the sum of them. Thus for 113-bit
+ *              precison, one may have to do something like:
+ *
+ *              long double t,w,r_head, r_tail;
+ *              t = (long double)y[2] + (long double)y[1];
+ *              w = (long double)y[0];
+ *              r_head = t+w;
+ *              r_tail = w - (r_head - t);
+ *
+ *      e0      The exponent of x[0]. Must be <= 16360 or you need to
+ *              expand the ipio2 table.
+ *
+ *      nx      dimension of x[]
+ *
+ *      prec    an integer indicating the precision:
+ *                      0       24  bits (single)
+ *                      1       53  bits (double)
+ *                      2       64  bits (extended)
+ *                      3       113 bits (quad)
+ *
+ * External function:
+ *      double scalbn(), floor();
+ *
+ *
+ * Here is the description of some local variables:
+ *
+ *      jk      jk+1 is the initial number of terms of ipio2[] needed
+ *              in the computation. The minimum and recommended value
+ *              for jk is 3,4,4,6 for single, double, extended, and quad.
+ *              jk+1 must be 2 larger than you might expect so that our
+ *              recomputation test works. (Up to 24 bits in the integer
+ *              part (the 24 bits of it that we compute) and 23 bits in
+ *              the fraction part may be lost to cancelation before we
+ *              recompute.)
+ *
+ *      jz      local integer variable indicating the number of
+ *              terms of ipio2[] used.
+ *
+ *      jx      nx - 1
+ *
+ *      jv      index for pointing to the suitable ipio2[] for the
+ *              computation. In general, we want
+ *                      ( 2^e0*x[0] * ipio2[jv-1]*2^(-24jv) )/8
+ *              is an integer. Thus
+ *                      e0-3-24*jv >= 0 or (e0-3)/24 >= jv
+ *              Hence jv = max(0,(e0-3)/24).
+ *
+ *      jp      jp+1 is the number of terms in PIo2[] needed, jp = jk.
+ *
+ *      q[]     double array with integral value, representing the
+ *              24-bits chunk of the product of x and 2/pi.
+ *
+ *      q0      the corresponding exponent of q[0]. Note that the
+ *              exponent for q[i] would be q0-24*i.
+ *
+ *      PIo2[]  double precision array, obtained by cutting pi/2
+ *              into 24 bits chunks.
+ *
+ *      f[]     ipio2[] in floating point
+ *
+ *      iq[]    integer array by breaking up q[] in 24-bits chunk.
+ *
+ *      fq[]    final product of x*(2/pi) in fq[0],..,fq[jk]
+ *
+ *      ih      integer. If >0 it indicates q[] is >= 0.5, hence
+ *              it also indicates the *sign* of the result.
+ *
+ */
+/*
+ * Constants:
+ * The hexadecimal values are the intended ones for the following
+ * constants. The decimal values may be used, provided that the
+ * compiler will convert from decimal to binary accurately enough
+ * to produce the hexadecimal values shown.
+ */
+
+src/math/__rem_pio2f.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_rem_pio2f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Debugged and optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* __rem_pio2f(x,y)
+ *
+ * return the remainder of x rem pi/2 in *y
+ * use double precision for everything except passing x
+ * use __rem_pio2_large() for large x
+ */
+
+src/math/__rem_pio2l.c
+
+/* origin: FreeBSD /usr/src/lib/msun/ld80/e_rem_pio2.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ * Copyright (c) 2008 Steven G. Kargl, David Schultz, Bruce D. Evans.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ * Optimized by Bruce D. Evans.
+ */
+
+src/math/__sin.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_sin.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* __sin( x, y, iy)
+ * kernel sin function on ~[-pi/4, pi/4] (except on -0), pi/4 ~ 0.7854
+ * Input x is assumed to be bounded by ~pi/4 in magnitude.
+ * Input y is the tail of x.
+ * Input iy indicates whether y is 0. (if iy=0, y assume to be 0).
+ *
+ * Algorithm
+ *      1. Since sin(-x) = -sin(x), we need only to consider positive x.
+ *      2. Callers must return sin(-0) = -0 without calling here since our
+ *         odd polynomial is not evaluated in a way that preserves -0.
+ *         Callers may do the optimization sin(x) ~ x for tiny x.
+ *      3. sin(x) is approximated by a polynomial of degree 13 on
+ *         [0,pi/4]
+ *                               3            13
+ *              sin(x) ~ x + S1*x + ... + S6*x
+ *         where
+ *
+ *      |sin(x)         2     4     6     8     10     12  |     -58
+ *      |----- - (1+S1*x +S2*x +S3*x +S4*x +S5*x  +S6*x   )| <= 2
+ *      |  x                                               |
+ *
+ *      4. sin(x+y) = sin(x) + sin'(x')*y
+ *                  ~ sin(x) + (1-x*x/2)*y
+ *         For better accuracy, let
+ *                   3      2      2      2      2
+ *              r = x *(S2+x *(S3+x *(S4+x *(S5+x *S6))))
+ *         then                   3    2
+ *              sin(x) = x + (S1*x + (x *(r-y/2)+y))
+ */
+
+src/math/__sindf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_sinf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/__tan.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_tan.c */
+/*
+ * ====================================================
+ * Copyright 2004 Sun Microsystems, Inc.  All Rights Reserved.
+ *
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* __tan( x, y, k )
+ * kernel tan function on ~[-pi/4, pi/4] (except on -0), pi/4 ~ 0.7854
+ * Input x is assumed to be bounded by ~pi/4 in magnitude.
+ * Input y is the tail of x.
+ * Input odd indicates whether tan (if odd = 0) or -1/tan (if odd = 1) is returned.
+ *
+ * Algorithm
+ *      1. Since tan(-x) = -tan(x), we need only to consider positive x.
+ *      2. Callers must return tan(-0) = -0 without calling here since our
+ *         odd polynomial is not evaluated in a way that preserves -0.
+ *         Callers may do the optimization tan(x) ~ x for tiny x.
+ *      3. tan(x) is approximated by a odd polynomial of degree 27 on
+ *         [0,0.67434]
+ *                               3             27
+ *              tan(x) ~ x + T1*x + ... + T13*x
+ *         where
+ *
+ *              |tan(x)         2     4            26   |     -59.2
+ *              |----- - (1+T1*x +T2*x +.... +T13*x    )| <= 2
+ *              |  x                                    |
+ *
+ *         Note: tan(x+y) = tan(x) + tan'(x)*y
+ *                        ~ tan(x) + (1+x*x)*y
+ *         Therefore, for better accuracy in computing tan(x+y), let
+ *                   3      2      2       2       2
+ *              r = x *(T2+x *(T3+x *(...+x *(T12+x *T13))))
+ *         then
+ *                                  3    2
+ *              tan(x+y) = x + (T1*x + (x *(r+y)+y))
+ *
+ *      4. For x in [0.67434,pi/4],  let y = pi/4 - x, then
+ *              tan(x) = tan(pi/4-y) = (1-tan(y))/(1+tan(y))
+ *                     = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
+ */
+
+src/math/__tandf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/k_tanf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ * Optimized by Bruce D. Evans.
+ */
+/*
+ * ====================================================
+ * Copyright 2004 Sun Microsystems, Inc.  All Rights Reserved.
+ *
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/acosl.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_acosl.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * See comments in acos.c.
+ * Converted to long double by David Schultz <das@FreeBSD.ORG>.
+ */
+
+src/math/asinf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_asinf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/asinl.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_asinl.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * See comments in asin.c.
+ * Converted to long double by David Schultz <das@FreeBSD.ORG>.
+ */
+
+src/math/atan2.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_atan2.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ */
+/* atan2(y,x)
+ * Method :
+ *      1. Reduce y to positive by atan2(y,x)=-atan2(-y,x).
+ *      2. Reduce x to positive by (if x and y are unexceptional):
+ *              ARG (x+iy) = arctan(y/x)           ... if x > 0,
+ *              ARG (x+iy) = pi - arctan[y/(-x)]   ... if x < 0,
+ *
+ * Special cases:
+ *
+ *      ATAN2((anything), NaN ) is NaN;
+ *      ATAN2(NAN , (anything) ) is NaN;
+ *      ATAN2(+-0, +(anything but NaN)) is +-0  ;
+ *      ATAN2(+-0, -(anything but NaN)) is +-pi ;
+ *      ATAN2(+-(anything but 0 and NaN), 0) is +-pi/2;
+ *      ATAN2(+-(anything but INF and NaN), +INF) is +-0 ;
+ *      ATAN2(+-(anything but INF and NaN), -INF) is +-pi;
+ *      ATAN2(+-INF,+INF ) is +-pi/4 ;
+ *      ATAN2(+-INF,-INF ) is +-3pi/4;
+ *      ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
+ *
+ * Constants:
+ * The hexadecimal values are the intended ones for the following
+ * constants. The decimal values may be used, provided that the
+ * compiler will convert from decimal to binary accurately enough
+ * to produce the hexadecimal values shown.
+ */
+
+src/math/atan2f.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_atan2f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/atan2l.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_atan2l.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ */
+/*
+ * See comments in atan2.c.
+ * Converted to long double by David Schultz <das@FreeBSD.ORG>.
+ */
+
+src/math/cbrtl.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_cbrtl.c */
+/*-
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ * Copyright (c) 2009-2011, Bruce D. Evans, Steven G. Kargl, David Schultz.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ * The argument reduction and testing for exceptional cases was
+ * written by Steven G. Kargl with input from Bruce D. Evans
+ * and David A. Schultz.
+ */
+
+src/math/erf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_erf.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* double erf(double x)
+ * double erfc(double x)
+ *                           x
+ *                    2      |\
+ *     erf(x)  =  ---------  | exp(-t*t)dt
+ *                 sqrt(pi) \|
+ *                           0
+ *
+ *     erfc(x) =  1-erf(x)
+ *  Note that
+ *              erf(-x) = -erf(x)
+ *              erfc(-x) = 2 - erfc(x)
+ *
+ * Method:
+ *      1. For |x| in [0, 0.84375]
+ *          erf(x)  = x + x*R(x^2)
+ *          erfc(x) = 1 - erf(x)           if x in [-.84375,0.25]
+ *                  = 0.5 + ((0.5-x)-x*R)  if x in [0.25,0.84375]
+ *         where R = P/Q where P is an odd poly of degree 8 and
+ *         Q is an odd poly of degree 10.
+ *                                               -57.90
+ *                      | R - (erf(x)-x)/x | <= 2
+ *
+ *
+ *         Remark. The formula is derived by noting
+ *          erf(x) = (2/sqrt(pi))*(x - x^3/3 + x^5/10 - x^7/42 + ....)
+ *         and that
+ *          2/sqrt(pi) = 1.128379167095512573896158903121545171688
+ *         is close to one. The interval is chosen because the fix
+ *         point of erf(x) is near 0.6174 (i.e., erf(x)=x when x is
+ *         near 0.6174), and by some experiment, 0.84375 is chosen to
+ *         guarantee the error is less than one ulp for erf.
+ *
+ *      2. For |x| in [0.84375,1.25], let s = |x| - 1, and
+ *         c = 0.84506291151 rounded to single (24 bits)
+ *              erf(x)  = sign(x) * (c  + P1(s)/Q1(s))
+ *              erfc(x) = (1-c)  - P1(s)/Q1(s) if x > 0
+ *                        1+(c+P1(s)/Q1(s))    if x < 0
+ *              |P1/Q1 - (erf(|x|)-c)| <= 2**-59.06
+ *         Remark: here we use the taylor series expansion at x=1.
+ *              erf(1+s) = erf(1) + s*Poly(s)
+ *                       = 0.845.. + P1(s)/Q1(s)
+ *         That is, we use rational approximation to approximate
+ *                      erf(1+s) - (c = (single)0.84506291151)
+ *         Note that |P1/Q1|< 0.078 for x in [0.84375,1.25]
+ *         where
+ *              P1(s) = degree 6 poly in s
+ *              Q1(s) = degree 6 poly in s
+ *
+ *      3. For x in [1.25,1/0.35(~2.857143)],
+ *              erfc(x) = (1/x)*exp(-x*x-0.5625+R1/S1)
+ *              erf(x)  = 1 - erfc(x)
+ *         where
+ *              R1(z) = degree 7 poly in z, (z=1/x^2)
+ *              S1(z) = degree 8 poly in z
+ *
+ *      4. For x in [1/0.35,28]
+ *              erfc(x) = (1/x)*exp(-x*x-0.5625+R2/S2) if x > 0
+ *                      = 2.0 - (1/x)*exp(-x*x-0.5625+R2/S2) if -6<x<0
+ *                      = 2.0 - tiny            (if x <= -6)
+ *              erf(x)  = sign(x)*(1.0 - erfc(x)) if x < 6, else
+ *              erf(x)  = sign(x)*(1.0 - tiny)
+ *         where
+ *              R2(z) = degree 6 poly in z, (z=1/x^2)
+ *              S2(z) = degree 7 poly in z
+ *
+ *      Note1:
+ *         To compute exp(-x*x-0.5625+R/S), let s be a single
+ *         precision number and s := x; then
+ *              -x*x = -s*s + (s-x)*(s+x)
+ *              exp(-x*x-0.5626+R/S) =
+ *                      exp(-s*s-0.5625)*exp((s-x)*(s+x)+R/S);
+ *      Note2:
+ *         Here 4 and 5 make use of the asymptotic series
+ *                        exp(-x*x)
+ *              erfc(x) ~ ---------- * ( 1 + Poly(1/x^2) )
+ *                        x*sqrt(pi)
+ *         We use rational approximation to approximate
+ *              g(s)=f(1/x^2) = log(erfc(x)*x) - x*x + 0.5625
+ *         Here is the error bound for R1/S1 and R2/S2
+ *              |R1/S1 - f(x)|  < 2**(-62.57)
+ *              |R2/S2 - f(x)|  < 2**(-61.52)
+ *
+ *      5. For inf > x >= 28
+ *              erf(x)  = sign(x) *(1 - tiny)  (raise inexact)
+ *              erfc(x) = tiny*tiny (raise underflow) if x > 0
+ *                      = 2 - tiny if x<0
+ *
+ *      7. Special case:
+ *              erf(0)  = 0, erf(inf)  = 1, erf(-inf) = -1,
+ *              erfc(0) = 1, erfc(inf) = 0, erfc(-inf) = 2,
+ *              erfc/erf(NaN) is NaN
+ */
+
+src/math/erff.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_erff.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/erfl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_erfl.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/* double erf(double x)
+ * double erfc(double x)
+ *                           x
+ *                    2      |\
+ *     erf(x)  =  ---------  | exp(-t*t)dt
+ *                 sqrt(pi) \|
+ *                           0
+ *
+ *     erfc(x) =  1-erf(x)
+ *  Note that
+ *              erf(-x) = -erf(x)
+ *              erfc(-x) = 2 - erfc(x)
+ *
+ * Method:
+ *      1. For |x| in [0, 0.84375]
+ *          erf(x)  = x + x*R(x^2)
+ *          erfc(x) = 1 - erf(x)           if x in [-.84375,0.25]
+ *                  = 0.5 + ((0.5-x)-x*R)  if x in [0.25,0.84375]
+ *         Remark. The formula is derived by noting
+ *          erf(x) = (2/sqrt(pi))*(x - x^3/3 + x^5/10 - x^7/42 + ....)
+ *         and that
+ *          2/sqrt(pi) = 1.128379167095512573896158903121545171688
+ *         is close to one. The interval is chosen because the fix
+ *         point of erf(x) is near 0.6174 (i.e., erf(x)=x when x is
+ *         near 0.6174), and by some experiment, 0.84375 is chosen to
+ *         guarantee the error is less than one ulp for erf.
+ *
+ *      2. For |x| in [0.84375,1.25], let s = |x| - 1, and
+ *         c = 0.84506291151 rounded to single (24 bits)
+ *      erf(x)  = sign(x) * (c  + P1(s)/Q1(s))
+ *      erfc(x) = (1-c)  - P1(s)/Q1(s) if x > 0
+ *                        1+(c+P1(s)/Q1(s))    if x < 0
+ *         Remark: here we use the taylor series expansion at x=1.
+ *              erf(1+s) = erf(1) + s*Poly(s)
+ *                       = 0.845.. + P1(s)/Q1(s)
+ *         Note that |P1/Q1|< 0.078 for x in [0.84375,1.25]
+ *
+ *      3. For x in [1.25,1/0.35(~2.857143)],
+ *      erfc(x) = (1/x)*exp(-x*x-0.5625+R1(z)/S1(z))
+ *              z=1/x^2
+ *      erf(x)  = 1 - erfc(x)
+ *
+ *      4. For x in [1/0.35,107]
+ *      erfc(x) = (1/x)*exp(-x*x-0.5625+R2/S2) if x > 0
+ *                      = 2.0 - (1/x)*exp(-x*x-0.5625+R2(z)/S2(z))
+ *                             if -6.666<x<0
+ *                      = 2.0 - tiny            (if x <= -6.666)
+ *              z=1/x^2
+ *      erf(x)  = sign(x)*(1.0 - erfc(x)) if x < 6.666, else
+ *      erf(x)  = sign(x)*(1.0 - tiny)
+ *      Note1:
+ *         To compute exp(-x*x-0.5625+R/S), let s be a single
+ *         precision number and s := x; then
+ *              -x*x = -s*s + (s-x)*(s+x)
+ *              exp(-x*x-0.5626+R/S) =
+ *                      exp(-s*s-0.5625)*exp((s-x)*(s+x)+R/S);
+ *      Note2:
+ *         Here 4 and 5 make use of the asymptotic series
+ *                        exp(-x*x)
+ *              erfc(x) ~ ---------- * ( 1 + Poly(1/x^2) )
+ *                        x*sqrt(pi)
+ *
+ *      5. For inf > x >= 107
+ *      erf(x)  = sign(x) *(1 - tiny)  (raise inexact)
+ *      erfc(x) = tiny*tiny (raise underflow) if x > 0
+ *                      = 2 - tiny if x<0
+ *
+ *      7. Special case:
+ *      erf(0)  = 0, erf(inf)  = 1, erf(-inf) = -1,
+ *      erfc(0) = 1, erfc(inf) = 0, erfc(-inf) = 2,
+ *              erfc/erf(NaN) is NaN
+ */
+
+src/math/exp2f_data.c
+
+/*
+ * Shared data between expf, exp2f and powf.
+ *
+ * Copyright (c) 2017-2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/exp2f_data.h
+src/math/powf.c
+src/math/powf_data.h
+
+/*
+ * Copyright (c) 2017-2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/exp2l.c
+
+/* origin: FreeBSD /usr/src/lib/msun/ld80/s_exp2l.c and /usr/src/lib/msun/ld128/s_exp2l.c */
+/*-
+ * Copyright (c) 2005-2008 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/math/exp_data.c
+
+/*
+ * Shared data between exp, exp2 and pow.
+ *
+ * Copyright (c) 2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/exp_data.h
+src/math/pow_data.h
+
+/*
+ * Copyright (c) 2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/expl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_expl.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Exponential function, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, expl();
+ *
+ * y = expl( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns e (2.71828...) raised to the x power.
+ *
+ * Range reduction is accomplished by separating the argument
+ * into an integer k and fraction f such that
+ *
+ *     x    k  f
+ *    e  = 2  e.
+ *
+ * A Pade' form of degree 5/6 is used to approximate exp(f) - 1
+ * in the basic range [-0.5 ln 2, 0.5 ln 2].
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE      +-10000     50000       1.12e-19    2.81e-20
+ *
+ *
+ * Error amplification in the exponential function can be
+ * a serious matter.  The error propagation involves
+ * exp( X(1+delta) ) = exp(X) ( 1 + X*delta + ... ),
+ * which shows that a 1 lsb error in representing X produces
+ * a relative error of X times 1 lsb in the function.
+ * While the routine gives an accurate result for arguments
+ * that are exactly represented by a long double precision
+ * computer number, the result contains amplified roundoff
+ * error for large arguments not exactly represented.
+ *
+ *
+ * ERROR MESSAGES:
+ *
+ *   message         condition      value returned
+ * exp underflow    x < MINLOG         0.0
+ * exp overflow     x > MAXLOG         MAXNUM
+ *
+ */
+
+src/math/expm1.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_expm1.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* expm1(x)
+ * Returns exp(x)-1, the exponential of x minus 1.
+ *
+ * Method
+ *   1. Argument reduction:
+ *      Given x, find r and integer k such that
+ *
+ *               x = k*ln2 + r,  |r| <= 0.5*ln2 ~ 0.34658
+ *
+ *      Here a correction term c will be computed to compensate
+ *      the error in r when rounded to a floating-point number.
+ *
+ *   2. Approximating expm1(r) by a special rational function on
+ *      the interval [0,0.34658]:
+ *      Since
+ *          r*(exp(r)+1)/(exp(r)-1) = 2+ r^2/6 - r^4/360 + ...
+ *      we define R1(r*r) by
+ *          r*(exp(r)+1)/(exp(r)-1) = 2+ r^2/6 * R1(r*r)
+ *      That is,
+ *          R1(r**2) = 6/r *((exp(r)+1)/(exp(r)-1) - 2/r)
+ *                   = 6/r * ( 1 + 2.0*(1/(exp(r)-1) - 1/r))
+ *                   = 1 - r^2/60 + r^4/2520 - r^6/100800 + ...
+ *      We use a special Remez algorithm on [0,0.347] to generate
+ *      a polynomial of degree 5 in r*r to approximate R1. The
+ *      maximum error of this polynomial approximation is bounded
+ *      by 2**-61. In other words,
+ *          R1(z) ~ 1.0 + Q1*z + Q2*z**2 + Q3*z**3 + Q4*z**4 + Q5*z**5
+ *      where   Q1  =  -1.6666666666666567384E-2,
+ *              Q2  =   3.9682539681370365873E-4,
+ *              Q3  =  -9.9206344733435987357E-6,
+ *              Q4  =   2.5051361420808517002E-7,
+ *              Q5  =  -6.2843505682382617102E-9;
+ *              z   =  r*r,
+ *      with error bounded by
+ *          |                  5           |     -61
+ *          | 1.0+Q1*z+...+Q5*z   -  R1(z) | <= 2
+ *          |                              |
+ *
+ *      expm1(r) = exp(r)-1 is then computed by the following
+ *      specific way which minimize the accumulation rounding error:
+ *                             2     3
+ *                            r     r    [ 3 - (R1 + R1*r/2)  ]
+ *            expm1(r) = r + --- + --- * [--------------------]
+ *                            2     2    [ 6 - r*(3 - R1*r/2) ]
+ *
+ *      To compensate the error in the argument reduction, we use
+ *              expm1(r+c) = expm1(r) + c + expm1(r)*c
+ *                         ~ expm1(r) + c + r*c
+ *      Thus c+r*c will be added in as the correction terms for
+ *      expm1(r+c). Now rearrange the term to avoid optimization
+ *      screw up:
+ *                      (      2                                    2 )
+ *                      ({  ( r    [ R1 -  (3 - R1*r/2) ]  )  }    r  )
+ *       expm1(r+c)~r - ({r*(--- * [--------------------]-c)-c} - --- )
+ *                      ({  ( 2    [ 6 - r*(3 - R1*r/2) ]  )  }    2  )
+ *                      (                                             )
+ *
+ *                 = r - E
+ *   3. Scale back to obtain expm1(x):
+ *      From step 1, we have
+ *         expm1(x) = either 2^k*[expm1(r)+1] - 1
+ *                  = or     2^k*[expm1(r) + (1-2^-k)]
+ *   4. Implementation notes:
+ *      (A). To save one multiplication, we scale the coefficient Qi
+ *           to Qi*2^i, and replace z by (x^2)/2.
+ *      (B). To achieve maximum accuracy, we compute expm1(x) by
+ *        (i)   if x < -56*ln2, return -1.0, (raise inexact if x!=inf)
+ *        (ii)  if k=0, return r-E
+ *        (iii) if k=-1, return 0.5*(r-E)-0.5
+ *        (iv)  if k=1 if r < -0.25, return 2*((r+0.5)- E)
+ *                     else          return  1.0+2.0*(r-E);
+ *        (v)   if (k<-2||k>56) return 2^k(1-(E-r)) - 1 (or exp(x)-1)
+ *        (vi)  if k <= 20, return 2^k((1-2^-k)-(E-r)), else
+ *        (vii) return 2^k(1-((E+2^-k)-r))
+ *
+ * Special cases:
+ *      expm1(INF) is INF, expm1(NaN) is NaN;
+ *      expm1(-INF) is -1, and
+ *      for finite argument, only expm1(0)=0 is exact.
+ *
+ * Accuracy:
+ *      according to an error analysis, the error is always less than
+ *      1 ulp (unit in the last place).
+ *
+ * Misc. info.
+ *      For IEEE double
+ *          if x >  7.09782712893383973096e+02 then expm1(x) overflow
+ *
+ * Constants:
+ * The hexadecimal values are the intended ones for the following
+ * constants. The decimal values may be used, provided that the
+ * compiler will convert from decimal to binary accurately enough
+ * to produce the hexadecimal values shown.
+ */
+
+src/math/expm1f.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_expm1f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/expm1l.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_expm1l.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Exponential function, minus 1
+ *      Long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, expm1l();
+ *
+ * y = expm1l( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns e (2.71828...) raised to the x power, minus 1.
+ *
+ * Range reduction is accomplished by separating the argument
+ * into an integer k and fraction f such that
+ *
+ *     x    k  f
+ *    e  = 2  e.
+ *
+ * An expansion x + .5 x^2 + x^3 R(x) approximates exp(f) - 1
+ * in the basic range [-0.5 ln 2, 0.5 ln 2].
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE    -45,+maxarg   200,000     1.2e-19     2.5e-20
+ */
+
+src/math/fmaf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_fmaf.c */
+/*-
+ * Copyright (c) 2005-2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/math/fmal.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/s_fmal.c */
+/*-
+ * Copyright (c) 2005-2011 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+src/math/j0.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_j0.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* j0(x), y0(x)
+ * Bessel function of the first and second kinds of order zero.
+ * Method -- j0(x):
+ *      1. For tiny x, we use j0(x) = 1 - x^2/4 + x^4/64 - ...
+ *      2. Reduce x to |x| since j0(x)=j0(-x),  and
+ *         for x in (0,2)
+ *              j0(x) = 1-z/4+ z^2*R0/S0,  where z = x*x;
+ *         (precision:  |j0-1+z/4-z^2R0/S0 |<2**-63.67 )
+ *         for x in (2,inf)
+ *              j0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)-q0(x)*sin(x0))
+ *         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+ *         as follow:
+ *              cos(x0) = cos(x)cos(pi/4)+sin(x)sin(pi/4)
+ *                      = 1/sqrt(2) * (cos(x) + sin(x))
+ *              sin(x0) = sin(x)cos(pi/4)-cos(x)sin(pi/4)
+ *                      = 1/sqrt(2) * (sin(x) - cos(x))
+ *         (To avoid cancellation, use
+ *              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+ *          to compute the worse one.)
+ *
+ *      3 Special cases
+ *              j0(nan)= nan
+ *              j0(0) = 1
+ *              j0(inf) = 0
+ *
+ * Method -- y0(x):
+ *      1. For x<2.
+ *         Since
+ *              y0(x) = 2/pi*(j0(x)*(ln(x/2)+Euler) + x^2/4 - ...)
+ *         therefore y0(x)-2/pi*j0(x)*ln(x) is an even function.
+ *         We use the following function to approximate y0,
+ *              y0(x) = U(z)/V(z) + (2/pi)*(j0(x)*ln(x)), z= x^2
+ *         where
+ *              U(z) = u00 + u01*z + ... + u06*z^6
+ *              V(z) = 1  + v01*z + ... + v04*z^4
+ *         with absolute approximation error bounded by 2**-72.
+ *         Note: For tiny x, U/V = u0 and j0(x)~1, hence
+ *              y0(tiny) = u0 + (2/pi)*ln(tiny), (choose tiny<2**-27)
+ *      2. For x>=2.
+ *              y0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)+q0(x)*sin(x0))
+ *         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+ *         by the method mentioned above.
+ *      3. Special cases: y0(0)=-inf, y0(x<0)=NaN, y0(inf)=0.
+ */
+
+src/math/j0f.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_j0f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/j1.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_j1.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/* j1(x), y1(x)
+ * Bessel function of the first and second kinds of order zero.
+ * Method -- j1(x):
+ *      1. For tiny x, we use j1(x) = x/2 - x^3/16 + x^5/384 - ...
+ *      2. Reduce x to |x| since j1(x)=-j1(-x),  and
+ *         for x in (0,2)
+ *              j1(x) = x/2 + x*z*R0/S0,  where z = x*x;
+ *         (precision:  |j1/x - 1/2 - R0/S0 |<2**-61.51 )
+ *         for x in (2,inf)
+ *              j1(x) = sqrt(2/(pi*x))*(p1(x)*cos(x1)-q1(x)*sin(x1))
+ *              y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+ *         where x1 = x-3*pi/4. It is better to compute sin(x1),cos(x1)
+ *         as follow:
+ *              cos(x1) =  cos(x)cos(3pi/4)+sin(x)sin(3pi/4)
+ *                      =  1/sqrt(2) * (sin(x) - cos(x))
+ *              sin(x1) =  sin(x)cos(3pi/4)-cos(x)sin(3pi/4)
+ *                      = -1/sqrt(2) * (sin(x) + cos(x))
+ *         (To avoid cancellation, use
+ *              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+ *          to compute the worse one.)
+ *
+ *      3 Special cases
+ *              j1(nan)= nan
+ *              j1(0) = 0
+ *              j1(inf) = 0
+ *
+ * Method -- y1(x):
+ *      1. screen out x<=0 cases: y1(0)=-inf, y1(x<0)=NaN
+ *      2. For x<2.
+ *         Since
+ *              y1(x) = 2/pi*(j1(x)*(ln(x/2)+Euler)-1/x-x/2+5/64*x^3-...)
+ *         therefore y1(x)-2/pi*j1(x)*ln(x)-1/x is an odd function.
+ *         We use the following function to approximate y1,
+ *              y1(x) = x*U(z)/V(z) + (2/pi)*(j1(x)*ln(x)-1/x), z= x^2
+ *         where for x in [0,2] (abs err less than 2**-65.89)
+ *              U(z) = U0[0] + U0[1]*z + ... + U0[4]*z^4
+ *              V(z) = 1  + v0[0]*z + ... + v0[4]*z^5
+ *         Note: For tiny x, 1/x dominate y1 and hence
+ *              y1(tiny) = -2/pi/tiny, (choose tiny<2**-54)
+ *      3. For x>=2.
+ *              y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+ *         where x1 = x-3*pi/4. It is better to compute sin(x1),cos(x1)
+ *         by method mentioned above.
+ */
+
+src/math/j1f.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_j1f.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/jn.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_jn.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * jn(n, x), yn(n, x)
+ * floating point Bessel's function of the 1st and 2nd kind
+ * of order n
+ *
+ * Special cases:
+ *      y0(0)=y1(0)=yn(n,0) = -inf with division by zero signal;
+ *      y0(-ve)=y1(-ve)=yn(n,-ve) are NaN with invalid signal.
+ * Note 2. About jn(n,x), yn(n,x)
+ *      For n=0, j0(x) is called,
+ *      for n=1, j1(x) is called,
+ *      for n<=x, forward recursion is used starting
+ *      from values of j0(x) and j1(x).
+ *      for n>x, a continued fraction approximation to
+ *      j(n,x)/j(n-1,x) is evaluated and then backward
+ *      recursion is used starting from a supposed value
+ *      for j(n,x). The resulting value of j(0,x) is
+ *      compared with the actual value to correct the
+ *      supposed value of j(n,x).
+ *
+ *      yn(n,x) is similar in all respects, except
+ *      that forward recursion is used for all
+ *      values of n>1.
+ */
+
+src/math/jnf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_jnf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/lgamma_r.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_lgamma_r.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ */
+/* lgamma_r(x, signgamp)
+ * Reentrant version of the logarithm of the Gamma function
+ * with user provide pointer for the sign of Gamma(x).
+ *
+ * Method:
+ *   1. Argument Reduction for 0 < x <= 8
+ *      Since gamma(1+s)=s*gamma(s), for x in [0,8], we may
+ *      reduce x to a number in [1.5,2.5] by
+ *              lgamma(1+s) = log(s) + lgamma(s)
+ *      for example,
+ *              lgamma(7.3) = log(6.3) + lgamma(6.3)
+ *                          = log(6.3*5.3) + lgamma(5.3)
+ *                          = log(6.3*5.3*4.3*3.3*2.3) + lgamma(2.3)
+ *   2. Polynomial approximation of lgamma around its
+ *      minimun ymin=1.461632144968362245 to maintain monotonicity.
+ *      On [ymin-0.23, ymin+0.27] (i.e., [1.23164,1.73163]), use
+ *              Let z = x-ymin;
+ *              lgamma(x) = -1.214862905358496078218 + z^2*poly(z)
+ *      where
+ *              poly(z) is a 14 degree polynomial.
+ *   2. Rational approximation in the primary interval [2,3]
+ *      We use the following approximation:
+ *              s = x-2.0;
+ *              lgamma(x) = 0.5*s + s*P(s)/Q(s)
+ *      with accuracy
+ *              |P/Q - (lgamma(x)-0.5s)| < 2**-61.71
+ *      Our algorithms are based on the following observation
+ *
+ *                             zeta(2)-1    2    zeta(3)-1    3
+ * lgamma(2+s) = s*(1-Euler) + --------- * s  -  --------- * s  + ...
+ *                                 2                 3
+ *
+ *      where Euler = 0.5771... is the Euler constant, which is very
+ *      close to 0.5.
+ *
+ *   3. For x>=8, we have
+ *      lgamma(x)~(x-0.5)log(x)-x+0.5*log(2pi)+1/(12x)-1/(360x**3)+....
+ *      (better formula:
+ *         lgamma(x)~(x-0.5)*(log(x)-1)-.5*(log(2pi)-1) + ...)
+ *      Let z = 1/x, then we approximation
+ *              f(z) = lgamma(x) - (x-0.5)(log(x)-1)
+ *      by
+ *                                  3       5             11
+ *              w = w0 + w1*z + w2*z  + w3*z  + ... + w6*z
+ *      where
+ *              |w - f(z)| < 2**-58.74
+ *
+ *   4. For negative x, since (G is gamma function)
+ *              -x*G(-x)*G(x) = pi/sin(pi*x),
+ *      we have
+ *              G(x) = pi/(sin(pi*x)*(-x)*G(-x))
+ *      since G(-x) is positive, sign(G(x)) = sign(sin(pi*x)) for x<0
+ *      Hence, for x<0, signgam = sign(sin(pi*x)) and
+ *              lgamma(x) = log(|Gamma(x)|)
+ *                        = log(pi/(|x*sin(pi*x)|)) - lgamma(-x);
+ *      Note: one should avoid compute pi*(-x) directly in the
+ *            computation of sin(pi*(-x)).
+ *
+ *   5. Special Cases
+ *              lgamma(2+s) ~ s*(1-Euler) for tiny s
+ *              lgamma(1) = lgamma(2) = 0
+ *              lgamma(x) ~ -log(|x|) for tiny x
+ *              lgamma(0) = lgamma(neg.integer) = inf and raise divide-by-zero
+ *              lgamma(inf) = inf
+ *              lgamma(-inf) = inf (bug for bug compatible with C99!?)
+ *
+ */
+
+src/math/lgammaf_r.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_lgammaf_r.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/lgammal.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_lgammal.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/* lgammal(x)
+ * Reentrant version of the logarithm of the Gamma function
+ * with user provide pointer for the sign of Gamma(x).
+ *
+ * Method:
+ *   1. Argument Reduction for 0 < x <= 8
+ *      Since gamma(1+s)=s*gamma(s), for x in [0,8], we may
+ *      reduce x to a number in [1.5,2.5] by
+ *              lgamma(1+s) = log(s) + lgamma(s)
+ *      for example,
+ *              lgamma(7.3) = log(6.3) + lgamma(6.3)
+ *                          = log(6.3*5.3) + lgamma(5.3)
+ *                          = log(6.3*5.3*4.3*3.3*2.3) + lgamma(2.3)
+ *   2. Polynomial approximation of lgamma around its
+ *      minimun ymin=1.461632144968362245 to maintain monotonicity.
+ *      On [ymin-0.23, ymin+0.27] (i.e., [1.23164,1.73163]), use
+ *              Let z = x-ymin;
+ *              lgamma(x) = -1.214862905358496078218 + z^2*poly(z)
+ *   2. Rational approximation in the primary interval [2,3]
+ *      We use the following approximation:
+ *              s = x-2.0;
+ *              lgamma(x) = 0.5*s + s*P(s)/Q(s)
+ *      Our algorithms are based on the following observation
+ *
+ *                             zeta(2)-1    2    zeta(3)-1    3
+ * lgamma(2+s) = s*(1-Euler) + --------- * s  -  --------- * s  + ...
+ *                                 2                 3
+ *
+ *      where Euler = 0.5771... is the Euler constant, which is very
+ *      close to 0.5.
+ *
+ *   3. For x>=8, we have
+ *      lgamma(x)~(x-0.5)log(x)-x+0.5*log(2pi)+1/(12x)-1/(360x**3)+....
+ *      (better formula:
+ *         lgamma(x)~(x-0.5)*(log(x)-1)-.5*(log(2pi)-1) + ...)
+ *      Let z = 1/x, then we approximation
+ *              f(z) = lgamma(x) - (x-0.5)(log(x)-1)
+ *      by
+ *                                  3       5             11
+ *              w = w0 + w1*z + w2*z  + w3*z  + ... + w6*z
+ *
+ *   4. For negative x, since (G is gamma function)
+ *              -x*G(-x)*G(x) = pi/sin(pi*x),
+ *      we have
+ *              G(x) = pi/(sin(pi*x)*(-x)*G(-x))
+ *      since G(-x) is positive, sign(G(x)) = sign(sin(pi*x)) for x<0
+ *      Hence, for x<0, signgam = sign(sin(pi*x)) and
+ *              lgamma(x) = log(|Gamma(x)|)
+ *                        = log(pi/(|x*sin(pi*x)|)) - lgamma(-x);
+ *      Note: one should avoid compute pi*(-x) directly in the
+ *            computation of sin(pi*(-x)).
+ *
+ *   5. Special Cases
+ *              lgamma(2+s) ~ s*(1-Euler) for tiny s
+ *              lgamma(1)=lgamma(2)=0
+ *              lgamma(x) ~ -log(x) for tiny x
+ *              lgamma(0) = lgamma(inf) = inf
+ *              lgamma(-integer) = +-inf
+ *
+ */
+
+src/math/log10l.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_log10l.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Common logarithm, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, log10l();
+ *
+ * y = log10l( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns the base 10 logarithm of x.
+ *
+ * The argument is separated into its exponent and fractional
+ * parts.  If the exponent is between -1 and +1, the logarithm
+ * of the fraction is approximated by
+ *
+ *     log(1+x) = x - 0.5 x**2 + x**3 P(x)/Q(x).
+ *
+ * Otherwise, setting  z = 2(x-1)/x+1),
+ *
+ *     log(x) = z + z**3 P(z)/Q(z).
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE      0.5, 2.0     30000      9.0e-20     2.6e-20
+ *    IEEE     exp(+-10000)  30000      6.0e-20     2.3e-20
+ *
+ * In the tests over the interval exp(+-10000), the logarithms
+ * of the random arguments were uniformly distributed over
+ * [-10000, +10000].
+ *
+ * ERROR MESSAGES:
+ *
+ * log singularity:  x = 0; returns MINLOG
+ * log domain:       x < 0; returns MINLOG
+ */
+
+src/math/log1pl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/s_log1pl.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Relative error logarithm
+ *      Natural logarithm of 1+x, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, log1pl();
+ *
+ * y = log1pl( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns the base e (2.718...) logarithm of 1+x.
+ *
+ * The argument 1+x is separated into its exponent and fractional
+ * parts.  If the exponent is between -1 and +1, the logarithm
+ * of the fraction is approximated by
+ *
+ *     log(1+x) = x - 0.5 x^2 + x^3 P(x)/Q(x).
+ *
+ * Otherwise, setting  z = 2(x-1)/x+1),
+ *
+ *     log(x) = z + z^3 P(z)/Q(z).
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE     -1.0, 9.0    100000      8.2e-20    2.5e-20
+ */
+
+src/math/log2l.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_log2l.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Base 2 logarithm, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, log2l();
+ *
+ * y = log2l( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns the base 2 logarithm of x.
+ *
+ * The argument is separated into its exponent and fractional
+ * parts.  If the exponent is between -1 and +1, the (natural)
+ * logarithm of the fraction is approximated by
+ *
+ *     log(1+x) = x - 0.5 x**2 + x**3 P(x)/Q(x).
+ *
+ * Otherwise, setting  z = 2(x-1)/x+1),
+ *
+ *     log(x) = z + z**3 P(z)/Q(z).
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE      0.5, 2.0     30000      9.8e-20     2.7e-20
+ *    IEEE     exp(+-10000)  70000      5.4e-20     2.3e-20
+ *
+ * In the tests over the interval exp(+-10000), the logarithms
+ * of the random arguments were uniformly distributed over
+ * [-10000, +10000].
+ */
+
+src/math/logl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_logl.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Natural logarithm, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, logl();
+ *
+ * y = logl( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns the base e (2.718...) logarithm of x.
+ *
+ * The argument is separated into its exponent and fractional
+ * parts.  If the exponent is between -1 and +1, the logarithm
+ * of the fraction is approximated by
+ *
+ *     log(1+x) = x - 0.5 x**2 + x**3 P(x)/Q(x).
+ *
+ * Otherwise, setting  z = 2(x-1)/(x+1),
+ *
+ *     log(x) = log(1+z/2) - log(1-z/2) = z + z**3 P(z)/Q(z).
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE      0.5, 2.0    150000      8.71e-20    2.75e-20
+ *    IEEE     exp(+-10000) 100000      5.39e-20    2.34e-20
+ *
+ * In the tests over the interval exp(+-10000), the logarithms
+ * of the random arguments were uniformly distributed over
+ * [-10000, +10000].
+ */
+
+src/math/pow.c
+
+/*
+ * Double-precision x^y function.
+ *
+ * Copyright (c) 2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/pow_data.c
+
+/*
+ * Data for the log part of pow.
+ *
+ * Copyright (c) 2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/powf_data.c
+
+/*
+ * Data definition for powf.
+ *
+ * Copyright (c) 2017-2018, Arm Limited.
+ * SPDX-License-Identifier: MIT
+ */
+
+src/math/powl.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_powl.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*                                                      powl.c
+ *
+ *      Power function, long double precision
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, z, powl();
+ *
+ * z = powl( x, y );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Computes x raised to the yth power.  Analytically,
+ *
+ *      x**y  =  exp( y log(x) ).
+ *
+ * Following Cody and Waite, this program uses a lookup table
+ * of 2**-i/32 and pseudo extended precision arithmetic to
+ * obtain several extra bits of accuracy in both the logarithm
+ * and the exponential.
+ *
+ *
+ * ACCURACY:
+ *
+ * The relative error of pow(x,y) can be estimated
+ * by   y dl ln(2),   where dl is the absolute error of
+ * the internally computed base 2 logarithm.  At the ends
+ * of the approximation interval the logarithm equal 1/32
+ * and its relative error is about 1 lsb = 1.1e-19.  Hence
+ * the predicted relative error in the result is 2.3e-21 y .
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *
+ *    IEEE     +-1000       40000      2.8e-18      3.7e-19
+ * .001 < x < 1000, with log(x) uniformly distributed.
+ * -1000 < y < 1000, y uniformly distributed.
+ *
+ *    IEEE     0,8700       60000      6.5e-18      1.0e-18
+ * 0.99 < x < 1.01, 0 < y < 8700, uniformly distributed.
+ *
+ *
+ * ERROR MESSAGES:
+ *
+ *   message         condition      value returned
+ * pow overflow     x**y > MAXNUM      INFINITY
+ * pow underflow   x**y < 1/MAXNUM       0.0
+ * pow domain      x<0 and y noninteger  0.0
+ *
+ */
+
+src/math/scalb.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_scalb.c */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+/*
+ * scalb(x, fn) is provide for
+ * passing various standard test suite. One
+ * should use scalbn() instead.
+ */
+
+src/math/scalbf.c
+
+/* origin: FreeBSD /usr/src/lib/msun/src/e_scalbf.c */
+/*
+ * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+ */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
+src/math/tgammal.c
+
+/* origin: OpenBSD /usr/src/lib/libm/src/ld80/e_tgammal.c */
+/*
+ * Copyright (c) 2008 Stephen L. Moshier <steve@moshier.net>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+/*
+ *      Gamma function
+ *
+ *
+ * SYNOPSIS:
+ *
+ * long double x, y, tgammal();
+ *
+ * y = tgammal( x );
+ *
+ *
+ * DESCRIPTION:
+ *
+ * Returns gamma function of the argument.  The result is
+ * correctly signed.
+ *
+ * Arguments |x| <= 13 are reduced by recurrence and the function
+ * approximated by a rational function of degree 7/8 in the
+ * interval (2,3).  Large arguments are handled by Stirling's
+ * formula. Large negative arguments are made positive using
+ * a reflection formula.
+ *
+ *
+ * ACCURACY:
+ *
+ *                      Relative error:
+ * arithmetic   domain     # trials      peak         rms
+ *    IEEE     -40,+40      10000       3.6e-19     7.9e-20
+ *    IEEE    -1755,+1755   10000       4.8e-18     6.5e-19
+ *
+ * Accuracy for large arguments is dominated by error in powl().
+ *
+ */
+
+src/regex/regcomp.c
+
+/*
+  regcomp.c - TRE POSIX compatible regex compilation functions.
+
+  Copyright (c) 2001-2009 Ville Laurikari <vl@iki.fi>
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS
+  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+src/regex/regexec.c
+
+/*
+  regexec.c - TRE POSIX compatible matching functions (and more).
+
+  Copyright (c) 2001-2009 Ville Laurikari <vl@iki.fi>
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS
+  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+src/regex/tre-mem.c
+
+/*
+  tre-mem.c - TRE memory allocator
+
+  Copyright (c) 2001-2009 Ville Laurikari <vl@iki.fi>
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS
+  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+/*
+  This memory allocator is for allocating small memory blocks efficiently
+  in terms of memory overhead and execution speed.  The allocated blocks
+  cannot be freed individually, only all at once.  There can be multiple
+  allocators, though.
+*/
+
+src/regex/tre.h
+
+/*
+  tre-internal.h - TRE internal definitions
+
+  Copyright (c) 2001-2009 Ville Laurikari <vl@iki.fi>
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS
+  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/

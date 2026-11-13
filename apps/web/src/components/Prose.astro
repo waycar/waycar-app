@@ -1,0 +1,148 @@
+---
+// Rendered Markdown in the site's long-form style: help pages
+// (HelpLayout.astro) and changelog releases (src/pages/changelog/). The slot
+// holds the HTML of a content entry's `<Content />`; a page adds its own
+// tweaks from outside (e.g. `.release :global(.prose h3)`).
+---
+
+<div class="prose">
+  <slot />
+</div>
+
+<style>
+  .prose {
+    font-size: var(--fs-body);
+    line-height: 1.75;
+    color: var(--text-2);
+  }
+
+  .prose > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  .prose :global(h2) {
+    margin-top: 48px;
+    padding-top: 24px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    border-top: 1px solid var(--line);
+  }
+
+  .prose :global(h3) {
+    margin-top: 32px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .prose :global(:is(p, ul, ol, pre, table, blockquote, img)) {
+    margin-top: 16px;
+  }
+
+  .prose :global(:is(ul, ol)) {
+    display: grid;
+    /* A long code line in a list item scrolls inside its block instead of
+       widening the list. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding-left: 22px;
+  }
+
+  .prose :global(li > :is(ul, ol, pre, p)) {
+    margin-top: 10px;
+  }
+
+  .prose :global(ul) {
+    list-style: disc;
+  }
+
+  .prose :global(ol) {
+    list-style: decimal;
+  }
+
+  .prose :global(li::marker) {
+    color: var(--violet-soft);
+  }
+
+  .prose :global(strong) {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .prose :global(a) {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .prose :global(:not(pre) > code) {
+    padding: 1px 6px;
+    font-size: 0.88em;
+    color: var(--text);
+    overflow-wrap: anywhere;
+    background: rgb(var(--white-rgb) / 0.06);
+    border-radius: var(--radius-code);
+  }
+
+  /* Fenced code: the site's terminal window look (Shiki's css-variables
+     theme; token colors in global.css). */
+  .prose :global(pre) {
+    padding: 18px 22px;
+    overflow-x: auto;
+    font: var(--fs-code) / var(--lh-code) var(--font-mono);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-keycap);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .prose :global(blockquote) {
+    padding: 14px 18px;
+    color: var(--text-2);
+    background: rgb(var(--violet-soft-rgb) / 0.06);
+    border-left: 2px solid var(--violet-soft);
+    border-radius: 0 var(--radius-keycap) var(--radius-keycap) 0;
+  }
+
+  .prose :global(blockquote > :first-child) {
+    margin-top: 0;
+  }
+
+  .prose :global(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    font-size: 15px;
+    border-collapse: collapse;
+  }
+
+  .prose :global(:is(th, td)) {
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .prose :global(th) {
+    font: var(--fw-label) var(--fs-label) / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    border-bottom-color: var(--line-2);
+  }
+
+  .prose :global(img) {
+    width: auto;
+    max-width: 100%;
+    max-height: 640px;
+    margin-inline: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-device);
+  }
+
+  .prose :global(hr) {
+    margin-top: 32px;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+</style>

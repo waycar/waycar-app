@@ -1,0 +1,35 @@
+---
+// Where the `x-text` ad link (src/lib/ad-links.mjs) sends anyone who is not on
+// an Apple device, and X's link-preview crawler with them. A text-only X ad
+// shows no image only if this page gives the crawler nothing to unfurl, so the
+// Layout is `cardless` (no og:*, twitter:* or meta description) and `noindex`.
+// Apple devices never see it: they go to the App Store through `/go`.
+// `homePage` makes the header and footer section links in-page anchors, so
+// every section they name (features, security, setup, faq, mosh, how) is here.
+import Faq from '../components/Faq.astro';
+import Features from '../components/Features.astro';
+import Security from '../components/Security.astro';
+import Setup from '../components/Setup.astro';
+import JustTalk from '../components/b/JustTalk.astro';
+import OutcomeClosing from '../components/b/OutcomeClosing.astro';
+import OutcomeHero from '../components/b/OutcomeHero.astro';
+import PickUp from '../components/b/PickUp.astro';
+import StartAnywhere from '../components/b/StartAnywhere.astro';
+import StepAway from '../components/b/StepAway.astro';
+import YourSetup from '../components/b/YourSetup.astro';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Waycar for iPhone and iPad" description="" noindex cardless homePage>
+  <OutcomeHero />
+  <JustTalk />
+  <YourSetup />
+  <StepAway />
+  <StartAnywhere />
+  <PickUp />
+  <Features compact />
+  <Security />
+  <Setup />
+  <Faq />
+  <OutcomeClosing />
+</Layout>

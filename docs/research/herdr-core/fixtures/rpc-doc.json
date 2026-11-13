@@ -1,0 +1,243 @@
+{
+ "exchanges": {
+  "doc_bad_name": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"bad name \\\"Bad Name\\\": use 1-32 of a-z 0-9 - _ . starting with a letter or digit, not shaped like an id (t7)\"},\"id\":6,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 6,
+     "jsonrpc": "2.0",
+     "method": "doc.get",
+     "params": {
+      "name": "Bad Name"
+     }
+    }
+   }
+  ],
+  "doc_get": [
+   {
+    "reply_raw": "{\"id\":4,\"jsonrpc\":\"2.0\",\"result\":{\"value\":{\"spaces\":[{\"folder\":\"/home/u/src/waycar\",\"id\":\"s0a1b2c3d4e5f60718293a4b5c6d7e8f\",\"name\":\"waycar\",\"tabs\":[{\"id\":\"tab01\",\"name\":\"main\",\"root\":{\"children\":[{\"content\":{\"terminal\":\"t1\"},\"id\":\"p1\",\"size\":{\"weight\":2.0},\"type\":\"block\"},{\"children\":[{\"content\":{\"terminal\":\"t2\"},\"id\":\"p2\",\"type\":\"block\"},{\"content\":{\"terminal\":\"t3\"},\"id\":\"p3\",\"type\":\"block\"}],\"id\":\"col1\",\"size\":{\"weight\":1.0},\"type\":\"column\"}],\"id\":\"tab01\",\"type\":\"row\"}},{\"id\":\"tab02\",\"name\":\"review\",\"root\":{\"children\":[{\"content\":{\"terminal\":\"t4\"},\"id\":\"p4\",\"type\":\"block\"}],\"id\":\"tab02\",\"type\":\"row\"}}]},{\"folder\":\"/srv/api\",\"id\":\"s9f\",\"name\":\"\",\"tabs\":[]}]},\"version\":1}}",
+    "request": {
+     "id": 4,
+     "jsonrpc": "2.0",
+     "method": "doc.get",
+     "params": {
+      "name": "herdr-app"
+     }
+    }
+   }
+  ],
+  "doc_get_after_null": [
+   {
+    "reply_raw": "{\"id\":8,\"jsonrpc\":\"2.0\",\"result\":{\"value\":null,\"version\":1}}",
+    "request": {
+     "id": 8,
+     "jsonrpc": "2.0",
+     "method": "doc.get",
+     "params": {
+      "name": "scratch1"
+     }
+    }
+   }
+  ],
+  "doc_get_unwritten": [
+   {
+    "reply_raw": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"value\":null,\"version\":0}}",
+    "request": {
+     "id": 1,
+     "jsonrpc": "2.0",
+     "method": "doc.get",
+     "params": {
+      "name": "herdr-app"
+     }
+    }
+   }
+  ],
+  "doc_on_unknown": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"no machines yet: hc machine add <ssh-target>\",\"kind\":\"machine_unknown\"},\"message\":\"unknown machine \\\"nowhere\\\"\"},\"id\":11,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 11,
+     "jsonrpc": "2.0",
+     "method": "doc.get",
+     "params": {
+      "name": "herdr-app",
+      "on": "nowhere"
+     }
+    }
+   }
+  ],
+  "doc_set_big": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32602,\"data\":{\"hint\":\"see `hc schema`\",\"kind\":\"invalid_params\"},\"message\":\"document exceeds 1 MiB of JSON\"},\"id\":9,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 9,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "scratch2",
+      "value": {
+       "x": "<elided: 1048576 x \"a\">"
+      },
+      "version": 0
+     }
+    }
+   }
+  ],
+  "doc_set_null": [
+   {
+    "reply_raw": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"version\":1}}",
+    "request": {
+     "id": 7,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "scratch1",
+      "value": null,
+      "version": 0
+     }
+    }
+   }
+  ],
+  "doc_set_ok_small": [
+   {
+    "reply_raw": "{\"id\":10,\"jsonrpc\":\"2.0\",\"result\":{\"version\":1}}",
+    "request": {
+     "id": 10,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "scratch2",
+      "value": "x",
+      "version": 0
+     }
+    }
+   }
+  ],
+  "doc_set_stale": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"read doc.get and retry with its version\",\"kind\":\"conflict\"},\"message\":\"document \\\"herdr-app\\\" is at version 1, not 0\"},\"id\":3,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 3,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "herdr-app",
+      "value": {
+       "spaces": []
+      },
+      "version": 0
+     }
+    }
+   }
+  ],
+  "doc_set_v0": [
+   {
+    "reply_raw": "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"version\":1}}",
+    "request": {
+     "id": 2,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "herdr-app",
+      "value": {
+       "spaces": [
+        {
+         "folder": "/home/u/src/waycar",
+         "id": "s0a1b2c3d4e5f60718293a4b5c6d7e8f",
+         "name": "waycar",
+         "tabs": [
+          {
+           "id": "tab01",
+           "name": "main",
+           "root": {
+            "children": [
+             {
+              "content": {
+               "terminal": "t1"
+              },
+              "id": "p1",
+              "size": {
+               "weight": 2.0
+              },
+              "type": "block"
+             },
+             {
+              "children": [
+               {
+                "content": {
+                 "terminal": "t2"
+                },
+                "id": "p2",
+                "type": "block"
+               },
+               {
+                "content": {
+                 "terminal": "t3"
+                },
+                "id": "p3",
+                "type": "block"
+               }
+              ],
+              "id": "col1",
+              "size": {
+               "weight": 1.0
+              },
+              "type": "column"
+             }
+            ],
+            "id": "tab01",
+            "type": "row"
+           }
+          },
+          {
+           "id": "tab02",
+           "name": "review",
+           "root": {
+            "children": [
+             {
+              "content": {
+               "terminal": "t4"
+              },
+              "id": "p4",
+              "type": "block"
+             }
+            ],
+            "id": "tab02",
+            "type": "row"
+           }
+          }
+         ]
+        },
+        {
+         "folder": "/srv/api",
+         "id": "s9f",
+         "name": "",
+         "tabs": []
+        }
+       ]
+      },
+      "version": 0
+     }
+    }
+   }
+  ],
+  "doc_set_wrongfuture": [
+   {
+    "reply_raw": "{\"error\":{\"code\":-32000,\"data\":{\"hint\":\"read doc.get and retry with its version\",\"kind\":\"conflict\"},\"message\":\"document \\\"herdr-app\\\" is at version 1, not 99\"},\"id\":5,\"jsonrpc\":\"2.0\"}",
+    "request": {
+     "id": 5,
+     "jsonrpc": "2.0",
+     "method": "doc.set",
+     "params": {
+      "name": "herdr-app",
+      "value": {
+       "spaces": []
+      },
+      "version": 99
+     }
+    }
+   }
+  ]
+ },
+ "note": "Real captures over hc connect (plain mode). Each entry: request (parsed), reply_raw (exact line from stdout). (the 1 MiB request value in doc_set_big is elided here; the reply is real)."
+}

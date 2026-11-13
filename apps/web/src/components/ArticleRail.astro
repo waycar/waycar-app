@@ -1,0 +1,172 @@
+---
+// The modules of an article page's right rail (copy and claim limits:
+// src/data/article-rail.ts). The page renders it once beside the article and,
+// for a short article, once more below it with the modules that did not fit.
+// Each module is a `data-ph-module` wrapper: Layout's click and copy listeners
+// add that id as `module` to the event of any control inside it. A store link
+// keeps `app_store_clicked`; every other link sends `article_rail_clicked`.
+import AppStoreCta from './AppStoreCta.astro';
+import CodeBlock from './CodeBlock.astro';
+import {
+  FIRST_LAUNCH,
+  GET_APP,
+  HOST_SETUP,
+  INSTALL_COMMAND,
+  START_HERE,
+  type RailModuleId,
+} from '../data/article-rail';
+
+interface Props {
+  ids: readonly RailModuleId[];
+  /** The "Start here" guides, already resolved against the live articles. */
+  picks: { href: string; title: string }[];
+}
+
+const { ids, picks } = Astro.props;
+const show = (id: RailModuleId) => ids.includes(id);
+---
+
+{
+  show('get-app') && (
+    <section class="module" data-ph-module="get-app" aria-labelledby="rail-get-app">
+      <h2 id="rail-get-app">{GET_APP.heading}</h2>
+      <p>{GET_APP.body}</p>
+      <AppStoreCta kind="button" ct="article" class="module-cta">Get Waycar</AppStoreCta>
+      <p class="note">{GET_APP.note}</p>
+    </section>
+  )
+}
+{
+  show('start-here') && picks.length > 0 && (
+    <section class="module" data-ph-module="start-here" aria-labelledby="rail-start-here">
+      <h2 id="rail-start-here">{START_HERE.heading}</h2>
+      <p>{START_HERE.body}</p>
+      <ul class="guides">
+        {picks.map((pick) => (
+          <li>
+            <a href={pick.href} data-ph-event="article_rail_clicked">{pick.title}</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+{
+  show('host-setup') && (
+    <section class="module" data-ph-module="host-setup" aria-labelledby="rail-host-setup">
+      <p class="label">{HOST_SETUP.label}</p>
+      <h2 id="rail-host-setup">{HOST_SETUP.heading}</h2>
+      <p>{HOST_SETUP.body}</p>
+      <div class="install" data-ph-copy-event="install_command_copied">
+        <CodeBlock
+          title="install Waycar on your Host"
+          label="Command to install Waycar for herdr or tmux"
+          copy={INSTALL_COMMAND}
+          lines={[{ kind: 'cmd', text: INSTALL_COMMAND, arg: 'https://waycar.dev/install.sh' }]}
+        />
+      </div>
+      <ul class="links">
+        {HOST_SETUP.links.map((link) => (
+          <li>
+            <a href={link.href} data-ph-event="article_rail_clicked">{link.text}</a>
+          </li>
+        ))}
+      </ul>
+      <p>{HOST_SETUP.pair}</p>
+      <p>
+        <a href={HOST_SETUP.pairLink.href} data-ph-event="article_rail_clicked">{HOST_SETUP.pairLink.text}</a>
+      </p>
+    </section>
+  )
+}
+{
+  show('first-launch') && (
+    <section class="module" data-ph-module="first-launch" aria-labelledby="rail-first-launch">
+      <p class="label">{FIRST_LAUNCH.label}</p>
+      <h2 id="rail-first-launch">{FIRST_LAUNCH.heading}</h2>
+      <p>{FIRST_LAUNCH.body}</p>
+      <p>
+        <a href={FIRST_LAUNCH.link.href} data-ph-event="article_rail_clicked">{FIRST_LAUNCH.link.text}</a>
+      </p>
+      <p class="note">{FIRST_LAUNCH.note}</p>
+    </section>
+  )
+}
+
+<style>
+  /* A module is a fixed block with a fixed gap, so a new one enters as the
+     reader scrolls. MODULE_HEIGHTS in src/data/article-rail.ts mirrors these
+     boxes: change one, check the other. */
+  .module {
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-2);
+    background: var(--glass-fill);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .module + .module {
+    margin-top: var(--module-gap);
+  }
+
+  .module h2 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .module p {
+    margin-top: 10px;
+  }
+
+  .module .label {
+    margin: 0 0 6px;
+    font: var(--fw-label) 11.5px / 1.4 var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--violet-soft);
+  }
+
+  .module .note {
+    font-size: var(--fs-caption);
+    color: var(--text-3);
+  }
+
+  .module a:not(:global(.btn)) {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .module :global(.module-cta) {
+    width: 100%;
+    margin-top: 14px;
+    text-align: center;
+    white-space: normal;
+    text-decoration: none;
+  }
+
+  .guides,
+  .links {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .install {
+    margin-top: 12px;
+  }
+
+  /* 260 px is too narrow for the command on one line: wrap it, keep the copy
+     button's gutter, so the button never covers text. */
+  .install :global(pre) {
+    padding: 16px 58px 16px 16px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+</style>

@@ -1,0 +1,6 @@
+Paradee-8M v1.0 (https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.0)
+Copyright Sahil Mahendrakar, licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0). Distilled from Kokoro-82M (Copyright hexgrad, Apache License, Version 2.0).
+
+Core ML conversion: FluidInference/paradee-8m-coreml (https://huggingface.co/FluidInference/paradee-8m-coreml), Apache License, Version 2.0. Uses the Kokoro-82M text model; see the Kokoro-82M notice.
+
+Waycar does not ship these files: Settings > CarPlay Voice downloads them to the device on request.

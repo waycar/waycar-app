@@ -1,0 +1,107 @@
+---
+status: accepted
+---
+
+# Workspace terminals share a bounded attach lifetime
+
+_2026-09-24:_ ADR 0018 supersedes the routing of ordinary panes to a Shell
+Terminal and the no-takeover attach for existing shells; shells are Console
+rows that open Agent detail and attach like Agents. The shared five-per-Host
+retention budget remains.
+
+_2026-09-27:_ The Workspace drawer described below was removed from Agent
+detail; Open Terminal and the Console rows remain the routes to other
+terminals. The inventory projection (`ConsoleTerminal`) was deleted with it,
+since nothing else read it; the terminal retention described below remains.
+
+_2026-10-01:_ ADR 0026's tmux backend keeps the session-channel headroom: a
+connection carrying tmux uses 1 control channel, 3 ordinary exec channels and
+up to 5 retained attaches, under OpenSSH's default `MaxSessions` of 10.
+
+_2026-10-04:_ ADR 0027 (#105) narrows two statements below. "Obsolete
+connection generations reclaim retained work" now holds for terminals that
+ride SSH only. A held terminal off screen still goes with its connection, but
+one on mosh stays and is only told the new generation, because its UDP flow
+never rode the replaced connection (`AgentTerminalCache
+.transportGenerationDidChange`); an on-screen terminal is replaced only when
+it rides an older connection, never while it runs mosh or holds no connection
+yet (`AgentAttachStore.transportGenerationDidChange`). Suspension still
+reclaims every retained terminal. "EventsSession serializes attaches to the
+same target" holds for every attach that goes through
+`EventsSession.withTerminalTransport`. An attach started at a standby
+mosh-server skips it, since it needs no SSH: one standby serves one attach
+(`StandbyMoshStore.take`), a standby and an attach bootstrap never run for
+the same target at once, and the terminal cache still owns one attach per
+Agent.
+
+Issue #333 makes every Pane discoverable as a Workspace Terminal, including
+panes running Agents. Agent detail has a Workspace drawer docked to the
+terminal's trailing edge: a handle that expands in place, so navigation
+costs the output neither width nor height.
+The drawer lists the inventory grouped by Host, then Workspace. The Console
+home keeps its Agent list only: a Terminals switch there was built and then
+removed, because the Console is the Agent overview and the inventory belongs
+next to the terminal being read. Agent panes route to Agent detail, preserving
+Composer, notification and Agent actions; ordinary panes route to the
+interactive Shell Terminal. Listing never opens a PTY.
+
+The authoritative inventory comes from `session.snapshot.panes`, joined with
+its tabs and workspaces. Membership events refresh it; `pane.updated` applies
+title and directory changes locally instead of making terminal-title traffic
+an RPC resnapshot loop. A reconnect discards the old inventory and reconciles
+against a snapshot from the new connection. Pane ids remain opaque.
+
+## Five retained terminals per Host
+
+The user explicitly requested lazy connections that survive switching, with
+a five-minute idle expiry and a bounded number of terminal connections per
+Host. This supersedes ADR 0011 and ADR 0015's single live terminal
+constraint. The bound started at three and was raised to five once switching
+among a Workspace's Agents and shells kept evicting the one just left: a
+retained attach shares the Host's single SSH connection, so it costs no
+extra radio wakeups, its offscreen surface is not drawn, and an
+alternate-screen Agent keeps no scrollback, which leaves sshd's session
+budget as the binding limit.
+
+Agent and shell owners share one retention budget, keyed by Host and terminal
+id. Admission evicts the least recently viewed idle terminal and awaits its
+channel teardown before opening the next. A terminal displayed in a window
+is protected from eviction; if all five are displayed, opening another fails
+with an actionable message. Idle expiry only detaches the client. It never
+closes the remote Pane or terminates its processes.
+
+Each retained connection keeps its Ghostty surface, so output arriving while
+offscreen updates the same emulator and scrollback. Deselecting clears input,
+paste and view callbacks; showing it again rebinds them. A replacement feed
+gets a new surface. Suspension, Host removal and obsolete connection
+generations reclaim retained work. UI ownership prevents one UIKit surface
+being displayed in two windows simultaneously.
+
+The SSH session admission budget allows five attach PTYs and four ordinary
+exec/SFTP sessions, leaving headroom under sshd's default ten session
+channels; ordinary sessions are one-shot commands that rarely overlap.
+Forwarding retains its separate eight ordinary channels plus one events
+channel. EventsSession serializes attaches to the same target but admits
+different targets concurrently. The SSH driver and its native continuation
+serialization remain unchanged.
+
+## Existing terminals and explicit takeover
+
+Open Terminal prefers existing shell panes in the Agent's Workspace: one
+opens directly, multiple offer a choice, and creation is the fallback. A
+successful creation is remembered before inventory refresh, so a failed
+refresh retries discovery without creating another tab.
+
+Existing ordinary terminals attach without `--takeover`. If an attach ends,
+the user can reattach or explicitly Take Over another client's attachment.
+Agent attaches preserve their existing takeover behavior. Back detaches only
+after retention expires or admission evicts the idle connection. Close Terminal
+is a separate confirmed `pane.close` action, affecting that Pane, not its
+siblings in the same tab.
+
+## Verification boundary
+
+Behavior tests cover inventory convergence, lazy admission, mixed Agent/shell
+LRU eviction, cancellation, idle expiry and renderer reuse. UI hosting tests
+cover the drawer and list controls. Real SSH and physical-device behavior require
+their own runs; these tests do not constitute live herdr or device evidence.
