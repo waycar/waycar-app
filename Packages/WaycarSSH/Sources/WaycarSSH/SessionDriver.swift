@@ -198,10 +198,12 @@ actor SessionDriver {
     private var nextOneShotID: UInt64 = 0
     private var oneShotChannels: [UInt64: OneShotChannel] = [:]
     private var nextTransportSendIdentity: UInt64 = 0
+    /// Who owns the pending outbound packet (`TransportSendOwnerMachine`).
+    private var sendOwnership = TransportSendOwnerMachine()
     /// The logical libssh2 call that last returned `EAGAIN` with an outbound
     /// block. Cleared only by that same call returning non-`EAGAIN`, or by
     /// completed whole-session invalidation. Cancellation does not clear it.
-    private var transportSendOwner: UInt64?
+    private var transportSendOwner: UInt64? { sendOwnership.owner }
     /// How many pipelined opens may await their replies at once. A bound on
     /// native state, not a scheduling knob: it sits above the most channels
     /// the app's channel budgets admit on one connection, so those decide.
@@ -3216,7 +3218,7 @@ actor SessionDriver {
                 ptyChannels.removeAll()
                 execStreamChannels.removeAll()
                 sftpClients.removeAll()
-                transportSendOwner = nil
+                _ = sendOwnership.handle(.sessionReleased)
                 activity.releaseAllWaiters()
                 closeDescriptor()
             } catch {
@@ -3919,18 +3921,20 @@ actor SessionDriver {
     ) -> TransportSendOwnerDisposition {
         SSHDiagnosticOperation.current?.recordResult(result)
         if result == LIBSSH2_ERROR_EAGAIN {
-            if sessionReportsOutbound(session), transportSendOwner == nil {
-                transportSendOwner = owner
-            }
+            _ = sendOwnership.handle(
+                .wouldBlock(call: owner, outboundPending: sessionReportsOutbound(session)))
             return .unchanged
         }
         guard transportSendOwner == owner else { return .unchanged }
-        let disposition = Self.transportSendOwnerDisposition(
-            result: result,
-            isCurrentOwner: true,
-            hasOutbound: sessionReportsOutbound(session))
-        if disposition == .clear { transportSendOwner = nil }
-        return disposition
+        let effects = sendOwnership.handle(
+            .finished(
+                call: owner, result: result,
+                outboundPending: sessionReportsOutbound(session)))
+        switch effects.first {
+        case .cleared: return .clear
+        case .invalidate: return .invalidate
+        case nil: return .unchanged
+        }
     }
 
     static func transportSendOwnerDisposition(
@@ -6277,7 +6281,7 @@ actor SessionDriver {
         wakeSFTPIdleWaiters()
         activity.releaseAllWaiters()
         InvalidatedSessionTeardown.reclaim(&session)
-        transportSendOwner = nil
+        _ = sendOwnership.handle(.sessionReleased)
         closeDescriptor()
     }
 

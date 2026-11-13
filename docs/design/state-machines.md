@@ -4482,6 +4482,39 @@ stateDiagram-v2
     started --> started: abort / close inner, cancelPump
 ```
 
+### TransportSendOwnerMachine
+
+- **File:** `Packages/WaycarSSH/Sources/WaycarSSH/TransportSendOwnerMachine.swift`
+- **Owner:** `SessionDriver`: `notePacketProducingResult` feeds every
+  packet-producing libssh2 result with libssh2's outbound-block report
+  (read exactly where it always was) and maps the effect to the
+  `TransportSendOwnerDisposition` its callers act on; `close` and
+  `invalidateResources` release it; every wait and drain reads `owner`
+  (`transportSendOwner`).
+- **States:** `free`, `owned(call)`.
+- **Events:** `wouldBlock(call, outboundPending)`, `finished(call, result,
+  outboundPending)`, `sessionReleased`.
+- **Effects:** `cleared`, `invalidate` (the driver then abandons the owned
+  send or invalidates). Only the exact owning call's non-`EAGAIN` result
+  ends ownership; cancellation and timeouts never clear it (#130).
+- **Tests:** `TransportSendOwnerMachineTests`; owner coverage is the
+  fixture-backed `SessionDriverE2ETests` (`cancelling a transport-send owner
+  drains` / `invalidates`, `timing out a transport-send owner at loop-top
+  drains` / `invalidates`, `a transport-send owner error with outbound
+  pending invalidates`, `outbound backpressure does not livelock a channel
+  open`), which only `make test-ci-app` runs.
+- **Catalogue:** SSH-13.
+
+```mermaid
+stateDiagram-v2
+    [*] --> free
+    free --> owned: wouldBlock, outbound pending
+    owned --> owned: another call's wouldBlock or result
+    owned --> free: owner's result, nothing outbound / cleared
+    owned --> owned: owner's failure, outbound pending / invalidate
+    owned --> free: sessionReleased
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4838,7 +4871,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-10 | Native session connection | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | SSH-11 | Native channel lifecycle | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | SSH-12 | Native channel opening | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-13 | Transport-send ownership | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | convert unless the risk is huge | P3c |
+| SSH-13 | Transport-send ownership | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | converted → `TransportSendOwnerMachine` | P3c |
 | SSH-14 | Session operation mutex | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | M/H | leave: priority handoff primitive | — |
 | SSH-15 | SFTP use and shutdown | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | SSH-16 | One-shot exchange cleanup | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | convert unless the risk is huge | P3c |
