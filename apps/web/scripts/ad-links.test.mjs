@@ -8,6 +8,7 @@ import {
   appStoreCampaignUrl,
   campaignFromSearch,
   isAppleDevice,
+  isAppleHandheld,
   organicCampaign,
   ORGANIC_CT,
   PAID_CT,
@@ -151,6 +152,19 @@ test('Apple devices are iPhone, iPad, iPod and Mac user agents', () => {
   assert.equal(isAppleDevice(IPAD_AS_MAC), true);
   assert.equal(isAppleDevice(ANDROID), false);
   assert.equal(isAppleDevice(undefined), false);
+});
+
+test('Apple handhelds include iPadOS desktop mode but not real Macs or other platforms', () => {
+  const ipad = 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148';
+  const ipod = 'Mozilla/5.0 (iPod touch; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148';
+  for (const userAgent of [IPHONE, ipad, ipod]) assert.equal(isAppleHandheld({ userAgent }), true, userAgent);
+  assert.equal(isAppleHandheld({ userAgent: IPAD_AS_MAC, platform: 'MacIntel', maxTouchPoints: 5 }), true);
+  assert.equal(isAppleHandheld({ userAgent: IPAD_AS_MAC, platform: 'MacIntel', maxTouchPoints: 0 }), false);
+  for (const userAgent of [ANDROID, WINDOWS, 'Mozilla/5.0 (X11; Linux x86_64)']) {
+    assert.equal(isAppleHandheld({ userAgent }), false, userAgent);
+  }
+  assert.equal(isAppleHandheld({}), false);
+  assert.equal(isAppleHandheld(), false);
 });
 
 test('a page campaign is read from utm_campaign only when it is a paid token', () => {

@@ -1,7 +1,8 @@
 // @ts-check
 // The Get Waycar picker, checked on the built HTML. Every store button on the
-// site is a button that opens a picker (src/components/AppStoreCta.astro,
-// GetPicker.astro); the picker alone names a store or a device.
+// site starts as a link that opens a picker (src/components/AppStoreCta.astro,
+// GetPicker.astro); JavaScript makes it a direct App Store link on Apple
+// handhelds. The picker alone names a store or a device in the built HTML.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -103,7 +104,12 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
   const qr = readFileSync(join(outDir, 'qr/site-qr.svg'), 'utf8');
   assert.ok(qr.startsWith('<svg ') && qr.includes('<path d="M'), 'the QR file is an SVG with modules');
   const home = readFileSync(join(outDir, 'index.html'), 'utf8');
-  assert.ok(pickers(home).every((picker) => picker.html.includes('<img src="/qr/site-qr.svg"')), 'every picker shows the QR');
+  const homePickers = pickers(home);
+  assert.ok(homePickers.length > 0, 'the home page has pickers');
+  for (const picker of homePickers) {
+    assert.ok(picker.html.includes('<img src="/qr/site-qr.svg"'), `${picker.id}: the QR image is present`);
+    assert.doesNotMatch(picker.html, /<details\b|<summary\b/i, `${picker.id}: the QR needs no disclosure click`);
+  }
 });
 
 test('with APP_STORE_LISTING_URL emptied, buttons are plain "Coming soon" labels (M8)', { timeout: 300_000 }, (t) => {
