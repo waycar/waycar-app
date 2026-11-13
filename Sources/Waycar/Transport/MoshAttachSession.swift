@@ -201,20 +201,13 @@ final class MoshSessionRegistry: Sendable {
 /// Owns one live swift-mosh session and the tasks around it: `run` drives
 /// the session and drains its host stream into the Attach output gate;
 /// `pump` feeds the Attach input queue into the session; the first-contact
-/// watchdog gives up on a server that never answers. All mutable state sits
-/// behind a mutex; the class is Sendable so the terminal machinery can reach
-/// it from any isolation domain.
+/// watchdog gives up on a server that never answers. The lifecycle is
+/// `MoshAttachMachine`; it and everything that is not a value (the session,
+/// tasks, continuations) sit behind one mutex, and each step feeds the
+/// machine and performs its effects in the lock section the step always
+/// used. The class is Sendable so the terminal machinery can reach it from
+/// any isolation domain.
 private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
-    /// Who settled the session's start. Exactly one party moves it off
-    /// `.starting`, under the state lock, so a late `start()` success can
-    /// tell whether anyone is still waiting for it.
-    private enum StartPhase {
-        case starting
-        case started
-        /// The watchdog or `end()` stopped waiting for `start()`.
-        case abandoned
-    }
-
     private enum StartOutcome: Sendable {
         case started
         case failed(any Error)
@@ -222,18 +215,13 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
     }
 
     private struct State {
+        var machine = MoshAttachMachine()
         var session: MoshClientSession?
         var runTask: Task<Void, Never>?
         var pumpTask: Task<Void, Never>?
         var watchdog: Task<Void, Never>?
         var relayTask: Task<Void, Never>?
-        var startPhase = StartPhase.starting
-        var hostAnswered = false
-        var endRequested = false
-        var firstContact: TerminalLinkFirstContact?
         var firstContactWaiters: [CheckedContinuation<TerminalLinkFirstContact, Never>] = []
-        var connectivity: TerminalLinkConnectivity?
-        var connectivityEnded = false
         /// The stall under way, for its log line (#105).
         var stall: NetworkInterval?
         var connectivitySubscribers: [UUID: AsyncStream<TerminalLinkConnectivity>.Continuation] = [:]
@@ -282,24 +270,25 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
     /// wait) for a server presumed gone. A start still in flight is
     /// abandoned rather than awaited, since it may never return.
     func end(abandoning: Bool) async {
-        let (session, runTask, pumpTask, watchdog, abandonsStart) = state.withLock { current in
-            current.endRequested = true
-            let abandonsStart = current.startPhase == .starting
-            if abandonsStart {
-                current.startPhase = .abandoned
-            }
+        let (effects, session, runTask, pumpTask, watchdog) = state.withLock { current in
+            let effects = current.machine.handle(.endRequested(abandoning: abandoning))
             let watchdog = current.watchdog
             current.watchdog = nil
-            return (current.session, current.runTask, current.pumpTask, watchdog, abandonsStart)
+            return (effects, current.session, current.runTask, current.pumpTask, watchdog)
         }
-        watchdog?.cancel()
-        if abandonsStart {
-            startOutcomeSink.yield(.abandoned)
-        }
-        if abandoning {
-            await session?.abandon()
-        } else {
-            await session?.shutdown()
+        for effect in effects {
+            switch effect {
+            case .cancelWatchdog:
+                watchdog?.cancel()
+            case .reportStart(.abandoned):
+                startOutcomeSink.yield(.abandoned)
+            case .stopSession(abandoning: true):
+                await session?.abandon()
+            case .stopSession(abandoning: false):
+                await session?.shutdown()
+            default:
+                break
+            }
         }
         await watchdog?.value
         await pumpTask?.value
@@ -313,8 +302,8 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
             of: TerminalLinkConnectivity.self, bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
         let subscribed = state.withLock { current -> Bool in
-            guard !current.connectivityEnded else { return false }
-            if let connectivity = current.connectivity {
+            guard !current.machine.state.linkEnded else { return false }
+            if let connectivity = current.machine.state.connectivity {
                 continuation.yield(connectivity)
             }
             current.connectivitySubscribers[id] = continuation
@@ -333,7 +322,7 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
     func firstContact() async -> TerminalLinkFirstContact {
         await withCheckedContinuation { continuation in
             state.withLock { current in
-                if let settled = current.firstContact {
+                if let settled = current.machine.state.firstContact {
                     continuation.resume(returning: settled)
                 } else {
                     current.firstContactWaiters.append(continuation)
@@ -372,11 +361,15 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
         // same lock so `end()` always finds it to cancel.
         let proceed = state.withLock { current -> Bool in
             current.session = session
-            guard !current.endRequested else { return false }
-            current.watchdog = Task<Void, Never> { [self] in
-                await watchForFirstContact(session)
+            var proceed = false
+            for effect in current.machine.handle(.sessionCreated) {
+                guard case .armWatchdog(let token) = effect else { continue }
+                current.watchdog = Task<Void, Never> { [self] in
+                    await watchForFirstContact(session, token: token)
+                }
+                proceed = true
             }
-            return true
+            return proceed
         }
         guard proceed else {
             outputGate.finish()
@@ -410,7 +403,7 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
         // the pump not to start behind its back.
         let connectivity = await session.connectivityStream()
         state.withLock { current in
-            guard !current.endRequested else { return }
+            guard current.machine.handle(.runReady) == [.startRelayAndPump] else { return }
             current.registration = registry?.register(session)
             current.relayTask = Task<Void, Never> { [self] in
                 for await update in connectivity {
@@ -439,8 +432,7 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
         for await op in hostOps {
             if awaitingFirstContact {
                 awaitingFirstContact = false
-                settleFirstContact(.answered)
-                disarmWatchdog()
+                send(.firstHostOp)
             }
             if case .hostBytes(let bytes) = op, !bytes.isEmpty {
                 outputGate.yield(bytes)
@@ -451,7 +443,7 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
         // it down (its command exited), `end()` or the watchdog stopped it,
         // or it failed. A watchdog timeout has already failed the output,
         // and the gate keeps the first completion.
-        let answered = state.withLock { $0.hostAnswered }
+        let answered = state.withLock { $0.machine.hostAnswered }
         switch await session.failure {
         case .some(.timeout(let timeoutMs)) where answered:
             NetworkLog.logger.notice("mosh timed out after \(timeoutMs, privacy: .public) ms of silence")
@@ -472,18 +464,20 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
             try await session.start()
             try await session.enqueue(.resize(cols: initialCols, rows: initialRows))
         } catch {
-            startOutcomeSink.yield(.failed(error))
+            for case .reportStart(.failed) in send(.startFailed) {
+                startOutcomeSink.yield(.failed(error))
+            }
             return
         }
-        let claimed = state.withLock { current -> Bool in
-            guard current.startPhase == .starting else { return false }
-            current.startPhase = .started
-            return true
-        }
-        if claimed {
-            startOutcomeSink.yield(.started)
-        } else {
-            await session.shutdown()
+        for effect in send(.startSucceeded) {
+            switch effect {
+            case .reportStart(.started):
+                startOutcomeSink.yield(.started)
+            case .shutdownStartedSession:
+                await session.shutdown()
+            default:
+                break
+            }
         }
     }
 
@@ -496,92 +490,113 @@ private final class MoshSessionLifecycle: TerminalSessionLink, Sendable {
     /// keeps retrying a silent server forever, and the Attach store only
     /// falls back to SSH on a thrown `moshSessionFailed`, so without this a
     /// blocked UDP port would leave an empty terminal indefinitely.
-    private func watchForFirstContact(_ session: MoshClientSession) async {
+    private func watchForFirstContact(_ session: MoshClientSession, token: UInt64) async {
         do {
             try await Task.sleep(for: firstContactTimeout)
         } catch {
             return
         }
-        let abandonsStart = state.withLock { current -> Bool? in
-            guard !current.hostAnswered, !current.endRequested else { return nil }
-            guard current.startPhase == .starting else { return false }
-            current.startPhase = .abandoned
-            return true
+        // Two steps, as ever: the start first, then first contact. The
+        // answer may win after the first; only the party that settles first
+        // contact fails the output.
+        for case .timeOutFirstContact(let abandonsStart) in send(.watchdogElapsed(token: token)) {
+            for effect in send(.firstContactTimedOut(abandonsStart: abandonsStart)) {
+                switch effect {
+                case .reportStart(.abandoned):
+                    startOutcomeSink.yield(.abandoned)
+                case .abandonSession:
+                    // Nothing answered, so nothing would acknowledge a shutdown.
+                    await session.abandon()
+                default:
+                    break
+                }
+            }
         }
-        guard let abandonsStart else { return }
-        // The answer may have won after the watchdog checked the state.
-        // Only the party that settles first contact may fail the output.
-        guard settleFirstContact(.timedOut) else { return }
-        NetworkLog.logger.notice(
-            "mosh first contact timed out after \(self.firstContactTimeout.wholeMilliseconds, privacy: .public) ms"
-        )
-        outputGate.finish(throwing: TransportError.moshSessionFailed(
-            detail: MoshAttachSession.firstContactTimeoutDetail(firstContactTimeout)))
-        if abandonsStart {
-            startOutcomeSink.yield(.abandoned)
-        }
-        // Nothing answered, so nothing would acknowledge a shutdown.
-        await session.abandon()
     }
 
     private func disarmWatchdog() {
-        let watchdog = state.withLock { current -> Task<Void, Never>? in
-            let watchdog = current.watchdog
-            current.watchdog = nil
-            return watchdog
-        }
-        watchdog?.cancel()
-    }
-
-    @discardableResult
-    private func settleFirstContact(_ outcome: TerminalLinkFirstContact) -> Bool {
-        let waiters = state.withLock { current -> [CheckedContinuation<TerminalLinkFirstContact, Never>]? in
-            guard current.firstContact == nil else { return nil }
-            current.firstContact = outcome
-            if outcome == .answered { current.hostAnswered = true }
-            defer { current.firstContactWaiters.removeAll() }
-            return current.firstContactWaiters
-        }
-        guard let waiters else { return false }
-        for waiter in waiters { waiter.resume(returning: outcome) }
-        return true
+        send(.disarmWatchdog)
     }
 
     private func publish(_ connectivity: TerminalLinkConnectivity) {
-        let (subscribers, stalled, recovered) = state.withLock {
-            current -> ([AsyncStream<TerminalLinkConnectivity>.Continuation], Bool, NetworkInterval?) in
-            guard !current.connectivityEnded, current.connectivity != connectivity else {
-                return ([], false, nil)
-            }
-            current.connectivity = connectivity
-            let recovered = connectivity == .stalled ? nil : current.stall
-            current.stall = connectivity == .stalled ? NetworkInterval("mosh stall") : nil
-            return (Array(current.connectivitySubscribers.values), connectivity == .stalled, recovered)
-        }
-        if stalled { NetworkLog.logger.notice("mosh stalled") }
-        recovered?.end("recovered")
-        for subscriber in subscribers { subscriber.yield(connectivity) }
+        send(.connectivity(connectivity))
     }
 
-    /// The run is over: the session leaves the registry, its connectivity
-    /// subscribers finish, and a first contact still pending never comes.
+    /// The run is over: a first contact still pending never comes, then the
+    /// session leaves the registry and its connectivity subscribers finish.
     private func settleLink() {
-        settleFirstContact(.ended)
-        let (registration, subscribers, relay, stall) = state.withLock { current in
-            current.connectivityEnded = true
-            defer {
-                current.registration = nil
-                current.connectivitySubscribers.removeAll()
-                current.relayTask = nil
-                current.stall = nil
+        send(.runEnded)
+        send(.linkEnded)
+    }
+
+    /// Feeds `MoshAttachMachine` under the lock, does the effects' lock-side
+    /// bookkeeping in that same section, then performs the effects that
+    /// need nothing from the caller, in order. Returns the rest (reporting
+    /// the start, stopping the session) for the caller, which holds what
+    /// they need.
+    @discardableResult
+    private func send(_ event: MoshAttachMachine.Event) -> [MoshAttachMachine.Effect] {
+        var waiters: [CheckedContinuation<TerminalLinkFirstContact, Never>] = []
+        var watchdog: Task<Void, Never>?
+        var subscribers: [AsyncStream<TerminalLinkConnectivity>.Continuation] = []
+        var recovered: NetworkInterval?
+        var registration: UUID?
+        var relay: Task<Void, Never>?
+        var stall: NetworkInterval?
+        let effects = state.withLock { current in
+            let effects = current.machine.handle(event)
+            for effect in effects {
+                switch effect {
+                case .settleFirstContact:
+                    waiters = current.firstContactWaiters
+                    current.firstContactWaiters.removeAll()
+                case .cancelWatchdog:
+                    watchdog = current.watchdog
+                    current.watchdog = nil
+                case .relayConnectivity(let connectivity):
+                    recovered = connectivity == .stalled ? nil : current.stall
+                    current.stall = connectivity == .stalled ? NetworkInterval("mosh stall") : nil
+                    subscribers = Array(current.connectivitySubscribers.values)
+                case .endLink:
+                    (registration, relay, stall) = (current.registration, current.relayTask, current.stall)
+                    subscribers = Array(current.connectivitySubscribers.values)
+                    current.registration = nil
+                    current.connectivitySubscribers.removeAll()
+                    current.relayTask = nil
+                    current.stall = nil
+                default:
+                    break
+                }
             }
-            return (
-                current.registration, Array(current.connectivitySubscribers.values),
-                current.relayTask, current.stall)
+            return effects
         }
-        stall?.end("ended")
-        relay?.cancel()
-        if let registration { registry?.unregister(registration) }
-        for subscriber in subscribers { subscriber.finish() }
+        var forCaller: [MoshAttachMachine.Effect] = []
+        for effect in effects {
+            switch effect {
+            case .settleFirstContact(let outcome):
+                for waiter in waiters { waiter.resume(returning: outcome) }
+            case .cancelWatchdog:
+                watchdog?.cancel()
+            case .failFirstContact:
+                NetworkLog.logger.notice(
+                    "mosh first contact timed out after \(self.firstContactTimeout.wholeMilliseconds, privacy: .public) ms"
+                )
+                outputGate.finish(throwing: TransportError.moshSessionFailed(
+                    detail: MoshAttachSession.firstContactTimeoutDetail(firstContactTimeout)))
+            case .relayConnectivity(let connectivity):
+                if connectivity == .stalled { NetworkLog.logger.notice("mosh stalled") }
+                recovered?.end("recovered")
+                for subscriber in subscribers { subscriber.yield(connectivity) }
+            case .endLink:
+                stall?.end("ended")
+                relay?.cancel()
+                if let registration { registry?.unregister(registration) }
+                for subscriber in subscribers { subscriber.finish() }
+            case .armWatchdog, .skipRun, .reportStart, .shutdownStartedSession, .stopSession,
+                 .timeOutFirstContact, .abandonSession, .startRelayAndPump:
+                forCaller.append(effect)
+            }
+        }
+        return forCaller
     }
 }

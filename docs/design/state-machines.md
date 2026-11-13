@@ -4414,6 +4414,63 @@ stateDiagram-v2
     }
 ```
 
+### MoshAttachMachine
+
+- **File:** `Sources/Waycar/Transport/MoshAttachMachine.swift`
+- **Owner:** `MoshSessionLifecycle` (`MoshAttachSession.swift`) keeps the
+  machine with the swift-mosh session, the run, start, pump, relay and
+  watchdog Tasks, the first-contact waiters and connectivity subscribers
+  behind one mutex. Each step feeds the machine and does its effects'
+  bookkeeping in the lock section that step always used (the session is
+  published and the watchdog armed under one lock, so `end()` always finds
+  them); the async effects (reporting the start, the handshake or abandon)
+  go back to the step that holds what they need.
+- **States:** four facets: start `starting`, `started`, `abandoned`; first
+  contact pending, `answered`, `timedOut`, `ended`; ending requested; link
+  (the connectivity last relayed, ended).
+- **Events:** `sessionCreated`, `startSucceeded`, `startFailed`,
+  `endRequested(abandoning)`, `watchdogElapsed(token)`,
+  `firstContactTimedOut`, `firstHostOp`, `runReady`, `connectivity`,
+  `disarmWatchdog`, `runEnded`, `linkEnded`.
+- **Effects:** `armWatchdog(token)`, `skipRun`, `reportStart`,
+  `shutdownStartedSession`, `cancelWatchdog`, `stopSession(abandoning)`,
+  `settleFirstContact`, `timeOutFirstContact`, `failFirstContact`,
+  `abandonSession`, `startRelayAndPump`, `relayConnectivity`, `endLink`.
+  An explicit end uses the shutdown handshake, a first-contact timeout
+  `abandon()`; a link lost after an answer is `MoshLinkLost` (the owner
+  reads `hostAnswered`). Kept from before: the watchdog takes the start
+  and then first contact in two steps (an answer, `end()` or the run's end
+  can come between), a disarmed watchdog past its sleep still decides by
+  the state, and the run's end settles first contact before it ends the
+  link.
+- **Tests:** `MoshAttachMachineTests`, `MoshAttachSessionTests` (silent
+  server: timeout, abandon and end before first contact, unusable port,
+  registry; a loopback server answering with sealed states: first contact,
+  its shutdown, the watchdog disarmed, an end after an answer),
+  `MoshFastPathStoreTests` (registry), `MoshServerContactTests`.
+- **Catalogue:** MOSH-01.
+
+```mermaid
+stateDiagram-v2
+    state Start {
+        [*] --> starting
+        starting --> started: startSucceeded / reportStart
+        starting --> abandoned: endRequested or watchdog / reportStart abandoned
+        abandoned --> abandoned: startSucceeded / shutdownStartedSession
+    }
+    state FirstContact {
+        [*] --> pending
+        pending --> answered: firstHostOp / settle, cancelWatchdog
+        pending --> timedOut: firstContactTimedOut / settle, failFirstContact, abandonSession
+        pending --> ended: runEnded / settle
+    }
+    state Link {
+        [*] --> relaying
+        relaying --> relaying: connectivity changed / relayConnectivity
+        relaying --> linkEnded: linkEnded / endLink
+    }
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4779,7 +4836,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-19 | Socket readiness waiter | `Packages/WaycarSSH/Sources/WaycarSSH/SocketReadiness.swift` | implicit | M/H | leave: dispatch barrier primitive | — |
 | SSH-20 | Session activity watches | `Packages/WaycarSSH/Sources/WaycarSSH/SessionActivity.swift` | implicit | L/M | leave: generation-checked | — |
 | SSH-21 | Happy Eyeballs race | `Packages/WaycarSSH/Sources/WaycarSSH/SocketConnector.swift` | partial | M/M | leave: generation-checked | — |
-| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | convert | P3c |
+| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | converted → `MoshAttachMachine`; the watchdog's two-step window kept | P3c |
 | MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | converted → `MoshEligibilityMachine` | P3c |
 | MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | converted → `StandbyMoshMachine`; the claim-window overlap with a preparation kept | P3c |
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
