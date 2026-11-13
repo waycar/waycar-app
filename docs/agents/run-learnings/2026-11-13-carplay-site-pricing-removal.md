@@ -7,9 +7,12 @@
   `BlockedPromptClassifier.swift` kept the copy to what 1.3.0 ships.
 - **Broke:** the branch started on the private history and had to be rebased
   onto the public `main` mid-run; only the ops-only commits dropped out.
+  Full-page Playwright clips left `loading="lazy"` images blank: set them eager
+  and wait for `complete` before capturing preview screenshots.
 - **Watch out:** the site's `.kicker` (and other labels) is
   `text-transform: uppercase`, and Apple forbids its product names in all caps:
   never put iPhone, iPad, CarPlay or Apple Watch in a kicker. Xcode 27
   simulators have no CarPlay display (docs/design/carplay.md §7), so CarPlay
   screens can't come from `make screenshots`. Article and compare bodies may
-  link only routes in `src/lib/landing.ts` `FIXED_ROUTES`.
+  link only routes in `src/lib/landing.ts` `FIXED_ROUTES`. iPhone photos carry
+  GPS in EXIF: strip it before committing an owner's photo.
