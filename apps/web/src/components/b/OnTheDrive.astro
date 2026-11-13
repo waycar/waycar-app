@@ -1,8 +1,10 @@
 ---
-// Page B only, after JustTalk. Waycar in CarPlay (1.3.0), told as the spoken
-// exchange it is: the car's screen shows only the list, so the visual is what
-// you hear, in the app's own lines (VoiceExchange). Never a picture of the
-// car's screen. Details live on /carplay.
+// Page B only, after JustTalk. Waycar in CarPlay (1.3.0): one real photo of
+// the car's screen while Waycar listens (parked, cropped, never retouched),
+// then the spoken exchange it is, in the app's own lines (VoiceExchange).
+// Details and the list photo live on /carplay.
+import { Image } from 'astro:assets';
+import voicePhoto from '../../assets/carplay/carplay-voice.jpg';
 import VoiceExchange, { type ExchangeLine } from '../VoiceExchange.astro';
 
 const exchange: ExchangeLine[] = [
@@ -17,14 +19,27 @@ const exchange: ExchangeLine[] = [
 
 <section id="road" class="section road" aria-labelledby="road-title">
   <div class="wrap">
-    <div class="sec-head">
-      <span class="kicker">On the drive</span>
-      <h2 id="road-title" class="sec-title">
-        Unblock an agent on your drive. <span class="muted">Nothing to read.</span>
-      </h2>
-      <p class="sec-lede">
-        Waycar in CarPlay says which agents need you. Answer by voice, with your iPhone locked.
-      </p>
+    <div class="top">
+      <div class="sec-head">
+        <span class="kicker">On the drive</span>
+        <h2 id="road-title" class="sec-title">
+          Unblock an agent on your drive. <span class="muted">Nothing to read.</span>
+        </h2>
+        <p class="sec-lede">
+          Waycar in CarPlay says which agents need you. Answer by voice, with your iPhone locked.
+        </p>
+      </div>
+      <figure class="photo">
+        <Image
+          src={voicePhoto}
+          alt="A car's CarPlay display showing Waycar listening: the title 'Ask Waycar · 4' above a waveform, and nothing else"
+          widths={[480, 720, 1080, 1440]}
+          sizes="(min-width: 1080px) 560px, calc(100vw - 40px)"
+          format="webp"
+          quality={80}
+        />
+        <figcaption>Waycar in CarPlay, on a real car's display. Parked.</figcaption>
+      </figure>
     </div>
 
     <div class="glass stage">
@@ -62,6 +77,36 @@ const exchange: ExchangeLine[] = [
     height: 520px;
     background: radial-gradient(640px 300px at 80% 10%, rgb(var(--cyan-rgb) / 0.08), transparent 70%);
     pointer-events: none;
+  }
+
+  .top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+    gap: 32px 56px;
+    align-items: center;
+    margin-bottom: 56px;
+  }
+
+  .top .sec-head {
+    margin-bottom: 0;
+  }
+
+  .photo {
+    margin: 0;
+  }
+
+  .photo :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-device);
+  }
+
+  .photo figcaption {
+    margin-top: 12px;
+    font: var(--fs-caption) / 1.6 var(--font-mono);
+    color: var(--text-3);
   }
 
   .stage {
@@ -102,6 +147,13 @@ const exchange: ExchangeLine[] = [
   .req {
     font: var(--fs-caption) var(--font-mono);
     color: var(--text-3);
+  }
+
+  @media (max-width: 1080px) {
+    .top {
+      grid-template-columns: 1fr;
+      margin-bottom: 40px;
+    }
   }
 
   @media (max-width: 860px) {

@@ -1,10 +1,14 @@
 ---
-// /carplay: Waycar in CarPlay (1.3.0, iPhone only). No picture of the car's
-// screen: it is described in words, and the rest is what you hear, in the
-// app's own spoken lines (Sources/Waycar/Voice/CarVoiceScript.swift, v1.3.0).
-// Keep it in step with the help pages carplay, carplay-voice and
-// live-activities. Apple's rules: "CarPlay" never in caps (so never in a
-// kicker), never more prominent than "Waycar", no Apple art.
+// /carplay: Waycar in CarPlay (1.3.0, iPhone only). Two real photos of the
+// car's screen (taken parked, cropped to the display, never retouched), and
+// the rest is what you hear, in the app's own spoken lines
+// (Sources/Waycar/Voice/CarVoiceScript.swift, v1.3.0). Keep it in step with the
+// help pages carplay, carplay-voice and live-activities. Apple's rules:
+// "CarPlay" never in caps (so never in a kicker), never more prominent than
+// "Waycar", no Apple art, and captions never imply Apple's endorsement.
+import { Image } from 'astro:assets';
+import listPhoto from '../assets/carplay/carplay-list.jpg';
+import voicePhoto from '../assets/carplay/carplay-voice.jpg';
 import AppStoreCta from '../components/AppStoreCta.astro';
 import VoiceExchange, { type ExchangeLine } from '../components/VoiceExchange.astro';
 import { ON_APP_STORE } from '../data/links';
@@ -94,17 +98,33 @@ const help = [
 >
   <section class="section intro" aria-labelledby="carplay-title">
     <div class="wrap">
+      <div class="top">
       <div class="sec-head">
         <span class="kicker">On the drive</span>
         <h1 id="carplay-title" class="sec-title">Your agents, out loud. <span class="muted">Nothing to read.</span></h1>
         <p class="sec-lede">
           Waycar in CarPlay tells you which coding agents need you. Ask one how it's going, or answer its approval, by
-          voice. The car's screen shows only the list.
+          voice. The car's screen shows only the list, and who you're talking to.
         </p>
         <div class="get">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           <span class="get-note">{ON_APP_STORE && <><span>Free on the App Store</span> · </>}<span>iPhone, iOS 26.4 or later</span></span>
         </div>
+      </div>
+
+      <figure class="photo">
+        <Image
+          src={voicePhoto}
+          alt="A car's CarPlay display showing Waycar listening: the title 'Ask Waycar · 4' above a waveform, and nothing else"
+          widths={[480, 720, 1080, 1440]}
+          sizes="(min-width: 1080px) 560px, calc(100vw - 40px)"
+          format="webp"
+          quality={80}
+          loading="eager"
+          fetchpriority="high"
+        />
+        <figcaption>Asking an agent: its name, and a waveform while Waycar listens. On a real car's display, parked.</figcaption>
+      </figure>
       </div>
 
       <div class="glass stage">
@@ -153,16 +173,29 @@ const help = [
 
   <section class="section" aria-labelledby="screen-title">
     <div class="wrap">
-      <div class="split">
-        <div class="sec-head">
-          <span class="kicker">On the car's screen</span>
-          <h2 id="screen-title" class="sec-title">A list. <span class="muted">That's all.</span></h2>
-          <p class="sec-lede">
-            The agents that need you sit on top, each with its status and how long ago it changed. A ring shows progress
-            when an agent has an estimate. Nothing an agent writes is ever shown. You hear it instead.
-          </p>
-        </div>
-        <ol class="rows" aria-label="What the list shows, top to bottom">
+      <div class="sec-head">
+        <span class="kicker">On the car's screen</span>
+        <h2 id="screen-title" class="sec-title">A list. <span class="muted">That's all.</span></h2>
+        <p class="sec-lede">
+          The agents that need you sit on top, each with its status and how long ago it changed. A ring shows progress
+          when an agent has an estimate. Nothing an agent writes is ever shown. You hear it instead.
+        </p>
+      </div>
+
+      <div class="screen">
+      <figure class="photo">
+        <Image
+          src={listPhoto}
+          alt="A car's CarPlay display showing the Waycar list: 'Paperclip · vault' working, with a progress ring and 'wrapping up · now', then under Idle 'Waycar · 4', 'Paperclip · gh-email' and 'Paperclip · pclip-agent', each idle for 2 minutes"
+          widths={[640, 960, 1400, 2048]}
+          sizes="(min-width: 1248px) 720px, (min-width: 861px) 60vw, calc(100vw - 40px)"
+          format="webp"
+          quality={80}
+        />
+        <figcaption>One agent working, with its progress ring, then three idle. On a real car's display, parked.</figcaption>
+      </figure>
+
+      <ol class="rows" aria-label="What the list shows, top to bottom">
           {
             rows.map((row) => (
               <li>
@@ -317,17 +350,45 @@ const help = [
     margin-top: 22px;
   }
 
-  /* ---------- The car's screen, in words ---------- */
+  /* ---------- Photos of the car's screen ---------- */
 
-  .split {
+  .top {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
-    gap: 56px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+    gap: 40px 56px;
     align-items: center;
+    margin-bottom: 56px;
   }
 
-  .split .sec-head {
+  .top .sec-head {
     margin-bottom: 0;
+  }
+
+  .photo {
+    margin: 0;
+  }
+
+  .photo :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-device);
+  }
+
+  .photo figcaption {
+    margin-top: 12px;
+    font: var(--fs-caption) / 1.6 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  /* ---------- The car's screen: the photo, then its rows in words ---------- */
+
+  .screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 400px);
+    gap: 40px 56px;
+    align-items: center;
   }
 
   .rows {
@@ -340,7 +401,7 @@ const help = [
     position: relative;
     display: grid;
     gap: 4px;
-    padding: 18px 0 18px 40px;
+    padding: 16px 0 16px 36px;
     border-bottom: 1px solid var(--line);
     counter-increment: row;
   }
@@ -470,6 +531,11 @@ const help = [
     .details {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .top,
+    .screen {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 860px) {
@@ -477,11 +543,6 @@ const help = [
       grid-template-columns: 1fr;
       gap: 40px;
       padding: 28px 20px;
-    }
-
-    .split {
-      grid-template-columns: 1fr;
-      gap: 32px;
     }
 
     .help {
