@@ -1322,6 +1322,60 @@ mod tests {
     }
 
     #[test]
+    fn a_hooks_write_between_the_read_and_the_working_write_wins() {
+        let host =
+            FakeTmux::new(&WORKING_OPTIONS, &screens(&[blocked(), denied()])).on_call(|args, h| {
+                if args.contains(&"if-shell")
+                    && args
+                        .iter()
+                        .any(|arg| arg.contains("@waycar_status working"))
+                {
+                    h.options.insert("@waycar_status".into(), "done".into());
+                    h.options
+                        .insert("@waycar_seq".into(), "9999999999999999999".into());
+                }
+            });
+        assert_eq!(watch(&host).notified, ["blocked"]);
+        assert_eq!(host.writes(), ["blocked"]);
+        assert_eq!(host.option("@waycar_status").as_deref(), Some("done"));
+        assert_eq!(host.option("@waycar_approval_watch"), None);
+    }
+
+    #[test]
+    fn another_watch_claiming_between_the_read_and_the_claim_wins() {
+        let host = FakeTmux::new(&WORKING_OPTIONS, &screens(&[blocked()])).on_call(|args, h| {
+            if args.contains(&"if-shell")
+                && args
+                    .iter()
+                    .any(|arg| arg.contains("@waycar_approval_watch 4242-"))
+            {
+                h.options
+                    .insert("@waycar_approval_watch".into(), "777-abcdef".into());
+            }
+        });
+        let (result, watched) = watch_with(&host, "agy", 4242, &|_, _| false);
+        result.unwrap();
+        assert!(watched.notified.is_empty());
+        assert!(host.writes().is_empty());
+        assert_eq!(host.host.borrow().calls, 2, "the read and the claim");
+        assert_eq!(
+            host.option("@waycar_approval_watch").as_deref(),
+            Some("777-abcdef")
+        );
+    }
+
+    #[test]
+    fn a_poke_that_cannot_sit_in_a_format_ends_the_watch_holding_its_token() {
+        let mut options = WORKING_OPTIONS.to_vec();
+        options.push(("@waycar_approval_poke", "1 2"));
+        let host = FakeTmux::new(&options, &screens(&[working()]));
+        let watched = watch(&host);
+        assert!(watched.notified.is_empty());
+        let token = host.option("@waycar_approval_watch").unwrap();
+        assert!(token.starts_with("4242-"), "{token}");
+    }
+
+    #[test]
     fn an_agent_with_no_approval_screen_is_refused() {
         let host = FakeTmux::new(&[], &screens(&[working()]));
         let (result, _) = watch_with(&host, "claude", 4242, &|_, _| false);
