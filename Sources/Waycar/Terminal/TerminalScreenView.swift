@@ -530,20 +530,14 @@ final class TerminalSessionCallbackBridge {
         _ phase: TerminalGridReportPhase, _ forwarded: TerminalGridSize?
     ) -> Void)?
     nonisolated private let resizeSequence = TerminalResizeSequence()
-    private var pendingResizeReports: [UInt64: InMemoryTerminalViewport] = [:]
-    private var lastProcessedResizeSequence: UInt64 = 0
-    private var discardsResizeReportsThrough: UInt64 = 0
-    private var defersSizeReports = false
-    private var deferredSize: (columns: Int, rows: Int)?
-    private var finishesSizeReportDeferralThrough: UInt64?
-    private var suppressesDuplicateSize: (columns: Int, rows: Int)?
-    private var lastNotifiedGridReportPhase = TerminalGridReportPhase.live
+    /// The report sequence, the freeze and duplicate suppression; see
+    /// ``GridReportMachine``.
+    private var reports = GridReportMachine()
 
-    /// Derived from the deferral bookkeeping rather than tracked alongside it,
-    /// so the phase callers observe cannot drift from the one the reports obey.
+    /// Derived from the machine the reports obey, so the phase callers
+    /// observe cannot drift from it.
     var gridReportPhase: TerminalGridReportPhase {
-        guard defersSizeReports else { return .live }
-        return finishesSizeReportDeferralThrough == nil ? .deferring : .flushing
+        reports.gridReportPhase
     }
 
     init(
@@ -575,7 +569,37 @@ final class TerminalSessionCallbackBridge {
     nonisolated func resize(_ viewport: InMemoryTerminalViewport) {
         let sequence = resizeSequence.next()
         Task { @MainActor [weak self] in
-            self?.receiveResize(viewport, sequence: sequence)
+            self?.send(.reportArrived(sequence: sequence, viewport: viewport))
+        }
+    }
+
+    /// Feeds the machine and performs its effects in order. Each callback is
+    /// the last effect of its step; its continuation is sent once it returns,
+    /// so a callback that re-entered the bridge has already been applied.
+    private func send(_ event: GridReportMachine.Event) {
+        for effect in reports.handle(event) {
+            switch effect {
+            case .checkCurrent(let viewport):
+                let isCurrent = isSizeReportCurrent?(
+                    Int(viewport.columns), Int(viewport.rows)) != false
+                send(.currentnessChecked(viewport, isCurrent: isCurrent))
+            case .deliverViewport(let viewport):
+                onViewport?(viewport)
+                send(.viewportDelivered(viewport))
+            case .reportSize(let size, let then):
+                onSizeChanged?(size.columns, size.rows)
+                send(.sizeReported(then: then))
+            case .forward(let size, let then):
+                guard let onSizeChanged else {
+                    send(.forwarded(size, delivered: false, then: then))
+                    continue
+                }
+                onSizeChanged(size.columns, size.rows)
+                send(.forwarded(size, delivered: true, then: then))
+            case .notifyPhase(let phase, let forwarded, let then):
+                onGridReportPhaseChanged?(phase, forwarded)
+                send(.phaseNotified(then: then))
+            }
         }
     }
 
@@ -584,28 +608,18 @@ final class TerminalSessionCallbackBridge {
         // main-actor delivery is still queued. It describes the layout before
         // this freeze and must not become the deferred result merely because
         // its Task happens to run after the handoff begins.
-        discardsResizeReportsThrough = max(
-            discardsResizeReportsThrough, resizeSequence.current())
-        defersSizeReports = true
-        deferredSize = nil
-        finishesSizeReportDeferralThrough = nil
-        suppressesDuplicateSize = nil
-        notifyGridReportPhase()
+        send(.beginFreeze(latest: resizeSequence.current()))
     }
 
     func finishSizeReportDeferral() {
-        guard defersSizeReports else { return }
         // `resize` crosses onto the main actor asynchronously. Keep the freeze
         // in force until every callback that had already left Ghostty when the
         // thaw was requested has been consumed in sequence.
-        finishesSizeReportDeferralThrough = resizeSequence.current()
-        notifyGridReportPhase()
-        completeSizeReportDeferralIfReady()
+        send(.finishFreeze(latest: resizeSequence.current()))
     }
 
     func provideAuthoritativeDeferredSize(columns: Int, rows: Int) {
-        guard defersSizeReports else { return }
-        deferredSize = (columns, rows)
+        send(.provideAuthoritative(TerminalGridSize(columns: columns, rows: rows)))
     }
 
     /// Tells the Host a grid it may have missed: a cancelled freeze discards
@@ -613,96 +627,11 @@ final class TerminalSessionCallbackBridge {
     /// changes. Held like any other report while a freeze is in force; the
     /// engine's matching callback, if still in flight, is consumed once.
     func reportSettledSize(columns: Int, rows: Int) {
-        guard !defersSizeReports else {
-            deferredSize = (columns, rows)
-            return
-        }
-        onSizeChanged?(columns, rows)
-        suppressesDuplicateSize = (columns, rows)
+        send(.reportSettled(TerminalGridSize(columns: columns, rows: rows)))
     }
 
     func cancelSizeReportDeferral() {
-        discardsResizeReportsThrough = max(
-            discardsResizeReportsThrough, resizeSequence.current())
-        defersSizeReports = false
-        deferredSize = nil
-        finishesSizeReportDeferralThrough = nil
-        suppressesDuplicateSize = nil
-        notifyGridReportPhase()
-    }
-
-    private func receiveResize(
-        _ viewport: InMemoryTerminalViewport,
-        sequence: UInt64
-    ) {
-        pendingResizeReports[sequence] = viewport
-
-        while let viewport = pendingResizeReports.removeValue(
-            forKey: lastProcessedResizeSequence &+ 1)
-        {
-            lastProcessedResizeSequence &+= 1
-            if lastProcessedResizeSequence > discardsResizeReportsThrough {
-                let size = (columns: Int(viewport.columns), rows: Int(viewport.rows))
-                if isSizeReportCurrent?(size.columns, size.rows) != false {
-                    onViewport?(viewport)
-                    if defersSizeReports {
-                        deferredSize = size
-                    } else {
-                        deliverSize(size)
-                    }
-                }
-            }
-            completeSizeReportDeferralIfReady()
-        }
-    }
-
-    private func completeSizeReportDeferralIfReady() {
-        guard let finishSequence = finishesSizeReportDeferralThrough,
-              lastProcessedResizeSequence >= finishSequence
-        else { return }
-        finishesSizeReportDeferralThrough = nil
-        defersSizeReports = false
-        // The Host hears the settled grid first, and the phase says `.live`
-        // only once it has: an observer woken by the thaw must find the
-        // report already delivered, not on its way.
-        let forwarded = forwardDeferredSize()
-        notifyGridReportPhase(forwarded: forwarded)
-    }
-
-    /// Hands the Host the one grid the freeze settled on and returns it, or
-    /// returns `nil` when the freeze never learned a grid to forward — the
-    /// next ordinary report speaks for it then.
-    private func forwardDeferredSize() -> TerminalGridSize? {
-        guard let deferredSize else { return nil }
-        self.deferredSize = nil
-        guard let onSizeChanged else { return nil }
-        onSizeChanged(deferredSize.columns, deferredSize.rows)
-        // The surface delegate supplied the settled grid synchronously. The
-        // equivalent engine callback can still be in Ghostty's IO pipeline;
-        // consume that one duplicate when it arrives. A different current
-        // grid clears the token and is delivered normally.
-        suppressesDuplicateSize = deferredSize
-        return TerminalGridSize(
-            columns: deferredSize.columns, rows: deferredSize.rows)
-    }
-
-    private func notifyGridReportPhase(forwarded: TerminalGridSize? = nil) {
-        let phase = gridReportPhase
-        guard phase != lastNotifiedGridReportPhase else { return }
-        lastNotifiedGridReportPhase = phase
-        onGridReportPhaseChanged?(phase, forwarded)
-    }
-
-    private func deliverSize(_ size: (columns: Int, rows: Int)) {
-        if let suppressedSize = suppressesDuplicateSize {
-            suppressesDuplicateSize = nil
-            if suppressedSize.columns == size.columns,
-               suppressedSize.rows == size.rows
-            {
-                return
-            }
-        }
-        onSizeChanged?(size.columns, size.rows)
+        send(.cancelFreeze(latest: resizeSequence.current()))
     }
 
     func paste(_ text: String, bracketed: Bool) {

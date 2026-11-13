@@ -3299,6 +3299,43 @@ stateDiagram-v2
     }
 ```
 
+### GridReportMachine
+
+- **File:** `Sources/Waycar/Terminal/GridReportMachine.swift`
+- **Owner:** `TerminalSessionCallbackBridge` keeps the cross-thread
+  sequence counter (read into the freeze events) and the UI closures. It
+  performs each callback effect and sends the step's continuation once the
+  callback returns, so a callback that re-entered the bridge has already
+  been applied when the step goes on.
+- **States:** phase `live`, `deferring(deferred)`, `flushing(through,
+  deferred)`; reports waiting for their predecessor; last processed and
+  discarded sequence; the duplicate-suppression grid; the last phase
+  notified.
+- **Events:** report arrived, begin/finish/cancel freeze (with the latest
+  sequence), authoritative and settled grids, and the continuations
+  (currentness checked, viewport delivered, size reported, forwarded, phase
+  notified).
+- **Effects:** check currentness, deliver the viewport, report a size,
+  forward the thaw grid, notify the phase; each the last of its step.
+- **Tests:** `GridReportMachineTests`, `TerminalResizeBridgeLifecycleTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`,
+  `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-15.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> live: report in sequence / check, deliver, report (duplicate consumed once)
+    live --> deferring: begin / discard reports that left, notify
+    deferring --> deferring: report or grid / hold newest
+    deferring --> flushing: finish / fence latest sequence, notify
+    flushing --> flushing: report before the fence / hold
+    flushing --> live: fence consumed / forward held grid, notify
+    deferring --> live: cancel / discard, notify
+    flushing --> live: cancel / discard, notify
+    flushing --> deferring: begin
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5532,7 +5569,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
 | ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
-| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
+| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
