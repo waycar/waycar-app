@@ -761,7 +761,9 @@ fn run_export_command(
         return Err(ChatError::export(
             format!("{} {what} {detail}", exporter.binary),
             false,
-            !killed && session_not_found(&stderr_text),
+            // An exit code is the exporter's own verdict, even when a child it
+            // left behind kept the pipes until the deadline (B-33).
+            (!killed || code.is_some()) && session_not_found(&stderr_text),
         ));
     }
     Ok(String::from_utf8_lossy(&stdout).into_owned())
@@ -1208,6 +1210,28 @@ esac
             thread::sleep(Duration::from_millis(50));
         }
         assert!(!is_alive(child), "the left-behind child outlived the read");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_not_found_exit_is_absent_even_when_a_child_holds_the_pipes_past_the_timeout() {
+        // The exporter itself exited 3 saying the session is gone; only the
+        // child it left kept the read until the deadline killed the group.
+        let (dir, mut options) =
+            stage("#!/bin/sh\nsleep 6 &\necho 'Session not found: ses_x' >&2\nexit 3\n");
+        options.timeout = Duration::from_millis(300);
+        let started = Instant::now();
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(3));
+        assert_eq!(error.message, "opencode export Session not found: ses_x");
+        assert_eq!(
+            error.kind,
+            crate::chat::shared::ErrorKind::Export {
+                located: false,
+                absent: true
+            }
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
