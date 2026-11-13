@@ -3099,6 +3099,52 @@ stateDiagram-v2
     unbound --> inactive: clear
 ```
 
+### AttachLifecycleMachine
+
+- **File:** `Sources/Waycar/Console/AttachLifecycleMachine.swift`
+- **Owner:** `AgentAttachStore` keeps the pipeline, the recovery latch
+  (`TerminalRecoveryGenerationMachine`), the transition queue's Tasks, the
+  contact-check Task, staging, the indices and the DEBUG traces; it reads
+  the route (`isOnStage`) into the events at the old points and mirrors the
+  observed lifecycle and recovery owner.
+- **States:** the lifecycle (`active`, `rejoinRequired`, `left`), the
+  recovery owner token, whether a foreground return claimed the on-stage
+  lifecycle, the pipeline started at intent and not yet seen, the contact
+  check token, the latest queued transition.
+- **Events:** `intentStarted`, `activated`, `contactAnswered(token)`,
+  `replacementRequested`, `abortOffStage(token)`, `recoveryFinished(token)`,
+  `rejoinRequested`, `rejoinGate(token)`, `leaveRequested`,
+  `transitionEnqueued`, `transitionEnded(token)`.
+- **Effects:** `repaint`, `beginTrace`/`abortTrace`, `beginLatch`/`clearLatch`,
+  `followIntentPipeline`, `checkMosh(token)`, `cancelContactCheck`,
+  `clearContactCheck`, `keepMoshSession`, `recover`, the two `publish…`
+  mirrors, `ownRecovery`, `enqueueRejoin`, `resumeTrayAfterRetention`,
+  `proceed`, `returnPendingTransition`, `tearDown`, `transitionToken`,
+  `clearTransition`. End versus abandon is unchanged: only a recovery after
+  a possible suspension, a newer transport or an unheard mosh server
+  abandons its predecessor; leave and rejoin end it cleanly. The route
+  guards (`isStillWanted`, on stage) stay where they were; only the owning
+  transition publishes, finishes or aborts.
+- **Tests:** `AttachLifecycleMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AgentAttachStoreTests`, `AgentAttachStoreForegroundTests`,
+  `MoshStandbyAttachTests`, `MoshStandbySuspensionTests`.
+- **Catalogue:** ATTACH-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> active
+    active --> active: activated / repaint, followIntent, checkMosh(token) or recover
+    active --> active: contactAnswered(token) / keep or recover
+    active --> active: replacementRequested / ownRecovery(token)
+    active --> active: recoveryFinished(owner) / clear owner
+    active --> rejoinRequired: abortOffStage(owner), off stage
+    active --> left: leaveRequested / tearDown
+    active --> active: leaveRequested, activation owns the stage / returnPending
+    rejoinRequired --> active: rejoinRequested on stage / enqueueRejoin(full)
+    left --> active: rejoinRequested on stage / enqueueRejoin
+    rejoinRequired --> left: leaveRequested / tearDown
+```
+
 ### TerminalRunMachine
 
 - **File:** `Sources/Waycar/Console/TerminalRunMachine.swift`
@@ -5691,7 +5737,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | convert (deferred: overlapping queued recovery, contact-check and leave/rejoin awaits own PTY/input teardown; preserve end versus abandon and route guards with Mac execution first). Safety net: `AttachLifecycleCharacterizationTests`, existing `AgentAttachStoreTests` | P2c |
+| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | converted → `AttachLifecycleMachine` (the link-open and transcript-read ids stay as they are, ATTACH-22) | P2c |
 | ATTACH-02 | Terminal recovery generation latch | `Sources/Waycar/Console/AttachTerminalStore.swift` | explicit | H/M | converted → `TerminalRecoveryGenerationMachine` | P2c |
 | ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; a stop during the mosh invalidation a restart awaits is still followed by one self-ending run, as before | P2c |
 | ATTACH-04 | Viewed-Done acknowledgement | `Sources/Waycar/Console/AgentFocusCoordinator.swift` | explicit | H/M | converted → `ViewedDoneMachine` | P2c |
