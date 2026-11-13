@@ -4395,6 +4395,51 @@ stateDiagram-v2
     committing --> finished: edited
 ```
 
+### PairPopupMachine
+
+- **File:** `plugin/rust/pair.rs`
+- **Owner:** `pair::Popup` (the `waycar pair` terminal loop) owns the raw
+  terminal, signals, the escape/TTL/poll/copied timers and the ceremony's
+  session, payload and Enrollment, and runs `begin_pairing`,
+  `expire_pairing`, `end_pairing` and `remove_key_line`. The keys of one
+  read run as one batch: a close in it drops a ceremony, copy or revoke the
+  same read started.
+- **States:** `select`, `qr`, `expiring`, `expired`, `enrolled`, `revoking`,
+  `revoked`, `fatal`; data: the selection, the confirmed addresses, the last
+  QR layout and `closing`.
+- **Events:** `key`, `closeRequested`, `startupFailed`, `ceremonyFailed`,
+  `qrDrawn(layout)`, `pollDue`, `enrollmentFound`, `expiryDue`,
+  `expireAnswered`, `revokeAnswered`, `resized`, `copiedNoticeElapsed`.
+- **Effects:** `paint`, `close`, `startCeremony`, `copy`, `revoke`,
+  `stopCeremonyTimers`, `stopPoll`, `showStartFailure`, `readEnrollment`,
+  `showEnrolled`, `expire`, `showExpired`, `redrawQr`, `clearCopied`,
+  `fail`.
+- **Tests:** `pair::tests` (keys per phase, the non-key events, and the
+  popup with a private home: start, close in the same read, poll, revoke,
+  TTL expiry and restart, an Enrollment at the deadline, signal, copy,
+  failed start).
+- **Catalogue:** HT-06.
+
+```mermaid
+stateDiagram-v2
+    [*] --> select
+    select --> qr: enter with an address / startCeremony
+    qr --> fatal: ceremonyFailed
+    qr --> enrolled: enrollmentFound
+    qr --> expiring: expiryDue / stopPoll, expire
+    expiring --> enrolled: expireAnswered with an Enrollment
+    expiring --> expired: expireAnswered, none / showExpired
+    expired --> qr: enter / startCeremony
+    enrolled --> revoking: r / revoke
+    revoking --> revoked: revokeAnswered
+    select --> [*]: q, escape, Ctrl-C, signal / close
+    qr --> [*]: close
+    expired --> [*]: any other key / close
+    enrolled --> [*]: any other key / close
+    revoked --> [*]: any key / close
+    fatal --> [*]: any key / close(1)
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4804,7 +4849,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `SessionReleaseMachine`; bug B-34 fixed (tmux) | P4 |
 | HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
 | HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | converted → `ApprovalWatchMachine` | P4 |
-| HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | convert | P4 |
+| HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | converted → `PairPopupMachine`; `expiring` with no session still strands the popup, as before | P4 |
 | HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | converted → `EnrollmentAcceptMachine` (the accept side; the popup side is HT-06) | P4 |
 | HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | convert | P4 |
 | HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | convert | P4 |
