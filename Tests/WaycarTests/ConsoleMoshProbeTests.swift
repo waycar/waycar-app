@@ -281,4 +281,48 @@ private struct ConsoleMoshProbeTests {
         }
         store.setHosts([])
     }
+
+    /// A Host removed and added back mid re-probe: the old re-probe, ending
+    /// late, neither clears the new re-probe's testing state nor records
+    /// its answer (MOSH-02).
+    @Test func aStaleReprobeLeavesTheReaddedHostsReprobeAlone() async throws {
+        let host = Host.fixture()
+        let transport = ScriptedTransport(snapshot: .fixture())
+        await transport.setMoshProbeAvailable(true)
+        let store = makeStore(transports: [host.id: transport])
+        store.setHosts([host])
+        await store.resume()
+        try await waitUntil("the connect-time probe should land") {
+            store.moshCapsuleState(for: host.id) == .available
+        }
+
+        let stale = ScriptedTransportCallGate()
+        await transport.gateNextMoshProbe(on: stale)
+        await store.forceMoshReprobe(for: host.id)
+        try await waitUntil("the first re-probe should reach its gate") { await stale.entryCount == 1 }
+        #expect(store.moshCapsuleState(for: host.id) == .testing)
+        store.setHosts([])
+        #expect(store.moshCapsuleState(for: host.id) == .untested)
+
+        store.setHosts([host])
+        try await waitUntil("the re-added Host's connect-time probe should land") {
+            await transport.moshProbeCount == 3 && store.moshCapsuleState(for: host.id) == .available
+        }
+        await transport.setMoshProbeAvailable(false)
+        let current = ScriptedTransportCallGate()
+        await transport.gateNextMoshProbe(on: current)
+        await store.forceMoshReprobe(for: host.id)
+        try await waitUntil("the second re-probe should reach its gate") { await current.entryCount == 1 }
+
+        await stale.open()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(store.moshCapsuleState(for: host.id) == .testing, "the old re-probe ended someone else's")
+
+        await current.open()
+        try await waitUntil("the second re-probe's answer should land") {
+            store.moshCapsuleState(for: host.id) == .unavailable
+        }
+        #expect(await transport.moshProbeCount == 4)
+        store.setHosts([])
+    }
 }

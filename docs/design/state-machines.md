@@ -4556,13 +4556,252 @@ stateDiagram-v2
     full --> full: invalidate / fail every waiter
 ```
 
+### DatagramEndpointMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshTransport/DatagramEndpointMachine.swift`
+- **Owner:** `NetworkDatagramEndpoint` (actor) keeps the `NWConnection`,
+  `start()`'s continuation, the waiting receives and the receive buffer;
+  it opens the connection the `start` effect names, hands every callback
+  its connection's token, and performs the effects. `send()` and
+  `receive()` go to the held connection; `start()` is refused unless
+  `stopped`, before its port checks, as before.
+- **States:** `stopped`, `connecting(connection)`, `open(connection)`,
+  `failed(connection)` (held until `stop()`: a start is refused, sends,
+  receives and its receive callbacks still go on).
+- **Events:** `start`, `reported(connection, ready|failed|cancelled|other)`,
+  `startReturned(connection)`, `receiveCompleted(connection)`, `stop`.
+- **Effects:** `open(connection)`, `resumeStart`, `failAll(failure)`,
+  `armReceive(connection)`, `deliverReceive`, `close`. A callback or a
+  start return whose token is not the held connection's does nothing
+  (B-28, SwiftMosh patch 18). SwiftMosh patch 19.
+- **Tests:** `DatagramEndpointMachineTests`, `TransportTests` (restart on a
+  fresh connection, a second start refused until stopped, stop during a
+  start, failure after ready, B-28's late cancel, receive error and
+  datagram).
+- **Catalogue:** MOSH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> stopped
+    stopped --> connecting: start / open(token)
+    connecting --> open: reported ready / resumeStart
+    open --> open: startReturned / armReceive
+    connecting --> failed: reported failed or cancelled / failAll
+    open --> failed: reported failed or cancelled / failAll
+    failed --> failed: reported failed or cancelled / failAll
+    open --> open: receiveCompleted / deliverReceive, armReceive
+    failed --> failed: receiveCompleted / deliverReceive, armReceive
+    connecting --> stopped: stop / close
+    open --> stopped: stop / close
+    failed --> stopped: stop / close
+    stopped --> stopped: stale token / ignored
+```
+
+### MoshContactHealthMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshCore/MoshContactHealthMachine.swift`
+- **Owner:** `MoshClientSession` (actor) sends `started` when it starts
+  running, `contact` on every authenticated server datagram, `tick` on
+  each maintenance pass while running (50 ms), `ended` when its runtime
+  stops or suspends; it yields published values to the connectivity
+  streams and fails the session on `expire`. `connectivity` and the
+  stream's first value read the state; the streams' finishing stays the
+  owner's.
+- **States:** `notRunning(lastContact)`, `healthy(lastContact)`,
+  `stalled(lastContact)`, `expired(lastContact, connectivity)` (the
+  connectivity it had stands until the runtime stops).
+- **Events:** `started(now)`, `contact(now, judged)` (`judged` is whether
+  the session runs: during a shutdown a datagram is contact, not
+  judgment), `tick(now)`, `ended`.
+- **Effects:** `publish(connectivity)`, `expire(timeoutMs)`. The timeout
+  is checked before the stall. The app's thresholds (6.5 s stall, 65 s
+  timeout, `MoshAttachSession`) are the config's; nothing here reads a
+  clock. SwiftMosh patch 20.
+- **Tests:** `MoshContactHealthMachineTests`, `WaycarNetworkPatchTests`
+  (stall and recovery, idle heartbeats, not judged during a shutdown,
+  suspension and resume, timeout before the stall), `CoreAndAdapterTests`
+  (network timeout).
+- **Catalogue:** MOSH-07.
+
+```mermaid
+stateDiagram-v2
+    [*] --> notRunning
+    notRunning --> healthy: started / publish connected
+    healthy --> stalled: tick past stall threshold / publish stalled
+    stalled --> healthy: contact while running / publish connected
+    healthy --> healthy: contact
+    stalled --> stalled: contact while not running
+    healthy --> expired: tick past network timeout / expire
+    stalled --> expired: tick past network timeout / expire
+    healthy --> notRunning: ended
+    stalled --> notRunning: ended
+    expired --> notRunning: ended
+```
+
+### StandbyMoshMachine
+
+- **File:** `Sources/Waycar/Transport/StandbyMosh.swift`
+- **Owner:** `StandbyMoshStore` (main actor) runs each preparation's
+  bootstrap under its budget in a Task keyed by the machine's token, waits
+  for a target's preparation in flight before `take` and
+  `claimAttachBootstrap`, and reads `standby(for:)`, `isPreparing` and
+  `hasAttachBootstrap(on:)` from the state. `now` arrives in events.
+- **States:** per target absent, `preparing(token)`, `ready(standby)`,
+  `refreshing(standby, token)` (a renewal keeps the ready one),
+  `bootstrapping(count)`, and the overlap kept from before:
+  `bootstrappingBesidePreparation(count, token)` and
+  `bootstrappingBesideStandby(count, standby)`, reached only when a
+  preparation starts between the one an attach waited for finishing and
+  that attach's claim.
+- **Events:** `prepare`, `prepared(token, standby?)`, `take(now)`,
+  `claimAttachBootstrap(now)`, `finishAttachBootstrap`, `discardHost`,
+  `discard`.
+- **Effects:** `startPreparation(token)`, `joinPreparation(token)`,
+  `refusePreparation`, `cancelPreparation(token)`, `handOut(standby?)`,
+  `attachBootstrapsSettled(host)`. Single use; a standby counts only
+  while younger than `maxAge` (50 s); discarding keeps attach bootstraps.
+- **Tests:** `StandbyMoshMachineTests`, `StandbyMoshStoreTests` (taken
+  once, origin, age, never beside an attach bootstrap, budget, renewal,
+  joining, take waits, stale claim, discards, settling),
+  `MoshStandbySuspensionTests`, `SpeculativeMoshStandbyTests`.
+- **Catalogue:** MOSH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> preparing: prepare / startPreparation
+    preparing --> ready: prepared(token, standby)
+    preparing --> [*]: prepared(token, nil) / discard
+    ready --> refreshing: prepare / startPreparation
+    refreshing --> ready: prepared(token) / new or kept standby
+    refreshing --> preparing: take
+    ready --> [*]: take / handOut / discard
+    [*] --> bootstrapping: claimAttachBootstrap, no standby
+    ready --> [*]: claimAttachBootstrap / handOut
+    bootstrapping --> bootstrapping: claim / finish, count > 1
+    bootstrapping --> [*]: finish last / attachBootstrapsSettled
+    preparing --> bootstrappingBesidePreparation: claim in the overlap
+    bootstrappingBesidePreparation --> bootstrappingBesideStandby: prepared(token, standby)
+    bootstrappingBesidePreparation --> bootstrapping: prepared(token, nil) / discard
+    bootstrappingBesideStandby --> bootstrapping: take / discard
+    bootstrappingBesideStandby --> ready: finish last
+    bootstrappingBesidePreparation --> preparing: finish last
+```
+
+### MoshEligibilityMachine
+
+- **File:** `Sources/Waycar/Console/MoshEligibilityMachine.swift`
+- **Owner:** `ConsoleStore` (`ConsoleStore+Mosh.swift`, `sendMosh`) keeps
+  the probe Tasks per Host, the projections the probes run over and the
+  network's memory (`MoshAvailabilityStore`, read only for a generation
+  not settled yet); it starts the probe a `startProbe` names, upgrades SSH
+  terminals, cancels probes, reconciles every Host, and mirrors the
+  outcomes and re-probing Hosts into the tracked `moshStates` and
+  `moshReprobingHosts` the capsule renders, only when they change.
+- **States:** per Host four facets: known (`outcome` by generation),
+  invalidated (automatic for a generation, or the user's SSH choice),
+  settled (the generation probed or answered from memory), re-probing (the
+  capsule re-probe's token).
+- **Events:** `invalidate`, `recordOutcome`, `reprobe`,
+  `reconcile(remembered, canProbe)`, `connectProbeFinished(available?,
+  cancelled)`, `reprobeEnded(token, available?)`, `networkChanged(hasPath)`,
+  `hostChanged(keepsTarget)`, `primaryProjectionEnded`.
+- **Effects:** `startProbe(connect | reprobe(token))`,
+  `upgrade(connectingOnly)`, `cancelProbe`, `cancelAllProbes`,
+  `reconcileAll`. Newest generation wins and an invalidation outlasts its
+  generation's probe; a discarded connect answer gives its generation back
+  unless cancelled; the user's SSH choice survives networks and new
+  connections until the capsule's re-probe; a re-probe cancelled by a new
+  network shows testing until its task ends. Connect probes are fenced by
+  generation, not token, as before (one still running when the herdr
+  projection ends may record its answer).
+- **Tests:** `MoshEligibilityMachineTests`, `ConsoleMoshProbeTests`,
+  `MoshAvailabilityPerNetworkTests`, `MoshFastPathEdgeTests`
+  (`moshTransport`, `MoshAvailabilityStore` and `MoshTransportChoice`
+  unchanged).
+- **Catalogue:** MOSH-02.
+
+```mermaid
+stateDiagram-v2
+    state Known {
+        [*] --> unknown
+        unknown --> known: probe, proof or memory
+        known --> known: newer generation / invalidate (unavailable)
+        known --> unknown: network change, Host change
+    }
+    state Settled {
+        [*] --> unsettled
+        unsettled --> settled: reconcile probes or answers from memory / reprobe
+        settled --> unsettled: discarded connect answer, not cancelled
+        settled --> unsettled: network change, Host change
+    }
+    state Reprobing {
+        [*] --> idle
+        idle --> testing: reprobe / startProbe(token)
+        testing --> idle: reprobeEnded(token)
+        testing --> idle: Host change
+    }
+```
+
+### MoshAttachMachine
+
+- **File:** `Sources/Waycar/Transport/MoshAttachMachine.swift`
+- **Owner:** `MoshSessionLifecycle` (`MoshAttachSession.swift`) keeps the
+  machine with the swift-mosh session, the run, start, pump, relay and
+  watchdog Tasks, the first-contact waiters and connectivity subscribers
+  behind one mutex. Each step feeds the machine and does its effects'
+  bookkeeping in the lock section that step always used (the session is
+  published and the watchdog armed under one lock, so `end()` always finds
+  them); the async effects (reporting the start, the handshake or abandon)
+  go back to the step that holds what they need.
+- **States:** four facets: start `starting`, `started`, `abandoned`; first
+  contact pending, `answered`, `timedOut`, `ended`; ending requested; link
+  (the connectivity last relayed, ended).
+- **Events:** `sessionCreated`, `startSucceeded`, `startFailed`,
+  `endRequested(abandoning)`, `watchdogElapsed(token)`,
+  `firstContactTimedOut`, `firstHostOp`, `runReady`, `connectivity`,
+  `disarmWatchdog`, `runEnded`, `linkEnded`.
+- **Effects:** `armWatchdog(token)`, `skipRun`, `reportStart`,
+  `shutdownStartedSession`, `cancelWatchdog`, `stopSession(abandoning)`,
+  `settleFirstContact`, `timeOutFirstContact`, `failFirstContact`,
+  `abandonSession`, `startRelayAndPump`, `relayConnectivity`, `endLink`.
+  An explicit end uses the shutdown handshake, a first-contact timeout
+  `abandon()`; a link lost after an answer is `MoshLinkLost` (the owner
+  reads `hostAnswered`). Kept from before: the watchdog takes the start
+  and then first contact in two steps (an answer, `end()` or the run's end
+  can come between), a disarmed watchdog past its sleep still decides by
+  the state, and the run's end settles first contact before it ends the
+  link.
+- **Tests:** `MoshAttachMachineTests`, `MoshAttachSessionTests` (silent
+  server: timeout, abandon and end before first contact, unusable port,
+  registry; a loopback server answering with sealed states: first contact,
+  its shutdown, the watchdog disarmed, an end after an answer),
+  `MoshFastPathStoreTests` (registry), `MoshServerContactTests`.
+- **Catalogue:** MOSH-01.
+
+```mermaid
+stateDiagram-v2
+    state Start {
+        [*] --> starting
+        starting --> started: startSucceeded / reportStart
+        starting --> abandoned: endRequested or watchdog / reportStart abandoned
+        abandoned --> abandoned: startSucceeded / shutdownStartedSession
+    }
+    state FirstContact {
+        [*] --> pending
+        pending --> answered: firstHostOp / settle, cancelWatchdog
+        pending --> timedOut: firstContactTimedOut / settle, failFirstContact, abandonSession
+        pending --> ended: runEnded / settle
+    }
+    state Link {
+        [*] --> relaying
+        relaying --> relaying: connectivity changed / relayConnectivity
+        relaying --> linkEnded: linkEnded / endLink
+    }
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
-
-The trait is `plugin/rust/state_machine.rs`; transition tests sit in the
-owner file's `tests` module, beside its owner pins (`cargo test --locked` in
-`plugin/`).
 
 ### ExportRunMachine
 
@@ -5347,17 +5586,17 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-19 | Socket readiness waiter | `Packages/WaycarSSH/Sources/WaycarSSH/SocketReadiness.swift` | implicit | M/H | leave: dispatch barrier primitive | — |
 | SSH-20 | Session activity watches | `Packages/WaycarSSH/Sources/WaycarSSH/SessionActivity.swift` | implicit | L/M | leave: generation-checked | — |
 | SSH-21 | Happy Eyeballs race | `Packages/WaycarSSH/Sources/WaycarSSH/SocketConnector.swift` | partial | M/M | leave: generation-checked | — |
-| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | convert | P3c |
-| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | convert | P3c |
-| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | convert | P3c |
+| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | converted → `MoshAttachMachine`; the watchdog's two-step window kept | P3c |
+| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | converted → `MoshEligibilityMachine` | P3c |
+| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | converted → `StandbyMoshMachine`; the claim-window overlap with a preparation kept | P3c |
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
-| MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert unless the risk is huge | P3c |
-| MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | convert | P3c |
+| MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert (deferred: the public `state` is written by nine async methods with last-writer-wins across their awaits (`stop()` overwrites `.failed`, `abandon()` keeps it, a `shutdown` in flight is shared and ended by `abandon()`), which patches 1, 4, 7 and 14 rely on; a machine either admits every such interleaving as legal or changes the ending the app reads) | P3c |
+| MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert (deferred: `engine == nil` is the swap's state for the receive loop, `sendPayload`, the shutdown loop and the maintenance pass at once, and patch 13's order (claim, stop the old engine, then read its sequence state) is what keeps OCB nonces unique; a slip there reuses a nonce, which no owner test would see) | P3c |
+| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | converted → `MoshContactHealthMachine` | P3c |
 | MOSH-08 | Recovery redial cooldown | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | L/L | leave: one timestamp | — |
-| MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
+| MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert (deferred: every datagram's send, retransmission, ack and heartbeat; patches 2, 3, 8 and 15 depend on what is recorded before each send suspends, so a machine would move the wire's timing and state numbering, which only the real-server suite checks) | P3c |
 | MOSH-10 | mosh availability file | `Sources/Waycar/Transport/MoshAvailabilityStore.swift` | implicit | M/L | leave: two states, guarded | — |
-| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | convert; bug B-28 | P3c |
+| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | converted → `DatagramEndpointMachine`; bug B-28 fixed | P3c |
 | MOSH-12 | mosh screen history | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | M/H | leave: fallback handles missing bases | — |
 | MOSH-13 | ECMA-48 parser | `Packages/SwiftMosh/Sources/MoshCore/MoshScreen.swift` | explicit | L/M | explicit | — |
 | MOSH-14 | Fragment assembly | `Packages/SwiftMosh/Sources/MoshWire/WirePrimitives.swift` | implicit | L/L | leave: pure, reset in one place | — |
@@ -5441,7 +5680,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
 | B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | fixed (P3c, `7189b71c`): every reading takes a token, and only the latest reading's debounce settles. The regression test's `afterDebounce` seam is an init parameter defaulting to `{}`, like the existing `sleep:` seam: one empty `await` before each settle, no behaviour |
 | B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | fixed (P3c, `6bd2365f`): the pump is cancelled inside the close's task group once the timeout wins |
-| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | open |
+| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | fixed (P3c, `49778c26`): each connection's callbacks carry its token; a stopped connection's are ignored (not reachable from the app, which builds a new endpoint per engine) |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |

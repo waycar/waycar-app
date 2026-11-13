@@ -99,13 +99,16 @@ public actor MoshClientSession {
     /// Receive-failure backoff sleeps taken, for tests. (Waycar patch.)
     private var receiveBackoffCount = 0
 
-    /// When the last authenticated server datagram arrived, or the session
-    /// (re)started if none has since. Drives connectivity and the network
-    /// timeout. (Waycar patch.)
-    private var lastServerContactAtMs: UInt64 = 0
+    /// Contact with the server: when the last authenticated server datagram
+    /// arrived, or the session (re)started if none has since, and how that
+    /// silence is judged. Drives connectivity and the network timeout.
+    /// (Waycar patch.)
+    private var health: MoshContactHealthMachine
     /// The connectivity last published to `connectivityStream()`; nil while
     /// the session is not running. (Waycar patch.)
-    private(set) public var connectivity: MoshConnectivity?
+    public var connectivity: MoshConnectivity? {
+        health.connectivity
+    }
     private var connectivityContinuations: [UUID: AsyncStream<MoshConnectivity>.Continuation] = [:]
     /// The receive loop waiting for a transport replacement to connect,
     /// resumed once it is installed or the runtime stops. (Waycar patch.)
@@ -156,6 +159,8 @@ public actor MoshClientSession {
         self.clock = { TransportClock.nowMs() }
         self.pacingSleep = { try await Task.sleep(nanoseconds: $0 * 1_000_000) }
         self.currentRtoMs = Double(config.initialRtoMs)
+        self.health = MoshContactHealthMachine(
+            stallThresholdMs: config.stallThresholdMs, networkTimeoutMs: config.networkTimeoutMs)
     }
 
     init(
@@ -175,6 +180,8 @@ public actor MoshClientSession {
         self.clock = clock
         self.pacingSleep = pacingSleep
         self.currentRtoMs = Double(config.initialRtoMs)
+        self.health = MoshContactHealthMachine(
+            stallThresholdMs: config.stallThresholdMs, networkTimeoutMs: config.networkTimeoutMs)
     }
 
     public func start() async throws {
@@ -249,10 +256,9 @@ public actor MoshClientSession {
         currentRtoMs = Double(config.initialRtoMs)
         srttMs = nil
         rttvarMs = nil
-        lastServerContactAtMs = now // (Waycar patch)
 
         state = .running
-        updateConnectivity(nowMs: now) // (Waycar patch)
+        performHealth(health.handle(.started(nowMs: now))) // (Waycar patch)
         self.receiveTask = Task { [weak self] in
             await self?.receiveLoop()
         }
@@ -664,11 +670,10 @@ public actor MoshClientSession {
         // (Waycar patch) Measured from the last server datagram on the
         // process clock, which keeps counting while the process is
         // suspended, so the first pass after a long suspension ends it.
-        if now >= lastServerContactAtMs, now - lastServerContactAtMs >= UInt64(config.networkTimeoutMs) {
-            await failSession(.timeout(timeoutMs: config.networkTimeoutMs))
+        if let timeoutMs = performHealth(health.handle(.tick(nowMs: now))) {
+            await failSession(.timeout(timeoutMs: timeoutMs))
             return false
         }
-        updateConnectivity(nowMs: now) // (Waycar patch)
         do {
             try await processRetransmitQueue(nowMs: now)
             try await maybeSendAck(nowMs: now)
@@ -708,8 +713,7 @@ public actor MoshClientSession {
             // (Waycar patch) With network crypto on (always, in the app) the
             // engine returns only datagrams that authenticated: contact with
             // the server.
-            lastServerContactAtMs = clock()
-            updateConnectivity(nowMs: lastServerContactAtMs)
+            performHealth(health.handle(.contact(nowMs: clock(), judged: state == .running)))
             updateRtt(from: incoming)
 
             let hostOps = try decodeHostOps(from: incoming)
@@ -855,17 +859,23 @@ public actor MoshClientSession {
         try? await processRetransmitQueue(nowMs: now)
     }
 
-    /// Publishes a connectivity change, judged at `nowMs` from the last
-    /// server contact. (Waycar patch.)
-    private func updateConnectivity(nowMs: UInt64) {
-        guard state == .running else { return }
-        let silentMs = nowMs >= lastServerContactAtMs ? nowMs - lastServerContactAtMs : 0
-        let current: MoshConnectivity = silentMs >= UInt64(config.stallThresholdMs) ? .stalled : .connected
-        guard current != connectivity else { return }
-        connectivity = current
-        for continuation in connectivityContinuations.values {
-            continuation.yield(current)
+    /// Performs what the contact health machine asked: publishes a
+    /// connectivity change, and returns the timeout to fail the session
+    /// with when the silence expired. (Waycar patch.)
+    @discardableResult
+    private func performHealth(_ effects: [MoshContactHealthMachine.Effect]) -> UInt32? {
+        var expired: UInt32?
+        for effect in effects {
+            switch effect {
+            case .publish(let current):
+                for continuation in connectivityContinuations.values {
+                    continuation.yield(current)
+                }
+            case .expire(let timeoutMs):
+                expired = timeoutMs
+            }
         }
+        return expired
     }
 
     private func removeConnectivityContinuation(_ streamID: UUID) {
@@ -892,7 +902,7 @@ public actor MoshClientSession {
     }
 
     func _testLastServerContactAtMs() -> UInt64 {
-        lastServerContactAtMs
+        health.lastContactMs
     }
 
     func _testOlderBaseStateCount() -> Int {
@@ -1367,7 +1377,7 @@ public actor MoshClientSession {
         finishHostStreams()
         // (Waycar patch)
         resumeTransportWaiters()
-        connectivity = nil
+        performHealth(health.handle(.ended))
         let connectivityContinuations = connectivityContinuations.values
         self.connectivityContinuations.removeAll()
         for continuation in connectivityContinuations {
@@ -1382,7 +1392,7 @@ public actor MoshClientSession {
         maintenanceTask = nil
 
         // (Waycar patch) Connectivity is judged only while running.
-        connectivity = nil
+        performHealth(health.handle(.ended))
         resumeTransportWaiters()
         await cancelStartingEngine() // (Waycar patch)
         guard let activeEngine = engine else { return }

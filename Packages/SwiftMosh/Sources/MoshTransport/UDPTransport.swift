@@ -102,6 +102,11 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
     private let connectionFactory: (NWEndpoint.Host, NWEndpoint.Port, NWParameters) -> any UDPConnection
     private let queue = DispatchQueue(label: "swift.mosh.network.endpoint")
 
+    /// The connection's lifecycle; `connection` is the one it holds. Every
+    /// callback carries its connection's token, so a late callback from a
+    /// connection `stop()` already let go of cannot fail the next start or
+    /// its receives (B-28). (Waycar patch.)
+    private var machine = DatagramEndpointMachine()
     private var connection: (any UDPConnection)?
     private var startContinuation: CheckedContinuation<Void, Error>?
     private var receiveContinuations: [CheckedContinuation<TransportDatagram, Error>] = []
@@ -124,7 +129,7 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
     }
 
     public func start() async throws {
-        guard connection == nil else {
+        guard machine.state == .stopped else {
             throw TransportError.alreadyStarted
         }
 
@@ -137,12 +142,19 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
             parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.any), port: local)
         }
 
+        var token: UInt64?
+        for effect in machine.handle(.start) {
+            if case .open(let opened) = effect {
+                token = opened
+            }
+        }
+        guard let token else { throw TransportError.alreadyStarted }
         let connection = connectionFactory(NWEndpoint.Host(remote.host), remotePort, parameters)
         self.connection = connection
 
         connection.setStateUpdateHandler { [weak self] state in
             guard let self else { return }
-            Task { await self.handleConnectionState(state) }
+            Task { await self.handleConnectionState(state, of: token) }
         }
 
         connection.start(queue: queue)
@@ -150,22 +162,11 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
             startContinuation = continuation
         }
 
-        armReceiveLoop()
+        perform(machine.handle(.startReturned(connection: token)))
     }
 
     public func stop() async {
-        connection?.cancel()
-        connection = nil
-
-        startContinuation?.resume(throwing: TransportError.cancelled)
-        startContinuation = nil
-
-        let continuations = receiveContinuations
-        receiveContinuations.removeAll(keepingCapacity: false)
-        receiveBuffer.removeAll(keepingCapacity: false)
-        for continuation in continuations {
-            continuation.resume(throwing: TransportError.cancelled)
-        }
+        perform(machine.handle(.stop))
     }
 
     public func send(_ data: Data) async throws {
@@ -206,18 +207,64 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
         return endpointPort
     }
 
-    private func armReceiveLoop() {
+    /// Performs the machine's effects in order. `deliver` hands a completed
+    /// receive's datagram or error over.
+    private func perform(
+        _ effects: [DatagramEndpointMachine.Effect], deliver: () -> Void = {}
+    ) {
+        for effect in effects {
+            switch effect {
+            case .open:
+                // `start()` opens the connection with the token it minted.
+                break
+            case .resumeStart:
+                startContinuation?.resume()
+                startContinuation = nil
+            case .failAll(.network(let message)):
+                failAll(TransportError.networkFailure(message))
+            case .failAll(.cancelled):
+                failAll(TransportError.cancelled)
+            case .armReceive(let token):
+                armReceive(on: token)
+            case .deliverReceive:
+                deliver()
+            case .close:
+                close()
+            }
+        }
+    }
+
+    private func close() {
+        connection?.cancel()
+        connection = nil
+
+        startContinuation?.resume(throwing: TransportError.cancelled)
+        startContinuation = nil
+
+        let continuations = receiveContinuations
+        receiveContinuations.removeAll(keepingCapacity: false)
+        receiveBuffer.removeAll(keepingCapacity: false)
+        for continuation in continuations {
+            continuation.resume(throwing: TransportError.cancelled)
+        }
+    }
+
+    private func armReceive(on token: UInt64) {
         guard let connection else { return }
 
         connection.receiveMessage { [weak self] content, _, _, error in
             guard let self else { return }
-            Task { await self.handleReceive(content: content, error: error) }
+            Task { await self.handleReceive(content: content, error: error, of: token) }
         }
     }
 
-    private func handleReceive(content: Data?, error: NWError?) {
-        defer { armReceiveLoop() }
+    private func handleReceive(content: Data?, error: NWError?, of token: UInt64) {
+        perform(machine.handle(.receiveCompleted(connection: token))) {
+            deliverReceive(content: content, error: error)
+        }
+    }
 
+    private func deliverReceive(content: Data?, error: NWError?) {
         if let error {
             if let continuation = receiveContinuations.first {
                 receiveContinuations.removeFirst()
@@ -239,18 +286,14 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
         }
     }
 
-    private func handleConnectionState(_ state: NWConnection.State) {
-        switch state {
-        case .ready:
-            startContinuation?.resume()
-            startContinuation = nil
-        case .failed(let error):
-            failAll(TransportError.networkFailure(error.localizedDescription))
-        case .cancelled:
-            failAll(TransportError.cancelled)
-        default:
-            break
+    private func handleConnectionState(_ state: NWConnection.State, of token: UInt64) {
+        let report: DatagramEndpointMachine.Report = switch state {
+        case .ready: .ready
+        case .failed(let error): .failed(error.localizedDescription)
+        case .cancelled: .cancelled
+        default: .other
         }
+        perform(machine.handle(.reported(connection: token, report)))
     }
 
     private func failAll(_ error: TransportError) {
@@ -265,7 +308,9 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
     }
 
     func _testArmReceiveLoop() {
-        armReceiveLoop()
+        if let token = machine.connection {
+            armReceive(on: token)
+        }
     }
 
     /// Receives waiting for a datagram, so a test knows one is registered
