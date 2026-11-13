@@ -195,6 +195,182 @@ struct MessageJumpDeferredOwnerTests {
         try await waitUntil { !wiring.isJumpRunning }
         #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:turn"])
     }
+
+    /// A settle timer whose step already got its frame wakes later (its
+    /// sleep ignores cancellation): the wait id keeps it from timing out
+    /// the next step's wait.
+    @Test func aStaleSettleTimerCannotTimeOutTheNextStep() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        configuration.unchangedFramesBeforeEnd = 1
+        let sleeps = JumpSleepLedger()
+        var steps = 0
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in steps += 1 },
+            visibleMessages: { $0 == "TARGET" ? ["TARGET"] : [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer { sleeps.releaseAll() }
+        controller.frameDidChange("start")
+        let jump = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        controller.frameDidChange("one")
+        try await waitUntil { sleeps.started == 2 }
+        #expect(steps == 2)
+        sleeps.release(0)
+        try await waitUntil { sleeps.finished == 1 }
+        #expect(controller.isRunning)
+        #expect(steps == 2)
+        controller.frameDidChange("TARGET")
+        #expect(await jump.value == .found)
+        #expect(!controller.isRunning)
+    }
+
+    /// The live wait's own timer does time it out.
+    @Test func theLiveSettleTimerTimesOutItsStep() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        configuration.unchangedFramesBeforeEnd = 1
+        let sleeps = JumpSleepLedger()
+        var steps = 0
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in steps += 1 },
+            visibleMessages: { _ in [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer { sleeps.releaseAll() }
+        controller.frameDidChange("start")
+        let jump = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        sleeps.release(0)
+        #expect(await jump.value == .reachedEnd)
+        #expect(steps == 1)
+        #expect(!controller.lastRunMovedViewport)
+    }
+
+    /// An enclosing-task cancel whose handler reaches the main actor only
+    /// after its run ended, with no run in progress, changes nothing: the
+    /// next run walks normally.
+    @Test func aCancelHandlerLandingBetweenRunsDoesNotPoisonTheNext() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        let sleeps = JumpSleepLedger()
+        let barrier = DeferredOwnerGate()
+        var passed = false
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in },
+            visibleMessages: { $0 == "TARGET" ? ["TARGET"] : [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer {
+            barrier.open()
+            sleeps.releaseAll()
+        }
+        controller.enclosingCancelHandlerBarrier = { await barrier.wait() }
+        controller.enclosingCancelHandlerDidPassPoisonWindow = { passed = true }
+        controller.frameDidChange("start")
+        let first = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        controller.frameDidChange("one")
+        first.cancel()
+        #expect(await first.value == .cancelled)
+        try await waitUntil { barrier.isWaiting }
+        #expect(!controller.isRunning)
+        barrier.open()
+        try await waitUntil { passed }
+        let second = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 2 }
+        controller.frameDidChange("TARGET")
+        #expect(await second.value == .found)
+    }
+
+    /// A reset drops the transcript read in flight and its pending reread:
+    /// the old read's answer reaches nobody, and a read started after the
+    /// reset is the one a later refresh coalesces behind.
+    @Test func aResetDropsTheReadInFlightAndItsReread() async throws {
+        let gates = [DeferredOwnerGate(), DeferredOwnerGate(), DeferredOwnerGate()]
+        let snapshot = HarnessJumpCaptures.transcript(
+            kind: "pi", messages: [("turn", .user, "Explain the parser changes")])
+        var reads = 0
+        var delivered = 0
+        let wiring = AgentMessageJumpWiring(readTranscript: {
+            reads += 1
+            await gates[min(reads, 3) - 1].wait()
+            return snapshot
+        }, jumpUsesTranscript: true)
+        defer {
+            gates.forEach { $0.open() }
+            wiring.resetSession()
+        }
+        wiring.onTranscript = { _ in delivered += 1 }
+        wiring.refreshTranscript()
+        try await waitUntil { gates[0].isWaiting }
+        wiring.refreshTranscript()
+        wiring.resetSession()
+        wiring.refreshTranscript()
+        try await waitUntil { gates[1].isWaiting }
+        gates[0].open()
+        wiring.refreshTranscript()
+        #expect(reads == 2)
+        #expect(delivered == 0)
+        gates[1].open()
+        try await waitUntil { delivered == 1 && gates[2].isWaiting }
+        #expect(reads == 3)
+        gates[2].open()
+        try await waitUntil { delivered == 2 }
+        #expect(reads == 3)
+    }
+
+    /// A snapshot held for a walk belongs to its session: a reset drops it,
+    /// and the old walk ending later applies nothing to the new session.
+    @Test func aSnapshotHeldForAWalkDiesWithItsSession() async throws {
+        let walk = DeferredOwnerGate()
+        let snapshot = HarnessJumpCaptures.transcript(
+            kind: "pi", messages: [("turn", .user, "Explain the parser changes")])
+        var delivered = 0
+        let wiring = AgentMessageJumpWiring(readTranscript: { snapshot }, jumpUsesTranscript: true)
+        defer { walk.open(); wiring.resetSession() }
+        wiring.onTranscript = { _ in delivered += 1 }
+        var walkEnded = false
+        wiring.runJump(.older) { _ in
+            await walk.wait()
+            walkEnded = true
+        }
+        try await waitUntil { walk.isWaiting && wiring.isJumpRunning }
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 1 }
+        let frame = "Explain the parser changes"
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty)
+        wiring.resetSession()
+        #expect(!wiring.isJumpRunning)
+        walk.open()
+        try await waitUntil { walkEnded }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty)
+        #expect(!wiring.isJumpRunning)
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 2 }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:turn"])
+    }
+}
+
+/// Settle-timer sleeps the test wakes one by one; each ignores
+/// cancellation, so a timer whose wait was answered can still wake late.
+@MainActor
+private final class JumpSleepLedger {
+    private var gates: [DeferredOwnerGate] = []
+    private(set) var finished = 0
+    var started: Int { gates.count }
+
+    func sleep() async {
+        let gate = DeferredOwnerGate()
+        gates.append(gate)
+        await gate.wait()
+        finished += 1
+    }
+
+    func release(_ index: Int) { gates[index].open() }
+
+    func releaseAll() { gates.forEach { $0.open() } }
 }
 
 @MainActor
