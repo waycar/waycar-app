@@ -38,14 +38,13 @@ permissions:
 
 jobs:
   # Full history brings the plugin-v* tags and the baseline (the push's
-  # previous commit); the read-only token lets the script ask origin for a
-  # tag missing locally.
+  # previous commit); the script asks the public origin anonymously for a
+  # tag missing locally, so the checkout keeps no credentials.
   plugin-version:
     name: Plugin version guard
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      # The guard's git ls-remote/fetch read the public origin anonymously.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0

@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      # actions: write lets actions/stale replace its saved state between runs.
+      actions: write
       issues: write
       pull-requests: write
     steps:

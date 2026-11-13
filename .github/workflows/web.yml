@@ -159,13 +159,12 @@ jobs:
           cargo test --locked
 
   # Same guard as ci-node.yml. Full history brings the plugin-v* tags and the
-  # baseline; credentials stay (read-only token) so the script can ask origin
-  # for a tag missing locally. It runs no third-party code.
+  # baseline; the script asks the public origin anonymously for a tag
+  # missing locally, so the checkout keeps no credentials.
   plugin-version:
     name: Plugin version guard
     runs-on: ubuntu-latest
     steps:
-      # The guard's git ls-remote/fetch read the public origin anonymously.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
