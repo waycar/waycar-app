@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Synchronization
 import Testing
 
 @testable import WaycarSSH
@@ -120,4 +121,44 @@ func closingAByteTransportReportsThePumpResult() async throws {
         #expect(failure(of: closed) == failure(of: outcome))
         transport.abort()
     }
+}
+
+/// B-27: a pump that is still running when the close's timeout runs out is
+/// cancelled then, so the close returns `timedOut` once the pump has ended,
+/// instead of waiting for a pump that nothing cancels.
+@Test("closing a byte transport past its timeout cancels the pump and returns")
+func closingAByteTransportPastItsTimeoutCancelsThePump() async throws {
+    let transport = try DirectTCPIPByteTransport()
+    let pump = try transport.takePumpDescriptor()
+    defer { Darwin.close(pump) }
+    transport.start(pumpEndingOnCancellation())
+
+    let closing = Task { () -> SSHError? in
+        do {
+            try await transport.close(timeout: .milliseconds(100))
+            return nil
+        } catch let error as SSHError {
+            return error
+        } catch {
+            return .channelFailed
+        }
+    }
+    let finished = Mutex<(done: Bool, error: SSHError?)>((false, nil))
+    let watcher = Task {
+        let result = await closing.value
+        finished.withLock { $0 = (true, result) }
+    }
+    // The close should be back within its timeout and the pump's own end;
+    // 10 s is far beyond both.
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while !finished.withLock({ $0.done }), ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(
+        finished.withLock { $0.done },
+        "the close was still waiting for its pump 10 s after a 100 ms timeout")
+    // Unblock a close stuck on the pump, so a failure ends the test.
+    transport.abort()
+    await watcher.value
+    #expect(finished.withLock { $0.error } == .timedOut)
 }

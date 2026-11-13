@@ -77,12 +77,13 @@ final class DirectTCPIPByteTransport: SSHByteTransport, @unchecked Sendable {
                 }
             }
             let first = await group.next() ?? .failure(.connectionFailed)
+            // Out of time: the pump is cancelled here, inside the group. The
+            // child awaiting `task.value` does not answer cancellation, and
+            // the group waits for it before returning, so a pump cancelled
+            // only after the group would never be cancelled at all (B-27).
+            if case .failure(.timedOut) = first { task.cancel() }
             group.cancelAll()
             return first
-        }
-        if case .failure(.timedOut) = result {
-            task.cancel()
-            _ = await task.value
         }
         try result.get()
     }
