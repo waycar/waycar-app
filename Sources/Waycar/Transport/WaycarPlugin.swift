@@ -82,7 +82,7 @@ enum WaycarPluginRequirement {
     /// older plugin that still meets its minimum is *offered* this version
     /// (``availableUpdate(for:)``), never gated or warned about. Bump it with
     /// every plugin version bump; never raise a minimum for it.
-    static let currentVersion = "2.6.0"
+    static let currentVersion = "2.6.1"
     /// The official installer, rebuilt from main on every plugin change.
     static let installScriptURL = "https://waycar.dev/install.sh"
     /// The one-line install and update command, as the docs print it.
