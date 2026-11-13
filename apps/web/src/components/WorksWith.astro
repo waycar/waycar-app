@@ -9,7 +9,7 @@ import { leadAgents, moreAgents, runtimes } from '../data/supported';
   <div class="wrap">
     <h2 id="works-title" class="visually-hidden">What Waycar works with</h2>
     <dl>
-      <div>
+      <div class="row">
         <dt>Runs with</dt>
         <dd>
           <ul>
@@ -24,7 +24,7 @@ import { leadAgents, moreAgents, runtimes } from '../data/supported';
           </ul>
         </dd>
       </div>
-      <div>
+      <div class="row">
         <dt>Agents</dt>
         <dd>
           <ul>
@@ -33,10 +33,121 @@ import { leadAgents, moreAgents, runtimes } from '../data/supported';
           </ul>
         </dd>
       </div>
-      <div>
+      <div class="row">
         <dt>Hosts</dt>
         <dd>macOS and Linux, over the SSH you already have</dd>
       </div>
     </dl>
   </div>
 </section>
+
+<style>
+  /* One quiet mono band under a hairline: a reference table, not a section.
+     Labels sit in a fixed column so the three rows scan as one. The page's
+     divider (or the next section's padding) closes it below. */
+  .works {
+    padding: 0 0 12px;
+  }
+
+  dl {
+    display: grid;
+    padding: 18px 0;
+    font: 13px / 1.5 var(--font-mono);
+    color: var(--text-2);
+    border-top: 1px solid var(--line);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+    align-items: baseline;
+    padding: 6px 0;
+  }
+
+  dt {
+    font-size: var(--fs-caption);
+    letter-spacing: var(--ls-label);
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  dd {
+    margin: 0;
+  }
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 0;
+  }
+
+  li {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  /* A middle dot between items, kept out of the reading order. */
+  li + li::before {
+    content: '·';
+    content: '·' / '';
+    margin: 0 10px;
+    color: var(--text-3);
+  }
+
+  code {
+    font: inherit;
+    color: var(--text);
+  }
+
+  .min {
+    color: var(--text-3);
+  }
+
+  .next {
+    padding: 1px 6px;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--violet-soft);
+    border: 1px solid rgb(var(--violet-soft-rgb) / 0.35);
+    border-radius: var(--radius-pill);
+  }
+
+  a {
+    color: var(--text-2);
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 3px;
+  }
+
+  a:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+
+  /* Phones: label over its line. */
+  @media (max-width: 560px) {
+    dl {
+      gap: 10px;
+      padding: 16px 0;
+      font-size: 12.5px;
+    }
+
+    .row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding: 0;
+    }
+
+    /* Lines wrap here, and a dot would start the next one: spacing alone. */
+    ul {
+      gap: 4px 16px;
+    }
+
+    li + li::before {
+      content: none;
+    }
+  }
+</style>
