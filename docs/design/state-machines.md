@@ -5013,8 +5013,8 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-23 | CORE-08 | A herdr-core Agent can stay Idle in a cached snapshot after a new turn starts | fixed (P3a, `032c2da7`): a notification that moves a terminal past its seen Done is a status change of that terminal |
 | B-24 | TMUX-06 | An older tmux inventory refresh can publish after a newer one | fixed (P3b, `7c49b616`): a refresh publishes only when none started after it has |
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
-| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | fixed (P3c, `5bfcd234`): every reading takes a token, and only the latest reading's debounce settles |
-| B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | fixed (P3c, `87511b7a`): the pump is cancelled inside the close's task group once the timeout wins |
+| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | fixed (P3c, `7189b71c`): every reading takes a token, and only the latest reading's debounce settles |
+| B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | fixed (P3c, `6bd2365f`): the pump is cancelled inside the close's task group once the timeout wins |
 | B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | open |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
