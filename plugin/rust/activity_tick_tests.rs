@@ -1181,3 +1181,200 @@ fn rust_transcript_plan_reader_has_no_plan_for_a_kind_without_plan_tools() {
     };
     assert_eq!(TranscriptPlanReader.read_plan(&request), PlanProgress::None);
 }
+
+// ---- ActivityTickMachine transitions -------------------------------------------
+
+mod activity_tick_machine {
+    use super::super::*;
+    use crate::state_machine::testing::handle_all;
+
+    /// A machine that took the lock at 0 and is at the top of a tick.
+    fn waiting() -> ActivityTickMachine {
+        let mut tick = ActivityTickMachine::default();
+        let effects = handle_all(
+            &mut tick,
+            [
+                TickEvent::Acquired {
+                    taken: true,
+                    now_ms: 0,
+                },
+                TickEvent::Beat(true),
+            ],
+        );
+        assert_eq!(
+            effects,
+            [TickEffect::Beat, TickEffect::Sleep(TICK_INTERVAL_MS)]
+        );
+        tick
+    }
+
+    fn checked(on: bool, live: bool) -> TickEvent {
+        TickEvent::Checked {
+            summaries_on: on,
+            episode_live: live,
+        }
+    }
+
+    #[test]
+    fn a_lock_not_taken_stops_locked_and_a_taken_one_sets_the_deadline() {
+        let mut tick = ActivityTickMachine::default();
+        let effects = tick.handle(TickEvent::Acquired {
+            taken: false,
+            now_ms: 5,
+        });
+        assert_eq!(effects, []);
+        assert_eq!(tick.state(), &TickState::Stopped(TickStop::Locked));
+        let tick = waiting();
+        assert_eq!(tick.deadline_ms(), TICK_MAX_RUN_MS);
+    }
+
+    #[test]
+    fn any_heartbeat_that_lost_the_lock_stops_locked() {
+        for then in [
+            AfterBeat::Wait,
+            AfterBeat::Read { index: 0, count: 1 },
+            AfterBeat::Compare,
+            AfterBeat::NextTick,
+        ] {
+            let mut tick = waiting();
+            tick.state = TickState::Beating { then };
+            assert_eq!(tick.handle(TickEvent::Beat(false)), []);
+            assert_eq!(tick.state(), &TickState::Stopped(TickStop::Locked));
+        }
+    }
+
+    #[test]
+    fn the_deadline_expires_after_a_wait() {
+        let mut tick = waiting();
+        assert_eq!(
+            tick.handle(TickEvent::Slept {
+                now_ms: TICK_MAX_RUN_MS
+            }),
+            []
+        );
+        assert_eq!(tick.state(), &TickState::Stopped(TickStop::Expired));
+    }
+
+    #[test]
+    fn the_checks_stop_disabled_clearing_progress_ended_or_idle() {
+        let mut tick = waiting();
+        let _ = tick.handle(TickEvent::Slept { now_ms: 1 });
+        assert_eq!(
+            tick.handle(checked(false, true)),
+            [TickEffect::ClearShownProgress]
+        );
+        assert_eq!(tick.state(), &TickState::Stopped(TickStop::Disabled));
+        let mut tick = waiting();
+        let _ = tick.handle(TickEvent::Slept { now_ms: 1 });
+        assert_eq!(tick.handle(checked(true, false)), []);
+        assert_eq!(tick.state(), &TickState::Stopped(TickStop::Ended));
+        let mut tick = waiting();
+        let effects = handle_all(
+            &mut tick,
+            [
+                TickEvent::Slept { now_ms: 1 },
+                checked(true, true),
+                TickEvent::Listed { working: 0 },
+            ],
+        );
+        assert_eq!(effects, [TickEffect::Check, TickEffect::List]);
+        assert_eq!(tick.state(), &TickState::Stopped(TickStop::Idle));
+    }
+
+    #[test]
+    fn each_agent_is_read_after_a_heartbeat_then_the_comparison_after_another() {
+        let mut tick = waiting();
+        let effects = handle_all(
+            &mut tick,
+            [
+                TickEvent::Slept { now_ms: 1 },
+                checked(true, true),
+                TickEvent::Listed { working: 2 },
+                TickEvent::Beat(true),
+                TickEvent::PlanDone { index: 0 },
+                TickEvent::Beat(true),
+                TickEvent::PlanDone { index: 1 },
+                TickEvent::Beat(true),
+            ],
+        );
+        assert_eq!(
+            effects,
+            [
+                TickEffect::Check,
+                TickEffect::List,
+                TickEffect::Beat,
+                TickEffect::ReadPlan(0),
+                TickEffect::Beat,
+                TickEffect::ReadPlan(1),
+                TickEffect::Beat,
+                TickEffect::Compare,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_change_pushes_then_beats_twice_before_the_next_wait_and_no_change_once() {
+        let compared = |changed: bool| {
+            let mut tick = waiting();
+            let _ = handle_all(
+                &mut tick,
+                [
+                    TickEvent::Slept { now_ms: 1 },
+                    checked(true, true),
+                    TickEvent::Listed { working: 1 },
+                    TickEvent::Beat(true),
+                    TickEvent::PlanDone { index: 0 },
+                    TickEvent::Beat(true),
+                ],
+            );
+            (tick.handle(TickEvent::Compared { changed }), tick)
+        };
+        let (effects, mut tick) = compared(true);
+        assert_eq!(effects, [TickEffect::Push]);
+        assert_eq!(
+            handle_all(
+                &mut tick,
+                [
+                    TickEvent::Pushed,
+                    TickEvent::Beat(true),
+                    TickEvent::Beat(true)
+                ]
+            ),
+            [
+                TickEffect::Beat,
+                TickEffect::Beat,
+                TickEffect::Sleep(TICK_INTERVAL_MS)
+            ]
+        );
+        let (effects, mut tick) = compared(false);
+        assert_eq!(effects, [TickEffect::Beat]);
+        assert_eq!(
+            tick.handle(TickEvent::Beat(true)),
+            [TickEffect::Sleep(TICK_INTERVAL_MS)]
+        );
+    }
+
+    #[test]
+    fn a_stale_plan_answer_and_events_a_state_never_asked_for_are_ignored() {
+        let mut tick = waiting();
+        let _ = handle_all(
+            &mut tick,
+            [
+                TickEvent::Slept { now_ms: 1 },
+                checked(true, true),
+                TickEvent::Listed { working: 2 },
+                TickEvent::Beat(true),
+            ],
+        );
+        assert_eq!(tick.handle(TickEvent::PlanDone { index: 1 }), []);
+        assert_eq!(tick.handle(TickEvent::Pushed), []);
+        assert_eq!(tick.state(), &TickState::Reading { index: 0, count: 2 });
+        let mut stopped = ActivityTickMachine::default();
+        let _ = stopped.handle(TickEvent::Acquired {
+            taken: false,
+            now_ms: 0,
+        });
+        assert_eq!(stopped.handle(TickEvent::Beat(true)), []);
+        assert_eq!(stopped.state(), &TickState::Stopped(TickStop::Locked));
+    }
+}

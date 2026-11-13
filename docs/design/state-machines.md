@@ -4540,6 +4540,51 @@ stateDiagram-v2
     settling --> finished: tickChecked
 ```
 
+### ActivityTickMachine
+
+- **File:** `plugin/rust/activity_tick.rs`
+- **Owner:** `run_activity_tick` (the detached `waycar activity-tick`) takes
+  and always releases `activity/tick.lock`, heartbeats it, sleeps on the
+  injected clock, reads the config and last-state, lists the Host (herdr,
+  tmux, a running core; never starts one) and prunes the plan-step map,
+  reads each Working Agent's plan into the store and the map, compares and
+  pushes through `run_progress_update`.
+- **States:** `acquiring`, `beating(then)`, `sleeping`, `checking`,
+  `listing`, `reading(index, count)`, `comparing`, `pushing`,
+  `stopped(locked | disabled | ended | idle | expired)`.
+- **Events:** `acquired(taken, now)`, `beat(kept)`, `slept(now)`,
+  `checked(summariesOn, episodeLive)`, `listed(working)`, `planDone(index)`,
+  `compared(changed)`, `pushed`.
+- **Effects:** `beat`, `sleep(ms)`, `check`, `clearShownProgress`, `list`,
+  `readPlan(index)`, `compare`, `push`.
+- **Tests:** `activity_tick::tests::activity_tick_machine` (transitions),
+  `activity_tick::tests` (the loop, unreadable plans, pocket mode, pruning
+  per backend, summaries off, the deadline, lock takeover before each read
+  and after the push, the detached spawn).
+- **Catalogue:** HT-02.
+
+```mermaid
+stateDiagram-v2
+    [*] --> acquiring
+    acquiring --> stopped: lock not taken (locked)
+    acquiring --> beating: taken / beat
+    beating --> stopped: lock lost (locked)
+    beating --> sleeping: kept, loop top / sleep
+    sleeping --> stopped: deadline (expired)
+    sleeping --> checking: slept / check
+    checking --> stopped: summaries off / clearShownProgress (disabled)
+    checking --> stopped: episode over (ended)
+    checking --> listing: live / list
+    listing --> stopped: nobody Working (idle)
+    listing --> beating: Working Agents / beat, readPlan
+    beating --> reading: kept / readPlan(i)
+    reading --> beating: planDone / beat
+    beating --> comparing: kept after the last read / compare
+    comparing --> pushing: changed / push
+    comparing --> beating: unchanged / beat, loop top
+    pushing --> beating: pushed / beat, then the loop top's
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4945,7 +4990,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
 | HT-01 | Notification delivery and dedupe | `plugin/rust/notify_core.rs` | implicit | H/H | convert | P4 |
-| HT-02 | Activity progress tick | `plugin/rust/activity_tick.rs` | implicit | H/H | convert | P4 |
+| HT-02 | Activity progress tick | `plugin/rust/activity_tick.rs` | implicit | H/H | converted → `ActivityTickMachine`; a plan read that outlives its turn can still put steps back until the next tick prunes them, as before | P4 |
 | HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `SessionReleaseMachine`; bug B-34 fixed (tmux) | P4 |
 | HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
 | HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | converted → `ApprovalWatchMachine` | P4 |

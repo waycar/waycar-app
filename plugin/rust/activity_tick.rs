@@ -72,6 +72,7 @@ use crate::plan_progress::{
     PLAN_READ_TIMEOUT_MS, PlanArgs, PlanProgress, SessionRef, core_session_reference,
     herdr_session_reference, read_plan_progress, tmux_session_reference,
 };
+use crate::state_machine::StateMachine;
 use crate::summary::store::{ProgressWrite, read_summary, write_progress};
 use crate::tmux::{Runner, is_tmux_pane_id, list_agents_with};
 
@@ -407,6 +408,7 @@ struct WorkingAgent {
 /// reader's terms; `statuses` maps every listed pane to its status;
 /// `herdr_listed`/`tmux_listed`/`core_listed` say which backends answered, so
 /// only their panes' absence means anything.
+#[derive(Default)]
 struct HostView {
     working: Vec<WorkingAgent>,
     statuses: HashMap<String, Option<String>>,
@@ -607,27 +609,253 @@ fn clear_shown_progress(host: &TickHost<'_>, deps: &TickDeps<'_>) -> Result<()> 
     Ok(())
 }
 
-/// One tick. Returns why the tick should stop, or `None` to keep going. Never
-/// calls a summary model: progress comes from the Agents' own plans. `beat`
-/// refreshes the lock and returns false once another tick took it.
-fn tick_once(
-    host: &TickHost<'_>,
-    deps: &TickDeps<'_>,
+/// The plan-step tick's loop (HT-02): heartbeats, the interval, the run's
+/// deadline, the per-tick checks, one plan read per Working Agent and the
+/// push, and why it stopped. Every heartbeat that finds the lock taken stops
+/// it as `Locked`: before each wait, before each plan read, after the reads
+/// and after a push. The owner ([`run_activity_tick`]) takes and releases the
+/// lock, sleeps on the injected clock, lists the Host, reads plans and writes
+/// the store, the plan-step map and the push.
+#[derive(Debug)]
+pub struct ActivityTickMachine {
+    state: TickState,
     deadline_ms: u64,
-    beat: &dyn Fn() -> Result<bool>,
-) -> Result<Option<TickStop>> {
-    let clock = deps.activity.clock;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickState {
+    Acquiring,
+    /// A heartbeat was asked for; `then` is what follows a kept lock.
+    Beating {
+        then: AfterBeat,
+    },
+    Sleeping,
+    /// Reading the config and last-state.
+    Checking,
+    /// Listing the Host's Agents and pruning the plan-step map.
+    Listing,
+    /// Reading the plan of Working Agent `index` of `count`.
+    Reading {
+        index: usize,
+        count: usize,
+    },
+    /// Comparing what a push would show with the last push.
+    Comparing,
+    Pushing,
+    Stopped(TickStop),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AfterBeat {
+    /// The interval's wait (the loop's top).
+    Wait,
+    Read {
+        index: usize,
+        count: usize,
+    },
+    Compare,
+    /// Back to the loop's top, which beats again.
+    NextTick,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickEvent {
+    Acquired {
+        taken: bool,
+        now_ms: u64,
+    },
+    /// Whether the heartbeat found the lock still ours.
+    Beat(bool),
+    Slept {
+        now_ms: u64,
+    },
+    Checked {
+        summaries_on: bool,
+        episode_live: bool,
+    },
+    Listed {
+        working: usize,
+    },
+    /// The plan of the Agent at `index` was read and stored (or unreadable).
+    PlanDone {
+        index: usize,
+    },
+    Compared {
+        changed: bool,
+    },
+    Pushed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickEffect {
+    Beat,
+    Sleep(u64),
+    /// Read the config and last-state.
+    Check,
+    /// Summaries are off: take the shown progress off the Live Activity.
+    ClearShownProgress,
+    List,
+    ReadPlan(usize),
+    Compare,
+    Push,
+}
+
+impl Default for ActivityTickMachine {
+    fn default() -> Self {
+        Self {
+            state: TickState::Acquiring,
+            deadline_ms: 0,
+        }
+    }
+}
+
+impl ActivityTickMachine {
+    /// The run's end (epoch ms), set when the lock was taken.
+    pub fn deadline_ms(&self) -> u64 {
+        self.deadline_ms
+    }
+
+    fn stop(&mut self, why: TickStop) -> Vec<TickEffect> {
+        self.state = TickState::Stopped(why);
+        Vec::new()
+    }
+
+    fn beat(&mut self, then: AfterBeat) -> Vec<TickEffect> {
+        self.state = TickState::Beating { then };
+        vec![TickEffect::Beat]
+    }
+}
+
+impl StateMachine for ActivityTickMachine {
+    type State = TickState;
+    type Event = TickEvent;
+    type Effect = TickEffect;
+
+    fn state(&self) -> &TickState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: TickEvent) -> Vec<TickEffect> {
+        match (self.state, event) {
+            (TickState::Acquiring, TickEvent::Acquired { taken, now_ms }) => {
+                if !taken {
+                    return self.stop(TickStop::Locked);
+                }
+                // Plan reads stop at the run's end, on top of their own
+                // per-read timeout.
+                self.deadline_ms = now_ms + TICK_MAX_RUN_MS;
+                self.beat(AfterBeat::Wait)
+            }
+            (TickState::Beating { .. }, TickEvent::Beat(false)) => self.stop(TickStop::Locked),
+            (TickState::Beating { then }, TickEvent::Beat(true)) => match then {
+                AfterBeat::Wait => {
+                    self.state = TickState::Sleeping;
+                    vec![TickEffect::Sleep(TICK_INTERVAL_MS)]
+                }
+                AfterBeat::Read { index, count } => {
+                    self.state = TickState::Reading { index, count };
+                    vec![TickEffect::ReadPlan(index)]
+                }
+                AfterBeat::Compare => {
+                    self.state = TickState::Comparing;
+                    vec![TickEffect::Compare]
+                }
+                AfterBeat::NextTick => self.beat(AfterBeat::Wait),
+            },
+            (TickState::Sleeping, TickEvent::Slept { now_ms }) => {
+                if now_ms >= self.deadline_ms {
+                    return self.stop(TickStop::Expired);
+                }
+                self.state = TickState::Checking;
+                vec![TickEffect::Check]
+            }
+            (
+                TickState::Checking,
+                TickEvent::Checked {
+                    summaries_on,
+                    episode_live,
+                },
+            ) => {
+                if !summaries_on {
+                    self.state = TickState::Stopped(TickStop::Disabled);
+                    return vec![TickEffect::ClearShownProgress];
+                }
+                if !episode_live {
+                    return self.stop(TickStop::Ended);
+                }
+                self.state = TickState::Listing;
+                vec![TickEffect::List]
+            }
+            (TickState::Listing, TickEvent::Listed { working }) => {
+                if working == 0 {
+                    return self.stop(TickStop::Idle);
+                }
+                self.beat(AfterBeat::Read {
+                    index: 0,
+                    count: working,
+                })
+            }
+            (TickState::Reading { index, count }, TickEvent::PlanDone { index: done })
+                if done == index =>
+            {
+                if index + 1 < count {
+                    self.beat(AfterBeat::Read {
+                        index: index + 1,
+                        count,
+                    })
+                } else {
+                    self.beat(AfterBeat::Compare)
+                }
+            }
+            (TickState::Comparing, TickEvent::Compared { changed }) => {
+                if changed {
+                    self.state = TickState::Pushing;
+                    vec![TickEffect::Push]
+                } else {
+                    self.beat(AfterBeat::Wait)
+                }
+            }
+            (TickState::Pushing, TickEvent::Pushed) => self.beat(AfterBeat::NextTick),
+            (
+                TickState::Acquiring
+                | TickState::Beating { .. }
+                | TickState::Sleeping
+                | TickState::Checking
+                | TickState::Listing
+                | TickState::Reading { .. }
+                | TickState::Comparing
+                | TickState::Pushing
+                | TickState::Stopped(_),
+                _,
+            ) => Vec::new(),
+        }
+    }
+}
+
+/// What one tick has read so far, for the effects that follow.
+struct TickRead {
+    last_state: Value,
+    view: HostView,
+}
+
+/// The config and last-state check of one tick: whether summaries are on and
+/// the episode is live, and the last-state when it is.
+fn check_tick(host: &TickHost<'_>) -> Result<(NotificationConfig, Option<Value>)> {
     let config =
         read_notification_config(&host.config_dir.to_string_lossy()).map_err(CliError::failure)?;
-    if !config.summary_enabled {
-        clear_shown_progress(host, deps)?;
-        return Ok(Some(TickStop::Disabled));
-    }
-    let last_state = match read_last_state(host.state_dir) {
-        Some(state) if js_get(&state, "ended") != Some(&Value::Bool(true)) => state,
-        _ => return Ok(Some(TickStop::Ended)),
-    };
-    let view = list_host(host, &config, deps)?;
+    let last_state = read_last_state(host.state_dir)
+        .filter(|state| js_get(state, "ended") != Some(&Value::Bool(true)));
+    Ok((config, last_state))
+}
+
+/// List the Host and prune the plan-step map. Never calls a summary model:
+/// progress comes from the Agents' own plans.
+fn list_tick(
+    host: &TickHost<'_>,
+    deps: &TickDeps<'_>,
+    config: &NotificationConfig,
+) -> Result<HostView> {
+    let view = list_host(host, config, deps)?;
     // Steps outlive a pane only while it is Working or Blocked (frozen); a pane
     // its backend no longer lists, or whose turn ended, loses them. A backend
     // that did not answer says nothing about its panes.
@@ -647,65 +875,70 @@ fn tick_once(
             !listed || kept
         });
     })?;
-    if view.working.is_empty() {
-        return Ok(Some(TickStop::Idle));
-    }
-    for agent in &view.working {
-        if !beat()? {
-            return Ok(Some(TickStop::Locked));
-        }
-        let read = deps.plan.read_plan(&PlanRequest {
-            agent: &agent.kind,
-            session: agent.session.as_ref(),
-            cwd: agent.cwd.as_deref(),
+    Ok(view)
+}
+
+/// Read one Working Agent's plan and store it. Could not read (timeout,
+/// error): keep what is stored and shown.
+fn read_tick_plan(
+    host: &TickHost<'_>,
+    deps: &TickDeps<'_>,
+    agent: &WorkingAgent,
+    deadline_ms: u64,
+) -> Result<()> {
+    let clock = deps.activity.clock;
+    let read = deps.plan.read_plan(&PlanRequest {
+        agent: &agent.kind,
+        session: agent.session.as_ref(),
+        cwd: agent.cwd.as_deref(),
+        pane_id: &agent.pane_id,
+        config_dir: host.config_dir,
+        terminal_id: agent.terminal_id.as_deref(),
+        env: host.env,
+        deadline_ms,
+        timeout: Duration::from_millis(PLAN_READ_TIMEOUT_MS),
+    });
+    let steps = match read {
+        PlanProgress::Unreadable => return Ok(()),
+        PlanProgress::Steps(steps) => Some(steps),
+        PlanProgress::None => None,
+    };
+    // Steps only: the stored phase stays, and a record written in another
+    // status (or none) is left alone; the tick's own map covers that case.
+    let progress = steps.map_or_else(
+        || json!({}),
+        |steps| json!({ "done": steps.done, "total": steps.total }),
+    );
+    write_progress(
+        &host.config_dir.to_string_lossy(),
+        &ProgressWrite {
             pane_id: &agent.pane_id,
-            config_dir: host.config_dir,
-            terminal_id: agent.terminal_id.as_deref(),
-            env: host.env,
-            deadline_ms,
-            timeout: Duration::from_millis(PLAN_READ_TIMEOUT_MS),
-        });
-        // Could not read (timeout, error): keep what is stored and shown.
-        let steps = match read {
-            PlanProgress::Unreadable => continue,
-            PlanProgress::Steps(steps) => Some(steps),
-            PlanProgress::None => None,
-        };
-        // Steps only: the stored phase stays, and a record written in another
-        // status (or none) is left alone; the tick's own map covers that case.
-        let progress = steps.map_or_else(
-            || json!({}),
-            |steps| json!({ "done": steps.done, "total": steps.total }),
-        );
-        write_progress(
-            &host.config_dir.to_string_lossy(),
-            &ProgressWrite {
-                pane_id: &agent.pane_id,
-                status: "working",
-                progress: &progress,
-                ts: clock.now_ms() as i64,
-            },
-        )?;
-        update_plan_steps(host.state_dir, |map| match steps {
-            None => {
-                map.shift_remove(&agent.pane_id);
-            }
-            Some(steps) => {
-                map.insert(
-                    agent.pane_id.clone(),
-                    json!({ "done": steps.done, "total": steps.total }),
-                );
-            }
-        })?;
-    }
-    if !beat()? {
-        return Ok(Some(TickStop::Locked));
-    }
-    // Push when a visible Working Agent's estimate differs from the last push:
-    // this tick's steps, or an estimate the summary refresh wrote.
-    let visible = js_get(&last_state, "visible").and_then(Value::as_array);
+            status: "working",
+            progress: &progress,
+            ts: clock.now_ms() as i64,
+        },
+    )?;
+    update_plan_steps(host.state_dir, |map| match steps {
+        None => {
+            map.shift_remove(&agent.pane_id);
+        }
+        Some(steps) => {
+            map.insert(
+                agent.pane_id.clone(),
+                json!({ "done": steps.done, "total": steps.total }),
+            );
+        }
+    })?;
+    Ok(())
+}
+
+/// Whether a visible Working Agent's estimate differs from the last push:
+/// this tick's steps, or an estimate the summary refresh wrote.
+fn tick_changed(host: &TickHost<'_>, read: &TickRead) -> bool {
+    let (last_state, view) = (&read.last_state, &read.view);
+    let visible = js_get(last_state, "visible").and_then(Value::as_array);
     let plan_steps = read_plan_steps(host.state_dir);
-    let changed = view.working.iter().any(|agent| {
+    view.working.iter().any(|agent| {
         if visible.is_some_and(|visible| {
             !visible
                 .iter()
@@ -719,45 +952,90 @@ fn tick_once(
             plan_steps.get(&agent.pane_id),
         )
         .map_or(Value::Null, |progress| progress.wire_json());
-        let pushed = non_null(js_get_opt(js_get(&last_state, "progress"), &agent.pane_id))
+        let pushed = non_null(js_get_opt(js_get(last_state, "progress"), &agent.pane_id))
             .map_or(Value::Null, Value::clone);
         jsx::stringify(&shown) != jsx::stringify(&pushed)
-    });
-    if changed {
-        // A relay failure leaves last-state behind the store, so the next tick
-        // tries again.
-        let _ = (deps.send_update)(&progress_request(host), &deps.activity);
-        if !beat()? {
-            return Ok(Some(TickStop::Locked));
-        }
-    }
-    Ok(None)
+    })
 }
 
-/// The tick loop. Returns why it stopped: [`TickStop::Locked`] (another tick
-/// runs or took over), `Disabled`, `Ended`, `Idle`, or `Expired`.
+/// The tick loop through [`ActivityTickMachine`]. Returns why it stopped:
+/// [`TickStop::Locked`] (another tick runs or took over), `Disabled`,
+/// `Ended`, `Idle`, or `Expired`.
 pub fn run_activity_tick(host: &TickHost<'_>, deps: &TickDeps<'_>) -> Result<TickStop> {
     let clock = deps.activity.clock;
-    if !acquire_tick_lock(host.state_dir, clock.now_ms())? {
+    let mut machine = ActivityTickMachine::default();
+    let taken = acquire_tick_lock(host.state_dir, clock.now_ms())?;
+    let first = machine.handle(TickEvent::Acquired {
+        taken,
+        now_ms: clock.now_ms(),
+    });
+    if !taken {
         return Ok(TickStop::Locked);
     }
-    let beat = || heartbeat_tick_lock(host.state_dir, clock.now_ms());
     let stop = (|| -> Result<TickStop> {
-        // Plan reads stop at the run's end, on top of their own per-read
-        // timeout.
-        let deadline = clock.now_ms() + TICK_MAX_RUN_MS;
-        loop {
-            if !beat()? {
-                return Ok(TickStop::Locked);
-            }
-            clock.sleep(Duration::from_millis(TICK_INTERVAL_MS));
-            if clock.now_ms() >= deadline {
-                return Ok(TickStop::Expired);
-            }
-            if let Some(stop) = tick_once(host, deps, deadline, &beat)? {
-                return Ok(stop);
-            }
+        let mut config = None;
+        let mut read: Option<TickRead> = None;
+        let mut pending: std::collections::VecDeque<TickEffect> = first.into();
+        while let Some(effect) = pending.pop_front() {
+            let event = match effect {
+                TickEffect::Beat => {
+                    TickEvent::Beat(heartbeat_tick_lock(host.state_dir, clock.now_ms())?)
+                }
+                TickEffect::Sleep(ms) => {
+                    clock.sleep(Duration::from_millis(ms));
+                    TickEvent::Slept {
+                        now_ms: clock.now_ms(),
+                    }
+                }
+                TickEffect::Check => {
+                    let (checked, last_state) = check_tick(host)?;
+                    let event = TickEvent::Checked {
+                        summaries_on: checked.summary_enabled,
+                        episode_live: last_state.is_some(),
+                    };
+                    config = Some(checked);
+                    read = last_state.map(|last_state| TickRead {
+                        last_state,
+                        view: HostView::default(),
+                    });
+                    event
+                }
+                TickEffect::ClearShownProgress => {
+                    clear_shown_progress(host, deps)?;
+                    continue;
+                }
+                TickEffect::List => {
+                    let (Some(config), Some(read)) = (&config, &mut read) else {
+                        continue;
+                    };
+                    read.view = list_tick(host, deps, config)?;
+                    TickEvent::Listed {
+                        working: read.view.working.len(),
+                    }
+                }
+                TickEffect::ReadPlan(index) => {
+                    if let Some(agent) = read.as_ref().and_then(|r| r.view.working.get(index)) {
+                        read_tick_plan(host, deps, agent, machine.deadline_ms())?;
+                    }
+                    TickEvent::PlanDone { index }
+                }
+                TickEffect::Compare => TickEvent::Compared {
+                    changed: read.as_ref().is_some_and(|read| tick_changed(host, read)),
+                },
+                TickEffect::Push => {
+                    // A relay failure leaves last-state behind the store,
+                    // so the next tick tries again.
+                    let _ = (deps.send_update)(&progress_request(host), &deps.activity);
+                    TickEvent::Pushed
+                }
+            };
+            pending.extend(machine.handle(event));
         }
+        Ok(match machine.state() {
+            TickState::Stopped(why) => *why,
+            // Unreachable: the loop ends only once the machine stopped.
+            _ => TickStop::Locked,
+        })
     })();
     release_tick_lock(host.state_dir);
     stop
