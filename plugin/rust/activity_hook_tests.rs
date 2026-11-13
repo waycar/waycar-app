@@ -565,6 +565,125 @@ fn an_invocation_that_starts_while_another_is_sending_does_not_send_it_again() {
     assert_eq!(left, Vec::<String>::new());
 }
 
+/// A fake clock that runs `on_sleep(n)` at its n-th sleep (1-based), as
+/// another hook process acting meanwhile.
+struct ActingClock<'a> {
+    clock: FakeClock,
+    count: std::sync::atomic::AtomicUsize,
+    on_sleep: Box<dyn Fn(usize) + Sync + 'a>,
+}
+
+impl Clock for ActingClock<'_> {
+    fn now_ms(&self) -> u64 {
+        self.clock.now_ms()
+    }
+
+    fn sleep(&self, duration: Duration) {
+        self.clock.sleep(duration);
+        let n = self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        (self.on_sleep)(n);
+    }
+}
+
+fn newer_claim(sb: &Sandbox) {
+    fs::write(
+        sb.activity_dir().join("claim.json"),
+        json!({ "pid": 1, "claimed_at_ms": 9_000_000_000_000u64 }).to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_newer_claim_during_the_debounce_sends_nothing() {
+    let sb = Sandbox::new("activity-hook");
+    let clock = ActingClock {
+        clock: FakeClock::new(),
+        count: Default::default(),
+        on_sleep: Box::new(|n| {
+            if n == 1 {
+                newer_claim(&sb);
+            }
+        }),
+    };
+    let herdr = FakeHerdr::new(vec![default_agent()]);
+    let relay = FakeRelay::ok();
+    let run = FakeRun::new(None, Some(&herdr));
+    let hook = Hook {
+        sb: &sb,
+        run: &run,
+        relay: &relay,
+        clock: &clock,
+    };
+    sb.write_config(Some(RELAY_URL), json!({}));
+    sb.write_registration(&[device()], Value::Null);
+    hook.herdr(&event("working"));
+    assert_eq!(relay.count(), 0);
+    assert_eq!(*clock.clock.sleeps.lock().unwrap(), [DEBOUNCE_MS]);
+}
+
+#[test]
+fn a_newer_claim_during_the_start_grace_takes_the_start_over() {
+    let sb = Sandbox::new("activity-hook");
+    let clock = ActingClock {
+        clock: FakeClock::new(),
+        count: Default::default(),
+        on_sleep: Box::new(|n| {
+            if n == 2 {
+                newer_claim(&sb);
+            }
+        }),
+    };
+    let herdr = FakeHerdr::new(vec![default_agent()]);
+    let relay = FakeRelay::ok();
+    let run = FakeRun::new(None, Some(&herdr));
+    let hook = Hook {
+        sb: &sb,
+        run: &run,
+        relay: &relay,
+        clock: &clock,
+    };
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[without_update_token(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    assert_eq!(relay.count(), 0, "the newer run decides the start");
+    assert_eq!(
+        *clock.clock.sleeps.lock().unwrap(),
+        [DEBOUNCE_MS, START_GRACE_MS]
+    );
+    assert!(!sb.activity_dir().join("start-state.json").exists());
+}
+
+#[test]
+fn a_start_after_an_undelivered_update_records_last_state_and_a_delivered_update_does_not_wait() {
+    // No live update token: nothing is delivered before the start, so the
+    // start writes last-state.
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(
+        &[without_update_token(
+            json!({ "live_activity_start": startup_registration() }),
+        )],
+        Value::Null,
+    );
+    hook.herdr(&event("working"));
+    assert_eq!(relay.sent(), [pair("start", START_TOKEN)]);
+    assert_eq!(read_last(&sb)["statuses"][PANE_ID], "working");
+    // A delivered update with no start candidate sleeps only the debounce.
+    let clock = FakeClock::new();
+    rig!(sb, herdr, relay, run, hook, clock; FakeRelay::ok(); vec![default_agent()]);
+    sb.write_config(Some(RELAY_URL), start_grace());
+    sb.write_registration(&[device()], Value::Null);
+    hook.herdr(&event("working"));
+    assert_eq!(relay.sent(), [pair("update", ACTIVITY_TOKEN_A)]);
+    assert_eq!(*clock.sleeps.lock().unwrap(), [DEBOUNCE_MS]);
+}
+
 // JS: "a send lock left by a dead process is broken"
 #[test]
 fn a_send_lock_left_by_a_dead_process_is_broken() {
