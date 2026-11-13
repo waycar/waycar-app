@@ -105,7 +105,7 @@ Waycar works with tmux 3.2 or later too. Same app, same install command. Run bot
 
 ## How it works: phone to machine, nothing in between
 
-Waycar talks to herdr, tmux, Herdr Core, Zellij, Codex or OpenCode over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later or Herdr Core, you're set. Codex and OpenCode servers start only when you tap Start. On tmux, run the install command for live status and alerts.
+Waycar talks to herdr, tmux or Herdr Core (and, from the next update, Zellij, Codex or OpenCode) over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later or Herdr Core, you're set. Codex and OpenCode servers start only when you tap Start. On tmux, run the install command for live status and alerts.
 
 The diagram:
 
@@ -192,7 +192,7 @@ The app has no accounts, ads, or cross-app tracking. The waycar.dev website runs
 
 ## Setup: one command on the Host, one scan on the phone
 
-1. **Install Waycar on the Host.** Do this once on each machine. The same command works for herdr, tmux, Herdr Core, Zellij, or more than one.
+1. **Install Waycar on the Host.** Do this once on each machine. The same command works for herdr, tmux, Herdr Core, or more than one.
 2. **Show a Pairing Code.** When it's done, the command offers to draw a QR code right in your terminal (herdr and tmux Hosts alike). Run it again anytime to pair another device. Press `c` to copy the code (on Linux it shows the code so you can select it).
 3. **Scan it in Waycar.** Waycar makes your keys, pins the machine's host key, and your agents appear. For mosh, also install `mosh-server` on the Host.
 

@@ -33,5 +33,5 @@ export const WAYCAR_ROWS: Record<CapabilityId, Cell> = {
   desktop: { level: 'no', text: 'No native desktop app or web client' },
   source: { level: 'info', text: 'Open source app + Host Tools, Apache-2.0, on GitHub' },
   price: { level: 'info', text: 'Free' },
-  'general-ssh': { level: 'no', text: 'No. Needs herdr, tmux, Herdr Core, Zellij, Codex or OpenCode' },
+  'general-ssh': { level: 'no', text: 'No. Needs herdr, tmux or Herdr Core; more in next update' },
 };

@@ -99,32 +99,32 @@ const help = [
   <section class="section intro" aria-labelledby="carplay-title">
     <div class="wrap">
       <div class="top">
-      <div class="sec-head">
-        <span class="kicker">On the drive</span>
-        <h1 id="carplay-title" class="sec-title">Your agents, out loud. <span class="muted">Nothing to read.</span></h1>
-        <p class="sec-lede">
-          Waycar in CarPlay tells you which coding agents need you. Ask one how it's going, or answer its approval, by
-          voice. The car's screen shows only the list, and who you're talking to.
-        </p>
-        <div class="get">
-          <AppStoreCta kind="button">Get Waycar</AppStoreCta>
-          <span class="get-note">{ON_APP_STORE && <><span>Free on the App Store</span> · </>}<span>iPhone, iOS 26.4 or later</span></span>
+        <div class="sec-head">
+          <span class="kicker">On the drive</span>
+          <h1 id="carplay-title" class="sec-title">Your agents, out loud. <span class="muted">Nothing to read.</span></h1>
+          <p class="sec-lede">
+            Waycar in CarPlay tells you which coding agents need you. Ask one how it's going, or answer its approval, by
+            voice. The car's screen shows only the list, and who you're talking to.
+          </p>
+          <div class="get">
+            <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+            <span class="get-note">{ON_APP_STORE && <><span>Free on the App Store</span> · </>}<span>iPhone, iOS 26.4 or later</span></span>
+          </div>
         </div>
-      </div>
 
-      <figure class="photo">
-        <Image
-          src={voicePhoto}
-          alt="A car's CarPlay display showing Waycar listening: the title 'Ask Waycar · 4' above a waveform, and nothing else"
-          widths={[480, 720, 1080, 1440]}
-          sizes="(min-width: 1080px) 560px, calc(100vw - 40px)"
-          format="webp"
-          quality={80}
-          loading="eager"
-          fetchpriority="high"
-        />
-        <figcaption>Asking an agent: its name, and a waveform while Waycar listens. On a real car's display, parked.</figcaption>
-      </figure>
+        <figure class="photo">
+          <Image
+            src={voicePhoto}
+            alt="A car's CarPlay display showing Waycar listening: the title 'Ask Waycar · 4' above a waveform"
+            widths={[480, 720, 1080, 1440]}
+            sizes="(min-width: 1080px) 560px, calc(100vw - 40px)"
+            format="webp"
+            quality={80}
+            loading="eager"
+            fetchpriority="high"
+          />
+          <figcaption>Asking an agent: its name, and a waveform while Waycar listens. On a real car's display, parked.</figcaption>
+        </figure>
       </div>
 
       <div class="glass stage">
@@ -183,19 +183,19 @@ const help = [
       </div>
 
       <div class="screen">
-      <figure class="photo">
-        <Image
-          src={listPhoto}
-          alt="A car's CarPlay display showing the Waycar list: 'Paperclip · vault' working, with a progress ring and 'wrapping up · now', then under Idle 'Waycar · 4', 'Paperclip · gh-email' and 'Paperclip · pclip-agent', each idle for 2 minutes"
-          widths={[640, 960, 1400, 2048]}
-          sizes="(min-width: 1248px) 720px, (min-width: 861px) 60vw, calc(100vw - 40px)"
-          format="webp"
-          quality={80}
-        />
-        <figcaption>One agent working, with its progress ring, then three idle. On a real car's display, parked.</figcaption>
-      </figure>
+        <figure class="photo">
+          <Image
+            src={listPhoto}
+            alt="A car's CarPlay display showing the Waycar list: 'Paperclip · vault' working, with a progress ring and 'wrapping up · now', then under Idle 'Waycar · 4', 'Paperclip · gh-email' and 'Paperclip · pclip-agent', each idle for 2 minutes"
+            widths={[640, 960, 1400, 2048]}
+            sizes="(min-width: 1248px) 720px, (min-width: 861px) 60vw, calc(100vw - 40px)"
+            format="webp"
+            quality={80}
+          />
+          <figcaption>One agent working, with its progress ring, then three idle. On a real car's display, parked.</figcaption>
+        </figure>
 
-      <ol class="rows" aria-label="What the list shows, top to bottom">
+        <ol class="rows" aria-label="What the list shows, top to bottom">
           {
             rows.map((row) => (
               <li>
