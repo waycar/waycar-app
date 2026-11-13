@@ -13,6 +13,7 @@ pub mod activity_state;
 pub mod activity_tick;
 pub mod addresses;
 pub mod approval_watch;
+pub mod approval_watch_machine;
 pub mod atomic;
 pub mod authorized_keys;
 pub mod base64;

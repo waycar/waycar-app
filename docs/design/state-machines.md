@@ -4319,6 +4319,47 @@ stateDiagram-v2
     writing --> failed: tmux failed
 ```
 
+### ApprovalWatchMachine
+
+- **File:** `plugin/rust/approval_watch_machine.rs`
+- **Owner:** `approval_watch::watch_approval` mints the token, reads the pane
+  (options plus the kind's screen rule), sleeps on the injected clock, makes
+  the `if-shell -F` compare-and-set writes and notifies.
+- **States:** `starting`, `claiming(firstRead)`, `waiting(wait)`,
+  `writingBlocked(wait)`, `held(wait, blockedSeq)`,
+  `writingWorking(wait, blockedSeq)`, `leaving(wait)`, `finished`;
+  `wait` is the poke, seq and deadline of the current `PreToolUse`.
+- **Events:** `started(pane?, otherHolder)`, `claimed(watch?, now)`,
+  `read(pane?, now)`, `blockedWritten(seq?)`, `workingWritten(ok)`,
+  `left(watch?)`.
+- **Effects:** `claim(onlyIf?)`, `read(afterMs?)`, `writeStatus(status,
+  previousSeq, token)`, `notify(status)`, `leave(poke)`.
+- **Tests:** `approval_watch_machine::tests` (transitions),
+  `approval_watch::tests` (dialog, denial, poke restarts, a hook's write
+  before each write, a lost claim, a gone pane, a real tmux).
+- **Catalogue:** HT-05.
+
+```mermaid
+stateDiagram-v2
+    [*] --> starting
+    starting --> finished: pane gone or another live watch
+    starting --> claiming: started / claim
+    claiming --> finished: claim lost
+    claiming --> waiting: claimed, judge the first read
+    waiting --> waiting: read, working, no dialog / read after POLL_MS
+    waiting --> writingBlocked: read, dialog shown / writeStatus blocked
+    waiting --> leaving: another status, seq or the deadline / leave
+    waiting --> finished: pane gone or token lost
+    writingBlocked --> held: written / notify, read after HELD_POLL_MS
+    writingBlocked --> leaving: lost / leave
+    held --> held: dialog still shown
+    held --> writingWorking: dialog gone / writeStatus working
+    held --> leaving: another write or pane gone / leave
+    writingWorking --> leaving: answered / notify if written, leave
+    leaving --> waiting: token kept (poked) / read
+    leaving --> finished: let go
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4727,7 +4768,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-02 | Activity progress tick | `plugin/rust/activity_tick.rs` | implicit | H/H | convert | P4 |
 | HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `SessionReleaseMachine`; bug B-34 fixed (tmux) | P4 |
 | HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
-| HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | convert | P4 |
+| HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | converted → `ApprovalWatchMachine` | P4 |
 | HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | convert | P4 |
 | HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | convert | P4 |
 | HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | convert | P4 |

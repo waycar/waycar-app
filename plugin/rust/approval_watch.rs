@@ -47,12 +47,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ring::rand::{SecureRandom, SystemRandom};
 
+use crate::approval_watch_machine::{ApprovalWatchMachine, PaneView, WatchEffect, WatchEvent};
 use crate::cli::{parse_flags, parse_pane};
 use crate::env::Env;
 use crate::error::{CliError, Result};
 use crate::exec::{RunResult, run_program};
 use crate::hook_session::{next_seq, now_ns, process_args};
 use crate::jsx;
+use crate::state_machine::StateMachine;
 use crate::tmux::to_tmux_target;
 
 pub const POLL_MS: u64 = 250;
@@ -76,7 +78,7 @@ const UNIT: char = '\u{241f}';
 
 /// Values that can sit inside a tmux format and command unquoted: ours always
 /// do (`/^[0-9A-Za-z_-]*$/`).
-fn is_plain(value: &str) -> bool {
+pub(crate) fn is_plain(value: &str) -> bool {
     value
         .bytes()
         .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
@@ -362,103 +364,81 @@ pub fn watch_approval(pane_id: &str, agent: &str, io: &WatchIo) -> Result<()> {
         return Err(CliError::failure(format!("no approval screen for {agent}")));
     };
     let target = to_tmux_target(pane_id);
-    let token = new_token(io.pid);
-
-    let Some(mut pane) = read_pane(io, target) else {
-        return Ok(());
+    let mut watch = ApprovalWatchMachine::new(new_token(io.pid));
+    let view = |pane: Option<Pane>| {
+        pane.map(|pane| PaneView {
+            shown: shown(&pane.screen),
+            status: pane.status,
+            seq: pane.seq,
+            watch: pane.watch,
+            poke: pane.poke,
+        })
     };
-    if holder(&pane.watch, io.pid, target, io.alive) {
-        return Ok(());
-    }
-    let claim = if is_plain(&pane.watch) {
-        equals(WATCH_OPTION, &pane.watch)
-    } else {
-        "1".to_string()
-    };
-    let claimed = run_if(
-        io,
-        target,
-        &claim,
-        &[format!("set-option -p -t {target} {WATCH_OPTION} {token}")],
-        WATCH_OPTION,
-    );
-    if claimed.as_deref() != Some(token.as_str()) {
-        return Ok(());
-    }
-
-    pane.watch = token.clone();
-    let mut pane = Some(pane);
-    let mut poke = pane.as_ref().map(|p| p.poke.clone()).unwrap_or_default();
-    let mut seq = pane.as_ref().and_then(|p| p.seq.clone());
-    let mut deadline = (io.now)() + DIALOG_WAIT_MS;
-    loop {
-        // 1. Wait for the dialog.
-        let mut blocked = false;
-        loop {
-            let Some(current) = pane.as_ref() else {
-                return Ok(());
-            };
-            if current.watch != token {
-                return Ok(());
-            }
-            if current.poke != poke {
-                // Another PreToolUse: a new tool, from the status it saw.
-                poke = current.poke.clone();
-                seq = current.seq.clone();
-                deadline = (io.now)() + DIALOG_WAIT_MS;
-            }
-            if current.status.as_deref() != Some("working")
-                || current.seq != seq
-                || (io.now)() >= deadline
-            {
-                break;
-            }
-            if shown(&current.screen) {
-                blocked = true;
-                break;
-            }
-            (io.sleep)(POLL_MS);
-            pane = read_pane(io, target);
-        }
-        if blocked
-            && let Some(blocked_seq) =
-                write_status(io, target, "blocked", seq.as_deref(), Some(&token))
-        {
-            (io.notify)("blocked");
-            // 2. Held until the dialog is gone.
-            loop {
-                (io.sleep)(HELD_POLL_MS);
-                pane = read_pane(io, target);
-                let Some(current) = pane.as_ref() else {
-                    break;
-                };
-                if current.seq.as_deref() != Some(blocked_seq.as_str()) {
-                    break;
-                }
-                if !shown(&current.screen) {
-                    if write_status(io, target, "working", Some(&blocked_seq), None).is_some() {
-                        (io.notify)("working");
+    let first = read_pane(io, target);
+    let other_holder = first
+        .as_ref()
+        .is_some_and(|pane| holder(&pane.watch, io.pid, target, io.alive));
+    let mut events = vec![WatchEvent::Started {
+        pane: view(first),
+        other_holder,
+    }];
+    while let Some(event) = events.pop() {
+        for effect in watch.handle(event) {
+            let token = watch.token().to_string();
+            events.push(match effect {
+                WatchEffect::Claim { only_if } => {
+                    let claim = only_if
+                        .map_or_else(|| "1".to_string(), |watch| equals(WATCH_OPTION, &watch));
+                    let watch = run_if(
+                        io,
+                        target,
+                        &claim,
+                        &[format!("set-option -p -t {target} {WATCH_OPTION} {token}")],
+                        WATCH_OPTION,
+                    );
+                    WatchEvent::Claimed {
+                        watch,
+                        now: (io.now)(),
                     }
-                    break;
                 }
-            }
+                WatchEffect::Read { after_ms } => {
+                    if let Some(ms) = after_ms {
+                        (io.sleep)(ms);
+                    }
+                    let pane = view(read_pane(io, target));
+                    WatchEvent::Read {
+                        pane,
+                        now: (io.now)(),
+                    }
+                }
+                WatchEffect::WriteStatus {
+                    status,
+                    previous_seq,
+                    token: with_token,
+                } => {
+                    let token = with_token.then_some(token.as_str());
+                    let written = write_status(io, target, status, previous_seq.as_deref(), token);
+                    if status == "blocked" {
+                        WatchEvent::BlockedWritten(written)
+                    } else {
+                        WatchEvent::WorkingWritten(written.is_some())
+                    }
+                }
+                WatchEffect::Notify(status) => {
+                    (io.notify)(status);
+                    continue;
+                }
+                WatchEffect::Leave { poke } => WatchEvent::Left(run_if(
+                    io,
+                    target,
+                    &all(&[equals(WATCH_OPTION, &token), equals(POKE_OPTION, &poke)]),
+                    &[format!("set-option -p -u -t {target} {WATCH_OPTION}")],
+                    WATCH_OPTION,
+                )),
+            });
         }
-        // Done, unless a PreToolUse came since the last poke this watch saw.
-        if !is_plain(&poke) {
-            return Ok(());
-        }
-        let left = run_if(
-            io,
-            target,
-            &all(&[equals(WATCH_OPTION, &token), equals(POKE_OPTION, &poke)]),
-            &[format!("set-option -p -u -t {target} {WATCH_OPTION}")],
-            WATCH_OPTION,
-        );
-        if left.as_deref() != Some(token.as_str()) {
-            return Ok(());
-        }
-        pane = read_pane(io, target);
     }
+    Ok(())
 }
 
 /// The arguments of `waycar watch-approval --pane tmux:%N --agent agy|cline`.
