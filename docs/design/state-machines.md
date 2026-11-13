@@ -4515,6 +4515,47 @@ stateDiagram-v2
     owned --> free: sessionReleased
 ```
 
+### ChannelOpenSlotMachine
+
+- **File:** `Packages/WaycarSSH/Sources/WaycarSSH/ChannelOpenSlotMachine.swift`
+- **Owner:** `SessionDriver.claimChannelOpenSlot` asks `canAdmit`, takes a
+  slot or parks (after its deadline and cancellation checks, releasing the
+  operation mutex inside the continuation as before); the driver keeps each
+  parked opener's continuation and deadline Task by waiter id and performs
+  the grants and failures. `openChannel` and `openSFTP` release their slot
+  when the open settles; `invalidateResources` fails every parked opener.
+- **States:** opens in flight, whether the stock open (SFTP init) is among
+  them, the limit (`pipelinedChannelOpenLimit`, 32), parked openers by
+  priority and arrival.
+- **Events:** `take`, `park(id, kind, priority)`, `release`, `withdraw(id,
+  error)`, `invalidate`, `setLimit`.
+- **Effects:** `grant(id)`, `fail(id, error)`. One stock open at a time, so
+  an opener that releases the mutex between `open_finish` turns never lets
+  a second stock open resume the first one's session-owned state; a slot
+  goes to the first admissible opener, interactive first. The native open
+  itself (patch 0004's start and finish, the pending-open registry, freeing
+  a refused or abandoned open within its 2 s budget without costing the
+  session) stays procedural in the driver: its C calls sit between mutex
+  turns.
+- **Tests:** `ChannelOpenSlotMachineTests`; owner coverage is the
+  fixture-backed `SessionDriverSchedulingE2ETests` and
+  `SessionDriverPatchedLibSSH2E2ETests` (`a serialized channel-open wait
+  honors deadline and cancellation`, pipelined, refused and abandoned
+  opens), which only `make test-ci-app` runs.
+- **Catalogue:** SSH-12.
+
+```mermaid
+stateDiagram-v2
+    [*] --> free
+    free --> free: take while room
+    free --> full: take reaches the limit
+    full --> full: park
+    full --> full: release / grant first admissible waiter
+    full --> free: release, no waiter it admits
+    full --> full: withdraw / fail
+    full --> full: invalidate / fail every waiter
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4870,7 +4911,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-09 | Notification file transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
 | SSH-10 | Native session connection | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | SSH-11 | Native channel lifecycle | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-12 | Native channel opening | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
+| SSH-12 | Native channel opening | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | converted → `ChannelOpenSlotMachine` (slot admission); the native open and abandoned-open free stay procedural (C calls between mutex turns) | P3c |
 | SSH-13 | Transport-send ownership | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | converted → `TransportSendOwnerMachine` | P3c |
 | SSH-14 | Session operation mutex | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | M/H | leave: priority handoff primitive | — |
 | SSH-15 | SFTP use and shutdown | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |

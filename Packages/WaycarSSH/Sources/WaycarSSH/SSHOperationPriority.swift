@@ -69,3 +69,6 @@ struct PriorityWaiterQueue<Element> {
         return all
     }
 }
+
+extension PriorityWaiterQueue: Equatable where Element: Equatable {}
+extension PriorityWaiterQueue: Sendable where Element: Sendable {}
