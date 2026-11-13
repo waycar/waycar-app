@@ -161,7 +161,9 @@ check-device:
 	@test -n "$(DEVICE)" || { echo "No physical iPhone found; pass DEVICE=<device identifier>"; exit 1; }
 
 # Builds against the concrete device so automatic signing can register it
-# in the development profile; the generic `build` target cannot.
+# in the development profile; the generic `build` target cannot. With the
+# App Store Connect key (ASC_AUTH_FLAGS) it registers a new device without an
+# account signed in to Xcode, which the Mac's GUI session lacks.
 # `BUILD_NUMBER=<n>` overrides CFBundleVersion for this build only.
 build-device: SHELL := /bin/bash
 build-device: check-device generate
@@ -169,7 +171,7 @@ build-device: check-device generate
 	set -o pipefail; xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug \
 		-destination 'platform=iOS,id=$(DEVICE)' -derivedDataPath $(DERIVED) \
 		$(if $(BUILD_NUMBER),CURRENT_PROJECT_VERSION=$(BUILD_NUMBER)) \
-		-allowProvisioningUpdates -allowProvisioningDeviceRegistration build \
+		-allowProvisioningUpdates -allowProvisioningDeviceRegistration $(ASC_AUTH_FLAGS) build \
 		2>&1 | tee $(DERIVED)/build-device.log; build_status=$$?; \
 		$(call actor_isolation_soft_gate,$(DERIVED)/build-device.log); exit $$build_status
 
@@ -279,6 +281,11 @@ archive: check-deployed-installer generate ## Archive a Release build for distri
 
 # Authenticate the export with the App Store Connect API key when available
 # (same as testflight.yml) instead of relying on an Xcode-signed-in account.
+# A launchd job or bare SSH session reads no ~/.env, so the key's ids come
+# from there unless already set, as scripts/asc_client.py does.
+ASC_FROM_DOTENV = $(shell sed -n 's/^\(export \)\{0,1\}$(1)=//p' $(HOME)/.env 2>/dev/null | tail -n 1 | tr -d "\"'")
+ASC_API_KEY_ID ?= $(call ASC_FROM_DOTENV,ASC_API_KEY_ID)
+ASC_API_ISSUER_ID ?= $(call ASC_FROM_DOTENV,ASC_API_ISSUER_ID)
 ASC_API_KEY_PATH ?= $(HOME)/.appstoreconnect/private/AuthKey_$(ASC_API_KEY_ID).p8
 ASC_AUTH_FLAGS = $(if $(and $(ASC_API_KEY_ID),$(ASC_API_ISSUER_ID),$(wildcard $(ASC_API_KEY_PATH))),-authenticationKeyPath "$(ASC_API_KEY_PATH)" -authenticationKeyID "$(ASC_API_KEY_ID)" -authenticationKeyIssuerID "$(ASC_API_ISSUER_ID)")
 
