@@ -4310,6 +4310,43 @@ stateDiagram-v2
     closed --> closed: retain / refused
 ```
 
+### RangedFileHolderMachine
+
+- **File:** `Sources/Waycar/Transport/RangedFileHolderMachine.swift`
+- **Owner:** `HostSSHSession.readFileSlice` and the session's teardown:
+  the session keeps the SFTP client and its `.ordinarySession` lease, the
+  open in flight (an actor-isolated Task under the machine's token, which
+  re-checks the session is still open before it installs the client) and
+  the idle release Task (30 s), and performs the closes.
+- **States:** holder `empty`, `opening(token)`, `open(token)`; the reads
+  in flight.
+- **Events:** `readStarted`, `opened`, `openFailed`, `readFailed`,
+  `readEnded`, `idleElapsed`, `sessionClosed`.
+- **Effects:** `cancelIdleRelease`, `use`, `joinOpening`, `open(token)`,
+  `close`, `armIdleRelease`. Reads arriving during an open join it; the
+  only read on a channel that fails drops it, one of several leaves it to
+  the others; the idle release is armed by the last read's end. The lease
+  lives as long as the channel (#148). Kept race: an idle release that had
+  already run out when a read started still closes the channel that read
+  left, early, as before.
+- **Tests:** `RangedFileHolderMachineTests`; the session itself needs a
+  real connection, and no real-SSH lane reads a file slice through it, so
+  the holder's owner coverage is the transition tests (reported in P3c).
+- **Catalogue:** SSH-04.
+
+```mermaid
+stateDiagram-v2
+    [*] --> empty
+    empty --> opening: readStarted / open(token)
+    opening --> opening: readStarted / joinOpening
+    opening --> open: opened(token)
+    opening --> empty: openFailed(token)
+    open --> open: readStarted / use; readEnded, last / armIdleRelease
+    open --> empty: readFailed, only read / close
+    open --> empty: idleElapsed, no read / close
+    open --> empty: sessionClosed / close
+```
+
 ### NetworkPathSettleMachine
 
 - **File:** `Sources/Waycar/Transport/NetworkPathSettleMachine.swift`
@@ -4792,7 +4829,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | converted → `SessionPoolMachine` | P3c |
 | SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
 | SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | converted → `HostSessionLifetimeMachine` | P3c |
-| SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
+| SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | converted → `RangedFileHolderMachine`; early idle-release race kept | P3c |
 | SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | converted → `ChannelAdmissionMachine` | P3c |
 | SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | converted → `AttachOutputMachine` | P3c |
 | SSH-07 | Attach pump completion | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | implicit | M/M | leave: structured scope bounds it | — |

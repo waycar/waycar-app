@@ -74,7 +74,9 @@ actor HostSSHSession: HostSSHServices {
     /// share it: the actor is re-entered at every await inside that open, and
     /// two independent opens would each keep a channel, one of them unowned.
     var sessionFileClientOpening: Task<SSHSFTPClient, any Error>?
-    var sessionFileReadsInFlight = 0
+    /// Whether the holder is empty, opening or open, and the reads on it
+    /// (`RangedFileHolderMachine`).
+    var sessionFileHolder = RangedFileHolderMachine()
     /// Returns the channel once no follower has read for a while. A screen
     /// that stopped looking does not tell the Transport so; without this the
     /// channel and its lease would stay spent until the Host disconnects.
@@ -419,12 +421,21 @@ actor HostSSHSession: HostSSHServices {
         imageStageClients.removeAll()
         let notificationClients = Array(notificationFileClients.values)
         notificationFileClients.removeAll()
-        sessionFileClientIdleRelease?.cancel()
-        sessionFileClientIdleRelease = nil
-        let fileReader = sessionFileClient
-        sessionFileClient = nil
-        let fileReaderLease = sessionFileClientLease
-        sessionFileClientLease = nil
+        var fileReader: SSHSFTPClient?
+        var fileReaderLease: SSHChannelAdmissionLease?
+        for effect in sessionFileHolder.handle(.sessionClosed) {
+            switch effect {
+            case .cancelIdleRelease:
+                cancelSessionFileClientIdleRelease()
+            case .close:
+                fileReader = sessionFileClient
+                sessionFileClient = nil
+                fileReaderLease = sessionFileClientLease
+                sessionFileClientLease = nil
+            case .use, .joinOpening, .open, .armIdleRelease:
+                continue
+            }
+        }
         for sftp in stagingClients {
             try? await sftp.close(timeout: .seconds(2))
         }

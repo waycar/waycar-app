@@ -70,16 +70,13 @@ extension HostSSHSession {
     /// the same way if the channel is gone, and closing the channel under it
     /// would strand the channel mid-use. The channel is returned once nobody
     /// has read through it for `sessionFileClientIdleTimeout`.
+    ///
+    /// The holder's states are `RangedFileHolderMachine`'s.
     func readFileSlice(_ range: RemoteFileRange) async throws -> RemoteFileSlice {
-        sessionFileClientIdleRelease?.cancel()
-        sessionFileClientIdleRelease = nil
-        sessionFileReadsInFlight += 1
-        defer {
-            sessionFileReadsInFlight -= 1
-            scheduleSessionFileClientIdleRelease()
-        }
+        let start = sessionFileHolder.handle(.readStarted)
+        defer { scheduleSessionFileClientIdleRelease(sessionFileHolder.handle(.readEnded)) }
         do {
-            let client = try await sessionFileClientForReading()
+            let client = try await sessionFileClientForReading(start)
             let slice = try await client.readFileRange(
                 at: range.path,
                 offset: range.offset,
@@ -88,7 +85,7 @@ extension HostSSHSession {
             return RemoteFileSlice(data: slice.data, length: slice.length)
         } catch {
             let mapped = mapOperationError(error)
-            if sessionFileReadsInFlight == 1 { await releaseSessionFileClient() }
+            await performSessionFileHolder(sessionFileHolder.handle(.readFailed))
             throw mapped
         }
     }
@@ -152,62 +149,111 @@ extension HostSSHSession {
         return client
     }
 
-    private func sessionFileClientForReading() async throws -> SSHSFTPClient {
-        if let sessionFileClient { return sessionFileClient }
-        if let opening = sessionFileClientOpening {
-            return try await opening.value
+    /// The client `readStarted`'s effects lead to: the open one, the open in
+    /// flight, or a new open.
+    private func sessionFileClientForReading(
+        _ effects: [RangedFileHolderMachine.Effect]
+    ) async throws -> SSHSFTPClient {
+        for effect in effects {
+            switch effect {
+            case .cancelIdleRelease:
+                cancelSessionFileClientIdleRelease()
+            case .use:
+                if let sessionFileClient { return sessionFileClient }
+            case .joinOpening:
+                if let opening = sessionFileClientOpening { return try await opening.value }
+            case .open(let token):
+                let opening = openSessionFileClient(token: token)
+                sessionFileClientOpening = opening
+                return try await opening.value
+            case .close, .armIdleRelease:
+                continue
+            }
         }
-        // Inherits this actor's isolation, so the task installs the holder
-        // itself; every caller, first or later, just awaits it.
-        let opening = Task { () throws -> SSHSFTPClient in
+        throw TransportError.sshUnreachable(detail: "the Host is not connected")
+    }
+
+    /// Inherits this actor's isolation, so the task installs the holder
+    /// itself; every caller, first or later, just awaits it.
+    private func openSessionFileClient(token: UInt64) -> Task<SSHSFTPClient, any Error> {
+        Task { () throws -> SSHSFTPClient in
             defer { sessionFileClientOpening = nil }
-            let lease = try await channelAdmission.acquire(.ordinarySession)
-            let client: SSHSFTPClient
             do {
-                client = try await connection.openSFTP(timeout: requestTimeout)
+                let lease = try await channelAdmission.acquire(.ordinarySession)
+                let client: SSHSFTPClient
+                do {
+                    client = try await connection.openSFTP(timeout: requestTimeout)
+                } catch {
+                    await lease.release()
+                    throw error
+                }
+                guard connected else {
+                    // Closed while the open was in flight: `close()` already
+                    // drained the holders, so this channel would be unowned.
+                    try? await client.close(timeout: .seconds(2))
+                    await lease.release()
+                    throw TransportError.sshUnreachable(detail: "the Host is not connected")
+                }
+                sessionFileClient = client
+                sessionFileClientLease = lease
+                _ = sessionFileHolder.handle(.opened(token: token))
+                return client
             } catch {
-                await lease.release()
+                _ = sessionFileHolder.handle(.openFailed(token: token))
                 throw error
             }
-            guard connected else {
-                // Closed while the open was in flight: `close()` already
-                // drained the holders, so this channel would be unowned.
-                try? await client.close(timeout: .seconds(2))
-                await lease.release()
-                throw TransportError.sshUnreachable(detail: "the Host is not connected")
+        }
+    }
+
+    /// A read's end: disarm the idle release, and arm it again when the read
+    /// was the last one on an open channel. It never closes anything.
+    private func scheduleSessionFileClientIdleRelease(
+        _ effects: [RangedFileHolderMachine.Effect]
+    ) {
+        for effect in effects {
+            switch effect {
+            case .cancelIdleRelease:
+                cancelSessionFileClientIdleRelease()
+            case .armIdleRelease:
+                sessionFileClientIdleRelease = Task { [weak self] in
+                    try? await Task.sleep(for: Self.sessionFileClientIdleTimeout)
+                    guard !Task.isCancelled else { return }
+                    await self?.sessionFileClientIdleReleaseElapsed()
+                }
+            case .use, .joinOpening, .open, .close:
+                assertionFailure("a read's end only schedules the idle release")
             }
-            sessionFileClient = client
-            sessionFileClientLease = lease
-            return client
-        }
-        sessionFileClientOpening = opening
-        return try await opening.value
-    }
-
-    private func scheduleSessionFileClientIdleRelease() {
-        sessionFileClientIdleRelease?.cancel()
-        guard sessionFileReadsInFlight == 0, sessionFileClient != nil else { return }
-        sessionFileClientIdleRelease = Task { [weak self] in
-            try? await Task.sleep(for: Self.sessionFileClientIdleTimeout)
-            guard !Task.isCancelled else { return }
-            await self?.releaseSessionFileClientIfIdle()
         }
     }
 
-    private func releaseSessionFileClientIfIdle() async {
-        guard sessionFileReadsInFlight == 0 else { return }
-        await releaseSessionFileClient()
+    /// Performs a failed read's or the idle release's effects.
+    private func performSessionFileHolder(_ effects: [RangedFileHolderMachine.Effect]) async {
+        for effect in effects {
+            switch effect {
+            case .cancelIdleRelease:
+                cancelSessionFileClientIdleRelease()
+            case .armIdleRelease:
+                scheduleSessionFileClientIdleRelease([effect])
+            case .close:
+                let client = sessionFileClient
+                sessionFileClient = nil
+                let lease = sessionFileClientLease
+                sessionFileClientLease = nil
+                try? await client?.close(timeout: .seconds(2))
+                await lease?.release()
+            case .use, .joinOpening, .open:
+                continue
+            }
+        }
     }
 
-    private func releaseSessionFileClient() async {
+    private func sessionFileClientIdleReleaseElapsed() async {
+        await performSessionFileHolder(sessionFileHolder.handle(.idleElapsed))
+    }
+
+    func cancelSessionFileClientIdleRelease() {
         sessionFileClientIdleRelease?.cancel()
         sessionFileClientIdleRelease = nil
-        guard let client = sessionFileClient else { return }
-        sessionFileClient = nil
-        let lease = sessionFileClientLease
-        sessionFileClientLease = nil
-        try? await client.close(timeout: .seconds(2))
-        await lease?.release()
     }
 
     // MARK: Directory listing
