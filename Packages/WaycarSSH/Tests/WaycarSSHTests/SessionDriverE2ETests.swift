@@ -1591,7 +1591,8 @@ struct SessionDriverE2ETests {
         let result = try await exec.value
         #expect(result.stdout == Data("done".utf8))
         #expect(result.exitStatus == 0)
-        #expect(released.duration(to: .now) < .seconds(2))
+        // Far below the exec's own budget, which the lost wakeup slept out.
+        #expect(released.duration(to: .now) < .sshdBudget(2))
 
         #expect(await connection.isConnected)
         try await connection.close(timeout: .sshdBudget(2))
