@@ -3099,6 +3099,57 @@ stateDiagram-v2
     unbound --> inactive: clear
 ```
 
+### TerminalRunMachine
+
+- **File:** `Sources/Waycar/Console/TerminalRunMachine.swift`
+- **Owner:** `AttachTerminalStore` keeps the run Task, the session and its
+  input generation, the connectivity and blank-frame Tasks, the geometry,
+  the transport generations and telemetry; it schedules each restart Task
+  the machine asks for and mirrors the observed status, flavor, live and
+  mosh-failure flags, the stop request and the scheduled upgrade.
+- **States:** the status (`waitingForSize`, `connecting`, `live`,
+  `ended(message)`, `stopped`), the run (`idle`, `running(token)`), the
+  session (`none`, `open(token)`), the flavor, the stop request, a scheduled
+  upgrade, and the restart budgets.
+- **Events:** `start`, `transportReady`, `sessionOpened`, `sessionFinished`,
+  `contentShown`, `graceElapsed(session)`, `runFailed(failure)`,
+  `runCompleted`, `runFinished`, `retry`, `retryOverSSH`, `upgrade`,
+  `restartDue`, `upgradeRestartDue`, `stop`, `stopFinished`.
+- **Effects:** the `publish…` mirrors, telemetry, `clearAcquired`,
+  `startRun`, `sessionToken`, `scheduleRestart(invalidating)`,
+  `scheduleUpgradeRestart`, `restart`. A lost mosh link reattaches once per
+  live stretch, the mosh→SSH fallback once per store (a retry or the upgrade
+  gives it back), a transient channel death once per ended episode; a stop
+  silences every later run end and restart check; a scheduled upgrade owns
+  the status; the blank-frame grace goes live only for its own session.
+  Kept as before: a restart that passed its stop check before awaiting the
+  mosh invalidation still starts after a stop that lands meanwhile, and two
+  "Use SSH Instead" taps schedule two restarts (the run's end is not
+  checked against its token, as before).
+- **Tests:** `TerminalRunMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AttachTerminalStoreTests`, `MoshAttachTerminalTests`, `MoshFastPathEdgeTests`.
+- **Catalogue:** ATTACH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> waitingForSize
+    waitingForSize --> connecting: start / startRun(token)
+    connecting --> live: contentShown or own graceElapsed
+    connecting --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: runFailed within budget / scheduleRestart
+    connecting --> connecting: runFailed within budget / scheduleRestart
+    live --> ended: runFailed or runCompleted
+    connecting --> ended: runFailed or runCompleted
+    ended --> connecting: retry / startRun
+    ended --> ended: retryOverSSH / scheduleRestart(userChoseSSH)
+    connecting --> connecting: restartDue, not stopped / restart
+    ended --> connecting: restartDue, not stopped / restart
+    live --> stopped: stop, stopFinished
+    connecting --> stopped: stop, stopFinished
+    ended --> stopped: stop, stopFinished
+```
+
 ### ViewedDoneMachine
 
 - **File:** `Sources/Waycar/Console/ViewedDoneMachine.swift`
@@ -5642,7 +5693,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | convert (deferred: overlapping queued recovery, contact-check and leave/rejoin awaits own PTY/input teardown; preserve end versus abandon and route guards with Mac execution first). Safety net: `AttachLifecycleCharacterizationTests`, existing `AgentAttachStoreTests` | P2c |
 | ATTACH-02 | Terminal recovery generation latch | `Sources/Waycar/Console/AttachTerminalStore.swift` | explicit | H/M | converted → `TerminalRecoveryGenerationMachine` | P2c |
-| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | convert (deferred: overlapping stop, upgrade and fallback awaits plus session/input identity and blank-frame grace need Mac execution before consolidation). Safety net: `AttachLifecycleCharacterizationTests`, existing `AttachTerminalStoreTests` | P2c |
+| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; a stop during the mosh invalidation a restart awaits is still followed by one self-ending run, as before | P2c |
 | ATTACH-04 | Viewed-Done acknowledgement | `Sources/Waycar/Console/AgentFocusCoordinator.swift` | explicit | H/M | converted → `ViewedDoneMachine` | P2c |
 | ATTACH-05 | Terminal cache entry retention | `Sources/Waycar/Console/AgentTerminalCache.swift` | explicit | H/H | converted → `AgentTerminalRetentionMachine` | P2c |
 | ATTACH-06 | Byte feed and surface binding | `Sources/Waycar/Terminal/TerminalByteFeed.swift` | implicit | M/M | leave: one-way latch | — |

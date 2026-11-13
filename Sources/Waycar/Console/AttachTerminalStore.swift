@@ -258,7 +258,7 @@ struct TerminalRecoveryGenerationLatch {
 @MainActor
 @Observable
 final class AttachTerminalStore {
-    enum Status: Equatable {
+    enum Status: Equatable, Sendable {
         /// Waiting for the terminal view's first layout to report cols/rows.
         case waitingForSize
         /// Opening the attach channel, and waiting for the remote attach to
@@ -273,7 +273,10 @@ final class AttachTerminalStore {
         case stopped
     }
 
+    /// The observed copy of ``TerminalRunMachine/status``.
     private(set) var status: Status = .waitingForSize
+    /// Runs, sessions, restarts and their budgets.
+    @ObservationIgnored private var runs = TerminalRunMachine()
     /// The byte pipe the terminal view consumes.
     let feed = TerminalByteFeed()
     /// What the screen identifies this pipeline's surface by. Owned by the
@@ -303,19 +306,14 @@ final class AttachTerminalStore {
     /// runner; nil from each start until the runner reports one. Unlike
     /// `transportGeneration`, this is never seeded from a projection value.
     private(set) var acquiredTransportGeneration: UInt64?
+    /// The observed copy of the machine's stop request.
     private var stopRequested = false
     private var preservesPendingPasteOnStop = false
     private var session: TerminalAttachSession?
+    /// The machine's token for `session`.
+    private var sessionToken: UInt64?
     private var inputGeneration: TerminalInputController.SessionGeneration?
     private var runTask: Task<Void, Never>?
-    /// Set once an automatic mosh→SSH fallback has run for this store.
-    /// Never reset by the fallback's own restart, so a failed invalidation
-    /// cannot loop mosh against the same dead handshake.
-    private var moshAutoFallbackUsed = false
-    /// Set once a transient failure has reattached this store silently;
-    /// cleared when a session goes live again, so each ended episode gets
-    /// one retry before `.ended` shows. A user `retry()` leaves it alone.
-    private var transientRetryUsed = false
     /// Whether this pipeline has ever gone live: its surface holds content
     /// to read, and keeps it through a later `.ended`.
     private(set) var hasBeenLive = false
@@ -336,9 +334,6 @@ final class AttachTerminalStore {
     /// How long a mosh session's first bytes may stay blank before the
     /// terminal goes live anyway (#105).
     private let blankFrameGrace: Duration
-    /// Set once a lost mosh link has reattached this store automatically;
-    /// cleared when a session goes live again, so each live stretch gets one.
-    private var linkLossReattachUsed = false
     /// The attach attempts and mosh losses the network telemetry counts.
     private let telemetry: TerminalAttachTelemetry?
     #if DEBUG
@@ -502,11 +497,9 @@ final class AttachTerminalStore {
 
     /// Reattaches after the session ended remotely.
     func retry() {
-        guard case .ended = status, runTask == nil else { return }
         // A user-driven reattach is a fresh consent to the mosh path: the
         // Host may have been fixed since the last handshake failed.
-        moshAutoFallbackUsed = false
-        start()
+        perform(runs.handle(.retry))
     }
 
     /// The connection dot popover's "Use SSH Instead": invalidates mosh for
@@ -514,22 +507,14 @@ final class AttachTerminalStore {
     /// fallback budget stays spent — if mosh were somehow chosen again and
     /// failed, the overlay would come back rather than loop.
     func retryOverSSH() {
-        guard case .ended = status else { return }
-        moshAutoFallbackUsed = true
-        let current = runTask
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await current?.value
-            guard !self.stopRequested else { return }
-            await self.onMoshFailure?(.userChoseSSH)
-            self.start()
-        }
+        perform(runs.handle(.retryOverSSH))
     }
 
     /// True while a mosh-upgrade restart is scheduled for the live
     /// session. A second request must not schedule a second restart, and
     /// the dying run must not overwrite the Connecting status the
-    /// scheduled restart already installed.
+    /// scheduled restart already installed. The observed copy of the
+    /// machine's.
     private var moshUpgradeRestartScheduled = false
 
     /// Whether `upgradeToMosh()` would restart this pipeline: a live
@@ -553,24 +538,10 @@ final class AttachTerminalStore {
     /// cleared by `run()`'s own `runTask = nil` teardown), one restart is
     /// ever in flight, and a session that stopped meanwhile stays stopped.
     func upgradeToMosh() {
-        guard canUpgradeToMosh else { return }
-        moshUpgradeRestartScheduled = true
         // Fresh consent to the mosh path, like a user-driven retry: the
         // upgrade is deliberate, so a spent automatic fallback must not
         // pin the reattach to SSH.
-        moshAutoFallbackUsed = false
-        status = .connecting
-        let session = self.session
-        let current = runTask
-        if session == nil { current?.cancel() }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await session?.end()
-            await current?.value
-            guard !self.stopRequested else { return }
-            self.moshUpgradeRestartScheduled = false
-            self.start()
-        }
+        perform(runs.handle(.upgrade))
     }
 
     /// Ends the session by explicit close (only `end()` runs the channel's
@@ -588,8 +559,7 @@ final class AttachTerminalStore {
     /// wait rather than sit behind whoever holds the channel — a stop must
     /// never depend on the channel becoming available.
     func stop(preservingPendingPaste: Bool = false, abandoning: Bool = false) async {
-        stopRequested = true
-        telemetry?.stopped()
+        perform(runs.handle(.stop))
         preservesPendingPasteOnStop = preservingPendingPaste
         if let session {
             if abandoning {
@@ -602,22 +572,79 @@ final class AttachTerminalStore {
             task.cancel()
             await task.value
         }
-        status = .stopped
+        perform(runs.handle(.stopFinished))
     }
 
     private func start() {
-        status = .connecting
-        telemetry?.began()
-        endedWithMoshFailure = false
-        runningFlavor = nil
-        acquiredTransportGeneration = nil
-        runTask = Task { await self.run() }
+        perform(runs.handle(.start))
+    }
+
+    /// Performs the machine's effects; `error` is the failure a run's end
+    /// reports to telemetry.
+    private func perform(_ effects: [TerminalRunMachine.Effect], error: (any Error)? = nil) {
+        for effect in effects {
+            switch effect {
+            case .publishStatus(let next):
+                status = next
+            case .publishFlavor(let flavor):
+                runningFlavor = flavor
+            case .publishEndedWithMoshFailure(let failed):
+                endedWithMoshFailure = failed
+            case .publishHasBeenLive:
+                hasBeenLive = true
+            case .publishStopRequested:
+                stopRequested = true
+            case .publishUpgradeScheduled(let scheduled):
+                moshUpgradeRestartScheduled = scheduled
+            case .telemetryBegan:
+                telemetry?.began()
+            case .telemetryWentLive:
+                telemetry?.wentLive()
+            case .telemetryRunEnded(let restarting):
+                telemetry?.runEnded(error, restarting: restarting)
+            case .telemetryStopped:
+                telemetry?.stopped()
+            case .clearAcquired:
+                acquiredTransportGeneration = nil
+            case .startRun:
+                runTask = Task { await self.run() }
+            case .sessionToken(let token):
+                sessionToken = token
+            case .scheduleRestart(let cause):
+                // Off the run task: a synchronous `start()` would be cleared
+                // by `run()`'s own `runTask = nil` teardown.
+                let current = runTask
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await current?.value
+                    guard self.runs.handle(.restartDue) == [.restart] else { return }
+                    if let cause { await self.onMoshFailure?(cause) }
+                    self.start()
+                }
+            case .scheduleUpgradeRestart:
+                let session = self.session
+                let current = runTask
+                if session == nil { current?.cancel() }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await session?.end()
+                    await current?.value
+                    let effects = self.runs.handle(.upgradeRestartDue)
+                    guard effects.contains(.restart) else { return }
+                    self.perform(effects.filter { $0 != .restart })
+                    self.start()
+                }
+            case .restart:
+                start()
+            }
+        }
     }
 
     /// One session lifetime: open at the current geometry, pump output until
     /// the stream ends, surface how it ended.
     private func run() async {
         defer {
+            _ = runs.handle(.runFinished)
             runTask = nil
             runDidFinish(surfaceID)
         }
@@ -636,7 +663,7 @@ final class AttachTerminalStore {
             self.transportGeneration = generation
             self.acquiredTransportGeneration = generation
             self.lastSessionFlavor = flavor
-            self.runningFlavor = flavor
+            self.perform(self.runs.handle(.transportReady(flavor)))
             self.transportReady(self.surfaceID, generation, flavor)
             self.telemetry?.transportReady(flavor)
             #if DEBUG
@@ -668,70 +695,28 @@ final class AttachTerminalStore {
         do {
             try await runTerminal(request, handler)
         } catch {
-            guard !stopRequested, !moshUpgradeRestartScheduled else { return }
-            if error is MoshLinkLost, !linkLossReattachUsed {
-                // The Host stopped answering a mosh session that had been
-                // live (#105): the link went, not mosh. Reattach once the
-                // ordinary way — mosh stays chosen — instead of falling back
-                // to SSH. Scheduled off this run task like the fallback.
-                linkLossReattachUsed = true
-                telemetry?.runEnded(error, restarting: true)
-                status = .connecting
-                let current = runTask
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    await current?.value
-                    guard !self.stopRequested else { return }
-                    self.start()
-                }
-                return
+            // A lost mosh link (#105) reattaches once the ordinary way, mosh
+            // still chosen; a mosh session that died after its banner
+            // invalidates mosh for the Host and restarts once over SSH; a
+            // channel that died under a session the Host never refused
+            // reattaches once before telling the user. Every restart is
+            // scheduled off this run task and dropped if the screen stops.
+            let failure: TerminalRunMachine.Failure
+            if error is MoshLinkLost {
+                failure = .moshLinkLost
+            } else if case TransportError.moshSessionFailed = error {
+                failure = .moshSessionFailed
+            } else if Self.isTransient(error) {
+                failure = .transient
+            } else {
+                failure = .other
             }
-            if case TransportError.moshSessionFailed = error {
-                endedWithMoshFailure = true
-                // The mosh attempt died after the banner: invalidate mosh
-                // for the Host and restart once, so SSH takes over without
-                // user action. The fallback restart is scheduled off this
-                // run task — `start()` synchronously would be cleared by
-                // this function's `runTask = nil` defer.
-                if !moshAutoFallbackUsed, onMoshFailure != nil {
-                    moshAutoFallbackUsed = true
-                    telemetry?.runEnded(error, restarting: true)
-                    status = .connecting
-                    let current = runTask
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        await current?.value
-                        guard !self.stopRequested else { return }
-                        await self.onMoshFailure?(.automaticFallback)
-                        self.start()
-                    }
-                    return
-                }
-            }
-            if Self.isTransient(error), !transientRetryUsed {
-                // The channel died under a session the Host never refused
-                // (a connection invalidated mid-attach): reattach once
-                // before telling the user. Scheduled off this run task like
-                // the fallbacks above, and dropped if the screen stops.
-                transientRetryUsed = true
-                telemetry?.runEnded(error, restarting: true)
-                status = .connecting
-                let current = runTask
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    await current?.value
-                    guard !self.stopRequested else { return }
-                    self.start()
-                }
-                return
-            }
-            telemetry?.runEnded(error, restarting: false)
-            status = .ended(Self.message(for: error))
+            perform(runs.handle(.runFailed(
+                failure, message: Self.message(for: error),
+                canInvalidateMosh: onMoshFailure != nil)), error: error)
             return
         }
-        guard !stopRequested, !moshUpgradeRestartScheduled else { return }
-        telemetry?.runEnded(nil, restarting: false)
-        status = .ended("The session ended.")
+        perform(runs.handle(.runCompleted))
     }
 
     private func consume(
@@ -745,6 +730,8 @@ final class AttachTerminalStore {
             return
         }
         self.session = session
+        perform(runs.handle(.sessionOpened))
+        let token = sessionToken
         let inputGeneration = input.beginSession(
             writer: { data in session.send(data) },
             scroller: { sequence, rows in
@@ -761,7 +748,7 @@ final class AttachTerminalStore {
         if let link = session.link {
             connectivityTask = Task { [weak self] in
                 for await connectivity in link.connectivity() {
-                    guard let self, self.session === session else { return }
+                    guard let self, let token, self.runs.isSession(token) else { return }
                     self.isStalled = connectivity == .stalled
                 }
             }
@@ -785,15 +772,13 @@ final class AttachTerminalStore {
                 // the bytes on screen.
                 if status == .connecting {
                     if !waitsForContent || content.containsVisibleContent(bytes) {
-                        goLive()
-                    } else if blankFrameTimer == nil {
+                        perform(runs.handle(.contentShown))
+                    } else if blankFrameTimer == nil, let token {
                         let grace = blankFrameGrace
                         blankFrameTimer = Task { [weak self] in
                             do { try await Task.sleep(for: grace) } catch { return }
-                            guard let self, self.session === session,
-                                self.status == .connecting
-                            else { return }
-                            self.goLive()
+                            guard let self else { return }
+                            self.perform(self.runs.handle(.graceElapsed(session: token)))
                         }
                     }
                 }
@@ -815,16 +800,10 @@ final class AttachTerminalStore {
         finishSession(inputGeneration)
     }
 
-    private func goLive() {
-        status = .live
-        hasBeenLive = true
-        telemetry?.wentLive()
-        linkLossReattachUsed = false
-        transientRetryUsed = false
-    }
-
     private func finishSession(_ inputGeneration: TerminalInputController.SessionGeneration) {
         self.session = nil
+        _ = runs.handle(.sessionFinished)
+        sessionToken = nil
         connectivityTask?.cancel()
         connectivityTask = nil
         isStalled = false
