@@ -1,15 +1,6 @@
 ---
-import { getImage } from 'astro:assets';
 import PhoneShot from './PhoneShot.astro';
-import { chat, dictationHero } from '../../data/screens';
-
-// The dictation clip: the bottom of an agent's screen while Dictate to Agent
-// listens. The animated webp goes out as-is (`?url`) and lazy, so it is only
-// fetched when the visitor scrolls near; reduced motion gets the still.
-const { still } = dictationHero;
-const stillSet = await getImage({ src: still, widths: [660, still.width], format: 'webp', quality: 82 });
-// The clip's drawn width: the 420px points column, or the stage minus its padding.
-const clipSizes = '(min-width: 721px) 404px, calc(100vw - 92px)';
+import { chat } from '../../data/screens';
 ---
 
 <section id="talk" class="section talk" aria-labelledby="talk-title">
@@ -21,44 +12,26 @@ const clipSizes = '(min-width: 721px) 404px, calc(100vw - 92px)';
     </div>
 
     <div class="glass stage">
-      <PhoneShot image={chat.iphone.image} alt={chat.iphone.alt} />
-      <div class="side">
-        <figure class="clip">
-          <div class="clip-frame">
-            <picture>
-              <source media="(prefers-reduced-motion: reduce)" type="image/webp" srcset={stillSet.srcSet.attribute} sizes={clipSizes} />
-              <img
-                src={dictationHero.anim}
-                srcset={`${dictationHero.anim660} 660w, ${dictationHero.anim} ${still.width}w`}
-                sizes={clipSizes}
-                width={still.width}
-                height={still.height}
-                alt={dictationHero.alt}
-                loading="lazy"
-                decoding="async"
-              />
-            </picture>
-          </div>
-          <figcaption><span class="pill pill-mosh">MIC</span> tap, talk, tap stop</figcaption>
-        </figure>
-        <ul class="points">
-          <li>
-            <h3>Want to check it first?</h3>
-            <p>Dictate into the Composer instead. Fix a word if you need to, then tap Send.</p>
-          </li>
-          <li>
-            <h3>Or skip the terminal</h3>
-            <p>
-              Start Claude Code, Codex, omp or pi with Chat Mode on, and it opens as a simple chat. When the agent asks for
-              permission, tap Allow or Cancel right there. Codex and OpenCode 2 server sessions are chats from the start.
-            </p>
-          </li>
-          <li>
-            <h3>Your voice stays on your phone</h3>
-            <p>Apple's on-device model turns speech into text. The audio is never recorded or sent. Needs iOS 26 or later.</p>
-          </li>
-        </ul>
-      </div>
+      <PhoneShot image={chat.iphone.image} alt={chat.iphone.alt}>
+        <p class="callout" aria-hidden="true"><span class="pill pill-mosh">MIC</span> tap, talk, tap stop</p>
+      </PhoneShot>
+      <ul class="points">
+        <li>
+          <h3>Want to check it first?</h3>
+          <p>Dictate into the Composer instead. Fix a word if you need to, then tap Send.</p>
+        </li>
+        <li>
+          <h3>Or skip the terminal</h3>
+          <p>
+            Start Claude Code, Codex, omp or pi with Chat Mode on, and it opens as a simple chat. When the agent asks for
+            permission, tap Allow or Cancel right there. Codex and OpenCode 2 server sessions are chats from the start.
+          </p>
+        </li>
+        <li>
+          <h3>Your voice stays on your phone</h3>
+          <p>Apple's on-device model turns speech into text. The audio is never recorded or sent. Needs iOS 26 or later.</p>
+        </li>
+      </ul>
     </div>
   </div>
 </section>
@@ -84,51 +57,9 @@ const clipSizes = '(min-width: 721px) 404px, calc(100vw - 92px)';
     padding: 48px 40px;
   }
 
-  .side {
-    display: grid;
-    gap: 32px;
-  }
-
-  /* The clip is the bottom of a phone screen, so its frame is open at the top
-     and rounded below, like the screen it was cut from. */
-  .clip {
-    margin: 0;
-  }
-
-  .clip-frame {
-    padding: 0 8px 8px;
-    background: var(--surface-2);
-    border: 1px solid var(--line-2);
-    border-top: 0;
-    border-radius: 0 0 40px 40px;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--black) 14%);
-    mask-image: linear-gradient(to bottom, transparent 0, var(--black) 14%);
-  }
-
-  .clip img {
-    display: block;
-    width: 100%;
-    height: auto;
-    border-radius: 0 0 32px 32px;
-  }
-
-  .clip figcaption {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    font: var(--fw-caption) var(--fs-caption) var(--font-mono);
-    color: var(--text-2);
-  }
-
-  .clip .pill {
-    padding: 2px 7px;
-    font-size: 11px;
-  }
-
   .points {
     display: grid;
-    gap: 24px;
+    gap: 28px;
   }
 
   .points h3 {
@@ -144,6 +75,33 @@ const clipSizes = '(min-width: 721px) 404px, calc(100vw - 92px)';
     color: var(--text-2);
   }
 
+
+  .callout {
+    position: absolute;
+    right: 16px;
+    bottom: -16px;
+    left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+    color: var(--text-2);
+    text-align: left;
+    background: rgb(var(--bg-2-rgb) / 0.86);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform: none;
+  }
+
+  .callout .pill {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
   @media (max-width: 720px) {
     .stage {
       grid-template-columns: 1fr;
@@ -151,13 +109,14 @@ const clipSizes = '(min-width: 721px) 404px, calc(100vw - 92px)';
       padding: 28px 20px;
     }
 
-    /* The clip says "talk" before the chat does. */
-    .side {
-      display: contents;
-    }
 
-    .clip {
-      order: -1;
+    .callout {
+      position: static;
+      justify-content: center;
+      margin-top: 12px;
+      width: fit-content;
+      margin-inline: auto;
+      white-space: normal;
     }
   }
 </style>
