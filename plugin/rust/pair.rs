@@ -997,6 +997,228 @@ mod tests {
         assert_eq!(press(&mut state, ch('x')), Effect::Close(1));
     }
 
+    // The popup around the machine, with a private home and state dir and
+    // the terminal output in a buffer.
+
+    use crate::authorized_keys::{self, parse_bootstrap_line};
+    use crate::pairing_session::{enrolled_path, pending_path, record_enrollment};
+    use crate::test_support::TempDir;
+
+    struct Stage {
+        home: TempDir,
+        out: Vec<u8>,
+    }
+
+    impl Stage {
+        fn new() -> Self {
+            Self {
+                home: TempDir::new("pair-popup"),
+                out: Vec::new(),
+            }
+        }
+
+        fn state(&self) -> PathBuf {
+            self.home.path().join("state")
+        }
+
+        fn bootstrap_lines(&self) -> usize {
+            std::fs::read_to_string(authorized_keys::path(self.home.path()))
+                .unwrap_or_default()
+                .lines()
+                .filter(|line| parse_bootstrap_line(line).is_some())
+                .count()
+        }
+    }
+
+    fn popup<'a>(home: &'a Path, state: &'a Path, out: &'a mut Vec<u8>) -> Popup<'a> {
+        Popup {
+            home,
+            state_dir: state,
+            out,
+            signals: Signals::install(&[]).unwrap(),
+            machine: machine(),
+            decoder: Decoder::default(),
+            host_fingerprint: "SHA256:ef+f9Jda6ZPkcW5GiL7pQZXJ57mCFnFAGkir3AcfTIM".into(),
+            session: None,
+            payload: None,
+            displayed_code: None,
+            enrolled: None,
+            view: QrView::default(),
+            stdin_open: true,
+            handlers: true,
+            escape_at: None,
+            expiry_at: None,
+            next_poll: None,
+            copied_until: None,
+            exit: None,
+            failure: None,
+        }
+    }
+
+    const DEVICE_LINE: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMYSCTemrZWEXptQyehHLI9kbqjHxNUGtQN2lF1ucCce waycar";
+
+    fn enroll(state: &Path, pairing_id: &str) {
+        record_enrollment(
+            state,
+            &Enrollment {
+                pairing_id: pairing_id.into(),
+                expires_at: None,
+                fingerprint: "SHA256:device".into(),
+                line: DEVICE_LINE.into(),
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn enter_starts_a_ceremony_with_its_ttl_and_poll_and_draws_the_qr() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        assert!(pending_path(&state, &id).exists());
+        assert!(popup.payload.is_some() && popup.displayed_code.is_some());
+        assert!(popup.expiry_at.is_some() && popup.next_poll.is_some());
+        assert!(popup.machine.qr_layout.is_some());
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 1);
+    }
+
+    #[test]
+    fn a_close_in_the_same_read_as_enter_starts_no_ceremony() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\rq");
+        assert_eq!(popup.exit, Some(0));
+        assert!(popup.session.is_none());
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 0);
+    }
+
+    #[test]
+    fn the_poll_finds_an_enrollment_and_stops_the_ceremony_timers() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        // Nothing enrolled: the poll re-arms.
+        let first = popup.next_poll.unwrap();
+        popup.fire_timers(first);
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        assert_eq!(popup.next_poll, Some(first + ENROLL_POLL));
+        enroll(&state, &id);
+        popup.fire_timers(first + ENROLL_POLL);
+        assert_eq!(popup.machine.phase, Phase::Enrolled);
+        assert_eq!((popup.expiry_at, popup.next_poll), (None, None));
+        assert_eq!(
+            popup.enrolled.as_ref().unwrap().fingerprint,
+            "SHA256:device"
+        );
+        // r revokes the device's line.
+        authorized_keys::edit_authorized_keys(&home, |mut lines| {
+            lines.push(DEVICE_LINE.into());
+            Ok(Some(lines))
+        })
+        .unwrap();
+        popup.on_input(b"r");
+        assert_eq!(popup.machine.phase, Phase::Revoked);
+        let keys = std::fs::read_to_string(authorized_keys::path(&home)).unwrap();
+        assert!(!keys.contains(DEVICE_LINE));
+        // Any key closes, and closing ends the ceremony's state.
+        popup.on_input(b"x");
+        assert_eq!(popup.exit, Some(0));
+        assert!(!enrolled_path(&state, &id).exists());
+    }
+
+    #[test]
+    fn the_ttl_expires_the_ceremony_and_enter_starts_a_fresh_one() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        popup.fire_timers(popup.expiry_at.unwrap());
+        assert_eq!(popup.machine.phase, Phase::Expired);
+        assert!(popup.session.is_none() && popup.payload.is_none());
+        assert!(popup.machine.qr_layout.is_none());
+        assert!(popup.next_poll.is_none());
+        assert!(!pending_path(&state, &id).exists());
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Qr);
+        assert_ne!(popup.session.as_ref().unwrap().pairing_id, id);
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 1);
+    }
+
+    #[test]
+    fn an_enrollment_at_the_deadline_wins_over_the_expiry() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        enroll(&state, &id);
+        // The expiry fires before the poll sees the record.
+        popup.next_poll = None;
+        popup.fire_timers(popup.expiry_at.unwrap());
+        assert_eq!(popup.machine.phase, Phase::Enrolled);
+        assert!(enrolled_path(&state, &id).exists());
+    }
+
+    #[test]
+    fn a_signal_closes_once_and_ends_the_ceremony() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        let id = popup.session.as_ref().unwrap().pairing_id.clone();
+        popup.on_signal(libc::SIGTERM);
+        assert_eq!(popup.exit, Some(0));
+        assert!(popup.machine.closing);
+        assert!(!pending_path(&state, &id).exists());
+        popup.exit = None;
+        popup.on_signal(libc::SIGTERM);
+        assert_eq!(popup.exit, None, "a second close does nothing");
+        drop(popup);
+        assert_eq!(stage.bootstrap_lines(), 0);
+    }
+
+    #[test]
+    fn copy_without_a_clipboard_prints_the_code_on_the_qr_screen() {
+        let mut stage = Stage::new();
+        let (home, state) = (stage.home.path().to_path_buf(), stage.state());
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        popup.on_input(b"c");
+        if cfg!(target_os = "macos") {
+            return;
+        }
+        assert_eq!(popup.view.printed_code, popup.displayed_code);
+        assert!(popup.copied_until.is_none());
+        assert_eq!(popup.machine.phase, Phase::Qr);
+    }
+
+    #[test]
+    fn a_ceremony_that_cannot_start_holds_the_failure_until_a_key_exits_one() {
+        let mut stage = Stage::new();
+        // A home that is a file: no authorized_keys can be written.
+        let home = stage.home.path().join("not-a-dir");
+        std::fs::write(&home, "").unwrap();
+        let state = stage.state();
+        let mut popup = popup(&home, &state, &mut stage.out);
+        popup.on_input(b"\r");
+        assert_eq!(popup.machine.phase, Phase::Fatal);
+        assert!(popup.session.is_none());
+        assert_eq!((popup.expiry_at, popup.next_poll), (None, None));
+        popup.on_input(b"x");
+        assert_eq!(popup.exit, Some(1));
+    }
+
     #[test]
     fn control_chords_act_as_their_letter_in_the_checklist_like_readline() {
         // Ctrl-K and Ctrl-A are named k and a by readline.
