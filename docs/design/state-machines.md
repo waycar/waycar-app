@@ -4930,7 +4930,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
 | B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | open |
 | B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | open |
-| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | fixed (P3c, `134f172d`): each connection's callbacks carry its token; a stopped connection's are ignored (not reachable from the app, which builds a new endpoint per engine) |
+| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | fixed (P3c, `49778c26`): each connection's callbacks carry its token; a stopped connection's are ignored (not reachable from the app, which builds a new endpoint per engine) |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |
