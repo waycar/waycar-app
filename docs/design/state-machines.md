@@ -3289,6 +3289,47 @@ stateDiagram-v2
     loaded --> loaded: encoded(raw file) / storeEncoded
 ```
 
+### MessageJumpFrameWaitMachine
+
+- **File:** `Sources/Waycar/Terminal/MessageJumpFrameWaitMachine.swift`
+- **Owner:** `TerminalMessageJumpController` keeps the walks (neighbour,
+  sticky prompt, to an end) and the step closure; it holds the one frame
+  continuation under the machine's token, the settle-timer Task and the
+  enclosing-task cancel handler's hop (with its two test seams), and reads
+  `Task.isCancelled` into the events.
+- **States:** whether a run is in progress and asked to stop, whether the
+  step awaits a frame and the frame buffered meanwhile, the latest frame, and
+  the wait (`none`, `active(token, held)`).
+- **Events:** `frameChanged`, `cancel`, `start`, `finish`, `beginAwaiting`,
+  `prepareWait`, `continuationArmed(token)`, `timerFired(token)`,
+  `enclosingCancelled(token)`, `waitReturned(token, result)`.
+- **Effects:** `started`/`refused`, `answer`, `armWait`, `hold`,
+  `cancelTimer`, `armTimer`, `resume(token, result)`. The token is the old
+  wait id: the settle timer and the cancel handler act only while theirs is
+  the active wait (the poison-window guard), a held continuation is resumed
+  at most once, a cancel wins over a frame, and the latest buffered paint
+  decides the step.
+- **Tests:** `MessageJumpFrameWaitMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `TerminalMessageJumpControllerTests`, `MessageJumpControlTests`.
+- **Catalogue:** ATTACH-16.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> running: start / started
+    running --> running: start / refused
+    running --> awaiting: beginAwaiting
+    awaiting --> running: prepareWait, cancel or buffered frame / answer
+    awaiting --> armed: prepareWait / armWait(token)
+    armed --> held: continuationArmed / hold, armTimer
+    armed --> armed: continuationArmed, cancel or frame / answer
+    held --> resumed: frame, cancel, matching timer or handler / resume(token)
+    resumed --> running: waitReturned / answer
+    armed --> running: waitReturned / answer
+    running --> idle: finish / resume a stranded waiter
+    held --> idle: finish / resume(token, cancelled)
+```
+
 ### PaneHistoryScrollMachine
 
 - **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
@@ -5568,7 +5609,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | convert (deferred: window measurements, transient hide debt, coalescing and destination/owner watchdogs span responder callbacks; needs Mac keyboard suites) | P2c |
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
-| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
+| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | converted → `MessageJumpFrameWaitMachine` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
