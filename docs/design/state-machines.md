@@ -2285,15 +2285,16 @@ stateDiagram-v2
   sweep(token), stop.
 - **Effects:** cancelSearch, browse(token), armSettle(token), cancelSettle,
   sweep(token), milestone. Search and sweep tokens discard cancelled streams;
-  only a tap starts the sweep. Settling reports the merged row count once.
+  only a tap starts the sweep, again after it finished or was unavailable.
+  The settle timer starts with the search, so a browser that never reports
+  ready still settles. Settling reports the merged row count once.
 - **Tests:** `FindComputersMachineTests`, `FindComputersStoreTests`, `FoundComputerTests`.
 - **Catalogue:** HOST-19.
 
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> searching: start / browse
-    searching --> searching: ready / armSettle
+    idle --> searching: start / browse, armSettle
     searching --> settled: computers or settleElapsed or failed
     settled --> settled: browse or sweep results
     searching --> denied: browse or sweep denial / cancelSearch

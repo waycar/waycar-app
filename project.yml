@@ -106,6 +106,8 @@ targets:
           - com.otreva.waycar.agent
         # mosh's UDP client dials LAN addresses directly; without the local
         # network declaration iOS silently drops those datagrams (#mosh).
+        # Find Computers browses `_ssh._tcp`, which must be declared for the
+        # Local Network prompt to cover it.
         NSLocalNetworkUsageDescription: "Waycar finds computers on your network that have SSH on, and connects to them over SSH and mosh."
         NSBonjourServices: ["_ssh._tcp"]
         # Copies our Reddit install-validation postbacks to Singular, our

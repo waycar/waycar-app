@@ -150,7 +150,6 @@ struct FindComputersView: View {
             }
         case .idle, .finished, .unavailable:
             Button("Check Every Address") { store.scanNetwork() }
-                .disabled(store.sweep == .unavailable)
         }
     }
 

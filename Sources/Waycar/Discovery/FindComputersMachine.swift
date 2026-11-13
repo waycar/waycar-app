@@ -6,6 +6,13 @@ import Foundation
 struct FindComputersMachine: StateMachine {
     enum Sweep: Equatable, Sendable {
         case idle, running(UInt64), finished, unavailable
+
+        /// Every state but a running sweep takes a tap: an unavailable one
+        /// may have since joined Wi-Fi, and the sweeper reads the subnet anew.
+        var canStart: Bool {
+            if case .running = self { return false }
+            return true
+        }
     }
 
     struct Search: Equatable, Sendable {
@@ -69,17 +76,22 @@ struct FindComputersMachine: StateMachine {
             (_, .searchAgain(let subnet)):
             lastToken += 1
             let search = Search(token: lastToken, subnet: subnet)
-            state = .searching(search, timer: nil)
-            return [.cancelSearch, .milestone(.lanScanStarted), .browse(search.token)]
+            // The settle timer starts with the search, not at `.ready`: a
+            // browser that only ever waits (Wi-Fi off, no usable interface)
+            // must still end in the empty state and its Search Again.
+            lastToken += 1
+            state = .searching(search, timer: lastToken)
+            return [
+                .cancelSearch, .milestone(.lanScanStarted), .browse(search.token),
+                .armSettle(lastToken),
+            ]
 
         case (.searching(var search, let timer), .browse(let token, let event)):
             guard token == search.token else { return [] }
             switch event {
             case .ready:
-                guard timer == nil else { return [] }
-                lastToken += 1
-                state = .searching(search, timer: lastToken)
-                return [.armSettle(lastToken)]
+                // The settle timer already runs from the search's start.
+                return []
             case .computers(let computers):
                 search.bonjour = computers
                 state = .searching(search, timer: timer)
@@ -106,14 +118,14 @@ struct FindComputersMachine: StateMachine {
             return settle(search)
 
         case (.searching(var search, let timer), .scanTapped):
-            guard search.sweep == .idle || search.sweep == .finished else { return [] }
+            guard search.sweep.canStart else { return [] }
             lastToken += 1
             search.sweep = .running(lastToken)
             search.swept = []
             state = .searching(search, timer: timer)
             return [.sweep(lastToken)]
         case (.settled(var search), .scanTapped):
-            guard search.sweep == .idle || search.sweep == .finished else { return [] }
+            guard search.sweep.canStart else { return [] }
             lastToken += 1
             search.sweep = .running(lastToken)
             search.swept = []
