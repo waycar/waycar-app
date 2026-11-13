@@ -18,3 +18,11 @@
 - **Watch out:** `xcrun devicectl device capture screenshot` captures a
   physical device's screen, but only while it is unlocked and awake; a
   locked phone captures black and refuses `process launch`.
+- **Watch out:** iOS's Local Network prompt makes the app inactive, and what
+  a search sees behind it (a denial, probes waiting out the answer) is not
+  final. Feed scene activity into the machine and decide there: gating
+  milestones on activity at delivery time lost a count that finished while
+  inactive and still reported one that started behind the prompt.
+- **Watch out:** two branches that each add a WaycarSSH package test both
+  rewrite the same pinned count in `scripts/run-ci-ios-tests.sh` to the same
+  number; git merges that cleanly and the count is one short.
