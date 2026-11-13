@@ -12,10 +12,13 @@ struct NetworkPathMonitorTests {
     private final class ScriptedPathSource: NetworkPathSource {
         private let handler = Mutex<(@Sendable (NetworkPathSnapshot) -> Void)?>(nil)
         private let cancelled = Mutex(false)
+        private let starts = Mutex(0)
 
         var isCancelled: Bool { cancelled.withLock { $0 } }
+        var startCount: Int { starts.withLock { $0 } }
 
         func start(_ handler: @escaping @Sendable (NetworkPathSnapshot) -> Void) {
+            starts.withLock { $0 += 1 }
             self.handler.withLock { $0 = handler }
         }
 
@@ -161,5 +164,112 @@ struct NetworkPathMonitorTests {
         #expect(await changes.next() == .some(nil))
         #expect(monitor.currentKey == nil)
         monitor.stop()
+    }
+
+    // MARK: Pinned interleavings (P3c, SSH-02)
+
+    @Test func startIsIdempotent() {
+        let (monitor, source, _) = makeMonitor()
+        monitor.start()
+        monitor.start()
+        #expect(source.startCount == 1)
+        monitor.stop()
+    }
+
+    /// A baseline subscriber that arrives before the first reading hears it
+    /// when it comes, then every settled change after it.
+    @Test func aBaselineSubscriberBeforeTheFirstReadingHearsItThenChanges() async throws {
+        let (monitor, source, gate) = makeMonitor()
+        var changes = monitor.changes(includingBaseline: true).makeAsyncIterator()
+        monitor.start()
+        source.read(Self.wifiHome)
+        source.read(Self.wifiCafe)
+        await gate.open()
+
+        #expect(await changes.next() == .some(Self.wifiHome.key))
+        #expect(await changes.next() == .some(Self.wifiCafe.key))
+        monitor.stop()
+        #expect(await changes.next() == nil)
+    }
+
+    /// A baseline subscriber that arrives after the first reading hears the
+    /// path settled last, at once, and nothing that has not settled yet.
+    @Test func aBaselineSubscriberAfterTheFirstReadingHearsTheSettledPathAtOnce() async throws {
+        let (monitor, source, gate) = makeMonitor()
+        monitor.start()
+        source.read(Self.wifiHome)
+        source.read(Self.cellular)
+        let log = ChangeLog()
+        let changes = monitor.changes(includingBaseline: true)
+        let reader = Task { for await change in changes { log.append(change) } }
+
+        try await waitUntil("the baseline should arrive at once") { !log.changes.isEmpty }
+        #expect(log.changes == [Self.wifiHome.key])
+        await gate.open()
+        try await waitUntil("cellular should settle") { log.changes.count == 2 }
+        monitor.stop()
+        await reader.value
+        #expect(log.changes == [Self.wifiHome.key, Self.cellular.key])
+    }
+
+    /// A plain stream keeps only the newest settled change nobody read yet.
+    @Test func aPlainStreamKeepsTheNewestUnreadChange() async throws {
+        let (monitor, source, gate) = makeMonitor()
+        var changes = monitor.changes().makeAsyncIterator()
+        monitor.start()
+        source.read(Self.wifiHome)
+        await gate.open()
+        source.read(Self.wifiCafe)
+        try await waitUntil("the café should settle") {
+            let probe = monitor.changes(includingBaseline: true)
+            var iterator = probe.makeAsyncIterator()
+            return await iterator.next() == .some(Self.wifiCafe.key)
+        }
+        source.read(Self.cellular)
+        try await waitUntil("cellular should settle") {
+            let probe = monitor.changes(includingBaseline: true)
+            var iterator = probe.makeAsyncIterator()
+            return await iterator.next() == .some(Self.cellular.key)
+        }
+
+        #expect(await changes.next() == .some(Self.cellular.key))
+        monitor.stop()
+        #expect(await changes.next() == nil)
+    }
+
+    /// Settling back on the baseline after another path settled is a change.
+    @Test func returningToTheBaselineAfterAChangeIsAChange() async throws {
+        let (monitor, source, gate) = makeMonitor()
+        let log = ChangeLog()
+        let changes = monitor.changes()
+        let reader = Task { for await change in changes { log.append(change) } }
+        monitor.start()
+        source.read(Self.wifiHome)
+        await gate.open()
+        source.read(Self.wifiCafe)
+        try await waitUntil("the café should settle") { log.changes.count == 1 }
+        source.read(Self.wifiHome)
+        try await waitUntil("home should settle again") { log.changes.count == 2 }
+        monitor.stop()
+        await reader.value
+        #expect(log.changes == [Self.wifiCafe.key, Self.wifiHome.key])
+    }
+
+    @Test func stopFinishesEveryStreamAndCancelsTheSource() async throws {
+        let (monitor, source, _) = makeMonitor()
+        let plain = monitor.changes()
+        let baseline = monitor.changes(includingBaseline: true)
+        monitor.start()
+        source.read(Self.wifiHome)
+        source.read(Self.wifiCafe)
+        monitor.stop()
+
+        var plainSeen: [NetworkPathKey?] = []
+        for await change in plain { plainSeen.append(change) }
+        var baselineSeen: [NetworkPathKey?] = []
+        for await change in baseline { baselineSeen.append(change) }
+        #expect(plainSeen.isEmpty)
+        #expect(baselineSeen == [Self.wifiHome.key])
+        #expect(source.isCancelled)
     }
 }
