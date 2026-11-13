@@ -3336,6 +3336,43 @@ stateDiagram-v2
     flushing --> deferring: begin
 ```
 
+### SurfaceKeyboardFreezeMachine
+
+- **File:** `Sources/Waycar/Terminal/SurfaceKeyboardFreezeMachine.swift`
+- **Owner:** `WaycarTerminalView` keeps the leash Task, the queued
+  main-queue reload, the shared grid-report Task, the window-resize debt and
+  the UIKit calls (`reloadInputViews`, layout, first responder). It feeds
+  the machine before every effect, so `layoutSubviews` and a settle UIKit
+  re-enters from `becomeFirstResponder` or `reloadInputViews` see the new
+  state, as before.
+- **States:** `live`, `frozen(cycle, endsOnFrameChange, reload
+  notYet/scheduled/done, handoff)`.
+- **Events:** inherit, request handoff, frame settled, queued reload fired,
+  leash elapsed, finish, request keyboard, cancel.
+- **Effects:** cancel the grid report, begin/cancel the bridge freeze,
+  cancel/arm the leash, schedule the reload, reload input views, lay out,
+  seed the authoritative grid, schedule the grid report, report the pending
+  window-resize grid, report the handoff's outcome. The queued reload and
+  the leash carry the cycle token; the reload is marked done before it
+  runs.
+- **Tests:** `SurfaceKeyboardFreezeMachineTests`,
+  `TerminalSurfaceFreezeLifecycleTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`.
+- **Catalogue:** ATTACH-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> frozen: inherit or request handoff / new cycle, freeze bridge, arm leash
+    frozen --> frozen: inherit or request handoff / new cycle
+    frozen --> frozen: first settle / queue reload (cycle)
+    frozen --> frozen: matching queued reload / mark done, reload
+    frozen --> live: settle after reload / thaw, report settled
+    frozen --> live: matching leash / reload if not done, thaw, report timedOut
+    frozen --> live: finish, or request keyboard with no handoff / thaw
+    frozen --> live: cancel / thaw bridge, report cancelled
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5568,7 +5605,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
 | ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
-| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
+| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | converted → `SurfaceKeyboardFreezeMachine`; the queued reload and leash carry the cycle token, effects keep the layout/thaw order. Pins: `TerminalSurfaceFreezeLifecycleTests` | P2c |
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
