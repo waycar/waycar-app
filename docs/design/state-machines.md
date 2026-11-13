@@ -4440,6 +4440,33 @@ stateDiagram-v2
     fatal --> [*]: any key / close(1)
 ```
 
+### SummaryRecordMachine
+
+- **File:** `plugin/rust/summary/store.rs`
+- **Owner:** `write_summary`, `write_progress` and `clear_progress` (through
+  `run_record`) read the pane's record, write lines with `write_atomic` and
+  run `rewrite_progress`'s re-read-and-compare. The record format, key
+  order and the progress rules are unchanged (`agent-summary-store-v1.json`).
+- **States:** `reading`, `writing`, `rewriting(changed)`,
+  `finished(result)`; the call (`summary`, `progress`, `clear`) is its data.
+- **Events:** `read(stored?)`, `wrote`, `rewrote(landed)`.
+- **Effects:** `write(line)` (a summary or tombstone, unless a newer `ts` is
+  stored), `rewriteProgress(seen, progress, progressTs)` (only while the
+  stored record is still `seen`).
+- **Tests:** `summary::store::tests` (`machine_*` transitions, the store
+  vector, turn and phase rules, the guarded rewrite, Node interop).
+- **Catalogue:** HT-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> reading
+    reading --> finished: newer ts stored, nothing to change, or no record
+    reading --> writing: summary / write
+    reading --> rewriting: progress or clear / rewriteProgress
+    writing --> finished: wrote, true
+    rewriting --> finished: rewrote, landed and changed
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4854,7 +4881,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | convert | P4 |
 | HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | convert | P4 |
 | HT-10 | Summary refresh run | `plugin/rust/summary/refresh.rs` | implicit | M/H | leave: cross-process lock with takeover | — |
-| HT-11 | Summary and progress record | `plugin/rust/summary/store.rs` | implicit | H/H | convert | P4 |
+| HT-11 | Summary and progress record | `plugin/rust/summary/store.rs` | implicit | H/H | converted → `SummaryRecordMachine`; a summary write's read-then-write is still not atomic across writers, as before | P4 |
 | HT-12 | Transcript turns | `plugin/rust/chat/shared.rs` | implicit | M/M | leave: reader-local | — |
 | HT-13 | Plan replay | `plugin/rust/plan_progress.rs` | implicit | M/M | leave: seq-checked | — |
 | HT-14 | Session export subprocess | `plugin/rust/chat/session_export.rs` | implicit | H/H | converted → `ExportRunMachine`; bug B-33 fixed | P4 |

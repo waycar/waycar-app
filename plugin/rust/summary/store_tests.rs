@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use serde_json::{Value, json};
 
 use super::*;
+use crate::state_machine::StateMachine;
 use crate::summary::test_support::TempDir;
 
 const VECTOR: &str = include_str!("../../test-vectors/agent-summary-store-v1.json");
@@ -803,6 +804,140 @@ fn a_summary_at_the_stored_ts_replaces_it_and_clear_progress_skips_what_has_none
     assert!(!clear_progress(dir.str(), PANE).unwrap());
     assert!(!update(&dir, "working", json!({"done": 1, "total": 2}), 7));
     assert!(write(&dir, "working", Some("third"), 1, Value::Null));
+}
+
+// MARK: - SummaryRecordMachine transitions
+
+fn summary_op(status: &str, summary: Option<&str>, ts: i64, progress: Value) -> RecordOp {
+    RecordOp::Summary {
+        pane_id: PANE.into(),
+        status: status.into(),
+        summary: summary.map(str::to_string),
+        ts,
+        hash: Some("h".into()),
+        progress,
+    }
+}
+
+fn record(status: &str, summary: Value, ts: i64, progress: Value) -> Value {
+    json!({"v": 1, "pane": PANE, "status": status, "summary": summary, "ts": ts, "hash": "h", "progress": progress, "progress_ts": ts})
+}
+
+#[test]
+fn machine_a_summary_over_a_newer_record_finishes_unwritten() {
+    let mut machine = SummaryRecordMachine::new(summary_op("done", Some("x"), 5, Value::Null));
+    let stored = record("working", json!("y"), 6, Value::Null);
+    assert_eq!(machine.handle(RecordEvent::Read(Some(stored))), []);
+    assert_eq!(machine.result(), Some(false));
+}
+
+#[test]
+fn machine_a_summary_writes_its_line_then_finishes_written() {
+    let mut machine = SummaryRecordMachine::new(summary_op(
+        "working",
+        Some("x"),
+        5,
+        json!({"done": 1, "total": 2}),
+    ));
+    let effects = machine.handle(RecordEvent::Read(None));
+    assert_eq!(
+        effects,
+        [RecordEffect::Write(
+            "{\"v\":1,\"pane\":\"w1:p1\",\"status\":\"working\",\"summary\":\"x\",\"ts\":5,\"hash\":\"h\",\"progress\":{\"done\":1,\"total\":2},\"progress_ts\":5}\n"
+                .into()
+        )]
+    );
+    assert_eq!(machine.state(), &RecordState::Writing);
+    assert_eq!(machine.handle(RecordEvent::Wrote), []);
+    assert_eq!(machine.result(), Some(true));
+}
+
+#[test]
+fn machine_a_progress_write_skips_a_missing_other_status_or_unchanged_record() {
+    let op = || RecordOp::Progress {
+        status: "working".into(),
+        progress: json!({"done": 1, "total": 2}),
+        ts: 5,
+    };
+    for stored in [
+        None,
+        Some(record("blocked", json!("x"), 1, Value::Null)),
+        Some(record("working", Value::Null, 1, Value::Null)),
+        Some(record(
+            "working",
+            json!("x"),
+            5,
+            json!({"done": 1, "total": 2}),
+        )),
+    ] {
+        let mut machine = SummaryRecordMachine::new(op());
+        assert_eq!(machine.handle(RecordEvent::Read(stored.clone())), []);
+        assert_eq!(machine.result(), Some(false), "{stored:?}");
+    }
+}
+
+#[test]
+fn machine_a_progress_write_rewrites_the_record_it_read_and_reports_a_change_once_landed() {
+    let stored = record("working", json!("x"), 1, Value::Null);
+    for (landed, result) in [(true, true), (false, false)] {
+        let mut machine = SummaryRecordMachine::new(RecordOp::Progress {
+            status: "working".into(),
+            progress: json!({"done": 1, "total": 2}),
+            ts: 5,
+        });
+        assert_eq!(
+            machine.handle(RecordEvent::Read(Some(stored.clone()))),
+            [RecordEffect::RewriteProgress {
+                seen: stored.clone(),
+                progress: normalize_progress(&json!({"done": 1, "total": 2})),
+                progress_ts: Some(5.0),
+            }]
+        );
+        assert_eq!(machine.state(), &RecordState::Rewriting { changed: true });
+        let _ = machine.handle(RecordEvent::Rewrote(landed));
+        assert_eq!(machine.result(), Some(result));
+    }
+    // Only the stamp moves: rewritten, but no change to report.
+    let steps = record("working", json!("x"), 1, json!({"done": 1, "total": 2}));
+    let mut machine = SummaryRecordMachine::new(RecordOp::Progress {
+        status: "working".into(),
+        progress: json!({"done": 1, "total": 2}),
+        ts: 9,
+    });
+    let _ = machine.handle(RecordEvent::Read(Some(steps)));
+    assert_eq!(machine.state(), &RecordState::Rewriting { changed: false });
+    let _ = machine.handle(RecordEvent::Rewrote(true));
+    assert_eq!(machine.result(), Some(false));
+}
+
+#[test]
+fn machine_a_clear_rewrites_only_a_record_with_progress() {
+    let mut machine = SummaryRecordMachine::new(RecordOp::Clear);
+    let _ = machine.handle(RecordEvent::Read(Some(record(
+        "working",
+        json!("x"),
+        1,
+        json!({"phase": "exploring"}),
+    ))));
+    assert_eq!(machine.state(), &RecordState::Rewriting { changed: true });
+    let _ = machine.handle(RecordEvent::Rewrote(true));
+    assert_eq!(machine.result(), Some(true));
+    let mut machine = SummaryRecordMachine::new(RecordOp::Clear);
+    let mut bare = record("working", json!("x"), 1, Value::Null);
+    bare.as_object_mut().unwrap().remove("progress_ts");
+    assert_eq!(machine.handle(RecordEvent::Read(Some(bare))), []);
+    assert_eq!(machine.result(), Some(false));
+}
+
+#[test]
+fn machine_events_a_state_never_asked_for_are_ignored() {
+    let mut machine = SummaryRecordMachine::new(RecordOp::Clear);
+    assert_eq!(machine.handle(RecordEvent::Wrote), []);
+    assert_eq!(machine.handle(RecordEvent::Rewrote(true)), []);
+    assert_eq!(machine.state(), &RecordState::Reading);
+    let _ = machine.handle(RecordEvent::Read(None));
+    assert_eq!(machine.handle(RecordEvent::Read(None)), []);
+    assert_eq!(machine.result(), Some(false));
 }
 
 // MARK: - Node interop (no JS test: the parity cases cover Node-written files)
