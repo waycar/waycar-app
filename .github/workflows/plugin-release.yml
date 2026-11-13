@@ -45,9 +45,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 # zizmor: ignore[artipacked] the guard script asks origin for a missing tag
+      # The guard's git ls-remote/fetch read the public origin anonymously.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Check plugin version and release guard
         run: sh scripts/check-plugin-version.sh
         env:
