@@ -606,6 +606,19 @@ fn run_export_command(
         }
         thread::sleep(Duration::from_millis(5));
     };
+    // A child the exporter left behind can hold the pipes open after it
+    // exits: the deadline and the signal still bound the wait (B-33).
+    while !(out_thread.is_finished() && err_thread.is_finished()) {
+        if !aborted && options.signal.as_ref().is_some_and(|s| s.is_aborted()) {
+            aborted = true;
+            kill();
+        }
+        if !killed && Instant::now() >= deadline {
+            killed = true;
+            kill();
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
     let stdout = out_thread.join().unwrap_or_default();
     let stderr = err_thread.join().unwrap_or_default();
     // Anything the group left behind goes with it.
@@ -1059,6 +1072,65 @@ esac
         let (dir, options) = stage("#!/bin/sh\n(sleep 0.3; echo '{\"messages\":[2]}') &\nexit 0\n");
         let data = session_export("opencode", &Value::String("ses_x".into()), &options).unwrap();
         assert_eq!(data["messages"][0], 2);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_exporter_that_exits_leaving_a_child_on_its_pipes_returns_by_the_timeout() {
+        // B-33: the exporter prints its export and exits 0, but a background
+        // child it started keeps stdout and stderr open. The read must not
+        // wait for that child past the timeout: the group is killed then.
+        let (dir, mut options) = stage(
+            "#!/bin/sh\nsleep 6 &\necho $! > \"$(dirname \"$0\")/../child.pid\"\necho '{\"messages\":[3]}'\nexit 0\n",
+        );
+        let pid_file = dir.join("child.pid");
+        options.timeout = Duration::from_millis(500);
+        let started = Instant::now();
+        let data = session_export("opencode", &Value::String("ses_x".into()), &options).unwrap();
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "took {:?}",
+            started.elapsed()
+        );
+        assert_eq!(data["messages"][0], 3);
+        let child: u32 = fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while is_alive(child) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!is_alive(child), "the left-behind child outlived the read");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_abort_ends_the_read_while_a_left_behind_child_holds_the_pipes() {
+        let (dir, options) = stage("#!/bin/sh\nsleep 6 &\nexit 0\n");
+        let signal = AbortSignal::new();
+        let options = ExportOptions {
+            signal: Some(Arc::clone(&signal)),
+            ..options
+        };
+        let aborter = {
+            let signal = Arc::clone(&signal);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(300));
+                signal.abort("read deadline");
+            })
+        };
+        let started = Instant::now();
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        aborter.join().unwrap();
+        assert_eq!(error.message, "read deadline");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "took {:?}",
+            started.elapsed()
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
