@@ -255,6 +255,58 @@ struct NetworkPathMonitorTests {
         #expect(log.changes == [Self.wifiCafe.key, Self.wifiHome.key])
     }
 
+    /// B-26: a debounce that has already run out, overtaken by a blip away
+    /// and back before it settles, must not settle the newest reading: that
+    /// one's own debounce decides when the path has stood long enough.
+    @Test func anExpiredDebounceDoesNotSettleANewerReadingOfTheSamePath() async throws {
+        let source = ScriptedPathSource()
+        let firstGate = DebounceGate()
+        let gate = DebounceGate()
+        let sleeps = Mutex(0)
+        let overtaken = Mutex(false)
+        let monitor = NetworkPathMonitor(
+            source: source, debounce: .seconds(1),
+            sleep: { _ in
+                // The first debounce runs out once its reading is in; every
+                // later one waits for the test.
+                let first = sleeps.withLock { count in
+                    defer { count += 1 }
+                    return count == 0
+                }
+                await (first ? firstGate : gate).wait()
+            },
+            afterDebounce: {
+                // Between the first debounce running out and its settle, the
+                // device blips home and back to the café.
+                let overtake = overtaken.withLock { done in
+                    defer { done = true }
+                    return !done
+                }
+                guard overtake else { return }
+                source.read(Self.wifiHome)
+                source.read(Self.wifiCafe)
+            })
+        let log = ChangeLog()
+        let changes = monitor.changes()
+        let reader = Task { for await change in changes { log.append(change) } }
+        monitor.start()
+        source.read(Self.wifiHome)
+        source.read(Self.wifiCafe)
+        await firstGate.open()
+
+        try await waitUntil("the blip should have been read") {
+            overtaken.withLock { $0 } && sleeps.withLock { $0 } == 3
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(log.changes.isEmpty, "the café settled before its own debounce ran out")
+
+        await gate.open()
+        try await waitUntil("the café should settle") { !log.changes.isEmpty }
+        monitor.stop()
+        await reader.value
+        #expect(log.changes == [Self.wifiCafe.key])
+    }
+
     @Test func stopFinishesEveryStreamAndCancelsTheSource() async throws {
         let (monitor, source, _) = makeMonitor()
         let plain = monitor.changes()

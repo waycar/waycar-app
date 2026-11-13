@@ -162,6 +162,9 @@ final class NetworkPathMonitor: Sendable {
         /// The last settled key; nil before the first reading, its baseline.
         var settled: NetworkPathKey??
         var debounce: Task<Void, Never>?
+        /// The reading the armed debounce belongs to: a debounce that ran
+        /// out after a newer reading arrived settles nothing (B-26).
+        var debounceToken: UInt64 = 0
         var subscribers: [UUID: Subscriber] = [:]
     }
 
@@ -173,19 +176,24 @@ final class NetworkPathMonitor: Sendable {
     private let source: any NetworkPathSource
     private let debounce: Duration
     private let sleep: @Sendable (Duration) async throws -> Void
+    private let afterDebounce: @Sendable () async -> Void
     private let state = Mutex(State())
 
     /// - Parameters:
     ///   - debounce: how long a path must stand before `changes()` reports it.
     ///   - sleep: waits out `debounce`; tests replace it to settle at will.
+    ///   - afterDebounce: runs once a debounce has run out, before it
+    ///     settles; tests deliver newer readings there (B-26).
     init(
         source: any NetworkPathSource = SystemNetworkPathSource(),
         debounce: Duration = .milliseconds(750),
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        afterDebounce: @escaping @Sendable () async -> Void = {}
     ) {
         self.source = source
         self.debounce = debounce
         self.sleep = sleep
+        self.afterDebounce = afterDebounce
     }
 
     deinit {
@@ -253,22 +261,26 @@ final class NetworkPathMonitor: Sendable {
     /// debounce, replacing the wait of the reading before it.
     private func receive(_ snapshot: NetworkPathSnapshot) {
         let key = snapshot.key
-        let baselineSubscribers: [Subscriber]? = state.withLock { state in
+        let reading: (baseline: [Subscriber]?, token: UInt64) = state.withLock { state in
             state.currentKey = key
-            guard state.settled == nil else { return nil }
+            state.debounceToken &+= 1
+            guard state.settled == nil else { return (nil, state.debounceToken) }
             state.settled = .some(key)
-            return state.subscribers.values.filter(\.wantsBaseline)
+            return (state.subscribers.values.filter(\.wantsBaseline), state.debounceToken)
         }
-        if let baselineSubscribers {
+        if let baselineSubscribers = reading.baseline {
             for subscriber in baselineSubscribers { subscriber.continuation.yield(key) }
             return
         }
+        let token = reading.token
         let delay = debounce
         let sleep = sleep
+        let afterDebounce = afterDebounce
         let task = Task { [weak self] in
             do { try await sleep(delay) } catch { return }
             guard !Task.isCancelled else { return }
-            self?.settle(key)
+            await afterDebounce()
+            self?.settle(key, token: token)
         }
         let previous = state.withLock { state in
             defer { state.debounce = task }
@@ -277,10 +289,13 @@ final class NetworkPathMonitor: Sendable {
         previous?.cancel()
     }
 
-    private func settle(_ key: NetworkPathKey?) {
+    private func settle(_ key: NetworkPathKey?, token: UInt64) {
         let subscribers: [Subscriber] = state.withLock { state in
-            // A newer reading arrived since this one: it settles instead.
-            guard state.currentKey == key, state.settled != .some(key) else { return [] }
+            // A newer reading arrived since this one, even one naming the
+            // same path again: its own debounce settles instead (B-26).
+            guard state.debounceToken == token, state.currentKey == key,
+                state.settled != .some(key)
+            else { return [] }
             state.settled = .some(key)
             return Array(state.subscribers.values)
         }
