@@ -13,7 +13,8 @@ const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
       <div class="glass prose">
         <h1>Waycar Support</h1>
         <p>
-          Waycar is an iPhone and iPad app for herdr and tmux. It connects to computers you control, called Hosts, over
+          Waycar is an iPhone and iPad app for herdr, tmux and Herdr Core, with Zellij, Codex and OpenCode 2 coming in the
+          next update. It connects to computers you control, called Hosts, over
           SSH or mosh, and shows the Agents running there. Waycar is made by OTREVA, LLC.
         </p>
         <p>
@@ -38,7 +39,8 @@ const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
         <ul>
           <li>An iPhone or iPad with iOS or iPadOS 18 or later. An Android app is coming next.</li>
           <li>
-            A Mac or Linux computer you control (a Host) running herdr 0.7.5 or later, or tmux 3.2 or later. See <a href="https://herdr.dev">herdr.dev</a>.
+            A Mac or Linux computer you control (a Host) running herdr 0.7.5 or later, tmux 3.2 or later, or Herdr Core 0.1.10 or later. See <a href="https://herdr.dev">herdr.dev</a>.
+            Zellij 0.46+, Codex 0.167+ and OpenCode 2.2+ come in the next update.
           </li>
           <li>SSH access to that Host. On a Mac, turn on Remote Login in System Settings › General › Sharing.</li>
           <li>Optional: Waycar's tools (the install command below), for Scan to Pair, Agent Notifications, Live Activities, Chat Mode, and status hooks.</li>
@@ -47,7 +49,7 @@ const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
 
         <h2>Set up</h2>
         <ol>
-          <li>Install herdr on your Host and start it, or have tmux 3.2 or later on the Host.</li>
+          <li>Install herdr on your Host and start it, or have tmux 3.2 or later or Herdr Core on the Host.</li>
           <li>Add the Host to Waycar in one of two ways.</li>
         </ol>
 
@@ -55,7 +57,7 @@ const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
         <ol>
           <li>
             On the Host, run: <code>curl -fsSL https://waycar.dev/install.sh | sh</code><br />
-            The same command works for herdr, tmux, or both. It needs curl and tar, and no Node.js. It does not use sudo.
+            The same command works for herdr, tmux, Herdr Core, or more than one. It needs curl and tar, and no Node.js. It does not use sudo.
           </li>
           <li>
             Answer <strong>Y</strong> when it offers to show a Pairing Code. On herdr it pops up inside herdr. On tmux

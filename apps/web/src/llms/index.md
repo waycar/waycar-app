@@ -1,8 +1,8 @@
 # Waycar
 
-> Waycar is a native iPhone and iPad app for checking on your coding agents in herdr or tmux. Agent terminals run over mosh, so they survive network changes, re-attach on their own after the phone sleeps, and fall back to SSH when mosh can't connect. No account required.
+> Waycar is a native iPhone and iPad app for checking on your coding agents in herdr, tmux, Herdr Core or Zellij, and Codex and OpenCode 2 server chats. Agent terminals run over mosh, so they survive network changes, re-attach on their own after the phone sleeps, and fall back to SSH when mosh can't connect. No account required.
 
-Native for iPhone & iPad · works with herdr and tmux.
+Native for iPhone & iPad · works with herdr, tmux, Herdr Core, Zellij, Codex and OpenCode.
 
 **Your agents stay attached. Over mosh, and SSH.**
 
@@ -20,7 +20,7 @@ Install on your Mac or Linux box:
 curl -fsSL https://waycar.dev/install.sh | sh
 ```
 
-It finds herdr or tmux, sets up Waycar, and offers to show a QR code to pair.
+It finds herdr, tmux, Herdr Core or Zellij, sets up Waycar, and offers to show a QR code to pair.
 
 ## mosh + SSH: change networks, the session is still there
 
@@ -105,13 +105,13 @@ Waycar works with tmux 3.2 or later too. Same app, same install command. Run bot
 
 ## How it works: phone to machine, nothing in between
 
-Waycar talks to herdr or tmux over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later, you're set. On tmux, run the install command for live status and alerts.
+Waycar talks to herdr, tmux, Herdr Core, Zellij, Codex or OpenCode over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later or Herdr Core, you're set. Codex and OpenCode servers start only when you tap Start. On tmux, run the install command for live status and alerts.
 
 The diagram:
 
 - Your device (Waycar): SSH key made on device; never leaves the Keychain; iPhone · iPad · iOS 18+.
 - The link: ssh, straight to your machine; mosh, for live terminals. No cloud, no account.
-- Your machine (SSH + herdr or tmux): OpenSSH (stock config); herdr ≥ 0.7.5 or tmux ≥ 3.2; mosh-server, for mosh. Runs claude, codex, omp, gemini, opencode, pi.
+- Your machine (SSH + herdr, tmux and more): OpenSSH (stock config); herdr ≥ 0.7.5, tmux ≥ 3.2 or Herdr Core ≥ 0.1.10; mosh-server, for mosh. Runs claude, codex, omp, gemini, opencode, pi.
 
 What that means for you:
 
@@ -192,7 +192,7 @@ The app has no accounts, ads, or cross-app tracking. The waycar.dev website runs
 
 ## Setup: one command on the Host, one scan on the phone
 
-1. **Install Waycar on the Host.** Do this once on each machine. The same command works for herdr, tmux, or both.
+1. **Install Waycar on the Host.** Do this once on each machine. The same command works for herdr, tmux, Herdr Core, Zellij, or more than one.
 2. **Show a Pairing Code.** When it's done, the command offers to draw a QR code right in your terminal (herdr and tmux Hosts alike). Run it again anytime to pair another device. Press `c` to copy the code (on Linux it shows the code so you can select it).
 3. **Scan it in Waycar.** Waycar makes your keys, pins the machine's host key, and your agents appear. For mosh, also install `mosh-server` on the Host.
 
@@ -202,13 +202,15 @@ Requirements:
 - Android: coming soon
 - herdr ≥ 0.7.5
 - or tmux ≥ 3.2
+- or Herdr Core ≥ 0.1.10
+- Next update: Zellij ≥ 0.46, Codex ≥ 0.167, OpenCode ≥ 2.2
 - No Node needed on the Host
 - OpenSSH · streamlocal on, for herdr
 - macOS: Remote Login on
 - mosh-server + UDP, for mosh
 
 ```sh
-# prerequisites: herdr ≥ 0.7.5 or tmux ≥ 3.2, OpenSSH running, curl and tar (no Node)
+# prerequisites: herdr ≥ 0.7.5, tmux ≥ 3.2 or Herdr Core ≥ 0.1.10, OpenSSH running, curl and tar (no Node)
 curl -fsSL https://waycar.dev/install.sh | sh
 # answer Y to show a pairing QR
 # scan it in Waycar, or press c to copy (Mac) or show (Linux) the code
@@ -220,7 +222,7 @@ curl -fsSL https://waycar.dev/install.sh | sh
 
 ### How do I get Waycar?
 
-{{app_store}}, then run the install command on each machine that runs herdr or tmux 3.2 or later, or add the machine by hand in the app. An Android app is coming next.
+{{app_store}}, then run the install command on each machine that runs herdr, tmux 3.2 or later, or Herdr Core, or add the machine by hand in the app. An Android app is coming next.
 
 ### Which agents work in Chat Mode?
 
@@ -228,7 +230,7 @@ Claude Code, Codex, omp, pi, opencode, GitHub Copilot CLI, Qwen Code, Gemini CLI
 
 ### Do I need herdr?
 
-No. Waycar also works with tmux 3.2 or later, and the same install command sets it up. herdr still gets you the most: it knows the status of more agents, and for now only herdr puts Chat Mode replies in your notifications.
+No. Waycar also works with tmux 3.2 or later and Herdr Core, and the same install command sets them up. Zellij 0.46 or later, Codex 0.167 or later and OpenCode 2.2 or later come in the next update: Codex and OpenCode run as chats, with approvals in the app. herdr still gets you the most: it knows the status of more agents, and for now only herdr puts Chat Mode replies in your notifications.
 
 ### How does Waycar know a tmux agent is blocked?
 

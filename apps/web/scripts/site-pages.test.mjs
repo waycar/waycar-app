@@ -1,6 +1,6 @@
 // @ts-check
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -39,7 +39,7 @@ test('listIndexablePages keeps one page per canonical URL, home first, no noinde
 });
 
 // The help gate (src/data/unreleased.ts); delete with it once a release newer than 1.3.0 lifts it.
-test('while 1.3.0 is the newest release, the site hides newer help and Unreleased but shows 1.3.0', { timeout: 300_000 }, (t) => {
+test('while 1.3.0 is the newest release, the site marks newer help and hides Unreleased but shows 1.3.0', { timeout: 300_000 }, (t) => {
   const gate = readFileSync(new URL('../src/data/unreleased.ts', import.meta.url), 'utf8');
   const appStoreRelease = /APP_STORE_RELEASE = '([\d.]+)'/.exec(gate)?.[1] ?? '';
   assert.equal(appStoreRelease, '1.3.0');
@@ -48,30 +48,27 @@ test('while 1.3.0 is the newest release, the site hides newer help and Unrelease
     t.skip('a newer release lifted the help gate: delete it (README "Release content switch") and this test');
     return;
   }
-  assert.ok(existsSync(new URL('../src/content/help/codex.md', import.meta.url)));
-  assert.ok(existsSync(new URL('../src/content/help/opencode.md', import.meta.url)));
   const { outDir, cleanup } = buildSite();
   t.after(cleanup);
-  for (const hidden of ['codex', 'opencode']) {
-    assert.equal(existsSync(join(outDir, `help/${hidden}.html`)), false);
-    assert.equal(existsSync(join(outDir, `help/${hidden}.md`)), false);
+  const note = 'Coming in the next update of Waycar.';
+  for (const slug of ['codex', 'opencode', 'zellij']) {
+    const source = readFileSync(new URL(`../src/content/help/${slug}.md`, import.meta.url), 'utf8');
+    assert.ok(!source.includes(note), `the note must not reach the app's bundled help: ${slug}.md`);
+    const html = readFileSync(join(outDir, `help/${slug}.html`), 'utf8');
+    const article = html.slice(html.indexOf('<main'));
+    assert.match(article, new RegExp(`<blockquote>\\s*<p>${note}</p>`), slug);
+    const markdown = readFileSync(join(outDir, `help/${slug}.md`), 'utf8');
+    const body = markdown.split('\n').filter((line) => line && !line.startsWith('#'));
+    assert.equal(body[1], `> ${note}`, `${slug}.md: the note follows the lead`);
   }
   for (const file of ['help.html', 'help.md', 'help/search.json', 'llms.txt', 'sitemap.xml']) {
     const text = readFileSync(join(outDir, file), 'utf8');
-    for (const hidden of ['codex', 'opencode']) {
-      assert.ok(!text.includes(`/help/${hidden}`), file);
-      assert.ok(!text.includes(`"slug":"${hidden}"`), file);
+    for (const slug of ['codex', 'opencode', 'zellij']) {
+      assert.ok(text.includes(`/help/${slug}`) || text.includes(`"slug":"${slug}"`), `${file} lists ${slug}`);
     }
-    assert.ok(!text.includes('Codex server') && !text.includes('OpenCode 2'), file);
   }
-  for (const slug of ['new-agent', 'host-page', 'closed-sessions', 'notifications']) {
-    for (const extension of ['html', 'md']) {
-      const file = `help/${slug}.${extension}`;
-      const text = readFileSync(join(outDir, file), 'utf8');
-      assert.ok(!text.includes('/help/codex') && !text.includes('/help/opencode'), file);
-      assert.ok(!text.includes('Codex server') && !text.includes('OpenCode 2'), file);
-      assert.ok(!text.includes('Codex** runtime') && !text.includes('OpenCode** runtime'), file);
-    }
+  for (const slug of ['new-agent', 'host-page', 'closed-sessions', 'notifications', 'requirements']) {
+    assert.ok(!readFileSync(join(outDir, `help/${slug}.html`), 'utf8').includes(note), slug);
   }
   const index = readFileSync(join(outDir, 'changelog.html'), 'utf8');
   assert.ok(index.includes('id="v1-3-0"'));

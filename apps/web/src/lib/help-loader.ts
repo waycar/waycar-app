@@ -55,6 +55,11 @@ export function applyHelpEdits(slug: string, text: string, edits: readonly HelpE
       current = current.replaceAll(edit.replace, () => edit.with);
       continue;
     }
+    if ('prependBody' in edit) {
+      const frontmatter = FRONTMATTER.exec(current)?.[0] ?? '';
+      current = `${frontmatter}\n${edit.prependBody}\n${current.slice(frontmatter.length)}`;
+      continue;
+    }
     let lines = current.split('\n');
     if ('dropSection' in edit) {
       const next = dropSection(lines, edit.dropSection);
@@ -76,19 +81,6 @@ export function applyHelpEdits(slug: string, text: string, edits: readonly HelpE
 const unmatched = (slug: string, text: string) =>
   `src/data/unreleased.ts: an edit for help page "${slug}" matches nothing (${JSON.stringify(text.slice(0, 80))}). ` +
   'The page changed: update its entry in RELEASED_HELP_EDITS.';
-
-/** 1.3.0 has no Codex or OpenCode 2 server runtime. */
-const UNRELEASED_TERMS = /Codex server|Codex thread|OpenCode 2|OpenCode server/;
-
-/** A released page that names the Codex or OpenCode server runtime promises what 1.3.0 lacks. */
-function checkUnreleasedTerms(slug: string, text: string): void {
-  const found = UNRELEASED_TERMS.exec(text)?.[0];
-  if (found) {
-    throw new Error(
-      `src/content/help/${slug}.md still says "${found}" after RELEASED_HELP_EDITS (the help gate holds): add an edit for it in src/data/unreleased.ts.`,
-    );
-  }
-}
 
 /** A body link to a hidden page would be a 404 on the released site. */
 function checkLinks(slug: string, text: string): void {
@@ -139,7 +131,6 @@ async function loadReleased({ config, store, parseData, renderMarkdown, generate
       const original = await readFile(fileURL, 'utf8');
       const text = applyHelpEdits(id, original, RELEASED_HELP_EDITS[id] ?? []);
       checkLinks(id, text);
-      checkUnreleasedTerms(id, text);
       const frontmatter = FRONTMATTER.exec(text)?.[0] ?? '';
       const rendered = await renderMarkdown(text, { fileURL });
       const data = { ...(rendered.metadata?.frontmatter ?? {}) } as Record<string, unknown>;

@@ -8,7 +8,7 @@ answer: Claude Code does not run on the phone. It runs on a computer, either you
 needs:
   - "An iPhone or iPad on iOS or iPadOS 18 or later."
   - "A Mac or Linux machine that is on and awake, with Claude Code installed and signed in."
-  - "tmux 3.2 or later, herdr 0.7.5 or later, or herdr-core 0.1.10 or later on that machine. Claude Code runs inside one of them."
+  - "tmux 3.2 or later, herdr 0.7.5 or later, or Herdr Core 0.1.10 or later on that machine, or Zellij 0.46+ from the next update. Claude Code runs inside one."
   - "SSH access to it: Remote Login on a Mac, or an SSH server on Linux. herdr also needs AllowTcpForwarding set to local or yes."
   - "`curl` and `tar` on the machine, for the install command that sets up the Waycar host tools. No Node needed."
   - "Optional: mosh-server on the machine, so the terminal keeps going when your network changes."
@@ -64,7 +64,7 @@ Waycar has an optional push relay. Your machine encrypts each notification first
 ## What Waycar cannot do
 
 - Claude Code runs on your machine, not in the app, and Waycar keeps no cloud copy. Your machine must be on and awake.
-- Its agent terminals need tmux, herdr or herdr-core. It cannot open an arbitrary SSH server.
+- Its agent terminals need tmux, herdr or Herdr Core, or Zellij from the next update. It cannot open an arbitrary SSH server.
 - Waycar supports Mac and Linux machines. Claude Code also runs on Windows, which Waycar does not support.
 - It is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
 - Chat Mode covers 14 agents; see [Chat Mode](/help/chat-mode).
