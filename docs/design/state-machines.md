@@ -4360,6 +4360,41 @@ stateDiagram-v2
     leaving --> finished: let go
 ```
 
+### EnrollmentAcceptMachine
+
+- **File:** `plugin/rust/pair_accept.rs`
+- **Owner:** `pair_accept::try_accept` (the sshd forced command) reads the
+  pending record and stdin, runs `end_pairing`, and performs the
+  inside-the-lock effects within `edit_authorized_keys`, the critical section
+  `expire_pairing` and `end_pairing` share. The popup side of the ceremony
+  (`begin_pairing`, `expire_pairing`, `end_pairing`) stays the popup's.
+- **States:** `checking`, `healing(outcome)`, `reading(expiresAt)`,
+  `editing(expiresAt, key)`, `committing(outcome)`, `finished(outcome)`.
+- **Events:** `pending(record, now)`, `healed`, `submission(text)`,
+  `locked(pendingExists, now)` (sent inside the lock), `edited`.
+- **Effects:** `fail`, `endPairing`, `readSubmission`, `edit`; inside the
+  lock `revokeBootstrap`, `removePending`, `addDeviceKey`,
+  `recordEnrollment`.
+- **Tests:** `pair_accept::tests::enrollment_accept_machine` (transitions),
+  `pair_accept::tests` (enroll, single use, retry after an invalid line,
+  expiry before and inside the lock, concurrent accepts, an expiry racing an
+  accept, self-heal), `pairing_session::tests`.
+- **Catalogue:** HT-07.
+
+```mermaid
+stateDiagram-v2
+    [*] --> checking
+    checking --> healing: missing or expired / endPairing
+    checking --> reading: live / readSubmission
+    healing --> finished: healed, rejected
+    reading --> finished: empty or invalid, rejected
+    reading --> editing: valid key / edit
+    editing --> committing: locked, used / nothing
+    editing --> committing: locked, expired / revokeBootstrap, removePending
+    editing --> committing: locked, live / revoke, remove, addDeviceKey, recordEnrollment
+    committing --> finished: edited
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4770,7 +4805,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
 | HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | converted → `ApprovalWatchMachine` | P4 |
 | HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | convert | P4 |
-| HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | convert | P4 |
+| HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | converted → `EnrollmentAcceptMachine` (the accept side; the popup side is HT-06) | P4 |
 | HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | convert | P4 |
 | HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | convert | P4 |
 | HT-10 | Summary refresh run | `plugin/rust/summary/refresh.rs` | implicit | M/H | leave: cross-process lock with takeover | — |

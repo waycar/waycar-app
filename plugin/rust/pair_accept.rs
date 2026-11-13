@@ -24,13 +24,14 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::authorized_keys::{edit_authorized_keys, key_blob_of, parse_bootstrap_line};
-use crate::device_key::parse_device_key_line;
+use crate::device_key::{DeviceKey, parse_device_key_line};
 use crate::error::{CliError, EXIT_FAILURE, EXIT_OK, Result};
 use crate::jsx;
 use crate::native::Ctx;
 use crate::pairing_session::{
     Enrollment, end_pairing, now_seconds, pending_path, read_json, record_enrollment, remove_force,
 };
+use crate::state_machine::StateMachine;
 
 const MAX_INPUT_BYTES: usize = 4096;
 const INPUT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -39,13 +40,244 @@ const READ_CHUNK: usize = 64 * 1024;
 
 /// How an accept ended: the protocol line for stdout, plus stderr detail on
 /// failure.
-enum Outcome {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
     Enrolled { fingerprint: String },
     Rejected { code: &'static str, detail: String },
 }
 
 fn rejected(code: &'static str, detail: String) -> Result<Outcome> {
     Ok(Outcome::Rejected { code, detail })
+}
+
+/// The pending record of the pairing, as read.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PendingRecord {
+    /// Missing, or not JSON.
+    Missing,
+    /// The JSON `null` (the JS threw reading its expiry).
+    Null,
+    /// A record; `expires_at` as a number, none when it has none (it then
+    /// never expires).
+    Found { expires_at: Option<f64> },
+}
+
+/// One accept of a Bootstrap Key submission (HT-07): check the pending
+/// record, read the submission, then one locked authorized_keys edit that
+/// either enrolls the Device Key and self-revokes the bootstrap line, or
+/// finds the pairing used or expired. The owner, [`try_accept`], performs the
+/// file and stdin effects; those marked "inside the lock" run inside
+/// `edit_authorized_keys`, the same critical section `expire_pairing` and
+/// `end_pairing` take.
+#[derive(Debug)]
+pub struct EnrollmentAcceptMachine {
+    state: AcceptState,
+    pairing_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AcceptState {
+    /// Waiting for the pending record.
+    Checking,
+    /// Cleaning up an unknown or expired pairing before rejecting.
+    Healing(Outcome),
+    /// Waiting for the submission.
+    Reading {
+        expires_at: Option<f64>,
+    },
+    /// The locked edit was asked for.
+    Editing {
+        expires_at: Option<f64>,
+        key: DeviceKey,
+    },
+    /// The locked edit decided; waiting for it to commit.
+    Committing(Outcome),
+    Finished(Outcome),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AcceptEvent {
+    Pending {
+        record: PendingRecord,
+        now: i64,
+    },
+    /// `end_pairing` finished.
+    Healed,
+    /// The submission's first line.
+    Submission(String),
+    /// Inside the lock: whether the pending record still exists, and the time.
+    Locked {
+        pending_exists: bool,
+        now: i64,
+    },
+    /// The locked edit committed.
+    Edited,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AcceptEffect {
+    /// Fail the accept with this message (no protocol line).
+    Fail(&'static str),
+    /// `end_pairing` for the pairing.
+    EndPairing,
+    ReadSubmission,
+    /// Run the locked edit (and feed it `Locked`).
+    Edit,
+    /// Inside the lock: drop the pairing's bootstrap line.
+    RevokeBootstrap,
+    /// Inside the lock: delete the pending record.
+    RemovePending,
+    /// Inside the lock: append this line unless its key is already there.
+    AddDeviceKey(String),
+    /// Inside the lock: write the Enrollment record the popup polls for.
+    RecordEnrollment(Enrollment),
+}
+
+impl EnrollmentAcceptMachine {
+    pub fn new(pairing_id: impl Into<String>) -> Self {
+        Self {
+            state: AcceptState::Checking,
+            pairing_id: pairing_id.into(),
+        }
+    }
+
+    /// The result once finished.
+    pub fn outcome(&self) -> Option<&Outcome> {
+        match &self.state {
+            AcceptState::Finished(outcome) => Some(outcome),
+            _ => None,
+        }
+    }
+
+    fn expired(expires_at: Option<f64>, now: i64) -> bool {
+        expires_at.is_some_and(|expires_at| now as f64 > expires_at)
+    }
+
+    fn expired_outcome(&self) -> Outcome {
+        Outcome::Rejected {
+            code: "expired",
+            detail: format!(
+                "pairing {} expired; regenerate the Pairing Code",
+                self.pairing_id
+            ),
+        }
+    }
+
+    fn finish(&mut self, outcome: Outcome) -> Vec<AcceptEffect> {
+        self.state = AcceptState::Finished(outcome);
+        Vec::new()
+    }
+}
+
+impl StateMachine for EnrollmentAcceptMachine {
+    type State = AcceptState;
+    type Event = AcceptEvent;
+    type Effect = AcceptEffect;
+
+    fn state(&self) -> &AcceptState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: AcceptEvent) -> Vec<AcceptEffect> {
+        let state = std::mem::replace(&mut self.state, AcceptState::Checking);
+        match (state, event) {
+            (AcceptState::Checking, AcceptEvent::Pending { record, now }) => match record {
+                // Unknown, already completed, or already cleaned up. Self-heal
+                // any leftover line for this id before rejecting.
+                PendingRecord::Missing => {
+                    self.state = AcceptState::Healing(Outcome::Rejected {
+                        code: "unknown_pairing",
+                        detail: format!("no pending pairing {}", self.pairing_id),
+                    });
+                    vec![AcceptEffect::EndPairing]
+                }
+                PendingRecord::Null => {
+                    self.state = AcceptState::Checking;
+                    vec![AcceptEffect::Fail(
+                        "TypeError: Cannot read properties of null (reading 'expiresAt')",
+                    )]
+                }
+                PendingRecord::Found { expires_at } if Self::expired(expires_at, now) => {
+                    self.state = AcceptState::Healing(self.expired_outcome());
+                    vec![AcceptEffect::EndPairing]
+                }
+                PendingRecord::Found { expires_at } => {
+                    self.state = AcceptState::Reading { expires_at };
+                    vec![AcceptEffect::ReadSubmission]
+                }
+            },
+            (AcceptState::Healing(outcome), AcceptEvent::Healed) => self.finish(outcome),
+            (AcceptState::Reading { expires_at }, AcceptEvent::Submission(submission)) => {
+                if jsx::trim(&submission).is_empty() {
+                    return self.finish(Outcome::Rejected {
+                        code: "no_input",
+                        detail: "expected a Device Key public line on stdin".into(),
+                    });
+                }
+                match parse_device_key_line(&submission) {
+                    Ok(key) => {
+                        self.state = AcceptState::Editing { expires_at, key };
+                        vec![AcceptEffect::Edit]
+                    }
+                    Err(error) => self.finish(Outcome::Rejected {
+                        code: "invalid_key",
+                        detail: format!("rejected Device Key line: {error}"),
+                    }),
+                }
+            }
+            (
+                AcceptState::Editing { expires_at, key },
+                AcceptEvent::Locked {
+                    pending_exists,
+                    now,
+                },
+            ) => {
+                if !pending_exists {
+                    self.state = AcceptState::Committing(Outcome::Rejected {
+                        code: "unknown_pairing",
+                        detail: format!("pairing {} was already used", self.pairing_id),
+                    });
+                    return Vec::new();
+                }
+                // Re-validate expiry inside the lock: the stdin read can
+                // block for up to the input timeout. Still revoke the
+                // bootstrap line, but do not enroll the Device Key.
+                if Self::expired(expires_at, now) {
+                    self.state = AcceptState::Committing(self.expired_outcome());
+                    return vec![AcceptEffect::RevokeBootstrap, AcceptEffect::RemovePending];
+                }
+                let record = Enrollment {
+                    pairing_id: self.pairing_id.clone(),
+                    expires_at: expires_at.map(|e| e as i64),
+                    fingerprint: key.fingerprint.clone(),
+                    line: key.line.clone(),
+                };
+                self.state = AcceptState::Committing(Outcome::Enrolled {
+                    fingerprint: key.fingerprint,
+                });
+                vec![
+                    AcceptEffect::RevokeBootstrap,
+                    AcceptEffect::RemovePending,
+                    AcceptEffect::AddDeviceKey(key.line),
+                    AcceptEffect::RecordEnrollment(record),
+                ]
+            }
+            (AcceptState::Committing(outcome), AcceptEvent::Edited) => self.finish(outcome),
+            // Every other pairing is an event the state never asked for.
+            (
+                state @ (AcceptState::Checking
+                | AcceptState::Healing(_)
+                | AcceptState::Reading { .. }
+                | AcceptState::Editing { .. }
+                | AcceptState::Committing(_)
+                | AcceptState::Finished(_)),
+                _,
+            ) => {
+                self.state = state;
+                Vec::new()
+            }
+        }
+    }
 }
 
 /// `waycar pair-accept --state-dir D --pairing-id I`; the Device Key line is
@@ -107,108 +339,100 @@ fn try_accept(
     };
     let (state_dir, home) = (Path::new(&state_dir), Path::new(home));
 
-    let pending = match read_json(&pending_path(state_dir, &pairing_id)) {
-        // Unknown, already completed, or already cleaned up. Self-heal any
-        // leftover line for this id before rejecting.
-        None => {
-            end_pairing(home, state_dir, &pairing_id)?;
-            return rejected(
-                "unknown_pairing",
-                format!("no pending pairing {pairing_id}"),
-            );
-        }
-        Some(Value::Null) => {
-            return Err(CliError::failure(
-                "TypeError: Cannot read properties of null (reading 'expiresAt')",
-            ));
-        }
-        Some(pending) => pending,
-    };
-    // The expiry as a number; a record this program did not write, with none,
-    // never expires.
-    let expires_at = pending.get("expiresAt").and_then(Value::as_f64);
-    let expired = |now: i64| expires_at.is_some_and(|expires_at| now as f64 > expires_at);
-    let expired_detail = format!("pairing {pairing_id} expired; regenerate the Pairing Code");
-
-    if expired(now_seconds()) {
-        end_pairing(home, state_dir, &pairing_id)?;
-        return rejected("expired", expired_detail);
-    }
-
-    let submission = read_submission(input, timeout);
-    if jsx::trim(&submission).is_empty() {
-        return rejected(
-            "no_input",
-            "expected a Device Key public line on stdin".into(),
-        );
-    }
-    let device_key = match parse_device_key_line(&submission) {
-        Ok(device_key) => device_key,
-        Err(error) => {
-            return rejected("invalid_key", format!("rejected Device Key line: {error}"));
-        }
-    };
-
-    // One locked edit enrolls the Device Key and self-revokes the bootstrap
-    // line. Pending state is deleted inside the critical section so a racing
-    // second connection cannot enroll twice with the same Bootstrap Key, and
-    // the Enrollment record is written inside it too, so the popup's locked
-    // expiry check (expire_pairing) can never miss an enroll that already
-    // happened: it would render "expired" over a silently enrolled device.
     let pending_file = pending_path(state_dir, &pairing_id);
-    let mut verdict = Verdict::Enrolled;
-    edit_authorized_keys(home, |lines| {
-        if !pending_file.exists() {
-            verdict = Verdict::AlreadyUsed;
-            return Ok(None);
+    let record = match read_json(&pending_file) {
+        None => PendingRecord::Missing,
+        Some(Value::Null) => PendingRecord::Null,
+        // The expiry as a number; a record this program did not write, with
+        // none, never expires.
+        Some(pending) => PendingRecord::Found {
+            expires_at: pending.get("expiresAt").and_then(Value::as_f64),
+        },
+    };
+    let mut machine = EnrollmentAcceptMachine::new(pairing_id.clone());
+    let mut input = Some(input);
+    let mut events = vec![AcceptEvent::Pending {
+        record,
+        now: now_seconds(),
+    }];
+    while let Some(event) = events.pop() {
+        for effect in machine.handle(event) {
+            match effect {
+                AcceptEffect::Fail(message) => return Err(CliError::failure(message)),
+                AcceptEffect::EndPairing => {
+                    end_pairing(home, state_dir, &pairing_id)?;
+                    events.push(AcceptEvent::Healed);
+                }
+                AcceptEffect::ReadSubmission => {
+                    let submission = input
+                        .take()
+                        .map(|input| read_submission(input, timeout))
+                        .unwrap_or_default();
+                    events.push(AcceptEvent::Submission(submission));
+                }
+                // One locked edit enrolls the Device Key and self-revokes the
+                // bootstrap line. Pending state is deleted inside the critical
+                // section so a racing second connection cannot enroll twice
+                // with the same Bootstrap Key, and the Enrollment record is
+                // written inside it too, so the popup's locked expiry check
+                // (expire_pairing) can never miss an enroll that already
+                // happened: it would render "expired" over a silently
+                // enrolled device.
+                AcceptEffect::Edit => {
+                    edit_authorized_keys(home, |lines| {
+                        let locked = machine.handle(AcceptEvent::Locked {
+                            pending_exists: pending_file.exists(),
+                            now: now_seconds(),
+                        });
+                        let mut kept = None;
+                        for effect in locked {
+                            match effect {
+                                AcceptEffect::RevokeBootstrap => {
+                                    kept = Some(
+                                        lines
+                                            .iter()
+                                            .filter(|line| {
+                                                parse_bootstrap_line(line)
+                                                    .is_none_or(|m| m.pairing_id != pairing_id)
+                                            })
+                                            .cloned()
+                                            .collect::<Vec<String>>(),
+                                    );
+                                }
+                                AcceptEffect::RemovePending => remove_force(&pending_file)?,
+                                AcceptEffect::AddDeviceKey(line) => {
+                                    let kept = kept.get_or_insert_with(|| lines.clone());
+                                    let identity = key_blob_of(&line);
+                                    if !kept.iter().any(|kept| key_blob_of(kept) == identity) {
+                                        kept.push(line);
+                                    }
+                                }
+                                AcceptEffect::RecordEnrollment(record) => {
+                                    record_enrollment(state_dir, &record)?;
+                                }
+                                // Never asked for inside the lock.
+                                AcceptEffect::Fail(_)
+                                | AcceptEffect::EndPairing
+                                | AcceptEffect::ReadSubmission
+                                | AcceptEffect::Edit => {}
+                            }
+                        }
+                        Ok(kept)
+                    })?;
+                    events.push(AcceptEvent::Edited);
+                }
+                // Only ever asked for inside the lock, above.
+                AcceptEffect::RevokeBootstrap
+                | AcceptEffect::RemovePending
+                | AcceptEffect::AddDeviceKey(_)
+                | AcceptEffect::RecordEnrollment(_) => {}
+            }
         }
-        let mut kept: Vec<String> = lines
-            .into_iter()
-            .filter(|line| parse_bootstrap_line(line).is_none_or(|m| m.pairing_id != pairing_id))
-            .collect();
-        remove_force(&pending_file)?;
-        // Re-validate expiry inside the lock: the stdin read can block for up
-        // to the input timeout, so the TTL may have lapsed since the check
-        // before it. Still revoke the bootstrap line, but do not enroll the
-        // Device Key.
-        if expired(now_seconds()) {
-            verdict = Verdict::Expired;
-            return Ok(Some(kept));
-        }
-        let identity = key_blob_of(&device_key.line);
-        if !kept.iter().any(|line| key_blob_of(line) == identity) {
-            kept.push(device_key.line.clone());
-        }
-        // The record the popup polls for: the enrolled fingerprint plus the
-        // appended line, its one-key revoke target.
-        record_enrollment(
-            state_dir,
-            &Enrollment {
-                pairing_id: pairing_id.clone(),
-                expires_at: expires_at.map(|e| e as i64),
-                fingerprint: device_key.fingerprint.clone(),
-                line: device_key.line.clone(),
-            },
-        )?;
-        Ok(Some(kept))
-    })?;
-    match verdict {
-        Verdict::AlreadyUsed => rejected(
-            "unknown_pairing",
-            format!("pairing {pairing_id} was already used"),
-        ),
-        Verdict::Expired => rejected("expired", expired_detail),
-        Verdict::Enrolled => Ok(Outcome::Enrolled {
-            fingerprint: device_key.fingerprint,
-        }),
     }
-}
-
-/// What the locked edit found.
-enum Verdict {
-    Enrolled,
-    AlreadyUsed,
-    Expired,
+    machine
+        .outcome()
+        .cloned()
+        .ok_or_else(|| CliError::failure("pair-accept ended without an outcome"))
 }
 
 /// Read stdin until the first newline, EOF, a size cap, or a timeout, and
@@ -697,6 +921,192 @@ mod tests {
             assert_eq!(f.keys(), format!("{USER_LINE}\n{DEVICE_LINE}\n"));
             assert_eq!(f.bootstrap_lines(), 0);
             assert!(!f.pending_exists(&session.pairing_id));
+        }
+    }
+
+    mod enrollment_accept_machine {
+        use super::super::*;
+        use super::{DEVICE_FINGERPRINT, DEVICE_LINE};
+        use crate::state_machine::testing::handle_all;
+
+        fn found(expires_at: Option<f64>) -> AcceptEvent {
+            AcceptEvent::Pending {
+                record: PendingRecord::Found { expires_at },
+                now: 100,
+            }
+        }
+
+        fn rejection(code: &'static str, detail: &str) -> AcceptState {
+            AcceptState::Finished(Outcome::Rejected {
+                code,
+                detail: detail.into(),
+            })
+        }
+
+        #[test]
+        fn a_missing_record_heals_then_rejects_as_unknown() {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            let effects = accept.handle(AcceptEvent::Pending {
+                record: PendingRecord::Missing,
+                now: 100,
+            });
+            assert_eq!(effects, [AcceptEffect::EndPairing]);
+            assert_eq!(accept.handle(AcceptEvent::Healed), []);
+            assert_eq!(
+                accept.state(),
+                &rejection("unknown_pairing", "no pending pairing p1")
+            );
+        }
+
+        #[test]
+        fn a_null_record_fails() {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            let effects = accept.handle(AcceptEvent::Pending {
+                record: PendingRecord::Null,
+                now: 100,
+            });
+            assert!(matches!(effects[..], [AcceptEffect::Fail(_)]));
+        }
+
+        #[test]
+        fn an_expired_record_heals_then_rejects_as_expired() {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            assert_eq!(accept.handle(found(Some(99.0))), [AcceptEffect::EndPairing]);
+            let _ = accept.handle(AcceptEvent::Healed);
+            assert_eq!(
+                accept.state(),
+                &rejection("expired", "pairing p1 expired; regenerate the Pairing Code")
+            );
+        }
+
+        #[test]
+        fn a_live_or_expiry_less_record_reads_the_submission() {
+            for expires_at in [Some(100.0), None] {
+                let mut accept = EnrollmentAcceptMachine::new("p1");
+                assert_eq!(
+                    accept.handle(found(expires_at)),
+                    [AcceptEffect::ReadSubmission]
+                );
+            }
+        }
+
+        #[test]
+        fn an_empty_or_invalid_submission_rejects_consuming_nothing() {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            let effects = handle_all(
+                &mut accept,
+                [found(Some(200.0)), AcceptEvent::Submission(" \t".into())],
+            );
+            assert_eq!(effects, [AcceptEffect::ReadSubmission]);
+            assert_eq!(
+                accept.state(),
+                &rejection("no_input", "expected a Device Key public line on stdin")
+            );
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            let _ = handle_all(
+                &mut accept,
+                [
+                    found(Some(200.0)),
+                    AcceptEvent::Submission("ssh-rsa x".into()),
+                ],
+            );
+            assert!(matches!(
+                accept.state(),
+                AcceptState::Finished(Outcome::Rejected {
+                    code: "invalid_key",
+                    ..
+                })
+            ));
+        }
+
+        fn editing(expires_at: Option<f64>) -> EnrollmentAcceptMachine {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            let effects = handle_all(
+                &mut accept,
+                [
+                    found(expires_at),
+                    AcceptEvent::Submission(DEVICE_LINE.into()),
+                ],
+            );
+            assert_eq!(effects, [AcceptEffect::ReadSubmission, AcceptEffect::Edit]);
+            accept
+        }
+
+        #[test]
+        fn inside_the_lock_a_consumed_pairing_was_already_used() {
+            let mut accept = editing(Some(200.0));
+            let effects = accept.handle(AcceptEvent::Locked {
+                pending_exists: false,
+                now: 150,
+            });
+            assert_eq!(effects, []);
+            assert_eq!(accept.handle(AcceptEvent::Edited), []);
+            assert_eq!(
+                accept.state(),
+                &rejection("unknown_pairing", "pairing p1 was already used")
+            );
+        }
+
+        #[test]
+        fn inside_the_lock_an_expired_pairing_revokes_without_enrolling() {
+            let mut accept = editing(Some(200.0));
+            assert_eq!(
+                accept.handle(AcceptEvent::Locked {
+                    pending_exists: true,
+                    now: 201,
+                }),
+                [AcceptEffect::RevokeBootstrap, AcceptEffect::RemovePending]
+            );
+            let _ = accept.handle(AcceptEvent::Edited);
+            assert!(matches!(
+                accept.outcome(),
+                Some(Outcome::Rejected {
+                    code: "expired",
+                    ..
+                })
+            ));
+        }
+
+        #[test]
+        fn inside_the_lock_a_live_pairing_enrolls_and_records() {
+            let mut accept = editing(Some(200.0));
+            let effects = accept.handle(AcceptEvent::Locked {
+                pending_exists: true,
+                now: 200,
+            });
+            assert_eq!(
+                effects,
+                [
+                    AcceptEffect::RevokeBootstrap,
+                    AcceptEffect::RemovePending,
+                    AcceptEffect::AddDeviceKey(DEVICE_LINE.into()),
+                    AcceptEffect::RecordEnrollment(Enrollment {
+                        pairing_id: "p1".into(),
+                        expires_at: Some(200),
+                        fingerprint: DEVICE_FINGERPRINT.into(),
+                        line: DEVICE_LINE.into(),
+                    }),
+                ]
+            );
+            assert_eq!(accept.outcome(), None, "not before the edit commits");
+            let _ = accept.handle(AcceptEvent::Edited);
+            assert_eq!(
+                accept.outcome(),
+                Some(&Outcome::Enrolled {
+                    fingerprint: DEVICE_FINGERPRINT.into()
+                })
+            );
+        }
+
+        #[test]
+        fn events_a_state_never_asked_for_are_ignored() {
+            let mut accept = EnrollmentAcceptMachine::new("p1");
+            assert_eq!(accept.handle(AcceptEvent::Edited), []);
+            assert_eq!(accept.handle(AcceptEvent::Healed), []);
+            assert_eq!(accept.state(), &AcceptState::Checking);
+            let mut accept = editing(None);
+            assert_eq!(accept.handle(AcceptEvent::Edited), []);
+            assert!(matches!(accept.state(), AcceptState::Editing { .. }));
         }
     }
 
