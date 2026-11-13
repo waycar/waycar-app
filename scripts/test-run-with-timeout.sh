@@ -153,7 +153,7 @@ awk '
     /if \[\[ "\$ci_lane" == "package" \]\]; then/ { in_pkg = 1 }
     in_pkg && /WaycarSSH package build/ { saw_build_label = 1 }
     in_pkg && /build-for-testing/ { build = NR }
-    in_pkg && /simctl bootstatus/ { boot = NR }
+    in_pkg && /^wait_for_simulator_boot$/ { boot = NR }
     in_pkg && /test-without-building/ { test_action = NR }
     in_pkg && /^exit 0$/ {
         ok = (saw_build_label && build && boot && test_action \
@@ -162,11 +162,15 @@ awk '
     }
     END { exit ok ? 0 : 1 }
 ' "$gate_script" || {
-    echo "package lane must overlap simulator boot with build-for-testing" >&2
+    echo "package lane must wait for the simulator between build-for-testing and its tests" >&2
     exit 1
 }
-[[ "$(grep -cF '==> Simulator boot wait after the build overlap:' "$gate_script")" == 2 ]] || {
-    echo "app and package lanes must each attribute the boot/build overlap" >&2
+[[ "$(grep -cx 'wait_for_simulator_boot' "$gate_script")" == 2 ]] || {
+    echo "app and package lanes must each wait for the simulator boot" >&2
+    exit 1
+}
+[[ "$(grep -cF '==> Simulator boot wait after the build overlap:' "$gate_script")" == 1 ]] || {
+    echo "the simulator boot wait must attribute the boot/build overlap" >&2
     exit 1
 }
 [[ "$(grep -cF -- '-disableAutomaticPackageResolution' "$gate_script")" == 1 ]] || {

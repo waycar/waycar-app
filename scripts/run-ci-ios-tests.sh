@@ -1801,7 +1801,61 @@ simulator_destination="platform=iOS Simulator,id=$simulator_udid"
 # Kick the boot off now and wait for it only after build-for-testing below:
 # compilation needs the destination to exist, not to be booted, so boot
 # happens under fixture provisioning and build instead of in front of them.
-xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+#
+# WAYCAR_CI_BOOT_AFTER_BUILD=1 (the hosted runners) defers the boot to after
+# the build and then waits for the device's first-boot work to finish. On a
+# 3-core hosted runner a new iOS 27 device's first boot keeps the 1-minute
+# load above 300 for about 15 minutes (simulator boot probe, 2026-11-13: 234 s
+# to bootstatus, load under 30 only 1,030 s after the boot began). Overlapped,
+# it stretched the build past its 30-minute watchdog and failed the password
+# preflight; still running when the suites started, it starves their tests.
+boot_after_build=0
+if [[ "${WAYCAR_CI_BOOT_AFTER_BUILD:-0}" == "1" ]]; then
+    boot_after_build=1
+else
+    xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+fi
+
+# Waits for the claimed simulator before the first test action: whatever is
+# left of the boot kicked off above, or, deferred, the whole boot and then its
+# first-boot work. That work has no completion signal, so the wait polls the
+# 1-minute load average until it is under ten per core (a booted, settled
+# device on the hosted runner idles at 15 to 25 on 3 cores), and gives up,
+# loudly, after settle_limit_seconds.
+settle_limit_seconds=1200
+wait_for_simulator_boot() {
+    local started=$SECONDS
+    local limit
+    local load
+    local cores
+
+    if [[ "$boot_after_build" == "1" ]]; then
+        xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+    fi
+    xcrun simctl bootstatus "$simulator_udid" -b
+    if [[ "$boot_after_build" != "1" ]]; then
+        echo "==> Simulator boot wait after the build overlap: $((SECONDS - started))s"
+        return 0
+    fi
+    echo "==> Simulator boot after the build: $((SECONDS - started))s"
+    cores=$(sysctl -n hw.ncpu)
+    limit=$((SECONDS + settle_limit_seconds))
+    while :; do
+        load=$(sysctl -n vm.loadavg | awk '{ print $2 }')
+        if awk -v load="$load" -v cores="$cores" 'BEGIN { exit !(load < 10 * cores) }'; then
+            echo "==> Simulator first-boot work settled: 1-minute load $load" \
+                "on $cores cores, $((SECONDS - started))s after the boot began"
+            return 0
+        fi
+        if ((SECONDS >= limit)); then
+            echo "WARNING: the simulator's first-boot work has not settled after" \
+                "${settle_limit_seconds}s (1-minute load $load on $cores cores);" \
+                "the suites start on a loaded machine." >&2
+            return 0
+        fi
+        sleep 15
+    done
+}
 
 sftp_server=""
 for candidate in /usr/libexec/sftp-server /usr/lib/openssh/sftp-server; do
@@ -3104,11 +3158,7 @@ elif [[ $gate_status -ne 0 ]]; then
     echo "actor-isolation gate could not read the build logs (status $gate_status)" >&2
     exit 1
 fi
-# The simulator has been booting since before the build started; whatever
-# remains of its boot is all this wait costs.
-boot_wait_started=$SECONDS
-xcrun simctl bootstatus "$simulator_udid" -b
-echo "==> Simulator boot wait after the build overlap: $((SECONDS - boot_wait_started))s"
+wait_for_simulator_boot
 # Read through variable indirection by push_simulator_environment, which
 # static analysis cannot follow; unset again by clear_simulator_environment.
 # shellcheck disable=SC2034
@@ -3499,9 +3549,7 @@ run_xcodebuild "WaycarSSH package build" "$xcodebuild_build_timeout_seconds" \
     -derivedDataPath "$package_derived_data_path" \
     -destination "$simulator_destination" \
     -collect-test-diagnostics never
-boot_wait_started=$SECONDS
-xcrun simctl bootstatus "$simulator_udid" -b
-echo "==> Simulator boot wait after the build overlap: $((SECONDS - boot_wait_started))s"
+wait_for_simulator_boot
 
 push_simulator_environment \
     WAYCAR_SSH_E2E_REQUIRED \
