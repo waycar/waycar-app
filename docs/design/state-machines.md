@@ -4310,6 +4310,55 @@ stateDiagram-v2
     expired --> notRunning: ended
 ```
 
+### StandbyMoshMachine
+
+- **File:** `Sources/Waycar/Transport/StandbyMosh.swift`
+- **Owner:** `StandbyMoshStore` (main actor) runs each preparation's
+  bootstrap under its budget in a Task keyed by the machine's token, waits
+  for a target's preparation in flight before `take` and
+  `claimAttachBootstrap`, and reads `standby(for:)`, `isPreparing` and
+  `hasAttachBootstrap(on:)` from the state. `now` arrives in events.
+- **States:** per target absent, `preparing(token)`, `ready(standby)`,
+  `refreshing(standby, token)` (a renewal keeps the ready one),
+  `bootstrapping(count)`, and the overlap kept from before:
+  `bootstrappingBesidePreparation(count, token)` and
+  `bootstrappingBesideStandby(count, standby)`, reached only when a
+  preparation starts between the one an attach waited for finishing and
+  that attach's claim.
+- **Events:** `prepare`, `prepared(token, standby?)`, `take(now)`,
+  `claimAttachBootstrap(now)`, `finishAttachBootstrap`, `discardHost`,
+  `discard`.
+- **Effects:** `startPreparation(token)`, `joinPreparation(token)`,
+  `refusePreparation`, `cancelPreparation(token)`, `handOut(standby?)`,
+  `attachBootstrapsSettled(host)`. Single use; a standby counts only
+  while younger than `maxAge` (50 s); discarding keeps attach bootstraps.
+- **Tests:** `StandbyMoshMachineTests`, `StandbyMoshStoreTests` (taken
+  once, origin, age, never beside an attach bootstrap, budget, renewal,
+  joining, take waits, stale claim, discards, settling),
+  `MoshStandbySuspensionTests`, `SpeculativeMoshStandbyTests`.
+- **Catalogue:** MOSH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> preparing: prepare / startPreparation
+    preparing --> ready: prepared(token, standby)
+    preparing --> [*]: prepared(token, nil) / discard
+    ready --> refreshing: prepare / startPreparation
+    refreshing --> ready: prepared(token) / new or kept standby
+    refreshing --> preparing: take
+    ready --> [*]: take / handOut / discard
+    [*] --> bootstrapping: claimAttachBootstrap, no standby
+    ready --> [*]: claimAttachBootstrap / handOut
+    bootstrapping --> bootstrapping: claim / finish, count > 1
+    bootstrapping --> [*]: finish last / attachBootstrapsSettled
+    preparing --> bootstrappingBesidePreparation: claim in the overlap
+    bootstrappingBesidePreparation --> bootstrappingBesideStandby: prepared(token, standby)
+    bootstrappingBesidePreparation --> bootstrapping: prepared(token, nil) / discard
+    bootstrappingBesideStandby --> bootstrapping: take / discard
+    bootstrappingBesideStandby --> ready: finish last
+    bootstrappingBesidePreparation --> preparing: finish last
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4677,7 +4726,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-21 | Happy Eyeballs race | `Packages/WaycarSSH/Sources/WaycarSSH/SocketConnector.swift` | partial | M/M | leave: generation-checked | — |
 | MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | convert | P3c |
 | MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | convert | P3c |
-| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | convert | P3c |
+| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | converted → `StandbyMoshMachine`; the claim-window overlap with a preparation kept | P3c |
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
 | MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert unless the risk is huge | P3c |
 | MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
