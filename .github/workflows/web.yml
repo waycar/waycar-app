@@ -105,10 +105,10 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
           cache: npm
@@ -140,7 +140,7 @@ jobs:
       run:
         working-directory: plugin
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
@@ -155,7 +155,7 @@ jobs:
       # unless WAYCAR_TEST_TMUX names the binary.
       - name: Test
         run: |
-          if command -v tmux >/dev/null; then export WAYCAR_TEST_TMUX="$(command -v tmux)"; fi
+          if command -v tmux >/dev/null; then WAYCAR_TEST_TMUX=$(command -v tmux); export WAYCAR_TEST_TMUX; fi
           cargo test --locked
 
   # Same guard as ci-node.yml. Full history brings the plugin-v* tags and the
@@ -165,7 +165,7 @@ jobs:
     name: Plugin version guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 # zizmor: ignore[artipacked] the guard script asks origin for a missing tag
         with:
           fetch-depth: 0
       - name: Check plugin version and release guard
@@ -189,10 +189,10 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
           cache: npm
@@ -216,7 +216,7 @@ jobs:
       - name: Download the last deployed llms.txt
         if: steps.llms.outputs.reuse_run_id != ''
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: llms-txt
           run-id: ${{ steps.llms.outputs.reuse_run_id }}
@@ -250,7 +250,7 @@ jobs:
       # What this deploy shipped, for the next deploy to carry forward. Only a
       # successful deploy gets here. `path` ignores working-directory.
       - name: Keep the deployed llms.txt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: llms-txt
           path: apps/web/dist/llms.txt

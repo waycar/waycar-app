@@ -108,12 +108,15 @@ concurrency:
   group: ci-node-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   plugin-binaries:
     name: Plugin binaries (4 targets)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # Sizes go to the step summary (a markdown table) as well as the log.
@@ -135,7 +138,7 @@ jobs:
       run:
         working-directory: plugin
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # Installs the pinned Rust toolchain and puts it on later steps' PATH;
@@ -152,7 +155,7 @@ jobs:
       # unless WAYCAR_TEST_TMUX names the binary.
       - name: Test
         run: |
-          if command -v tmux >/dev/null; then export WAYCAR_TEST_TMUX="$(command -v tmux)"; fi
+          if command -v tmux >/dev/null; then WAYCAR_TEST_TMUX=$(command -v tmux); export WAYCAR_TEST_TMUX; fi
           cargo test --locked
       # bin/waycar-hook tries tmux, then herdr-core: which half a hook reaches,
       # against a fake tmux and a stub waycar.
@@ -160,7 +163,7 @@ jobs:
         run: sh test/waycar-hook-dispatch.sh
       # The opencode extension's OpenCode 2 pushes: one per event across
       # every Location's instance, approvals of subagents on their root.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
       - name: OpenCode 2 pushes (opencode extension)
@@ -175,7 +178,7 @@ jobs:
     steps:
       # Full history brings every plugin-v* tag for the shipped-files diff
       # (the script can also fetch the one tag it needs into a shallow clone).
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 # zizmor: ignore[artipacked] the guard script asks origin for a missing tag
         with:
           fetch-depth: 0
       - name: Check plugin version and release guard
@@ -190,8 +193,10 @@ jobs:
       run:
         working-directory: relay
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
       # The relay has zero dependencies, so there is no install step.
@@ -202,7 +207,9 @@ jobs:
     name: Codegen drift (wire types, demo terminal)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       - name: Check generated wire types are up to date
         run: scripts/generate-wire-types.py --check --schema scripts/herdr-schema.json
       - name: Check the OMP demo terminal frames are up to date

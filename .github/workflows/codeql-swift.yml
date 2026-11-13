@@ -1,0 +1,69 @@
+# CodeQL for the app's Swift. It traces a real build, which needs a macOS
+# runner; the org has few of those, so it runs weekly and on demand, and on a
+# pull request only when this file changes (so the change proves itself).
+
+name: CodeQL (Swift)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/codeql-swift.yml
+  schedule:
+    - cron: "41 5 * * 4"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (swift)
+    # GitHub's Xcode 27 image, as in ci.yml.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Select the newest Xcode 27
+        run: |
+          # shellcheck disable=SC2012 # sort -V needs the plain list
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+
+      - name: Cache SwiftPM checkouts
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .ci/source-packages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Waycar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: swift
+          build-mode: manual
+          config-file: ./.github/codeql/codeql-config.yml
+
+      # The committed project, unsigned, for the Simulator: what ci.yml builds.
+      - name: Build the app
+        run: |
+          xcodebuild build \
+            -project Waycar.xcodeproj \
+            -scheme Waycar \
+            -destination 'generic/platform=iOS Simulator' \
+            -clonedSourcePackagesDirPath .ci/source-packages \
+            CODE_SIGNING_ALLOWED=NO
+
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:swift

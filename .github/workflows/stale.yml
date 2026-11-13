@@ -1,0 +1,41 @@
+# A gentle policy: only issues and pull requests that are waiting on the
+# author (labelled needs-info or needs-evidence) can go stale. Everything else
+# stays open.
+
+name: Stale
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          any-of-labels: needs-info,needs-evidence
+          days-before-stale: 30
+          days-before-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-draft-pr: true
+          stale-issue-message: >-
+            This issue has been waiting for more information for 30 days.
+            Please update the issue description with what was asked for
+            (steps to reproduce, versions, logs). Without an update it will
+            be closed in 14 days; you can reopen it any time.
+          stale-pr-message: >-
+            This pull request has been waiting for evidence or changes for 30
+            days. Please update the PR description with what was asked for
+            (tests run, screenshots, the linked issue). Without an update it
+            will be closed in 14 days; you can reopen it any time.
+          close-issue-message: Closed after 14 days without an update. Reopen it when you have the requested information.
+          close-pr-message: Closed after 14 days without an update. Reopen it when the description has the requested evidence.

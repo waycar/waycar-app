@@ -1,0 +1,54 @@
+# Lints every workflow with actionlint (syntax, expressions, shellcheck on run
+# steps) and zizmor (security audits: unpinned actions, broad permissions,
+# injection, credential persistence). Fix findings; an ignore is allowed only
+# inline, with the reason (`# zizmor: ignore[<audit>] <why>`).
+
+name: Workflow lint
+
+on:
+  pull_request:
+    paths:
+      - .github/**
+  push:
+    branches: [main]
+    paths:
+      - .github/**
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: actionlint and zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/actionlint"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/actionlint" actionlint
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+
+      - name: actionlint
+        run: actionlint -color
+
+      # The token lets zizmor's online audits (for example, whether a pinned
+      # SHA matches its version comment) call the GitHub API.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pipx run --spec zizmor==1.32.0 zizmor --format=github .github/workflows
