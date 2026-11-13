@@ -3168,9 +3168,10 @@ stateDiagram-v2
 - **Tests:** `TerminalInputOwnershipMachineTests`,
   `TerminalInputOwnershipOwnerTests` (existing controller API, no new seam),
   `TerminalInputControllerTests`, `TmuxPaneHistoryTests`.
-- **Catalogue:** ATTACH-09. ATTACH-11/13/14/15 remain deferred for a Mac pass;
-  `TerminalKeyboardLifecycleOwnerTests` adds existing-API stage, inset-token,
-  queued-reload and resize-fence safety nets without changing UIKit ordering.
+- **Catalogue:** ATTACH-09. `TerminalKeyboardLifecycleOwnerTests` adds
+  existing-API stage, inset-token, queued-reload and resize-fence safety nets
+  for ATTACH-11/13/14/15, since converted (`DirectKeyboardHandoffMachine`,
+  `KeyboardInsetMachine`, `SurfaceKeyboardFreezeMachine`, `GridReportMachine`).
 
 ```mermaid
 stateDiagram-v2
@@ -3247,6 +3248,196 @@ stateDiagram-v2
     ready --> ready: close viewer or gallery
     loading --> loading: close viewer or gallery
     failed --> failed: close viewer or gallery
+```
+
+### KeyboardInsetMachine
+
+- **File:** `Sources/Waycar/Terminal/KeyboardInsetMachine.swift`
+- **Owner:** `TerminalKeyboardInset` keeps the window, the measurement
+  overrides, the coalesce, confirmation and fallback Tasks keyed by token,
+  and the armed handoff's closures; its observed `height`,
+  `lastPresentedHeight`, `isSoftwareKeyboardDismissed` and
+  `activeResponderHandoffID` are assigned only by `publish…` effects, in
+  the order the inset always assigned them.
+- **States:** published heights and dismissal, capture on/off, the missed
+  presentation flag, presentation `none`/`coalescing(token, height)`,
+  dismissal `none`/`confirming(token)`, handoff
+  `none`/`holding(id, fallback, kind, owesDismissal)`.
+- **Events:** will-present and its measurement, coalesce elapsed,
+  will-dismiss, did-show and the window's measurement, expect keyboard,
+  confirmation elapsed, pause/resume capture, begin/end/cancel handoff,
+  fallback elapsed, exit measured.
+- **Effects:** measure, cancel/arm the three timers, forget the fired
+  fallback, publish. Measurements are separate events, so a presentation
+  is measured only while it can land and an exit measures only after its
+  freeze is released; stale timer tokens do nothing.
+- **Tests:** `KeyboardInsetMachineTests`, `TerminalKeyboardInsetLifecycleTests`,
+  the inset tests in `TerminalAttachTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-13.
+
+```mermaid
+stateDiagram-v2
+    state Presentation {
+        [*] --> none
+        none --> coalescing: measured frame covers the window / arm coalesce
+        coalescing --> coalescing: later frame / re-arm
+        coalescing --> none: matching elapsed / publish heights
+        coalescing --> none: hide, pause, handoff, did-show settle
+    }
+    state Dismissal {
+        [*] --> idle
+        idle --> confirming: hide, expect keyboard, zero settle / arm
+        confirming --> idle: matching elapsed at zero / publish dismissed
+        confirming --> idle: presentation, handoff, positive settle
+    }
+    state Handoff {
+        [*] --> free
+        free --> holding: begin / publish id, arm fallback
+        holding --> holding: hide or expiring confirmation / owe dismissal
+        holding --> holding: begin / carry debt
+        holding --> free: end, cancel, matching fallback / publish nil, measure, reconcile
+    }
+```
+
+### GridReportMachine
+
+- **File:** `Sources/Waycar/Terminal/GridReportMachine.swift`
+- **Owner:** `TerminalSessionCallbackBridge` keeps the cross-thread
+  sequence counter (read into the freeze events) and the UI closures. It
+  performs each callback effect and sends the step's continuation once the
+  callback returns, so a callback that re-entered the bridge has already
+  been applied when the step goes on.
+- **States:** phase `live`, `deferring(deferred)`, `flushing(through,
+  deferred)`; reports waiting for their predecessor; last processed and
+  discarded sequence; the duplicate-suppression grid; the last phase
+  notified.
+- **Events:** report arrived, begin/finish/cancel freeze (with the latest
+  sequence), authoritative and settled grids, and the continuations
+  (currentness checked, viewport delivered, size reported, forwarded, phase
+  notified).
+- **Effects:** check currentness, deliver the viewport, report a size,
+  forward the thaw grid, notify the phase; each the last of its step.
+- **Tests:** `GridReportMachineTests`, `TerminalResizeBridgeLifecycleTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`,
+  `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-15.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> live: report in sequence / check, deliver, report (duplicate consumed once)
+    live --> deferring: begin / discard reports that left, notify
+    deferring --> deferring: report or grid / hold newest
+    deferring --> flushing: finish / fence latest sequence, notify
+    flushing --> flushing: report before the fence / hold
+    flushing --> live: fence consumed / forward held grid, notify
+    deferring --> live: cancel / discard, notify
+    flushing --> live: cancel / discard, notify
+    flushing --> deferring: begin
+```
+
+### SurfaceKeyboardFreezeMachine
+
+- **File:** `Sources/Waycar/Terminal/SurfaceKeyboardFreezeMachine.swift`
+- **Owner:** `WaycarTerminalView` keeps the leash Task, the queued
+  main-queue reload, the shared grid-report Task, the window-resize debt and
+  the UIKit calls (`reloadInputViews`, layout, first responder). It feeds
+  the machine before every effect, so `layoutSubviews` and a settle UIKit
+  re-enters from `becomeFirstResponder` or `reloadInputViews` see the new
+  state, as before.
+- **States:** `live`, `frozen(cycle, endsOnFrameChange, reload
+  notYet/scheduled/done, handoff)`.
+- **Events:** inherit, request handoff, frame settled, queued reload fired,
+  leash elapsed, finish, request keyboard, cancel.
+- **Effects:** cancel the grid report, begin/cancel the bridge freeze,
+  cancel/arm the leash, schedule the reload, reload input views, lay out,
+  seed the authoritative grid, schedule the grid report, report the pending
+  window-resize grid, report the handoff's outcome. The queued reload and
+  the leash carry the cycle token; the reload is marked done before it
+  runs.
+- **Tests:** `SurfaceKeyboardFreezeMachineTests`,
+  `TerminalSurfaceFreezeLifecycleTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`.
+- **Catalogue:** ATTACH-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> frozen: inherit or request handoff / new cycle, freeze bridge, arm leash
+    frozen --> frozen: inherit or request handoff / new cycle
+    frozen --> frozen: first settle / queue reload (cycle)
+    frozen --> frozen: matching queued reload / mark done, reload
+    frozen --> live: settle after reload / thaw, report settled
+    frozen --> live: matching leash / reload if not done, thaw, report timedOut
+    frozen --> live: finish, or request keyboard with no handoff / thaw
+    frozen --> live: cancel / thaw bridge, report cancelled
+```
+
+### DirectKeyboardHandoffMachine
+
+- **File:** `Sources/Waycar/Console/DirectKeyboardHandoffMachine.swift`
+- **Owner:** `AgentTerminalView` (`@State`) begins it inside the same
+  animation-free transaction as before, after the shared inset froze and
+  minted the id; the terminal's update-time claim, its answer and its
+  settle or cancel arrive through the screen's callbacks unchanged, and the
+  owner applies Direct Input, drops the intent and ends or cancels the
+  inset's handoff as effects.
+- **States:** `idle`, `requested(id)`, `settling(id, requestHeld)`.
+- **Events:** begin, destination answered (accepted or refused),
+  destination settled, cancel(id), cancel current, request cleared.
+- **Effects:** enter Direct Input preserving the handoff, drop the keyboard
+  intent, end or cancel the inset's handoff. Ownership is this screen's
+  state, never inferred from the shared inset's active id.
+- **Tests:** `DirectKeyboardHandoffMachineTests`,
+  `ComposerDirectHandoffLifecycleTests`, `AgentDirectInputTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> requested: begin (inset frozen)
+    requested --> settling: matching acceptance / enter Direct Input
+    requested --> idle: refusal or cancel / drop intent, cancel inset
+    requested --> idle: request cleared
+    settling --> idle: matching settle / end inset
+    settling --> idle: cancel / cancel inset
+    settling --> settling: request cleared
+```
+
+### ShellOpeningMachine
+
+- **File:** `Sources/Waycar/Console/ShellOpeningMachine.swift`
+- **Owner:** `AgentDetailView` (`@State`) keeps the chooser and failure
+  presentations, the shell handoff (`TerminalKeyboardHandoff`) and one Task
+  per attempt, which performs the machine's steps (create or refresh, then
+  wait for the row) in turn and finishes the attempt in its `defer`, after
+  the last step's effects, as before.
+- **States:** the captured handoff token, the terminal this detail created
+  (identity and row), attempt `idle`/`resolving(attempt, handoffToken)`.
+- **Events:** Open Terminal (token, shells, request, sample), shell chosen,
+  chooser cancelled, New Terminal, created, creation failed, refreshed, row
+  awaited (found, visible), attempt finished.
+- **Effects:** present the chooser, open a shell with a token, cancel a
+  token, connect the Sample, start or continue the attempt, present a
+  failure. Every outcome consumes or cancels the token its attempt
+  started with.
+- **Tests:** `ShellOpeningMachineTests`, `ShellOpeningLifecycleTests`,
+  `ShellOpeningDeferredOwnerTests`, `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-21.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> idle: one shell / open with token
+    idle --> idle: several shells / chooser
+    idle --> resolving: no shell or a remembered one / create or refresh
+    resolving --> resolving: tap / give its token back
+    resolving --> resolving: created / remember, await row
+    resolving --> resolving: row found and visible / open with token
+    resolving --> resolving: row missing, not visible or failure / cancel token (report)
+    resolving --> idle: attempt finished
 ```
 
 **Ultimate, herdr-core, Codex and OpenCode transports**
@@ -5478,17 +5669,17 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | convert (deferred: protected-disk load/merge/sweep and queued JPEG completion need Mac persistence verification); owner safety net `AgentLastFrameDeferredOwnerTests` | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
-| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |
+| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | converted → `DirectKeyboardHandoffMachine` (the Composer-to-Direct handoff); the update-time claim, acceptance and inset release keep their callback order. The tools/system presentation flags stay view state resolved by `AgentDirectInputPresentation`. Pins: `ComposerDirectHandoffLifecycleTests` | P2c |
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
-| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | convert (deferred: window measurements, transient hide debt, coalescing and destination/owner watchdogs span responder callbacks; needs Mac keyboard suites) | P2c |
-| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
-| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
+| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
+| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | converted → `SurfaceKeyboardFreezeMachine`; the queued reload and leash carry the cycle token, effects keep the layout/thaw order. Pins: `TerminalSurfaceFreezeLifecycleTests` | P2c |
+| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
 | ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
-| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | convert (deferred: private View creation/inventory state crosses awaits and token-scoped UIKit keyboard handoff; requires hosted Mac visibility/handoff tests); existing-API failure safety net `ShellOpeningDeferredOwnerTests` does not cover that private lifecycle | P2c |
+| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | converted → `ShellOpeningMachine`; one Task per attempt runs its steps and finishes it after the last effects. Hosted pins: `ShellOpeningLifecycleTests` | P2c |
 | ATTACH-22 | Link interaction | `Sources/Waycar/Console/AgentTerminalView.swift`, `Sources/Waycar/Console/AgentAttachStore.swift` | implicit | M/M | leave: open id guards it | — |
 | ATTACH-23 | Ignition loader | `Sources/Waycar/Console/TerminalIgnitionLifecycle.swift` | explicit | L/L | explicit | — |
 | ATTACH-24 | Link evidence | `Sources/Waycar/Console/AttachLinkIndex.swift` | implicit | M/M | leave: set-based evidence | — |

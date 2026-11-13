@@ -158,8 +158,8 @@ struct PaneHistoryDeferredOwnerTests {
 
 @MainActor
 struct ShellOpeningDeferredOwnerTests {
-    /// The private View's creation/handoff lifecycle is deferred, not replaced
-    /// by this narrower existing-API guard on definitive versus lost replies.
+    /// Definitive versus lost replies; the creation and handoff lifecycle
+    /// itself is `ShellOpeningMachine`, pinned by `ShellOpeningLifecycleTests`.
     @Test func backendRejectionsStayDistinctFromAnUnclearCreationOutcome() {
         let message = AgentDetailView.terminalCreationFailureMessage(
             for: TransportError.apiRejected(code: "gone", message: "Workspace is gone"), backend: .tmux)

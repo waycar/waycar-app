@@ -1067,10 +1067,36 @@ final actor ScriptedTransport: Transport {
         workspaceRenames.append(params)
     }
 
+    /// Every shell-terminal creation received, in order.
+    private(set) var shellTerminalCreations: [ShellTerminalCreationRequest] = []
+    private var shellTerminalCreationFailure: (any Error)?
+    private var shellTerminalSnapshot: SessionSnapshot?
+    private var nextShellTerminalGate: ScriptedTransportCallGate?
+
+    /// Scripts the next shell-terminal creations: they fail with `failure`,
+    /// or succeed and replace the snapshot with `snapshotAfter` when given.
+    func scriptShellTerminalCreation(
+        failure: (any Error)? = nil, snapshotAfter: SessionSnapshot? = nil
+    ) {
+        shellTerminalCreationFailure = failure
+        shellTerminalSnapshot = snapshotAfter
+    }
+
+    /// Pauses the next creation after recording its request.
+    func gateNextShellTerminalCreation(using gate: ScriptedTransportCallGate) {
+        nextShellTerminalGate = gate
+    }
+
     func createShellTerminal(
         _ request: ShellTerminalCreationRequest
     ) async throws -> ShellTerminalIdentity {
-        ShellTerminalIdentity(paneID: "w1:p-shell", tabID: "w1:t-shell", terminalID: "term-shell")
+        shellTerminalCreations.append(request)
+        let gate = nextShellTerminalGate
+        nextShellTerminalGate = nil
+        await gate?.waitUntilOpen()
+        if let shellTerminalCreationFailure { throw shellTerminalCreationFailure }
+        if let shellTerminalSnapshot { snapshot = shellTerminalSnapshot }
+        return ShellTerminalIdentity(paneID: "w1:p-shell", tabID: "w1:t-shell", terminalID: "term-shell")
     }
 
     func subscribeToEvents(_ subscriptions: [EventSubscription]) async throws -> HerdrEventStream {
