@@ -20,14 +20,14 @@
     "deploy": "wrangler deploy --var POSTHOG_ENV:release"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.5",
-    "@astrojs/markdown-satteri": "0.4.2",
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/markdown-satteri": "0.4.7",
     "@types/node": "^24.19.2",
-    "astro": "^7.2.1",
+    "astro": "^7.4.8",
     "esbuild": "^0.28.2",
     "qrcode-generator": "^2.0.4",
     "typescript": "^5.9.3",
-    "wrangler": "^4.122.0"
+    "wrangler": "^4.160.0"
   },
   "dependencies": {
     "posthog-js": "^1.447.8"
