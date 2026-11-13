@@ -24,6 +24,7 @@ rows:
   live-activity: { level: unknown, text: "Not documented" }
   attach: { level: yes, text: "Yes, image attachments in the composer" }
   voice: { level: yes, text: "Yes, dictation and voice mode" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: yes, text: "Yes, subscription quota windows and a context meter" }
   resume: { level: yes, text: "Yes, History, restore and Import session" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later" }
@@ -50,7 +51,7 @@ faq:
   - q: Does Paseo need an account or a cloud service?
     a: Paseo says it has no required account and no telemetry. The relay is off by default and asks before you enable it. Its docs say traffic between phone and daemon is end-to-end encrypted. Paseo Hub is a separate optional service, hosted or self-hosted, and is not needed for phone access.
   - q: Is Paseo free and open source?
-    a: Yes. Paseo is Apache License 2.0, and its site says it is free. You bring your own agent CLIs and logins. It is an independent project. Waycar's app is open source under Apache-2.0 and free, with unlimited launches.
+    a: Yes. Paseo is Apache License 2.0, and its site says it is free. You bring your own agent CLIs and logins. It is an independent project. Waycar's app is open source under Apache-2.0 and free.
   - q: Which one should I use to check on an agent from my phone?
     a: If your agents run in tmux or herdr today, Waycar opens them as they are. If you want a managed workspace with apps for every platform, Paseo fits better. Both have push alerts, approvals and a chat view, so the choice is about how agents start and where you use them.
 sources:
@@ -105,7 +106,7 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 
 Paseo is free, including the apps, the daemon and the CLI. The official relay is optional and has no listed price, and its terms say it is subject to reasonable and fair use. Paseo Hub is a separate, optional service for GitHub, Slack and Discord triggers, and you do not need it for phone access. You can self-host Hub for $0. Hosted Hub has a $0 plan with 50 agent runs a month and one seat, and a Pro plan at $15 per seat per month.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription. See [pricing](/pricing).
+Waycar is free.
 
 ## Can you use both?
 

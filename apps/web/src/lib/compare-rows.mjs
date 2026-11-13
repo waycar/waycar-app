@@ -68,6 +68,7 @@ export const CAPABILITIES = /** @type {const} */ ([
   { id: 'live-activity', group: 'agents', label: 'Lock Screen Live Activity', rated: true },
   { id: 'attach', group: 'agents', label: 'Send images and files to the agent', rated: true },
   { id: 'voice', group: 'agents', label: 'Voice input', rated: true },
+  { id: 'carplay', group: 'agents', label: 'Works with CarPlay', rated: true },
   { id: 'usage', group: 'agents', label: 'Usage and rate limits', rated: true },
   { id: 'resume', group: 'agents', label: 'Resume a closed agent', rated: true },
   { id: 'ios', group: 'reach', label: 'iPhone and iPad app', rated: true },

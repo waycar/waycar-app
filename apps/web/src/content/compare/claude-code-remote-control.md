@@ -24,6 +24,7 @@ rows:
   live-activity: { level: unknown, text: "Not documented" }
   attach: { level: yes, text: "Yes, photos and files go into the session" }
   voice: { level: unknown, text: "Not documented for Remote Control sessions" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: partial, text: "Partial: /usage and /context text output only" }
   resume: { level: partial, text: "Partial: from the machine only, about 4 hours" }
   ios: { level: yes, text: "Yes, the Claude app on iPhone and iPad, iOS 18 or later" }
@@ -99,7 +100,7 @@ Waycar works the other way. Your phone connects straight to your machine over mo
 
 Remote Control costs nothing on its own. Claude Code is included in paid plans, not in the Free plan. Anthropic lists Pro at $20 a month billed monthly, or $17 a month billed yearly ($200 up front). Max starts at $100 a month.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription. You still pay for the agent itself, such as your Claude plan.
+Waycar is free. You still pay for the agent itself, such as your Claude plan.
 
 ## Can you use both?
 

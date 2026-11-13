@@ -24,6 +24,7 @@ rows:
   live-activity: { level: unknown, text: "Not documented" }
   attach: { level: yes, text: "Yes, a photo or screenshot into the prompt" }
   voice: { level: yes, text: "Yes, with ElevenLabs. 20 free minutes per 30 days" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: partial, text: "Partial: context and Claude 5h and 7d limits" }
   resume: { level: yes, text: "Yes, resume sessions from the app" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later" }
@@ -44,7 +45,7 @@ pickThem:
   - You want an agent on a server or a Mac mini that keeps working while your laptop sleeps.
 faq:
   - q: Is Happy Coder free?
-    a: Yes. Happy says the app is free and MIT licensed, and the models run on your own Claude, Codex and Grok subscriptions. Voice is the only thing it charges for. You get 20 free minutes per 30 days. Waycar is free, with every feature included and unlimited launches.
+    a: Yes. Happy says the app is free and MIT licensed, and the models run on your own Claude, Codex and Grok subscriptions. Voice is the only thing it charges for. You get 20 free minutes per 30 days. Waycar is free.
   - q: Does Happy need an account?
     a: Its sources differ. The App Store listing says to create an account in the app, with no email address or password. One page of its docs says there is no hosted account for the app. We claim neither. Waycar has no account at all.
   - q: Is Happy end-to-end encrypted?
@@ -107,7 +108,7 @@ In Waycar the agent runs on your machine, in herdr or tmux, not in the app. Wayc
 
 Happy is free. The app, desktop app and original CLI cost $0, and models run on your own subscriptions or API keys. Voice gets 20 free minutes per 30 days. A subscription raises that to 5 hours. Its voice page does not state the price. The App Store lists one in-app purchase, Plus Monthly at $19.99, but its pages do not say that is the voice plan.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

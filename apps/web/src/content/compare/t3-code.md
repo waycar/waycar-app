@@ -24,6 +24,7 @@ rows:
   live-activity: { level: yes, text: "Yes, Live Activities on iOS" }
   attach: { level: yes, text: "Yes, up to 100 files per message" }
   voice: { level: yes, text: "Yes, on-device, iPhone with iOS 26 or later" }
+  carplay: { level: unknown, text: "Not documented. Docs list a CarPlay mic for voice input" }
   usage: { level: yes, text: "Yes: phone has limits. Tokens and cost on desktop, web" }
   resume: { level: partial, text: "Partial: resumes after a restart. Quit agent: not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 18 or later" }
@@ -52,7 +53,7 @@ faq:
   - q: Can I use T3 Code on Android?
     a: Yes. T3 Code Mobile is on Google Play as well as the App Store. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
   - q: Is T3 Code free, and is Waycar?
-    a: T3 Code is free and MIT licensed, and you pay your own agent providers. Waycar is free, with every feature included and unlimited launches.
+    a: T3 Code is free and MIT licensed, and you pay your own agent providers. Waycar is free.
 sources:
   - { label: T3 Code, url: "https://t3.codes" }
   - { label: T3 Code repository and README, url: "https://github.com/pingdotgg/t3code" }
@@ -106,7 +107,7 @@ Waycar works differently. Nothing of ours runs as a server on your machine, othe
 
 T3 Code is free, and no paid tier is documented. T3 Connect limits how many environments you can link (its docs name the error but not the number), and we did not find T3 Connect pricing. The App Store lists the app as Free.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

@@ -85,7 +85,7 @@ export const byId = <T extends { id: string }>(items: readonly T[], ids: readonl
   ids.flatMap((id) => items.filter((item) => item.id === id));
 
 // Pages that are not collection entries. A page body may link to any of them.
-const FIXED_ROUTES = ['/', '/ipad', '/pricing', '/privacy', '/support', '/articles', '/changelog', '/compare', '/help', '/solutions'];
+const FIXED_ROUTES = ['/', '/carplay', '/ipad', '/privacy', '/support', '/articles', '/changelog', '/compare', '/help', '/solutions'];
 
 /** Every path a page body may link to: the fixed pages, plus each comparison, solution, published help page and article. */
 export async function bodyRoutes(): Promise<Set<string>> {

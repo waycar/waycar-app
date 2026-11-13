@@ -236,9 +236,11 @@ test('a token that is not a paid token resolves to nothing, so the Worker answer
 });
 
 test('an organic CTA takes the page type\'s token, then its section\'s, then site', () => {
-  assert.equal(organicCampaign('/pricing/'), 'pricing');
-  assert.equal(organicCampaign('/pricing', 'site-nav'), 'pricing');
-  assert.equal(organicCampaign('/pricing.html', 'site-nav'), 'pricing');
+  for (const path of ['/pricing', '/pricing/', '/pricing.html']) {
+    assert.equal(organicCampaign(path), 'site');
+    assert.equal(organicCampaign(path, 'site-nav'), 'site-nav');
+  }
+  assert.equal(organicCampaign('/', 'pricing'), 'pricing', 'legacy campaign tokens still validate');
   assert.equal(organicCampaign('/help.html', 'site-nav'), 'help');
   assert.equal(organicCampaign('/help/accessibility.html', 'site-nav'), 'help');
   assert.equal(organicCampaign('/articles/a.html', 'site-nav'), 'article');

@@ -29,7 +29,8 @@ export const PAID_CT = /^(?=.{3,30}$)(?:reddit|x)(?:-[a-z0-9]+)+$/;
  * The organic tokens, a closed list that is never read from a URL. Each is the
  * page type or section a store click happened on, or an off-site surface
  * (`hn`, `readme`, ...) whose link is written by hand. A paid token is never in
- * this list, so an organic link cannot be sent through `/go` as paid.
+ * this list, so an organic link cannot be sent through `/go` as paid. The
+ * retired `pricing` token remains valid for links already shared.
  */
 export const ORGANIC_CT = /^(?:site|site-hero|site-hero-b|site-closing|site-nav|site-qr|pricing|help|article|setup-prompt|readme|hn|producthunt|ref|social-x|social-reddit|press)$/;
 
@@ -38,7 +39,7 @@ export const DEFAULT_ORGANIC_CT = 'site';
 
 /**
  * The organic token for an App Store CTA on `pathname`. A page type outranks the
- * CTA's own section, so every CTA on `/pricing`, `/help/*` and `/articles/*`
+ * CTA's own section, so every CTA on `/help/*` and `/articles/*`
  * (header and footer too) carries that page's token; elsewhere the CTA's
  * `section` token applies, then `site`. Throws on a `section` outside
  * `ORGANIC_CT`, so a typo fails the build instead of shipping a stray `ct`.
@@ -47,9 +48,9 @@ export const DEFAULT_ORGANIC_CT = 'site';
  */
 export function organicCampaign(pathname, section = DEFAULT_ORGANIC_CT) {
   if (!ORGANIC_CT.test(section)) throw new Error(`Not an organic campaign token: ${section}`);
-  // The static build writes `pricing.html`, so a path may end in `.html`.
-  const page = /^\/(pricing|help|articles)(?:[/.]|$)/.exec(pathname)?.[1];
-  if (page === 'pricing' || page === 'help') return page;
+  // The static build writes `help.html`, so a path may end in `.html`.
+  const page = /^\/(help|articles)(?:[/.]|$)/.exec(pathname)?.[1];
+  if (page === 'help') return page;
   return page === 'articles' ? 'article' : section;
 }
 

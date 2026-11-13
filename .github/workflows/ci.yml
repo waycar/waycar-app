@@ -216,6 +216,11 @@ jobs:
           # 600 s default; the step and job deadlines above leave
           # room for the script's own watchdog to fire first.
           WAYCAR_XCODEBUILD_TEST_TIMEOUT_SECONDS: "900"
+          # A cold build-for-testing (no DerivedData on a fresh image) ran
+          # past the script's 900 s default on the first public run, its
+          # test target still compiling; 1800 s still stops a hung build
+          # well inside the step's 85 minutes.
+          WAYCAR_XCODEBUILD_BUILD_TIMEOUT_SECONDS: "1800"
         run: scripts/run-ci-ios-tests.sh
 
       - name: Upload iOS CI diagnostics

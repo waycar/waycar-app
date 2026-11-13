@@ -24,6 +24,7 @@ rows:
   live-activity: { level: unknown, text: "Not documented" }
   attach: { level: partial, text: "Partial: files via SFTP and the Files app" }
   voice: { level: yes, text: "Yes, voice input in Prompt Mode" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: unknown, text: "Not documented" }
   resume: { level: unknown, text: "Not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17.6 or later" }
@@ -36,7 +37,7 @@ pickWaycar:
   - You run coding agents in tmux or herdr and want one list sorted by who needs you, and a push when one is Blocked or Done.
   - You want Chat Mode for 14 agents you start in Waycar, with Allow and Cancel for permission requests.
   - You want the agent to outlive your phone, and a way to bring back one you quit by mistake. Closed Sessions keep it for 30 days.
-  - You want a free app with every feature and unlimited launches.
+  - You want a free app.
 pickThem:
   - You want mosh with predictive local echo that you can set for each host.
   - "You need a general SSH toolkit: any server, SFTP in the Files app and port forwarding."
@@ -52,7 +53,7 @@ faq:
   - q: Can I run Claude Code in Blink Shell?
     a: Yes, as a terminal. Blink runs any command line tool, and its 18.5 release added a Prompt Mode for writing AI prompts with voice input. We did not find an agent status list or approve and deny buttons in its docs. Waycar adds a status list and push alerts, with Status Hooks for 17 tmux agents. It adds Allow and Cancel buttons in Chat Mode.
   - q: How does the price compare?
-    a: Blink has a 14-day trial, then $19.99 a year (US), with no one-time purchase. Blink Build cloud machines cost extra, from $7.99 a month. Waycar is free, with every feature included and unlimited launches.
+    a: Blink has a 14-day trial, then $19.99 a year (US), with no one-time purchase. Blink Build cloud machines cost extra, from $7.99 a month. Waycar is free.
 sources:
   - { label: Blink Shell, url: "https://blink.sh/" }
   - { label: "Blink docs: mosh", url: "https://docs.blink.sh/advanced/advanced-mosh" }
@@ -110,7 +111,7 @@ Blink wins on these:
 
 Blink has a 14-day trial, then $19.99 a year (US). Its FAQ says the earlier freemium model ended in 2023 and that Blink is no longer sold as a one-time purchase. Blink Build starts at $7.99 a month on top.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

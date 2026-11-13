@@ -43,9 +43,6 @@ const solutions = await getSolutions();
 
       <section class="glass closing" aria-labelledby="closing-title">
         <h2 id="closing-title">Try Waycar on your own machine</h2>
-        <p>
-          Waycar is <a href="/pricing">free</a>. Every feature included, unlimited launches, no account or subscription.
-        </p>
         <div class="actions">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
@@ -106,8 +103,7 @@ const solutions = await getSolutions();
     color: var(--text-2);
   }
 
-  .more a,
-  .closing p a {
+  .more a {
     color: var(--cyan);
     text-decoration: underline;
     text-underline-offset: 3px;
@@ -123,12 +119,6 @@ const solutions = await getSolutions();
     font-size: 24px;
     font-weight: 600;
     letter-spacing: -0.02em;
-  }
-
-  .closing p {
-    max-width: 62ch;
-    margin-top: 10px;
-    color: var(--text-2);
   }
 
   .actions {

@@ -24,6 +24,7 @@ rows:
   live-activity: { level: unknown, text: "Not documented. A feature request is open" }
   attach: { level: yes, text: "Yes, attach a photo or file to a reply" }
   voice: { level: yes, text: "Yes, microphone dictation" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: yes, text: "Yes, usage, rate limits and reset countdowns" }
   resume: { level: partial, text: "Partial: phone can resume a chat in a new terminal tab" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later (App Store)" }
@@ -107,7 +108,7 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 
 Orca's desktop app is free, and the maker says you bring your own agent subscriptions. The iOS app lists as Free on the App Store. The Android download shows no price. Enterprise teams are asked to email the maker. We found no pricing page.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

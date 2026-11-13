@@ -10,6 +10,9 @@
 // are dormant. To gate a later release, set `APP_STORE_RELEASE` to it and list
 // what `main` has beyond it below. README "Release content switch".
 //
+// Pages for a feature only `main` has can stay on the site with a note that it
+// comes in the next update (`nextUpdateNote`), instead of being hidden.
+//
 // The help folder (src/content/help/) is bundled whole into the iOS app, so no
 // page is moved, renamed or edited for this. `src/lib/help-loader.ts` instead
 // reads each page, drops the pages in `HIDDEN_HELP_PAGES`, applies
@@ -21,8 +24,8 @@
 /** The version the App Store has; a release file newer than it lifts the gate. */
 export const APP_STORE_RELEASE = '1.3.0';
 
-/** Help pages for features 1.3.0 does not have. */
-export const HIDDEN_HELP_PAGES: readonly string[] = ['codex', 'opencode', 'zellij', 'find-computers'];
+/** Help pages the site leaves out while the gate holds. */
+export const HIDDEN_HELP_PAGES: readonly string[] = [];
 
 export type HelpEdit =
   /** Replace every occurrence of `replace` with `with`. */
@@ -32,12 +35,14 @@ export type HelpEdit =
   /** Replace each line that contains `setLine` with `to`. */
   | { setLine: string; to: string }
   /** Delete the heading line and everything under it up to the next heading of the same or a higher level. */
-  | { dropSection: string };
+  | { dropSection: string }
+  /** Insert a paragraph at the top of the body, right after the front matter. */
+  | { prependBody: string };
 
 const dropLine = (text: string): HelpEdit => ({ dropLine: text });
 const setLine = (text: string, to: string): HelpEdit => ({ setLine: text, to });
-const CODEX_NOTE = dropLine('/help/codex');
-const OPENCODE_NOTE = dropLine('/help/opencode');
+/** For a page about a feature 1.3.0 lacks: shown on the site until the next release lifts the gate. */
+const nextUpdateNote: HelpEdit = { prependBody: '> Coming in the next update of Waycar.' };
 
 /** Edits that turn the pages that stay into 1.3.0's text, by slug, applied to the whole file (front matter included). */
 export const RELEASED_HELP_EDITS: Readonly<Record<string, readonly HelpEdit[]>> = {
@@ -49,11 +54,9 @@ export const RELEASED_HELP_EDITS: Readonly<Record<string, readonly HelpEdit[]>> 
     ),
   ],
   'ai-usage': [dropLine('**"Claude timed out"**')],
-  'closed-sessions': [CODEX_NOTE, OPENCODE_NOTE],
-  'host-page': [CODEX_NOTE, OPENCODE_NOTE],
+  'codex': [nextUpdateNote],
+  'find-computers': [nextUpdateNote],
   'new-agent': [
-    CODEX_NOTE,
-    OPENCODE_NOTE,
     dropLine('On herdr, Waycar adds a suffix'),
     setLine(
       'Tap **Start** and the sheet closes.',
@@ -65,5 +68,6 @@ export const RELEASED_HELP_EDITS: Readonly<Record<string, readonly HelpEdit[]>> 
       'If the start fails, the card says why: tap **Retry** or **Delete**. **Interrupted** means Waycar closed or lost the connection while the agent was starting, so it may already be running. Check the Console before you tap **Retry**.',
     ),
   ],
-  'notifications': [CODEX_NOTE],
+  'opencode': [nextUpdateNote],
+  'zellij': [nextUpdateNote],
 };

@@ -17,9 +17,9 @@ const heroSizes = '(min-width: 1024px) min(489px, calc(45vw - 73px)), (min-width
 <section class="hero" aria-labelledby="hero-title">
   <div class="wrap hero-grid">
     <div class="text">
-    <p class="eyebrow">
-      <span class="tag">NEW</span>Native for iPhone &amp; iPad<span class="long"> · works with herdr and tmux · Android coming soon</span>
-    </p>
+    <a class="eyebrow" href="/carplay">
+      <span class="tag">NEW</span><span>Waycar in CarPlay<span class="long">: talk to your agents on the drive</span></span><span class="go" aria-hidden="true">→</span>
+    </a>
     <h1 id="hero-title">
       Step away.<br class="br-d" /> Keep talking.<br />
       <span class="grad-text">Pick right up.</span>
@@ -115,6 +115,23 @@ const heroSizes = '(min-width: 1024px) min(489px, calc(45vw - 73px)), (min-width
     background: rgb(var(--white-rgb) / 0.035);
     border: 1px solid var(--line-2);
     border-radius: var(--radius-pill);
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .eyebrow:hover {
+    color: var(--text);
+    border-color: rgb(var(--violet-soft-rgb) / 0.45);
+  }
+
+  .go {
+    color: var(--violet-soft);
+    transition: transform 0.15s ease;
+  }
+
+  .eyebrow:hover .go {
+    transform: translateX(2px);
   }
 
   .tag {
