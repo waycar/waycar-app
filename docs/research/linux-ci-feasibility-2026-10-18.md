@@ -4,6 +4,11 @@ Question: can `ci.yml` (build and test) run on Linux runners, and how much of it
 
 Answer: the simulator build and test jobs need a Mac. No Linux tool runs an iOS Simulator or builds an Xcode project. Some steps and some pure-logic tests can move to Linux. The larger win needs a refactor.
 
+> **Superseded in part, 2026-11-13.** Since the open-source cut every workflow in this
+> repository runs on GitHub-hosted runners: `ci.yml` on GitHub's Xcode 27 image, the Linux
+> jobs on `ubuntu-latest`. No Waycar CI runs on a self-hosted Linux runner any more. Section 2
+> and the open questions describe the layout as this research found it.
+
 Status labels: **verified** = read in this repo or in a fetched doc. **inferred** = reasoned, not run. **unverified** = third-party claim, no primary source.
 
 ## 1. Linux ports of iOS build and test
