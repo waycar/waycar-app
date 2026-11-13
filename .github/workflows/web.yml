@@ -150,8 +150,13 @@ jobs:
         working-directory: .
         run: sh scripts/ci/provision-plugin-build.sh --github
 
+      # Hosted runners have tmux: until plugin 2.6.1, real_tmux.rs links its
+      # scratch bin/tmux to the bare name `tmux` (a link to itself, ELOOP)
+      # unless WAYCAR_TEST_TMUX names the binary.
       - name: Test
-        run: cargo test --locked
+        run: |
+          if command -v tmux >/dev/null; then export WAYCAR_TEST_TMUX="$(command -v tmux)"; fi
+          cargo test --locked
 
   # Same guard as ci-node.yml. Full history brings the plugin-v* tags and the
   # baseline; credentials stay (read-only token) so the script can ask origin

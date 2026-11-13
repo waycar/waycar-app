@@ -71,9 +71,14 @@ jobs:
       - name: Provision the toolchain
         run: sh scripts/ci/provision-plugin-build.sh --github
 
+      # Hosted runners have tmux: until plugin 2.6.1, real_tmux.rs links its
+      # scratch bin/tmux to the bare name `tmux` (a link to itself, ELOOP)
+      # unless WAYCAR_TEST_TMUX names the binary.
       - name: Test plugin
         working-directory: plugin
-        run: cargo test --locked
+        run: |
+          if command -v tmux >/dev/null; then export WAYCAR_TEST_TMUX="$(command -v tmux)"; fi
+          cargo test --locked
 
       - name: Package
         run: sh scripts/package-plugin.sh "$RUNNER_TEMP/plugin-dist"
