@@ -4259,6 +4259,43 @@ stateDiagram-v2
     debouncing --> debouncing: debounceElapsed(replaced token) / ignored
 ```
 
+### ChannelAdmissionMachine
+
+- **File:** `Sources/Waycar/Transport/ChannelAdmissionMachine.swift`
+- **Owner:** `SSHChannelAdmission` mints request ids, keeps each request's
+  continuation and deadline Task by id and performs the effects;
+  `snapshot()` and the waiter count read the machine. Leases
+  (`SSHChannelAdmissionLease`, released once, or by deinit) send `release`.
+- **States:** the admitted counts per class and on the connection, the
+  parked requests in arrival order, the pending requests and those
+  cancelled while not parked.
+- **Events:** `requested`, `register(class, deadline)`, `cancel`, `expire`,
+  `release(class)`, `finished`.
+- **Effects:** `grant`, `refuse`, `cancelWait`, `timeOut`, `armDeadline`.
+  The production budgets (forwarding 8, events 1, ordinary 4, attach 5,
+  ceiling 18) keep session channels under sshd's `MaxSessions`: `control`,
+  `core` and `zellij` each spend an ordinary slot. An immediate grant is
+  never refused by its deadline; a release goes to the first parked request
+  it admits, in arrival order; a request granted before its cancellation
+  arrives gives the slot back from `acquire`, as before.
+- **Tests:** `ChannelAdmissionMachineTests`, `SSHChannelAdmissionTests`
+  (budgets, ceiling, the long-lived classes, deadlines, cancellation, order,
+  leases).
+- **Catalogue:** SSH-05.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: requested
+    pending --> granted: register with room / grant
+    pending --> parked: register, class full / armDeadline
+    pending --> refused: register after cancel / refuse
+    parked --> granted: release makes room / grant
+    parked --> [*]: cancel / cancelWait
+    parked --> [*]: expire / timeOut
+    granted --> [*]: finished (lease kept, or given back if cancelled)
+    refused --> [*]: finished
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4607,7 +4644,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
 | SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
 | SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
-| SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | convert | P3c |
+| SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | converted → `ChannelAdmissionMachine` | P3c |
 | SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | convert | P3c |
 | SSH-07 | Attach pump completion | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | implicit | M/M | leave: structured scope bounds it | — |
 | SSH-08 | Attachment upload transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
