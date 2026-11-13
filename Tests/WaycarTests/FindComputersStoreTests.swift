@@ -11,8 +11,7 @@ struct FindComputersStoreTests {
         let browser = DiscoveryTestBrowser()
         let sweeper = DiscoveryTestSweeper()
         let store = FindComputersStore(
-            browser: browser, sweeper: sweeper, localSubnet: { nil }, settleDelay: .seconds(60),
-            isAppActive: { true })
+            browser: browser, sweeper: sweeper, localSubnet: { nil }, settleDelay: .seconds(60))
         var milestones: [Milestone] = []
         store.start { milestones.append($0) }
         defer { store.stop() }
@@ -33,26 +32,10 @@ struct FindComputersStoreTests {
         #expect(milestones == [.lanScanStarted, .lanScanFound(count: 1)])
     }
 
-    /// While iOS's Local Network prompt is up the app is inactive, and what a
-    /// search sees then says nothing about the network: no milestone goes out.
-    @Test func milestonesWaitForAnActiveApp() async throws {
-        let browser = DiscoveryTestBrowser()
-        let store = FindComputersStore(
-            browser: browser, sweeper: DiscoveryTestSweeper(), localSubnet: { nil },
-            isAppActive: { false })
-        var milestones: [Milestone] = []
-        store.start { milestones.append($0) }
-        defer { store.stop() }
-        browser.continuation.yield(.denied)
-        try await waitUntil { store.isDenied }
-        #expect(milestones.isEmpty)
-    }
-
     @Test func browseDenialReportsOnlyThePermissionMilestone() async throws {
         let browser = DiscoveryTestBrowser()
         let store = FindComputersStore(
-            browser: browser, sweeper: DiscoveryTestSweeper(), localSubnet: { nil },
-            isAppActive: { true })
+            browser: browser, sweeper: DiscoveryTestSweeper(), localSubnet: { nil })
         var milestones: [Milestone] = []
         store.start { milestones.append($0) }
         defer { store.stop() }

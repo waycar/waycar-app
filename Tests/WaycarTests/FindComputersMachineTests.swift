@@ -92,6 +92,47 @@ struct FindComputersMachineTests {
         #expect(sweepDenied.isDenied)
     }
 
+    /// iOS's Local Network prompt makes the app inactive. A denial seen then
+    /// may only mean the prompt is unanswered: it is neither shown nor
+    /// reported, and the search starts again, unannounced, once the app is
+    /// active. A denial once active is real.
+    @Test func aDenialBehindThePromptIsCheckedAgainOnceActive() {
+        var machine = FindComputersMachine()
+        _ = machine.handle(.start(home))
+        _ = machine.handle(.appInactive)
+        #expect(machine.handle(.sweep(3, .denied)) == [.cancelSearch])
+        #expect(!machine.isDenied)
+        #expect(machine.handle(.appActive(home)) == [.cancelSearch, .browse(4), .armSettle(5), .sweep(6)])
+        #expect(machine.handle(.browse(4, .denied)) == [.cancelSearch, .milestone(.lanPermissionDenied)])
+        #expect(machine.isDenied)
+    }
+
+    /// Nothing can be found behind the prompt, so a search with no rows yet
+    /// starts again; one with rows (Control Center pulled down mid-scan) runs
+    /// on, and a count that came in while inactive is reported once active.
+    @Test func returningToTheAppKeepsASearchWithRows() {
+        var empty = FindComputersMachine()
+        _ = empty.handle(.start(home))
+        _ = empty.handle(.appInactive)
+        #expect(empty.handle(.appActive(home)) == [.cancelSearch, .browse(4), .armSettle(5), .sweep(6)])
+
+        var running = FindComputersMachine()
+        _ = running.handle(.start(home))
+        _ = running.handle(.browse(1, .computers([mac])))
+        _ = running.handle(.appInactive)
+        #expect(running.handle(.appActive(home)).isEmpty)
+        #expect(running.sweep == .running(3))
+
+        var finishedWhileInactive = FindComputersMachine()
+        _ = finishedWhileInactive.handle(.start(home))
+        _ = finishedWhileInactive.handle(.browse(1, .computers([mac])))
+        _ = finishedWhileInactive.handle(.appInactive)
+        #expect(finishedWhileInactive.handle(.sweep(3, .finished)).isEmpty)
+        #expect(finishedWhileInactive.handle(.appActive(home)) == [.milestone(.lanScanFound(count: 1))])
+        _ = finishedWhileInactive.handle(.appInactive)
+        #expect(finishedWhileInactive.handle(.appActive(home)).isEmpty)
+    }
+
     @Test func searchAgainResetsRowsAndRecoversFromDenial() {
         var machine = FindComputersMachine()
         _ = machine.handle(.start(home))

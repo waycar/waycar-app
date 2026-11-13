@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import UIKit
 
 /// Feeds discovery events into the machine and performs its I/O. Results and
 /// lifecycle state belong to the machine, never to the Tasks performing them.
@@ -19,33 +18,23 @@ final class FindComputersStore {
     @ObservationIgnored private let localSubnet: @Sendable () -> IPv4Subnet?
     @ObservationIgnored private let settleDelay: Duration
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
-    @ObservationIgnored private let isAppActive: @MainActor () -> Bool
     @ObservationIgnored private var milestone: (Milestone) -> Void = { _ in }
     @ObservationIgnored private var browseTasks: [UInt64: Task<Void, Never>] = [:]
     @ObservationIgnored private var settleTasks: [UInt64: Task<Void, Never>] = [:]
     @ObservationIgnored private var sweepTasks: [UInt64: Task<Void, Never>] = [:]
 
-    /// `isAppActive` gates the milestones: while iOS shows its Local Network
-    /// prompt the app is inactive, and what a search sees then (a denial
-    /// before the answer, a sweep whose probes waited out the prompt) says
-    /// nothing about the user's network. The view searches again once the
-    /// app is active.
     init(
         browser: any ComputerBrowsing = NetworkComputerBrowser(),
         sweeper: any NetworkSweeping = SubnetSweeper(),
         localSubnet: @escaping @Sendable () -> IPv4Subnet? = { LocalWiFiSubnet.current() },
         settleDelay: Duration = .seconds(6),
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        isAppActive: @escaping @MainActor () -> Bool = {
-            UIApplication.shared.applicationState == .active
-        }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.browser = browser
         self.sweeper = sweeper
         self.localSubnet = localSubnet
         self.settleDelay = settleDelay
         self.sleep = sleep
-        self.isAppActive = isAppActive
     }
 
     static func makeForPresentation() -> FindComputersStore {
@@ -67,6 +56,12 @@ final class FindComputersStore {
 
     func search() { send(.searchAgain(localSubnet())) }
     func stop() { send(.stop) }
+
+    /// The scene's activity: iOS's Local Network prompt and Control Center
+    /// make the app inactive; Settings sends it to the background.
+    func appActivityChanged(isActive: Bool) {
+        send(isActive ? .appActive(localSubnet()) : .appInactive)
+    }
 
     private func send(_ event: FindComputersMachine.Event) {
         for effect in machine.handle(event) {
@@ -105,7 +100,7 @@ final class FindComputersStore {
                     self?.sweepTasks[token] = nil
                 }
             case .milestone(let value):
-                if isAppActive() { milestone(value) }
+                milestone(value)
             }
         }
     }

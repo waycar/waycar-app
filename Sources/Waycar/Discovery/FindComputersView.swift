@@ -45,13 +45,10 @@ struct FindComputersView: View {
         }
         .task { store.start { analytics?.milestone($0) } }
         .onDisappear { store.stop() }
-        // Active again after iOS's Local Network prompt, or back from
-        // Settings: a search that ran while the prompt was up saw nothing
-        // (its probes waited out the answer), so look again.
+        // Answered iOS's Local Network prompt, or back from Settings: the
+        // machine looks again when what it saw meanwhile can't be trusted.
         .onChange(of: scenePhase) {
-            if scenePhase == .active, store.isDenied || store.computers.isEmpty {
-                store.search()
-            }
+            store.appActivityChanged(isActive: scenePhase == .active)
         }
     }
 

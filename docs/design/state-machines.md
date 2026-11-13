@@ -2279,18 +2279,24 @@ stateDiagram-v2
 
 - **File:** `Sources/Waycar/Discovery/FindComputersMachine.swift`
 - **Owner:** `FindComputersStore` browses Bonjour and sweeps every address on
-  the Wi-Fi, arms settling Tasks and reports anonymous milestones (only while
-  the app is active, never behind iOS's Local Network prompt).
+  the Wi-Fi, arms settling Tasks, reports anonymous milestones, and forwards
+  the scene's activity from `FindComputersView`.
 - **States:** `idle`, `searching(search, timer)`, `settled(search)`, `denied`,
-  `stopped`; the search carries sweep `running(token)/finished/unavailable`.
+  `stopped`; the search carries sweep `running(token)/finished/unavailable`;
+  the machine also tracks whether the app is active.
 - **Events:** start, searchAgain, browse(token), settleElapsed(token),
-  sweep(token), stop.
+  sweep(token), appInactive, appActive, stop.
 - **Effects:** cancelSearch, browse(token), armSettle(token), cancelSettle,
   sweep(token), milestone. One tap (start or searchAgain) starts the browse,
   the settle timer and the sweep; search, timer and sweep tokens discard
   cancelled streams. The settle timer starts with the search, so a browser
   that never reports ready still settles. The merged row count is reported
-  once per search, after the browse settled and the sweep ended.
+  once per search, after the browse settled and the sweep ended. While the
+  app is inactive (iOS's Local Network prompt, Control Center) nothing is
+  reported and a denial is not shown, since it may only mean the prompt is
+  unanswered; on appActive a denied or still-empty search starts again
+  unannounced, a search with rows runs on, and a count that arrived while
+  inactive is reported.
 - **Tests:** `FindComputersMachineTests`, `FindComputersStoreTests`, `FoundComputerTests`.
 - **Catalogue:** HOST-19.
 
@@ -2302,7 +2308,8 @@ stateDiagram-v2
     settled --> settled: browse or sweep results
     searching --> denied: browse or sweep denial / cancelSearch
     settled --> denied: browse or sweep denial / cancelSearch
-    denied --> searching: searchAgain
+    denied --> searching: searchAgain or appActive
+    searching --> searching: appActive with no rows / replace tokens
     settled --> searching: searchAgain
     searching --> searching: searchAgain / replace tokens
     searching --> stopped: stop / cancelSearch
