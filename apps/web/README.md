@@ -522,20 +522,38 @@ rail and footer, the site footer, compare and solutions pages)
 is one component, `src/components/AppStoreCta.astro`, which follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
-- **Live** (the shipped state): each button opens the **Get Waycar picker**
-  (`src/components/GetPicker.astro`). No button names a device or a store: the
-  labels are "Get Waycar" and "Download" (header).
-  The picker is the one place that does. Tile one, "iPhone and iPad", holds
+- **Live** (the shipped state): with JavaScript on an iPhone, iPad or iPod
+  touch, each button links **directly to the App Store**, one tap away, sending
+  `app_store_clicked`. Detection uses `isAppleHandheld` in `src/lib/ad-links.mjs`:
+  an `iPhone|iPad|iPod` user agent, or iPadOS desktop mode (`MacIntel` with more
+  than one touch point), not a real Mac. The bundled picker script copies the
+  App Store link from that button's own picker and removes `data-picker-open`
+  and `aria-haspopup`, keeping its text and `ct`. Layout's paid-campaign rewrite
+  works in either script order: it updates the picker link before the copy, or
+  both links after it. Layout's existing click listener reads the rewritten
+  button's own `href` for `ct`; no `get_picker_opened` event is sent on this path.
+  Everyone else (computers and Android included) opens the **Get Waycar picker**
+  (`src/components/GetPicker.astro`), sending `get_picker_opened` with the
+  picker's App Store `ct`. No button names a device or a store: the labels stay
+  "Get Waycar" and "Download" (header). The picker is the one place that does.
+  Tile one, "iPhone and iPad", holds
   Apple's official "Download on the App Store" badge
   (`public/app-store-badge.svg`) as the link to the listing, with
   `data-ph-event="app_store_clicked"`. Tile two, "Android™", is plain text,
   "Coming soon": not a link, not focusable, no Play name, badge or logo. A line
   below says "Android is a trademark of Google LLC." Each button owns its
   picker (a `<dialog>` right after it), so the App Store link inside keeps that
-  button's `ct`, and the `module` of the wrapper around both. With JavaScript
-  the click opens it as a modal (Esc, Close and the backdrop close it; focus
-  moves in and returns; the page behind does not scroll). Without JavaScript the
-  button is a link to the picker's id and, under `@media (scripting: none)`,
+  button's `ct` (or the paid campaign's) and the `module` of the wrapper around
+  both; the direct link keeps them too. Inside the picker, the QR figure is
+  always shown under the badge on wide screens with a mouse
+  (`@media (hover: hover) and (pointer: fine) and (min-width: 820px)`), with no
+  disclosure click; elsewhere it stays hidden. It uses `/qr/site-qr.svg`,
+  148 × 148 px, and the caption "Scan with your iPhone or iPad". The QR itself
+  keeps `ct=site-qr`. With JavaScript outside Apple handhelds the button opens
+  the picker as a modal (Esc, Close and the backdrop close it; focus moves in
+  and returns; the page behind does not scroll). Without JavaScript on any
+  device there are no click events; the button links to the picker's id and,
+  under `@media (scripting: none)`,
   CSS shows `:target` as a fixed overlay, so the App Store link is two taps away;
   Esc and the focus trap need JavaScript, and Close is a link to `#_`. The
   header's blur is a `::before` so the header does not become the overlay's
