@@ -295,6 +295,13 @@ taken.
     case of the same kind: a `start()` that returns after a `stop()` and
     a new `start()` no longer arms a second receive on the new connection.
     No wire or timing change.
+20. **Contact health state machine** (`MoshContactHealthMachine`). The
+    last server contact and the connectivity patches 11 and 12 judge from
+    it (not running, healthy, stalled, expired) are one pure value type
+    that `MoshClientSession` feeds (start, contact, maintenance pass, end)
+    and whose effects it performs (publish, fail with the timeout).
+    `connectivity` is now computed from it. Same thresholds, same order
+    (timeout before stall), judged only while running: no behaviour change.
 
 `Tests/SwiftMoshTests/WaycarPatchTests.swift` covers the shutdown state
 (final screen applied, maximum state acked, session ends `.stopped` without a
@@ -320,7 +327,8 @@ host. It also covers patch 18 with a fake connection per start: a late
 `.cancelled`, a late receive error and a late datagram from a stopped
 connection leave the restarted endpoint alone (each fails against the
 unpatched endpoint). `DatagramEndpointMachineTests` covers patch 19's
-transitions, stale tokens included.
+transitions, stale tokens included, and `MoshContactHealthMachineTests`
+patch 20's.
 
 `Tests/SwiftMoshTests/WaycarNetworkPatchTests.swift` covers patches 11 and
 13–15: connectivity stalling on silence, recovering on the next server

@@ -4269,6 +4269,47 @@ stateDiagram-v2
     stopped --> stopped: stale token / ignored
 ```
 
+### MoshContactHealthMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshCore/MoshContactHealthMachine.swift`
+- **Owner:** `MoshClientSession` (actor) sends `started` when it starts
+  running, `contact` on every authenticated server datagram, `tick` on
+  each maintenance pass while running (50 ms), `ended` when its runtime
+  stops or suspends; it yields published values to the connectivity
+  streams and fails the session on `expire`. `connectivity` and the
+  stream's first value read the state; the streams' finishing stays the
+  owner's.
+- **States:** `notRunning(lastContact)`, `healthy(lastContact)`,
+  `stalled(lastContact)`, `expired(lastContact, connectivity)` (the
+  connectivity it had stands until the runtime stops).
+- **Events:** `started(now)`, `contact(now, judged)` (`judged` is whether
+  the session runs: during a shutdown a datagram is contact, not
+  judgment), `tick(now)`, `ended`.
+- **Effects:** `publish(connectivity)`, `expire(timeoutMs)`. The timeout
+  is checked before the stall. The app's thresholds (6.5 s stall, 65 s
+  timeout, `MoshAttachSession`) are the config's; nothing here reads a
+  clock. SwiftMosh patch 20.
+- **Tests:** `MoshContactHealthMachineTests`, `WaycarNetworkPatchTests`
+  (stall and recovery, idle heartbeats, not judged during a shutdown,
+  suspension and resume, timeout before the stall), `CoreAndAdapterTests`
+  (network timeout).
+- **Catalogue:** MOSH-07.
+
+```mermaid
+stateDiagram-v2
+    [*] --> notRunning
+    notRunning --> healthy: started / publish connected
+    healthy --> stalled: tick past stall threshold / publish stalled
+    stalled --> healthy: contact while running / publish connected
+    healthy --> healthy: contact
+    stalled --> stalled: contact while not running
+    healthy --> expired: tick past network timeout / expire
+    stalled --> expired: tick past network timeout / expire
+    healthy --> notRunning: ended
+    stalled --> notRunning: ended
+    expired --> notRunning: ended
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4640,7 +4681,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
 | MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert unless the risk is huge | P3c |
 | MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | convert | P3c |
+| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | converted → `MoshContactHealthMachine` | P3c |
 | MOSH-08 | Recovery redial cooldown | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | L/L | leave: one timestamp | — |
 | MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | MOSH-10 | mosh availability file | `Sources/Waycar/Transport/MoshAvailabilityStore.swift` | implicit | M/L | leave: two states, guarded | — |
