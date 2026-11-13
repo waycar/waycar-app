@@ -48,7 +48,7 @@ With AI Summaries on, Agent Progress estimates how far along an agent is from it
 - **A badge.** The Waycar icon counts the agents that need you, across all your machines.
 - **Lock Screen.** A Live Activity can keep a machine on your Lock Screen and in the Dynamic Island.
 - **Apple Watch.** The watch app shows agent status and replies through a nearby paired iPhone.
-- **CarPlay.** On an iPhone with iOS 26.4 or later, talk to agents and hear their answers in the car.
+- **CarPlay.** On an iPhone with iOS 26.4 or later, hear what needs you, ask an agent out loud and hear its answer in a sentence or two. Nothing an agent writes is shown on the car's screen. See [CarPlay](/help/carplay).
 
 ## Answer it from the phone
 

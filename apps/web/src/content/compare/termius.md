@@ -24,6 +24,7 @@ rows:
   live-activity: { level: partial, text: "Partial: shows active connections, not agent state" }
   attach: { level: yes, text: "Yes, paste uploads over SFTP and inserts the path" }
   voice: { level: yes, text: "Yes, a speech-to-text input field" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: unknown, text: "Not documented" }
   resume: { level: unknown, text: "Not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17 or later" }
@@ -52,7 +53,7 @@ faq:
   - q: Can Termius keep a session alive in the background on iPhone?
     a: Partly. Termius says recent versions stop background activity within about 20 to 30 seconds. Its help article lists location tracking as a way to make background connections less likely to drop. Its blog suggests turning on Live Activities and running the agent in tmux. Waycar works inside the same iOS limit. Its terminal ends about 20 seconds after you leave the app and re-attaches when you come back, while the agent keeps running in herdr or tmux.
   - q: How does the price compare?
-    a: Termius Starter is free, and its pricing page lists Pro at $10 a month billed yearly. The US App Store lists Pro Monthly at $15.00 and Pro Annual at $119.00. Waycar is free, with every feature included and unlimited launches.
+    a: Termius Starter is free, and its pricing page lists Pro at $10 a month billed yearly. The US App Store lists Pro Monthly at $15.00 and Pro Annual at $119.00. Waycar is free.
 sources:
   - { label: Termius pricing, url: "https://termius.com/pricing" }
   - { label: "Termius docs: connecting to a server (mosh)", url: "https://docs.termius.com/organize-and-connect-to-hosts/connecting-to-a-server" }
@@ -109,7 +110,7 @@ Termius wins on these:
 
 Termius Starter is free and covers SSH, SFTP and port forwarding. Pro adds the cloud vault and sync. Termius lists Pro at $10 a month billed yearly on its site. The US App Store lists Pro Monthly at $15.00 and Pro Annual at $119.00.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

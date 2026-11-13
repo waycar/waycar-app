@@ -29,7 +29,7 @@ export const GET: APIRoute = async () => {
 > Waycar is a native iPhone and iPad app for checking on your coding agents (Claude Code, Codex, omp, Gemini, opencode, pi and more) running in herdr or tmux on your own Mac or Linux machine. Agent terminals run over mosh and fall back to SSH. No account, no cloud between you and your sessions. An Android app is coming next.
 
 - Availability: ${availability}
-- Pricing: free. Every feature included, unlimited agent and shell launches, no account or subscription. Users pay for their own machines and AI providers.
+- Price: Waycar is free. Users pay for their own machines and AI providers.
 - Install on each machine: \`curl -fsSL https://waycar.dev/install.sh | sh\`, then scan the pairing QR in Waycar.
 - Requirements: iOS/iPadOS 18+; herdr 0.7.5+ or tmux 3.2+ on the Host (no Node needed); OpenSSH on the Host (stream-local forwarding on, for herdr; on macOS, Remote Login on); mosh-server and open UDP for mosh.
 - Made by OTREVA, LLC. Not affiliated with or endorsed by herdr, CodexBar, Anthropic, OpenAI, or Google.
@@ -37,7 +37,7 @@ export const GET: APIRoute = async () => {
 ## Docs
 
 - [Waycar product guide](https://waycar.dev/index.md): every feature, mosh vs SSH, herdr vs tmux, setup, requirements, full FAQ
-- [Pricing](https://waycar.dev/pricing): everything included for free, no account or subscription
+- [Waycar in CarPlay](https://waycar.dev/carplay): hear and answer your agents by voice in CarPlay on iPhone (iOS 26.4 or later)
 - [Support](https://waycar.dev/support): help and contact
 - [Privacy policy](https://waycar.dev/privacy): what data Waycar handles
 

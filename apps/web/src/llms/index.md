@@ -51,11 +51,16 @@ Turn on Chat Mode when you start Claude Code, Codex, omp, pi, opencode, GitHub C
 
 ## CarPlay: talk to your agents from the car
 
-On iOS 26.4 or later, Waycar shows your agents on the car's screen, sorted by who needs you (Blocked, then Done, Working, Idle), with a "Talk to Waycar" row on top. Nothing an agent writes is shown on the car's screen.
+Waycar works with CarPlay on iPhone, with iOS 26.4 or later. It is a voice-based conversational app: you hear your agents and answer them out loud. The car's screen lists your agents under a "Talk to Waycar" row: first the ones that need you (Blocked, then Done), then Working and Idle. Each row shows the agent's status and how long ago it changed, with a progress ring when Agent Progress has an estimate. Shells aren't listed, and a long list is cut to fit. Nothing an agent writes is shown on the car's screen: you hear it instead. More: https://waycar.dev/carplay
 
-- **Ask out loud.** Tap an agent and ask it anything. Waycar speaks its answer in a sentence or two, then listens for your next question.
-- **Yes or no, by voice.** Allow or deny a Claude Code or Codex command approval out loud. Risky or long ones wait for you.
-- **Speech stays on your iPhone.** Your speech is transcribed on the iPhone, and CarPlay works with the iPhone locked.
+- **Hear what needs you.** Tap Talk to Waycar for a spoken briefing, such as "One Agent needs you." or "Nothing needs you."
+- **Ask out loud.** Tap an agent and ask it anything. Waycar sends your question when you pause and speaks the agent's answer in a sentence or two, then listens for your next question. It stops when you go back on the car's screen, say "stop" or "that's all", or say nothing for two minutes.
+- **Yes or no, by voice.** For Claude Code and Codex, Waycar reads a plain yes or no command approval out loud and you say "allow" or "deny". Say what to do instead and Waycar reads it back ("Tell *agent*: … Send?"), then denies the command and sends your words.
+- **Held until you're stopped.** Waycar won't allow risky commands, or ones too long to read out, from the car. It won't answer folder-trust or multiple-choice questions, or prompts from other agents, from the car either. Shell symbols are spoken as words, such as "pipe", so you hear exactly what would run.
+- **Choose the voice.** Settings › CarPlay Voice picks an installed voice and a speaking speed from 0.75× to 1.5×. Natural Voice (Beta) runs a neural voice model on your iPhone: Kokoro, Pocket TTS or Paradee Lite.
+- **Speech stays on your iPhone.** Your speech is transcribed on the iPhone, and CarPlay works with the iPhone locked. The Live Activity also shows on the CarPlay Dashboard. iPad never connects to CarPlay.
+
+Help: https://waycar.dev/help/carplay, voice approvals: https://waycar.dev/help/carplay-voice, voice not working: https://waycar.dev/help/carplay-voice-not-working
 
 ## AI Usage (via CodexBar): know which account runs dry, before your agent does
 
@@ -231,7 +236,7 @@ The install command adds small Waycar hooks to Claude Code, Codex, omp, pi, open
 
 ### What does Waycar cost?
 
-Waycar is free. Every feature is included, with no limit on starting or resuming agents and shells. No account, no subscription. You pay for your own machines and any AI providers you use. Waycar's developer built it for his own use and shares it for free. The app has no ads, and usage analytics are opt-in. Pricing: https://waycar.dev/pricing. Privacy: https://waycar.dev/privacy
+Waycar is free. You pay for your own machines and any AI providers you use. The app has no ads, and usage analytics are opt-in. Privacy: https://waycar.dev/privacy
 
 ### Does anything go through the cloud?
 
@@ -283,4 +288,4 @@ Not yet: Android is coming next. Waycar is on iPhone and iPad today.
 
 ## Ride at the back. See the whole train.
 
-A waycar is the caboose, the last car on the train, keeping watch over everything ahead. Waycar is free for iPhone and iPad. Every feature is included, with unlimited launches. What's herdr? https://herdr.dev
+A waycar is the caboose, the last car on the train, keeping watch over everything ahead. Waycar is for iPhone and iPad. What's herdr? https://herdr.dev

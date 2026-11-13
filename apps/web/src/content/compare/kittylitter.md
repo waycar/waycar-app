@@ -24,6 +24,7 @@ rows:
   live-activity: { level: yes, text: "Yes, Live Activity for a turn (per its code)" }
   attach: { level: yes, text: "Yes, up to 4 images per message; files per its code" }
   voice: { level: yes, text: "Yes, real-time voice (App Store says OpenAI)" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: partial, text: "Partial: Codex rate limits and context % (its code)" }
   resume: { level: yes, text: "Yes, resume threads" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 18.0 or later" }
@@ -109,7 +110,7 @@ Waycar's agent terminals need herdr (0.7.5 or newer), tmux (3.2 or newer) or her
 
 Kittylitter is free. The site says it is always free, and we found no paid plan or subscription. The App Store lists optional in-app tips at $9.99, $24.99, $49.99 and $99.99.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription. See [pricing](/pricing).
+Waycar is free.
 
 ## Can you use both?
 

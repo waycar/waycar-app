@@ -19,7 +19,7 @@ faq:
   - q: Can I run Claude Code from my iPhone?
     a: You can steer it from your iPhone. Claude Code itself runs on a computer, not on the phone. Waycar connects your iPhone to a Claude Code session that runs on your own Mac or Linux machine, so you can watch it and answer it from anywhere. Anthropic's own Remote Control and cloud sessions are other ways.
   - q: Do I need a Claude plan or API key to use Waycar?
-    a: Waycar has no Claude login of its own. Claude Code signs in on your machine as it always does, with whatever it already uses. Waycar itself is free, with every feature included and unlimited launches.
+    a: Waycar has no Claude login of its own. Claude Code signs in on your machine as it always does, with whatever it already uses. Waycar is free.
   - q: Can I approve Claude Code permission requests from my phone?
     a: Yes. In Chat Mode, tap Allow or Cancel on the card that shows the request. In the terminal, answer with the toolbar keys. On tmux, Allow and Cancel need the Waycar hooks that the install command adds.
   - q: Does it work when my laptop is asleep?
@@ -58,6 +58,7 @@ Waycar has an optional push relay. Your machine encrypts each notification first
 - **Use the real terminal.** You see exactly what Claude Code draws, with a toolbar for Esc, Tab, arrows and Ctrl.
 - **Send photos and files.** Attach up to 10 per message. Files can be up to 64 MiB each. Photos are resized to fit 16 MiB. The file lands in a private folder on your machine, and its path is added to your message when you send it.
 - **Dictate a prompt.** On iOS 26 or later, dictation runs on your phone.
+- **Answer it in the car.** In CarPlay, on an iPhone with iOS 26.4 or later, Waycar reads a Claude Code command approval out loud and you say "allow" or "deny". It holds risky or long commands until you're stopped. See [Approve commands by voice](/help/carplay-voice).
 - **Bring back a closed session.** Closed Sessions keep an agent for 30 days. Tap it to reopen it in the same folder.
 
 ## What Waycar cannot do
