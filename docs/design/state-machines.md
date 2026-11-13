@@ -4232,6 +4232,36 @@ stateDiagram-v2
 
 **Host Tools plugin**
 
+The trait is `plugin/rust/state_machine.rs`; transition tests sit in the
+owner file's `tests` module, beside its owner pins (`cargo test --locked` in
+`plugin/`).
+
+### ExportRunMachine
+
+- **File:** `plugin/rust/chat/session_export.rs`
+- **Owner:** `run_export_command` spawns the exporter in its own process
+  group, reads both pipes on threads, polls every 5 ms and SIGKILLs the group
+  for each `killGroup`. The size cap stays in the pipe readers, which kill
+  the group themselves.
+- **States:** `running(stops)`, `draining(exit, stops)` (the exporter exited,
+  its pipes are still open), `finished(exit, timedOut)`.
+- **Events:** `tick(aborted, now)`, `exited(code)`, `pipesClosed`.
+- **Effects:** `killGroup`: once for the signal, once for the deadline, in
+  `running` and `draining` alike (B-33), and once more when the pipes close.
+- **Tests:** `chat::session_export::tests::export_run_machine` (transitions),
+  `chat::session_export::tests` (timeout, abort, failure detail, a hung
+  wrapper's child, a left-behind child within and past the timeout).
+- **Catalogue:** HT-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> running
+    running --> running: tick, signal or deadline first seen / killGroup
+    running --> draining: exited
+    draining --> draining: tick, signal or deadline first seen / killGroup
+    draining --> finished: pipesClosed / killGroup
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4649,7 +4679,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-11 | Summary and progress record | `plugin/rust/summary/store.rs` | implicit | H/H | convert | P4 |
 | HT-12 | Transcript turns | `plugin/rust/chat/shared.rs` | implicit | M/M | leave: reader-local | — |
 | HT-13 | Plan replay | `plugin/rust/plan_progress.rs` | implicit | M/M | leave: seq-checked | — |
-| HT-14 | Session export subprocess | `plugin/rust/chat/session_export.rs` | implicit | H/H | convert; bug B-33 | P4 |
+| HT-14 | Session export subprocess | `plugin/rust/chat/session_export.rs` | implicit | H/H | converted → `ExportRunMachine`; bug B-33 fixed | P4 |
 | HT-15 | Hook configuration report | `plugin/rust/hooks/ops.rs` | partial | L/M | leave: snapshot classification | — |
 | HT-16 | Read cancellation | `plugin/rust/chat/shared.rs` | implicit | L/M | leave: synchronization primitive | — |
 | HT-17 | Pairing key input decoder | `plugin/rust/keypress.rs` | explicit | L/L | explicit | — |
@@ -4692,7 +4722,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |
 | B-32 | HERDR-08 | An Agent attach can open after its transport closed, while another holder keeps SSH up | open |
-| B-33 | HT-14 | A chat read can hang past its timeout when the exporter leaves a child behind | open |
+| B-33 | HT-14 | A chat read can hang past its timeout when the exporter leaves a child behind | fixed (P4, `51159d3b`): the deadline and the abort signal bound the pipe wait after the exporter exits |
 | B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | open |
 | B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | open |
 | B-36 | NOTIF-13 | An iCloud pass finishing after disable publishes Last Checked and retries connections | fixed (P1, `cbf8e38c`) |

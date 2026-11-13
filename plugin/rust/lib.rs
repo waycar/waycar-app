@@ -65,6 +65,7 @@ pub mod reach_status;
 pub mod seal;
 pub mod select_list;
 pub mod sidebar_config;
+pub mod state_machine;
 pub mod status;
 pub mod summary;
 pub mod tmux;

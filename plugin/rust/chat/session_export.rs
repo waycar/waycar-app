@@ -22,6 +22,7 @@ use crate::chat::shared::{AbortSignal, ChatError, ChatResult, Found, check_abort
 use crate::env::Env;
 use crate::jspath;
 use crate::jsx;
+use crate::state_machine::StateMachine;
 
 /// One export can take a few seconds for a long session.
 pub const EXPORT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -507,6 +508,117 @@ fn opencode_server(options: &ExportOptions) -> ChatResult<(String, String)> {
     Ok((url.into(), password.into()))
 }
 
+/// One exporter run, from spawn until both of its pipes have closed. The
+/// exporter leads its own process group; the timeout and the abort signal
+/// each kill that group once, while the exporter runs and while a child it
+/// left behind still holds the pipes (B-33). Once the pipes close, whatever
+/// the group left behind is killed too. The size cap is not here: the pipe
+/// readers kill the group themselves the moment it is crossed.
+#[derive(Debug)]
+pub struct ExportRunMachine {
+    state: ExportRunState,
+    deadline: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExportRunState {
+    /// The exporter runs.
+    Running { stops: ExportStops },
+    /// The exporter exited (`exit`: its code, None when a signal ended it or
+    /// waiting failed); its pipes are still open.
+    Draining {
+        exit: Option<i32>,
+        stops: ExportStops,
+    },
+    /// Both pipes closed. `timed_out`: the deadline killed the group.
+    Finished { exit: Option<i32>, timed_out: bool },
+}
+
+/// Which stops already killed the group: each kills it at most once.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ExportStops {
+    pub timed_out: bool,
+    pub aborted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExportRunEvent {
+    /// One poll with nothing else to report: the signal's state and the time.
+    Tick { aborted: bool, now: Instant },
+    /// The exporter itself exited.
+    Exited(Option<i32>),
+    /// Both pipe readers reached end of file.
+    PipesClosed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ExportRunEffect {
+    /// SIGKILL the exporter's process group.
+    KillGroup,
+}
+
+impl ExportRunMachine {
+    pub fn new(deadline: Instant) -> Self {
+        Self {
+            state: ExportRunState::Running {
+                stops: ExportStops::default(),
+            },
+            deadline,
+        }
+    }
+
+    fn stop(stops: &mut ExportStops, aborted: bool, timed_out: bool) -> Vec<ExportRunEffect> {
+        let mut effects = Vec::new();
+        if aborted && !stops.aborted {
+            stops.aborted = true;
+            effects.push(ExportRunEffect::KillGroup);
+        }
+        if timed_out && !stops.timed_out {
+            stops.timed_out = true;
+            effects.push(ExportRunEffect::KillGroup);
+        }
+        effects
+    }
+}
+
+impl StateMachine for ExportRunMachine {
+    type State = ExportRunState;
+    type Event = ExportRunEvent;
+    type Effect = ExportRunEffect;
+
+    fn state(&self) -> &ExportRunState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: ExportRunEvent) -> Vec<ExportRunEffect> {
+        let deadline = self.deadline;
+        match (&mut self.state, event) {
+            (
+                ExportRunState::Running { stops } | ExportRunState::Draining { stops, .. },
+                ExportRunEvent::Tick { aborted, now },
+            ) => Self::stop(stops, aborted, now >= deadline),
+            (ExportRunState::Running { stops }, ExportRunEvent::Exited(exit)) => {
+                self.state = ExportRunState::Draining {
+                    exit,
+                    stops: *stops,
+                };
+                Vec::new()
+            }
+            (ExportRunState::Draining { exit, stops }, ExportRunEvent::PipesClosed) => {
+                self.state = ExportRunState::Finished {
+                    exit: *exit,
+                    timed_out: stops.timed_out,
+                };
+                vec![ExportRunEffect::KillGroup]
+            }
+            // The exporter's pipes are read to the end only once it exited.
+            (ExportRunState::Running { .. }, ExportRunEvent::PipesClosed) => Vec::new(),
+            (ExportRunState::Draining { .. }, ExportRunEvent::Exited(_)) => Vec::new(),
+            (ExportRunState::Finished { .. }, _) => Vec::new(),
+        }
+    }
+}
+
 fn run_export_command(
     exporter: &Exporter,
     bin: &str,
@@ -587,42 +699,36 @@ fn run_export_command(
             .map(|p| Box::new(p) as Box<dyn Read + Send>),
     );
 
-    let deadline = Instant::now() + options.timeout;
-    let mut killed = false;
-    let mut aborted = false;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {}
-            Err(_) => break None,
+    let mut run = ExportRunMachine::new(Instant::now() + options.timeout);
+    let finished = loop {
+        let event = match run.state() {
+            ExportRunState::Running { .. } => match child.try_wait() {
+                Ok(Some(status)) => Some(ExportRunEvent::Exited(status.code())),
+                Ok(None) => None,
+                Err(_) => Some(ExportRunEvent::Exited(None)),
+            },
+            ExportRunState::Draining { .. } => (out_thread.is_finished()
+                && err_thread.is_finished())
+            .then_some(ExportRunEvent::PipesClosed),
+            ExportRunState::Finished { exit, timed_out } => break (*exit, *timed_out),
+        };
+        let polled = event.is_none();
+        let event = event.unwrap_or_else(|| ExportRunEvent::Tick {
+            aborted: options.signal.as_ref().is_some_and(|s| s.is_aborted()),
+            now: Instant::now(),
+        });
+        for effect in run.handle(event) {
+            match effect {
+                ExportRunEffect::KillGroup => kill(),
+            }
         }
-        if !aborted && options.signal.as_ref().is_some_and(|s| s.is_aborted()) {
-            aborted = true;
-            kill();
+        if polled {
+            thread::sleep(Duration::from_millis(5));
         }
-        if !killed && Instant::now() >= deadline {
-            killed = true;
-            kill();
-        }
-        thread::sleep(Duration::from_millis(5));
     };
-    // A child the exporter left behind can hold the pipes open after it
-    // exits: the deadline and the signal still bound the wait (B-33).
-    while !(out_thread.is_finished() && err_thread.is_finished()) {
-        if !aborted && options.signal.as_ref().is_some_and(|s| s.is_aborted()) {
-            aborted = true;
-            kill();
-        }
-        if !killed && Instant::now() >= deadline {
-            killed = true;
-            kill();
-        }
-        thread::sleep(Duration::from_millis(5));
-    }
+    let (code, killed) = finished;
     let stdout = out_thread.join().unwrap_or_default();
     let stderr = err_thread.join().unwrap_or_default();
-    // Anything the group left behind goes with it.
-    kill();
     check_abort(options.signal.as_deref())?;
     if too_big.load(Ordering::SeqCst) {
         return Err(ChatError::export(
@@ -634,7 +740,6 @@ fn run_export_command(
             false,
         ));
     }
-    let code = status.and_then(|s| s.code());
     if code != Some(0) {
         let stderr_text = String::from_utf8_lossy(&stderr);
         let detail = {
@@ -1132,6 +1237,126 @@ esac
             started.elapsed()
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    mod export_run_machine {
+        use super::super::*;
+        use crate::state_machine::testing::handle_all;
+
+        fn at(machine: &ExportRunMachine, after_ms: u64) -> Instant {
+            machine.deadline - Duration::from_secs(1) + Duration::from_millis(after_ms)
+        }
+
+        fn fresh() -> ExportRunMachine {
+            ExportRunMachine::new(Instant::now() + Duration::from_secs(1))
+        }
+
+        fn tick(machine: &ExportRunMachine, after_ms: u64, aborted: bool) -> ExportRunEvent {
+            ExportRunEvent::Tick {
+                aborted,
+                now: at(machine, after_ms),
+            }
+        }
+
+        #[test]
+        fn a_quiet_tick_before_the_deadline_does_nothing() {
+            let mut run = fresh();
+            let event = tick(&run, 10, false);
+            assert_eq!(run.handle(event), []);
+            assert_eq!(
+                run.state(),
+                &ExportRunState::Running {
+                    stops: ExportStops::default()
+                }
+            );
+        }
+
+        #[test]
+        fn the_deadline_kills_the_group_once() {
+            let mut run = fresh();
+            let events = [tick(&run, 1000, false), tick(&run, 1500, false)];
+            assert_eq!(handle_all(&mut run, events), [ExportRunEffect::KillGroup]);
+        }
+
+        #[test]
+        fn the_signal_kills_the_group_once_and_the_deadline_again() {
+            let mut run = fresh();
+            let events = [
+                tick(&run, 10, true),
+                tick(&run, 20, true),
+                tick(&run, 1000, true),
+            ];
+            assert_eq!(
+                handle_all(&mut run, events),
+                [ExportRunEffect::KillGroup, ExportRunEffect::KillGroup]
+            );
+            let mut both = fresh();
+            let event = tick(&both, 1000, true);
+            assert_eq!(
+                both.handle(event),
+                [ExportRunEffect::KillGroup, ExportRunEffect::KillGroup]
+            );
+        }
+
+        #[test]
+        fn an_exit_drains_with_the_stops_so_far() {
+            let mut run = fresh();
+            let event = tick(&run, 1000, false);
+            let _ = run.handle(event);
+            assert_eq!(run.handle(ExportRunEvent::Exited(None)), []);
+            assert_eq!(
+                run.state(),
+                &ExportRunState::Draining {
+                    exit: None,
+                    stops: ExportStops {
+                        timed_out: true,
+                        aborted: false
+                    }
+                }
+            );
+        }
+
+        #[test]
+        fn draining_still_honours_the_deadline_and_the_signal() {
+            let mut run = fresh();
+            let _ = run.handle(ExportRunEvent::Exited(Some(0)));
+            let events = [tick(&run, 10, true), tick(&run, 1000, true)];
+            assert_eq!(
+                handle_all(&mut run, events),
+                [ExportRunEffect::KillGroup, ExportRunEffect::KillGroup]
+            );
+        }
+
+        #[test]
+        fn closed_pipes_finish_and_kill_what_the_group_left() {
+            let mut run = fresh();
+            let _ = run.handle(ExportRunEvent::Exited(Some(3)));
+            assert_eq!(
+                run.handle(ExportRunEvent::PipesClosed),
+                [ExportRunEffect::KillGroup]
+            );
+            assert_eq!(
+                run.state(),
+                &ExportRunState::Finished {
+                    exit: Some(3),
+                    timed_out: false
+                }
+            );
+        }
+
+        #[test]
+        fn ignored_events() {
+            let mut run = fresh();
+            assert_eq!(run.handle(ExportRunEvent::PipesClosed), []);
+            let _ = run.handle(ExportRunEvent::Exited(Some(1)));
+            assert_eq!(run.handle(ExportRunEvent::Exited(Some(2))), []);
+            let _ = run.handle(ExportRunEvent::PipesClosed);
+            let finished = run.state().clone();
+            let event = tick(&run, 5000, true);
+            assert_eq!(run.handle(event), []);
+            assert_eq!(run.handle(ExportRunEvent::PipesClosed), []);
+            assert_eq!(run.state(), &finished);
+        }
     }
 
     #[test]
