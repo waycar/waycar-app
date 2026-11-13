@@ -7,7 +7,7 @@ import Testing
 @Suite("Find Computers store")
 @MainActor
 struct FindComputersStoreTests {
-    @Test func startsBonjourImmediatelyAndScansOnlyAfterATap() async {
+    @Test func startsBonjourImmediatelyAndScansOnlyAfterATap() async throws {
         let browser = DiscoveryTestBrowser()
         let sweeper = DiscoveryTestSweeper()
         let store = FindComputersStore(
@@ -22,7 +22,7 @@ struct FindComputersStoreTests {
         browser.continuation.yield(.computers([
             FoundComputer(address: "192.168.1.20", port: 22, serviceName: "Studio Mac", software: nil, source: .bonjour)
         ]))
-        #expect(await waitUntil { store.hasSettled })
+        try await waitUntil { store.hasSettled }
         #expect(milestones == [.lanScanStarted, .lanScanFound(count: 1)])
 
         store.scanNetwork()
@@ -30,20 +30,20 @@ struct FindComputersStoreTests {
         sweeper.continuation.yield(.found(FoundComputer(
             address: "192.168.1.20", port: 22, serviceName: nil, software: "OpenSSH_test", source: .sweep)))
         sweeper.continuation.yield(.finished)
-        #expect(await waitUntil { store.sweep == .finished })
+        try await waitUntil { store.sweep == .finished }
         #expect(store.computers.count == 1)
         #expect(store.computers.first?.software == "OpenSSH_test")
         #expect(milestones.count == 2)
     }
 
-    @Test func browseDenialReportsOnlyThePermissionMilestone() async {
+    @Test func browseDenialReportsOnlyThePermissionMilestone() async throws {
         let browser = DiscoveryTestBrowser()
         let store = FindComputersStore(browser: browser, localSubnet: { nil })
         var milestones: [Milestone] = []
         store.start { milestones.append($0) }
         defer { store.stop() }
         browser.continuation.yield(.denied)
-        #expect(await waitUntil { store.isDenied })
+        try await waitUntil { store.isDenied }
         #expect(milestones == [.lanScanStarted, .lanPermissionDenied])
     }
 }
