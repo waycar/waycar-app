@@ -1,17 +1,20 @@
 ---
 import { ON_APP_STORE } from '../data/links';
+import { runtimes } from '../data/supported';
 import AppStoreCta from './AppStoreCta.astro';
 import CodeBlock from './CodeBlock.astro';
 
 const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
 
+const atLeast = ({ name, min }: { name: string; min: string }) => `${name} ≥ ${min}`;
+const live = runtimes.filter((runtime) => !runtime.next);
+const next = runtimes.filter((runtime) => runtime.next);
+
 const requirements = [
   'iOS / iPadOS 18+',
   'Android: coming soon',
-  'herdr ≥ 0.7.5',
-  'or tmux ≥ 3.2',
-  'or Herdr Core ≥ 0.1.10',
-  'Next update: Zellij ≥ 0.46, Codex ≥ 0.167, OpenCode ≥ 2.2',
+  ...live.map((runtime, index) => (index ? `or ${atLeast(runtime)}` : atLeast(runtime))),
+  ...(next.length ? [`Next update: ${next.map(atLeast).join(', ')}`] : []),
   'No Node needed on the Host',
   'OpenSSH · streamlocal on, for herdr',
   'macOS: Remote Login on',

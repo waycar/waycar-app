@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import { ipad, iphone, watch } from '../data/screens';
+import { leadAgents, moreAgents } from '../data/supported';
 
 interface Props {
   /** Page B covers the console, prompting, workspaces and notifications cells in its own sections. */
@@ -36,26 +37,6 @@ const qrRows = [
 const qrPath = qrRows
   .flatMap((row, y) => [...row].map((cell, x) => (cell === '#' ? `M${x} ${y}h1v1h-1z` : '')))
   .join('');
-
-const moreAgents = [
-  'Amp',
-  'Antigravity',
-  'Cline',
-  'Cursor Agent',
-  'Devin CLI',
-  'Droid',
-  'GitHub Copilot CLI',
-  'Grok Build',
-  'Hermes Agent',
-  'Kilo Code',
-  'Kimi CLI',
-  'Kiro CLI',
-  'Maki',
-  'Mastra Code',
-  'Muse',
-  'Qoder CLI',
-  'Qwen Code',
-];
 
 // Swatches of terminal themes the app ships (Catppuccin, Dracula, Tokyo Night,
 // Solarized, Nord, ...). They show other people's palettes, so they are
@@ -262,12 +243,7 @@ const themes = [
         <h3>Bring the agents you already run.</h3>
         <p>Waycar finds them on each Host. Shells show up too.</p>
         <ul class="agent-list">
-          <li><code class="lead">claude</code></li>
-          <li><code class="lead">codex</code></li>
-          <li><code class="lead">omp</code></li>
-          <li><code class="lead">gemini</code></li>
-          <li><code class="lead">opencode</code></li>
-          <li><code class="lead">pi</code></li>
+          {leadAgents.map((name) => <li><code class="lead">{name}</code></li>)}
           {moreAgents.map((name) => <li><code>{name}</code></li>)}
         </ul>
       </article>

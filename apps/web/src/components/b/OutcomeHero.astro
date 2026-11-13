@@ -254,8 +254,11 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
     border-radius: 32px 32px 0 0;
   }
 
+  /* Shown only where there is room beside the screen (1280px up): anywhere
+     narrower a callout would sit on the screenshot and cover what it shows. */
   .callout {
-    display: flex;
+    display: none;
+    position: absolute;
     align-items: center;
     gap: 8px;
     width: fit-content;
@@ -277,21 +280,6 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
 
   .host {
     color: var(--text);
-  }
-
-  .c1,
-  .c2 {
-    position: absolute;
-  }
-
-  .c1 {
-    top: 21%;
-    left: -22%;
-  }
-
-  .c2 {
-    top: 40%;
-    right: -18%;
   }
 
   /* ---------- Install and proof ---------- */
@@ -360,16 +348,6 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
     .stage {
       margin-top: 36px;
     }
-
-    /* One callout is enough on a phone; the Host names show on each card. */
-    .c1 {
-      top: 19%;
-      left: -14%;
-    }
-
-    .c2 {
-      display: none;
-    }
   }
 
   /* ---------- Two columns ---------- */
@@ -424,22 +402,6 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
       aspect-ratio: 1320 / 2280;
     }
 
-    /* Outside the screen, pointing in: the Blocked card, then the card from
-       the other Host. */
-    .c1,
-    .c2 {
-      right: calc(100% - 14px);
-      left: auto;
-    }
-
-    .c1 {
-      top: 118px;
-    }
-
-    .c2 {
-      top: 262px;
-    }
-
     /* The left column is narrow, so the command uses the phone code size and
        may wrap at spaces instead of running under the copy button. */
     .install :global(.window pre) {
@@ -448,13 +410,20 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
     }
   }
 
-  /* The text column runs up to the screen here, so the callouts tuck in over
-     the screen's left edge instead of reaching into the lede. */
-  @media (min-width: 1024px) and (max-width: 1279px) {
-    .c1,
+  /* Outside the screen, pointing in: the Blocked card, then the card from
+     the other Host. */
+  @media (min-width: 1280px) {
+    .callout {
+      display: flex;
+      right: calc(100% - 14px);
+    }
+
+    .c1 {
+      top: 118px;
+    }
+
     .c2 {
-      right: auto;
-      left: -40px;
+      top: 262px;
     }
   }
 

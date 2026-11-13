@@ -1,7 +1,8 @@
 // What Waycar works with, in one place: the "Works with" strip under the home
-// page hero and the Setup requirements read it, so a version or a new runtime
-// changes once. The agent names match the table in
-// src/content/help/supported-agents.md.
+// page hero, the Setup requirements and the Features agent list read it, so a
+// version, a new runtime or a new agent changes once. The agent names match
+// the table in src/content/help/supported-agents.md. src/llms/index.md repeats
+// the versions in prose: change it too.
 
 export type Runtime = {
   name: string;
