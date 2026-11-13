@@ -454,7 +454,7 @@ fn write_last_state(state_dir: &Path, state: &Value) -> Result<()> {
 }
 
 /// This run's place in the debounce: the newest claim wins.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Claim {
     pid: u32,
     claimed_at_ms: u64,
@@ -1500,6 +1500,171 @@ fn keep_tick_alive(
     });
 }
 
+/// One Live Activity run on a Host (HT-09): a status run claims the debounce,
+/// sleeps it, sends updates under the send lock (superseded when a newer
+/// claim exists), then, when a device may be started, sleeps the start grace
+/// and starts under the lock again (superseded the same way), and last makes
+/// sure the plan-step tick runs. A progress-only run (the tick's) holds no
+/// claim, sleeps nothing and never starts. The owner ([`run_activity`],
+/// [`run_progress_update`]) does the reads, the claim file, the sleeps, the
+/// lock and the pushes.
+#[derive(Debug)]
+struct ActivityRunMachine {
+    state: RunState,
+    debounce_ms: u64,
+    grace_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RunState {
+    Idle,
+    Debouncing(Claim),
+    Updating(Option<Claim>),
+    /// Updates done; a device may be started after the grace. `write_last`:
+    /// no update was delivered, so a delivered start records last-state.
+    StartGrace {
+        claim: Claim,
+        write_last: bool,
+    },
+    Starting,
+    /// The tick check is under way.
+    Settling,
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RunEvent {
+    /// A status run, with its cheap-exit facts and its claim.
+    StatusRequested {
+        has_devices: bool,
+        ended_and_ineligible: bool,
+        claim: Claim,
+    },
+    ProgressRequested,
+    DebounceElapsed,
+    /// The update half's answer: `None` when superseded or nothing was left
+    /// to do, else how many devices may be started and whether an update was
+    /// delivered.
+    UpdatesAnswered(Option<(usize, bool)>),
+    GraceElapsed,
+    StartsAnswered,
+    TickChecked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RunEffect {
+    WriteClaim(Claim),
+    /// Sleep the debounce (ms), then `debounceElapsed`.
+    Debounce(u64),
+    /// Sleep the start grace (ms), then `graceElapsed`.
+    StartGrace(u64),
+    SendUpdates {
+        claim: Option<Claim>,
+        progress_only: bool,
+    },
+    StartActivities {
+        claim: Claim,
+        write_last: bool,
+    },
+    KeepTickAlive,
+}
+
+impl ActivityRunMachine {
+    fn new(config: &NotificationConfig) -> Self {
+        Self {
+            state: RunState::Idle,
+            debounce_ms: config.activity_debounce_ms,
+            grace_ms: config.activity_start_grace_ms,
+        }
+    }
+
+    fn settle(&mut self) -> Vec<RunEffect> {
+        self.state = RunState::Settling;
+        vec![RunEffect::KeepTickAlive]
+    }
+}
+
+impl StateMachine for ActivityRunMachine {
+    type State = RunState;
+    type Event = RunEvent;
+    type Effect = RunEffect;
+
+    fn state(&self) -> &RunState {
+        &self.state
+    }
+
+    fn handle(&mut self, event: RunEvent) -> Vec<RunEffect> {
+        match (self.state, event) {
+            (
+                RunState::Idle,
+                RunEvent::StatusRequested {
+                    has_devices,
+                    ended_and_ineligible,
+                    claim,
+                },
+            ) => {
+                // Cheap exits before burning a debounce process on a no-op.
+                if !has_devices || ended_and_ineligible {
+                    self.state = RunState::Finished;
+                    return Vec::new();
+                }
+                self.state = RunState::Debouncing(claim);
+                vec![
+                    RunEffect::WriteClaim(claim),
+                    RunEffect::Debounce(self.debounce_ms),
+                ]
+            }
+            (RunState::Idle, RunEvent::ProgressRequested) => {
+                self.state = RunState::Updating(None);
+                vec![RunEffect::SendUpdates {
+                    claim: None,
+                    progress_only: true,
+                }]
+            }
+            (RunState::Debouncing(claim), RunEvent::DebounceElapsed) => {
+                self.state = RunState::Updating(Some(claim));
+                vec![RunEffect::SendUpdates {
+                    claim: Some(claim),
+                    progress_only: false,
+                }]
+            }
+            (RunState::Updating(None), RunEvent::UpdatesAnswered(_)) => {
+                self.state = RunState::Finished;
+                Vec::new()
+            }
+            (RunState::Updating(Some(claim)), RunEvent::UpdatesAnswered(answer)) => match answer {
+                Some((start_candidates, delivered)) if start_candidates > 0 => {
+                    self.state = RunState::StartGrace {
+                        claim,
+                        write_last: !delivered,
+                    };
+                    vec![RunEffect::StartGrace(self.grace_ms)]
+                }
+                _ => self.settle(),
+            },
+            (RunState::StartGrace { claim, write_last }, RunEvent::GraceElapsed) => {
+                self.state = RunState::Starting;
+                vec![RunEffect::StartActivities { claim, write_last }]
+            }
+            (RunState::Starting, RunEvent::StartsAnswered) => self.settle(),
+            (RunState::Settling, RunEvent::TickChecked) => {
+                self.state = RunState::Finished;
+                Vec::new()
+            }
+            (
+                RunState::Idle
+                | RunState::Debouncing(_)
+                | RunState::Updating(_)
+                | RunState::StartGrace { .. }
+                | RunState::Starting
+                | RunState::Settling
+                | RunState::Finished,
+                _,
+            ) => Vec::new(),
+        }
+    }
+}
+
 /// One Live Activity run for a status change, shared by both triggers.
 fn run_activity(
     host: &Host<'_>,
@@ -1508,44 +1673,73 @@ fn run_activity(
     start_tick: &dyn Fn(&TickStart<'_>),
 ) -> Result<()> {
     let config = read_config(host.config_dir)?;
-
-    // Cheap exits before burning a debounce process on a no-op.
-    if read_activity_devices(host.config_dir).is_empty() {
-        return Ok(());
-    }
-    if read_last_state(host.state_dir)
-        .is_some_and(|state| js_get(&state, "ended") == Some(&Value::Bool(true)))
-        && !is_eligible_status(status)
-    {
-        return Ok(());
-    }
-
-    let claim = Claim {
-        pid: std::process::id(),
-        claimed_at_ms: deps.clock.now_ms(),
-    };
-    write_claim(host.state_dir, claim)?;
-    deps.clock
-        .sleep(Duration::from_millis(config.activity_debounce_ms));
-    let sent = with_send_lock(host.state_dir, deps.clock, LockLimits::default(), || {
-        send_updates(&config, host, Some(claim), deps, false)
-    })?;
+    let has_devices = !read_activity_devices(host.config_dir).is_empty();
+    let ended_and_ineligible = has_devices
+        && read_last_state(host.state_dir)
+            .is_some_and(|state| js_get(&state, "ended") == Some(&Value::Bool(true)))
+        && !is_eligible_status(status);
+    let mut machine = ActivityRunMachine::new(&config);
+    let mut events = vec![RunEvent::StatusRequested {
+        has_devices,
+        ended_and_ineligible,
+        claim: Claim {
+            pid: std::process::id(),
+            claimed_at_ms: deps.clock.now_ms(),
+        },
+    }];
+    let mut sent: Option<Sent> = None;
     let mut failures = Vec::new();
-    if let Some(sent) = sent {
-        failures = sent.failures;
-        if sent.start_candidates > 0 {
-            start_activities(
-                &config,
-                host,
-                claim,
-                deps,
-                &sent.content,
-                &mut failures,
-                (!sent.delivered).then_some(&sent.last_state),
-            )?;
+    while let Some(event) = events.pop() {
+        for effect in machine.handle(event) {
+            match effect {
+                RunEffect::WriteClaim(claim) => write_claim(host.state_dir, claim)?,
+                RunEffect::Debounce(ms) => {
+                    deps.clock.sleep(Duration::from_millis(ms));
+                    events.push(RunEvent::DebounceElapsed);
+                }
+                // A grace lets a foregrounded app start its own activity and
+                // register its token first.
+                RunEffect::StartGrace(ms) => {
+                    deps.clock.sleep(Duration::from_millis(ms));
+                    events.push(RunEvent::GraceElapsed);
+                }
+                RunEffect::SendUpdates {
+                    claim,
+                    progress_only,
+                } => {
+                    sent =
+                        with_send_lock(host.state_dir, deps.clock, LockLimits::default(), || {
+                            send_updates(&config, host, claim, deps, progress_only)
+                        })?;
+                    if let Some(sent) = &mut sent {
+                        failures = std::mem::take(&mut sent.failures);
+                    }
+                    let answer = sent
+                        .as_ref()
+                        .map(|sent| (sent.start_candidates, sent.delivered));
+                    events.push(RunEvent::UpdatesAnswered(answer));
+                }
+                RunEffect::StartActivities { claim, write_last } => {
+                    if let Some(sent) = &sent {
+                        start_activities(
+                            &config,
+                            host,
+                            claim,
+                            deps,
+                            &sent.content,
+                            &mut failures,
+                            write_last.then_some(&sent.last_state),
+                        )?;
+                    }
+                    events.push(RunEvent::StartsAnswered);
+                }
+                RunEffect::KeepTickAlive => {
+                    keep_tick_alive(&config, host, start_tick);
+                    events.push(RunEvent::TickChecked);
+                }
+            }
         }
     }
-    keep_tick_alive(&config, host, start_tick);
     if failures.is_empty() {
         Ok(())
     } else {
@@ -1580,9 +1774,23 @@ pub fn run_progress_update(request: &ProgressRequest<'_>, deps: &ActivityDeps<'_
         env: request.env,
         home: home.as_deref(),
     };
-    let sent = with_send_lock(host.state_dir, deps.clock, LockLimits::default(), || {
-        send_updates(&config, &host, None, deps, true)
-    })?;
+    let mut machine = ActivityRunMachine::new(&config);
+    let mut sent = None;
+    for effect in machine.handle(RunEvent::ProgressRequested) {
+        if let RunEffect::SendUpdates {
+            claim,
+            progress_only,
+        } = effect
+        {
+            sent = with_send_lock(host.state_dir, deps.clock, LockLimits::default(), || {
+                send_updates(&config, &host, claim, deps, progress_only)
+            })?;
+            let answer = sent
+                .as_ref()
+                .map(|sent: &Sent| (sent.start_candidates, sent.delivered));
+            let _ = machine.handle(RunEvent::UpdatesAnswered(answer));
+        }
+    }
     let Some(sent) = sent else {
         return Ok(false);
     };
@@ -1803,12 +2011,12 @@ fn send_updates(
     }))
 }
 
-/// Push-to-start, after a grace period that lets a foregrounded app start its
-/// own activity and register its token first; a device that gained a live
-/// update token meanwhile is skipped. A newer invocation that claimed the
-/// debounce during the grace takes over the decision. Start state is re-read
-/// after the grace, under the send lock, so an overlapping invocation's start
-/// is never repeated. `last_state`, when given, is written once a start is
+/// Push-to-start, once [`ActivityRunMachine`]'s start grace has passed (it
+/// lets a foregrounded app start its own activity and register its token
+/// first); a device that gained a live update token meanwhile is skipped. A
+/// newer invocation that claimed the debounce during the grace takes over the
+/// decision. Start state is re-read after the grace, under the send lock, so
+/// an overlapping invocation's start is never repeated. `last_state`, when given, is written once a start is
 /// delivered.
 fn start_activities(
     config: &NotificationConfig,
@@ -1819,8 +2027,6 @@ fn start_activities(
     failures: &mut Vec<String>,
     last_state: Option<&LastState>,
 ) -> Result<()> {
-    deps.clock
-        .sleep(Duration::from_millis(config.activity_start_grace_ms));
     with_send_lock(host.state_dir, deps.clock, LockLimits::default(), || {
         if claim_superseded(claim, host.state_dir) {
             return Ok(());

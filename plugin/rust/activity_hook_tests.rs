@@ -2951,3 +2951,126 @@ fn rust_a_real_core_terminal_hook_builds_the_content_from_the_real_ls_and_get_re
         json!({ "hc:t1": "working", "hc:t2": "blocked" })
     );
 }
+
+// ---- ActivityRunMachine transitions ------------------------------------------------
+
+mod activity_run_machine {
+    use super::super::*;
+    use crate::state_machine::testing::handle_all;
+
+    const CLAIM: Claim = Claim {
+        pid: 7,
+        claimed_at_ms: 1_000,
+    };
+
+    fn machine() -> ActivityRunMachine {
+        ActivityRunMachine {
+            state: RunState::Idle,
+            debounce_ms: 120,
+            grace_ms: 30,
+        }
+    }
+
+    fn requested(has_devices: bool, ended_and_ineligible: bool) -> RunEvent {
+        RunEvent::StatusRequested {
+            has_devices,
+            ended_and_ineligible,
+            claim: CLAIM,
+        }
+    }
+
+    #[test]
+    fn the_cheap_exits_finish_without_a_claim_or_a_tick() {
+        for event in [requested(false, false), requested(true, true)] {
+            let mut run = machine();
+            assert_eq!(run.handle(event), []);
+            assert_eq!(run.state(), &RunState::Finished);
+        }
+    }
+
+    #[test]
+    fn a_status_run_claims_debounces_then_sends_with_its_claim() {
+        let mut run = machine();
+        assert_eq!(
+            run.handle(requested(true, false)),
+            [RunEffect::WriteClaim(CLAIM), RunEffect::Debounce(120)]
+        );
+        assert_eq!(
+            run.handle(RunEvent::DebounceElapsed),
+            [RunEffect::SendUpdates {
+                claim: Some(CLAIM),
+                progress_only: false
+            }]
+        );
+    }
+
+    #[test]
+    fn no_start_candidate_or_a_superseded_update_settles_with_the_tick() {
+        for answer in [None, Some((0, true)), Some((0, false))] {
+            let mut run = machine();
+            let _ = handle_all(
+                &mut run,
+                [requested(true, false), RunEvent::DebounceElapsed],
+            );
+            assert_eq!(
+                run.handle(RunEvent::UpdatesAnswered(answer)),
+                [RunEffect::KeepTickAlive],
+                "{answer:?}"
+            );
+            assert_eq!(run.handle(RunEvent::TickChecked), []);
+            assert_eq!(run.state(), &RunState::Finished);
+        }
+    }
+
+    #[test]
+    fn a_start_candidate_waits_the_grace_then_starts_recording_last_state_only_if_undelivered() {
+        for (delivered, write_last) in [(true, false), (false, true)] {
+            let mut run = machine();
+            let _ = handle_all(
+                &mut run,
+                [requested(true, false), RunEvent::DebounceElapsed],
+            );
+            assert_eq!(
+                run.handle(RunEvent::UpdatesAnswered(Some((1, delivered)))),
+                [RunEffect::StartGrace(30)]
+            );
+            assert_eq!(
+                run.handle(RunEvent::GraceElapsed),
+                [RunEffect::StartActivities {
+                    claim: CLAIM,
+                    write_last
+                }]
+            );
+            assert_eq!(
+                run.handle(RunEvent::StartsAnswered),
+                [RunEffect::KeepTickAlive]
+            );
+        }
+    }
+
+    #[test]
+    fn a_progress_run_sends_without_a_claim_and_never_starts_or_ticks() {
+        let mut run = machine();
+        assert_eq!(
+            run.handle(RunEvent::ProgressRequested),
+            [RunEffect::SendUpdates {
+                claim: None,
+                progress_only: true
+            }]
+        );
+        assert_eq!(run.handle(RunEvent::UpdatesAnswered(Some((3, true)))), []);
+        assert_eq!(run.state(), &RunState::Finished);
+    }
+
+    #[test]
+    fn events_a_state_never_asked_for_are_ignored() {
+        let mut run = machine();
+        assert_eq!(run.handle(RunEvent::GraceElapsed), []);
+        assert_eq!(run.handle(RunEvent::UpdatesAnswered(None)), []);
+        assert_eq!(run.state(), &RunState::Idle);
+        let _ = run.handle(requested(true, false));
+        assert_eq!(run.handle(RunEvent::StartsAnswered), []);
+        assert_eq!(run.handle(RunEvent::ProgressRequested), []);
+        assert_eq!(run.state(), &RunState::Debouncing(CLAIM));
+    }
+}

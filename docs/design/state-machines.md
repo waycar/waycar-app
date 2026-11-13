@@ -4500,6 +4500,46 @@ stateDiagram-v2
     started --> eligible: plan, inventory empty (episode ends)
 ```
 
+### ActivityRunMachine
+
+- **File:** `plugin/rust/activity_hook.rs`
+- **Owner:** `run_activity` (a status run, both triggers) and
+  `run_progress_update` (the plan-step tick's progress-only run) read the
+  registrations and last-state, write the debounce claim, sleep on the
+  injected clock, take the send lock and run `send_updates` /
+  `start_activities` (each checks the claim first, so a newer run
+  supersedes), and `keep_tick_alive`. The update half's dedupe and content
+  stay in `send_updates`; the per-device bookkeeping is
+  `ActivityEpisodeMachine`.
+- **States:** `idle`, `debouncing(claim)`, `updating(claim?)`,
+  `startGrace(claim, writeLast)`, `starting`, `settling`, `finished`.
+- **Events:** `statusRequested(hasDevices, endedAndIneligible, claim)`,
+  `progressRequested`, `debounceElapsed`, `updatesAnswered(candidates,
+  delivered)?`, `graceElapsed`, `startsAnswered`, `tickChecked`.
+- **Effects:** `writeClaim`, `debounce(ms)`, `sendUpdates(claim?,
+  progressOnly)`, `startGrace(ms)`, `startActivities(claim, writeLast)`,
+  `keepTickAlive`.
+- **Tests:** `activity_hook::tests::activity_run_machine` (transitions),
+  `activity_hook::tests` (overlapping runs, the send lock, a newer claim in
+  the debounce and in the grace, start once per episode, progress-only
+  runs).
+- **Catalogue:** HT-09.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> finished: no device, or ended and not eligible
+    idle --> debouncing: statusRequested / writeClaim, debounce
+    idle --> updating: progressRequested / sendUpdates
+    debouncing --> updating: debounceElapsed / sendUpdates
+    updating --> startGrace: a device may start / startGrace
+    updating --> settling: none, or superseded / keepTickAlive
+    updating --> finished: progress-only answered
+    startGrace --> starting: graceElapsed / startActivities
+    starting --> settling: startsAnswered / keepTickAlive
+    settling --> finished: tickChecked
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4912,7 +4952,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | converted → `PairPopupMachine`; `expiring` with no session still strands the popup, as before | P4 |
 | HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | converted → `EnrollmentAcceptMachine` (the accept side; the popup side is HT-06) | P4 |
 | HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | converted → `ActivityEpisodeMachine`; start-state file unchanged | P4 |
-| HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | convert | P4 |
+| HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | converted → `ActivityRunMachine` (run phases; `send_updates`' dedupe stays a function) | P4 |
 | HT-10 | Summary refresh run | `plugin/rust/summary/refresh.rs` | implicit | M/H | leave: cross-process lock with takeover | — |
 | HT-11 | Summary and progress record | `plugin/rust/summary/store.rs` | implicit | H/H | converted → `SummaryRecordMachine`; a summary write's read-then-write is still not atomic across writers, as before | P4 |
 | HT-12 | Transcript turns | `plugin/rust/chat/shared.rs` | implicit | M/M | leave: reader-local | — |
