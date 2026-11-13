@@ -39,10 +39,14 @@ jobs:
     # A cold build, the three suites, and a wait for an iPad slot.
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Select the newest Xcode 27
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+        run: |
+          # shellcheck disable=SC2012 # sort -V needs the plain list
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
 
       # make test-ipad regenerates the project, and its SwiftMosh suite
       # resolves mosh-server on PATH; the image has neither.

@@ -1,0 +1,56 @@
+# CodeQL for the languages that need no build: GitHub Actions workflows,
+# JavaScript/TypeScript (apps/web, relay, scripts) and Rust (plugin/). No Swift
+# yet: CodeQL extracts Swift by tracing a build, and its tracer cannot trace
+# Xcode 27 / Swift 6.4 builds (posix_spawn "Bad CPU type" on the xcode-27
+# runner; github/codeql#22742). Issue #3 tracks adding it once a new
+# extractor ships. Advanced setup: keep GitHub's
+# default setup off, or the two upload conflicting analyses.
+
+name: CodeQL
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - docs/**
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - docs/**
+  schedule:
+    - cron: "23 5 * * 3"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, rust]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

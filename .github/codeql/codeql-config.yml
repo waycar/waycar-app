@@ -1,0 +1,9 @@
+name: Waycar CodeQL
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/.build/**"
+  - "**/target/**"
+  - "apps/web/.astro/**"
+  - Sources/Waycar/Transport/Generated/**
+  - Sources/Waycar/Demo/DemoTerminalFrames.swift

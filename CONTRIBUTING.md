@@ -76,6 +76,24 @@ Generated or shared files are never hand-edited:
 
 ## Pull requests
 
+- Open or find an issue first for anything non-trivial, and for any change an
+  agent wrote. Small fixes (a typo, an obvious one-line bug) may go straight
+  to a pull request.
+- One change per pull request.
+- Fill in the template: Problem, User impact, Why this approach and Evidence.
+  Evidence is what you ran and saw: the test commands and their results,
+  screenshots or a recording for UI changes (iPhone, and iPad where layout
+  matters), and the device or simulator. "Tested locally" is not evidence.
+- After review feedback, update the pull request description, not only a
+  comment, so it stays the durable explanation of the change.
+- AI-assisted and agent-written pull requests are welcome at the same bar as
+  any other; no disclosure label is needed.
+- An automated review comment appears on each pull request and is edited in
+  place on every push. It is advisory; a maintainer decides. Review
+  automation never runs code from a pull request.
+- Workflows under `.github/` must pass actionlint and zizmor
+  (`workflow-lint.yml`): actions pinned by SHA with a version comment,
+  least-privilege `permissions:`, `persist-credentials: false` on checkouts.
 - Swift 6 strict concurrency; no force unwraps or `try!` outside tests.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, …) with an imperative,
   lowercase subject; reference issues with `refs #<n>`.
