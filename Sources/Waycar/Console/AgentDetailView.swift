@@ -28,6 +28,8 @@ struct AgentDetailView: View {
     /// A thread's Show Terminal always attaches, even if the pane also has
     /// its own Chat Mode marker.
     private let isLinkedTerminal: Bool
+    /// Tests drive the terminal screen's Toolbar through it; nil in the app.
+    private let interactionProbe: AgentTerminalInteractionProbe?
     @State private var focus = AgentFocusCoordinator()
     @State private var hasAppeared = false
     @Environment(\.scenePhase) private var scenePhase
@@ -97,7 +99,8 @@ struct AgentDetailView: View {
         onChatPresentationChange: @escaping (Bool) -> Void = { _ in },
         composerStore: AgentComposerStore? = nil,
         attachStore: AgentAttachStore? = nil,
-        isLinkedTerminal: Bool = false
+        isLinkedTerminal: Bool = false,
+        interactionProbe: AgentTerminalInteractionProbe? = nil
     ) {
         self.agent = agent
         self.console = console
@@ -114,6 +117,7 @@ struct AgentDetailView: View {
         self.onMarkedUnread = onMarkedUnread
         self.onChatPresentationChange = onChatPresentationChange
         self.isLinkedTerminal = isLinkedTerminal
+        self.interactionProbe = interactionProbe
         let composer = composerStore ?? console.composerStore(for: agent)
         _composer = State(initialValue: composer)
         let ownerID = UUID()
@@ -577,7 +581,8 @@ struct AgentDetailView: View {
             // Retention swaps `attach` on appear and rebuilds this view; the
             // build before that swap is a placeholder and must not spend the
             // keyboard handoff meant for the real one.
-            inheritsKeyboardHandoff: !permitsRetention || retainedAgent != nil)
+            inheritsKeyboardHandoff: !permitsRetention || retainedAgent != nil,
+            interactionProbe: interactionProbe)
         .id(ObjectIdentifier(attach))
     }
 
