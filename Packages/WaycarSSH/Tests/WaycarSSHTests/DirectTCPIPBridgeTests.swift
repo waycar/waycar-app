@@ -39,3 +39,85 @@ func bridgeWriteToInvalidDescriptorSurfacesErrno() throws {
             descriptor: -1)
     }
 }
+
+// MARK: Byte transport ownership (P3c, SSH-17)
+
+/// How a pump or a close ended, comparable (`Result<Void, _>` is not).
+private func failure(of result: Result<Void, SSHError>) -> SSHError? {
+    if case .failure(let error) = result { return error }
+    return nil
+}
+
+/// A pump stand-in that ends only when cancelled, as the real pump does once
+/// it is cancelled and its channel cleanup ran.
+private func pumpEndingOnCancellation() -> Task<Result<Void, SSHError>, Never> {
+    Task {
+        do {
+            try await Task.sleep(for: .seconds(3_600))
+            return .success(())
+        } catch {
+            return .failure(.cancelled)
+        }
+    }
+}
+
+@Test("each byte transport descriptor is handed out once")
+func byteTransportHandsEachDescriptorOutOnce() throws {
+    let transport = try DirectTCPIPByteTransport()
+    let inner = try transport.takeDescriptor()
+    let pump = try transport.takePumpDescriptor()
+    defer {
+        Darwin.close(inner)
+        Darwin.close(pump)
+    }
+    #expect(throws: SSHError.connectionInvalidated) { _ = try transport.takeDescriptor() }
+    #expect(throws: SSHError.connectionInvalidated) { _ = try transport.takePumpDescriptor() }
+}
+
+@Test("aborting an unstarted byte transport closes both descriptors it still owns")
+func abortingAnUnstartedByteTransportClosesItsDescriptors() throws {
+    let transport = try DirectTCPIPByteTransport()
+    transport.abort()
+    #expect(throws: SSHError.connectionInvalidated) { _ = try transport.takeDescriptor() }
+    #expect(throws: SSHError.connectionInvalidated) { _ = try transport.takePumpDescriptor() }
+    // A second abort has nothing left to close.
+    transport.abort()
+}
+
+@Test("aborting a started byte transport cancels its pump and closes the inner descriptor")
+func abortingAStartedByteTransportCancelsItsPump() async throws {
+    let transport = try DirectTCPIPByteTransport()
+    let pump = try transport.takePumpDescriptor()
+    defer { Darwin.close(pump) }
+    let task = pumpEndingOnCancellation()
+    transport.start(task)
+    transport.abort()
+    #expect(failure(of: await task.value) == .cancelled)
+    #expect(throws: SSHError.connectionInvalidated) { _ = try transport.takeDescriptor() }
+}
+
+@Test("closing a byte transport whose pump never started returns at once")
+func closingAnUnstartedByteTransportReturns() async throws {
+    let transport = try DirectTCPIPByteTransport()
+    try await transport.close(timeout: .seconds(5))
+    transport.abort()
+}
+
+@Test("closing a byte transport reports how its pump ended")
+func closingAByteTransportReportsThePumpResult() async throws {
+    for outcome: Result<Void, SSHError> in [.success(()), .failure(.connectionFailed)] {
+        let transport = try DirectTCPIPByteTransport()
+        let pump = try transport.takePumpDescriptor()
+        defer { Darwin.close(pump) }
+        transport.start(Task { outcome })
+        let closed: Result<Void, SSHError>
+        do {
+            try await transport.close(timeout: .seconds(30))
+            closed = .success(())
+        } catch let error as SSHError {
+            closed = .failure(error)
+        }
+        #expect(failure(of: closed) == failure(of: outcome))
+        transport.abort()
+    }
+}
