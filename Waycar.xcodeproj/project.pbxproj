@@ -1783,6 +1783,7 @@
 		384A7799FC7F57502B8B1BCA /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		384B387102D682AB3B2AEAEE /* FindComputersStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindComputersStoreTests.swift; sourceTree = "<group>"; };
 		38710FC0A1207CD306E7E518 /* ClosedSessionFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosedSessionFixtures.swift; sourceTree = "<group>"; };
+		38DE38ED334FE428077A7DCB /* WaycarSelfBuild.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WaycarSelfBuild.entitlements; sourceTree = "<group>"; };
 		38EB42F699E83C2DF808CA59 /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
 		39036EADF337B38D6013EAD9 /* AppIconCabooseCobalt.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIconCabooseCobalt.icon; sourceTree = "<group>"; };
 		391FC1B1D0A5C13AB2240D98 /* WatchStateBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchStateBuilderTests.swift; sourceTree = "<group>"; };
@@ -4165,6 +4166,7 @@
 				B8E46EA04C8D3E7E1E996E9E /* Waycar.entitlements */,
 				0D890E8BF76AE71B0205F0EF /* WaycarApp.swift */,
 				7F3C3DB57FA221C109C821FC /* WaycarAppModel.swift */,
+				38DE38ED334FE428077A7DCB /* WaycarSelfBuild.entitlements */,
 				ACA73F4E054EDDADD9BF5D6F /* AIUsage */,
 				DCE7EDD32F1EADE64DB6C502 /* Analytics */,
 				E7A67644709954C62F638673 /* AppIcons */,
@@ -6495,7 +6497,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.NotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).NotificationService";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -6557,6 +6559,7 @@
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+				WAYCAR_BUNDLE_ID = com.otreva.waycar;
 			};
 			name = Release;
 		};
@@ -6570,7 +6573,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).tests";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Waycar.app/Waycar";
@@ -6587,7 +6590,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.screenshots;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).screenshots";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Waycar;
@@ -6604,7 +6607,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.screenshots;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).screenshots";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Waycar;
@@ -6617,7 +6620,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconCaboosePhosphor AppIconCabooseTomato AppIconCabooseSignal AppIconCabooseCobalt AppIconCabooseMono AppIconCabooseBlack AppIconCabooseTeal AppIconPromptPhosphor AppIconPromptAmber AppIconPromptMono AppIconPromptBlack AppIconPromptCoral";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Sources/Waycar/Waycar.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(WAYCAR_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 167;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -6636,11 +6639,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) $(WAYCAR_ADMIN_CONDITION)";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WAYCAR_ADMIN_CONDITION = "";
+				WAYCAR_APP_ENTITLEMENTS = Sources/Waycar/Waycar.entitlements;
 			};
 			name = Debug;
 		};
@@ -6656,7 +6660,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.Widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).Widgets";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -6672,7 +6676,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).tests";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Waycar.app/Waycar";
@@ -6687,7 +6691,7 @@
 				CURRENT_PROJECT_VERSION = 167;
 				INFOPLIST_FILE = Sources/WaycarWatch/Resources/Info.plist;
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).watchkitapp";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -6702,7 +6706,7 @@
 				CURRENT_PROJECT_VERSION = 167;
 				INFOPLIST_FILE = Sources/WaycarWatch/Resources/Info.plist;
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).watchkitapp";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -6721,7 +6725,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.NotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).NotificationService";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -6790,6 +6794,7 @@
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+				WAYCAR_BUNDLE_ID = com.otreva.waycar;
 			};
 			name = Debug;
 		};
@@ -6805,7 +6810,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar.Widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID).Widgets";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -6817,7 +6822,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconCaboosePhosphor AppIconCabooseTomato AppIconCabooseSignal AppIconCabooseCobalt AppIconCabooseMono AppIconCabooseBlack AppIconCabooseTeal AppIconPromptPhosphor AppIconPromptAmber AppIconPromptMono AppIconPromptBlack AppIconPromptCoral";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Sources/Waycar/Waycar.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(WAYCAR_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 167;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -6836,11 +6841,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.otreva.waycar;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WAYCAR_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) $(WAYCAR_ADMIN_CONDITION)";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WAYCAR_ADMIN_CONDITION = "";
+				WAYCAR_APP_ENTITLEMENTS = Sources/Waycar/Waycar.entitlements;
 			};
 			name = Release;
 		};

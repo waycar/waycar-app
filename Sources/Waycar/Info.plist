@@ -62,5 +62,7 @@
 			<string>com.otreva.waycar.new-chat</string>
 		</dict>
 	</array>
+	<key>WaycarAppGroup</key>
+	<string>group.$(WAYCAR_BUNDLE_ID).shared</string>
 </dict>
 </plist>
