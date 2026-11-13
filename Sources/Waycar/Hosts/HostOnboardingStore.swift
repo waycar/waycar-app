@@ -84,6 +84,11 @@ final class HostOnboardingStore {
     /// `setHostEnabled(false)`.
     @ObservationIgnored private var fingerprintDecision:
         (token: UInt64, continuation: CheckedContinuation<Bool, Never>)?
+    /// Test seam: when set, a cancelled probe's decline runs through it on
+    /// the main actor (the hook calls `decline` when it chooses), so a test
+    /// can hold the cancellation hop while a new question appears. Nil in
+    /// production, where the hop declines at once, as before.
+    @ObservationIgnored var cancellationHop: (@MainActor (_ decline: @MainActor () -> Void) async -> Void)?
     /// Whether the Host is enabled now; `host` keeps the value at creation.
     /// While false nothing here dials it. See `setHostEnabled`.
     var isHostEnabled: Bool { checks.isEnabled }
@@ -615,10 +620,16 @@ final class HostOnboardingStore {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 fingerprintDecision = (token, continuation)
-                if Task.isCancelled { sendTrust(.answered(trusted: false)) }
+                if Task.isCancelled { sendTrust(.cancelled(token)) }
             }
         } onCancel: {
-            Task { @MainActor in self.sendTrust(.answered(trusted: false)) }
+            Task { @MainActor in
+                if let hop = self.cancellationHop {
+                    await hop { self.sendTrust(.cancelled(token)) }
+                } else {
+                    self.sendTrust(.cancelled(token))
+                }
+            }
         }
     }
 

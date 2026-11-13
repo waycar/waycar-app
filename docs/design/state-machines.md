@@ -2238,7 +2238,7 @@ stateDiagram-v2
   `asking(token, candidate)`) and the replacement (`none`, `offered(known,
   presented)`), plus the tokens of confirmed pin writes in flight.
 - **Events:** `asked(candidate, hostEnabled)`, `answered(trusted)`,
-  `checksStarted`, `mismatched`, `replacementConfirmed(hostEnabled,
+  `cancelled(token)`, `checksStarted`, `mismatched`, `replacementConfirmed(hostEnabled,
   checksRunning)`, `pinWritten(token)`.
 - **Effects:** `wait(token)`, `decline`, `resolve(token, trusted)`,
   `writePin(token, presented)`, `runChecks`. A changed key is written only
@@ -2247,8 +2247,10 @@ stateDiagram-v2
   checks may run and re-offer the mismatch meanwhile, and the landed write
   clears the offer and reruns them (coalesced into a running run). A second
   question while one is up is declined, so a rerun during a mosh test's
-  Jump Host question fails rather than replace it. Cancellation and a
-  disabled Host answer whatever question is up with false, as before.
+  Jump Host question fails rather than replace it. A disabled Host answers
+  whatever question is up with false; a cancelled probe declines only the
+  question its token names (B-37), so a late cancel cannot decline a newer
+  question.
 - **Tests:** `HostKeyTrustMachineTests`, `HostOnboardingLifecycleTests`
   (refused while running or off, a run outlasting the write, disabling
   during it, mosh tests leave the offer alone, a question overlapping the
@@ -2263,6 +2265,8 @@ stateDiagram-v2
         none --> none: asked while disabled / decline
         asking --> asking: second asked / decline
         asking --> none: answered / resolve(token)
+        asking --> none: cancelled(its token) / resolve(token, false)
+        asking --> asking: cancelled(older token)
     }
     state Replacement {
         [*] --> noOffer

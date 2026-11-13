@@ -34,6 +34,18 @@ struct HostKeyTrustMachineTests {
         #expect(machine.pendingCandidate == candidate)
     }
 
+    /// B-37: a cancel declines only the question its probe holds.
+    @Test func aCancelDeclinesOnlyItsOwnQuestion() {
+        var machine = HostKeyTrustMachine().after([.asked(candidate, hostEnabled: true)])
+        #expect(machine.handle(.cancelled(1)) == [.resolve(1, trusted: false)])
+        #expect(machine.state == .init())
+        #expect(machine.handle(.cancelled(1)).isEmpty)
+        _ = machine.handle(.asked(candidate, hostEnabled: true))
+        #expect(machine.handle(.cancelled(1)).isEmpty)
+        #expect(machine.pendingCandidate == candidate)
+        #expect(machine.handle(.cancelled(2)) == [.resolve(2, trusted: false)])
+    }
+
     @Test func anAnswerWithNoQuestionDoesNothing() {
         var machine = HostKeyTrustMachine()
         #expect(machine.handle(.answered(trusted: true)).isEmpty)
