@@ -96,6 +96,8 @@ final class HostConsoleProjection {
     private var consumeTask: Task<Void, Never>?
     private var latencyTask: Task<Void, Never>?
     private var terminalTransportTask: Task<Void, Never>?
+    /// The activation `start(isActive: true)` hands to the session.
+    private var startTask: Task<Void, Never>?
     /// The rows' authority and the snapshot work behind it: one resync at a
     /// time with one follow-up, the retry, and the epoch.
     private var snapshots = SnapshotAuthorityMachine()
@@ -236,8 +238,15 @@ final class HostConsoleProjection {
             }
         }
         if isActive {
-            Task { await resume() }
+            startTask = Task { await resume() }
         }
+    }
+
+    /// Returns once the activation `start` began has reached the session.
+    /// Until then `session.withTransport` still sees a suspended session
+    /// and fails at once instead of waiting for the connection.
+    func started() async {
+        await startTask?.value
     }
 
     /// Activates the session, subscribing first with the Agent pane set of
