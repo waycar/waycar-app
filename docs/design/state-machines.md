@@ -4365,6 +4365,10 @@ stateDiagram-v2
     held --> writingWorking: dialog gone / writeStatus working
     held --> leaving: another write or pane gone / leave
     writingWorking --> leaving: answered / notify if written, leave
+    waiting --> finished: leave asked, poke cannot sit in a format (token kept)
+    writingBlocked --> finished: lost, poke cannot sit in a format (token kept)
+    held --> finished: another write or gone, poke cannot sit in a format (token kept)
+    writingWorking --> finished: answered, poke cannot sit in a format (token kept)
     leaving --> waiting: token kept (poked) / read
     leaving --> finished: let go
 ```
@@ -4393,6 +4397,7 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> checking
+    checking --> [*]: null record / fail
     checking --> healing: missing or expired / endPairing
     checking --> reading: live / readSubmission
     healing --> finished: healed, rejected
@@ -4423,24 +4428,29 @@ stateDiagram-v2
   `stopCeremonyTimers`, `stopPoll`, `showStartFailure`, `readEnrollment`,
   `showEnrolled`, `expire`, `showExpired`, `redrawQr`, `clearCopied`,
   `fail`.
-- **Tests:** `pair::tests` (keys per phase, the non-key events, and the
-  popup with a private home: start, close in the same read, poll, revoke,
-  TTL expiry and restart, an Enrollment at the deadline, signal, copy,
-  failed start).
+- **Tests:** `pair::tests` (keys per phase, the non-key events, each answer
+  ignored outside its phase, and the popup with a private home: start, close
+  in the same read, poll, revoke, TTL expiry and restart, an Enrollment at
+  the deadline, signal, copy, failed start). `handle` matches `(phase,
+  event)`: keys and closing signals reach every phase, every other event
+  only the phase that asks for it.
 - **Catalogue:** HT-06.
 
 ```mermaid
 stateDiagram-v2
     [*] --> select
+    select --> fatal: startupFailed
     select --> qr: enter with an address / startCeremony
     qr --> fatal: ceremonyFailed
     qr --> enrolled: enrollmentFound
     qr --> expiring: expiryDue / stopPoll, expire
     expiring --> enrolled: expireAnswered with an Enrollment
     expiring --> expired: expireAnswered, none / showExpired
+    expiring --> [*]: expireAnswered, failed / fail (exit 1)
     expired --> qr: enter / startCeremony
     enrolled --> revoking: r / revoke
-    revoking --> revoked: revokeAnswered
+    revoking --> revoked: revokeAnswered with a screen
+    revoking --> [*]: revokeAnswered, no Enrollment / close
     select --> [*]: q, escape, Ctrl-C, signal / close
     qr --> [*]: close
     expired --> [*]: any other key / close
@@ -4629,10 +4639,11 @@ stateDiagram-v2
     deciding --> holding: hold
     readingMarker --> holding: markerRead / hold
     holding --> rechecking: held / recheck
-    rechecking --> finished: gone (clearLastNotified), moved on, or a departure (clearLastNotified)
-    rechecking --> replying: held / reply
+    rechecking --> finished: gone (clearLastNotified), moved on, or on the first a departure (clearLastNotified)
+    rechecking --> replying: first, held / reply
     replying --> resummarizing: Chat Mode with no reply / resummarize
     resummarizing --> rechecking: resummarized / recheck (second)
+    rechecking --> checkingDedupe: second, held / persistSummary, checkDedupe
     replying --> checkingDedupe: persistSummary, checkDedupe
     replying --> finished: summary only / persistSummary
     checkingDedupe --> finished: already notified or no device
