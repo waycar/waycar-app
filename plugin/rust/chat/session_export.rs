@@ -984,6 +984,85 @@ esac
     }
 
     #[test]
+    fn an_abort_kills_a_running_export_and_fails_with_the_signals_reason() {
+        let (dir, options) = stage("#!/bin/sh\nsleep 30\n");
+        let signal = AbortSignal::new();
+        let options = ExportOptions {
+            signal: Some(Arc::clone(&signal)),
+            ..options
+        };
+        let aborter = {
+            let signal = Arc::clone(&signal);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(200));
+                signal.abort("read deadline");
+            })
+        };
+        let started = Instant::now();
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        aborter.join().unwrap();
+        assert_eq!(error.kind, crate::chat::shared::ErrorKind::Aborted);
+        assert_eq!(error.message, "read deadline");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "took {:?}",
+            started.elapsed()
+        );
+        // An already-aborted signal runs nothing.
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        assert_eq!(error.kind, crate::chat::shared::ErrorKind::Aborted);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failure_detail_is_the_last_stderr_line_then_the_timeout_then_the_exit_code() {
+        // No stderr: the exit code.
+        let (dir, options) = stage("#!/bin/sh\nexit 3\n");
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        assert_eq!(error.message, "opencode export exited 3");
+        let _ = fs::remove_dir_all(&dir);
+
+        // Killed at the timeout after a stderr line: the line wins, and a
+        // timed-out "not found" is never an absent session.
+        let (dir, mut options) =
+            stage("#!/bin/sh\necho 'Session not found: ses_x' >&2\nsleep 30\n");
+        options.timeout = Duration::from_millis(300);
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        assert_eq!(error.message, "opencode export Session not found: ses_x");
+        assert_eq!(
+            error.kind,
+            crate::chat::shared::ErrorKind::Export {
+                located: false,
+                absent: false
+            }
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn output_a_background_child_writes_after_the_exporter_exits_is_still_read() {
+        // The exporter exits at once; its background child holds the pipes
+        // for a moment and writes the last stderr line. Within the timeout
+        // the read waits for it.
+        let (dir, options) = stage(
+            "#!/bin/sh\n(sleep 0.3; echo 'late line' >&2) &\necho 'early line' >&2\nexit 4\n",
+        );
+        let error =
+            session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
+        assert_eq!(error.message, "opencode export late line");
+        let _ = fs::remove_dir_all(&dir);
+
+        let (dir, options) = stage("#!/bin/sh\n(sleep 0.3; echo '{\"messages\":[2]}') &\nexit 0\n");
+        let data = session_export("opencode", &Value::String("ses_x".into()), &options).unwrap();
+        assert_eq!(data["messages"][0], 2);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn hermes_sessions_come_from_its_table_newest_first_without_duplicates() {
         let options = ExportOptions::new(Env::default(), "/h");
         let table = "title 20260101_000000_abcdef  20260930_120000_0a1b2c\nother 20260930_120000_0a1b2c\nx 20260929_080000_ffffff\n";
