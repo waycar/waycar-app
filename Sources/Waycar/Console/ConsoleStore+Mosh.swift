@@ -25,15 +25,44 @@ struct MoshProbeOutcome: Equatable {
         let available: Bool
     }
 
-    /// Whether mosh was invalidated for the Host on `generation` or later,
-    /// or by the user on any generation.
-    private func moshInvalidated(_ hostID: Host.ID, through generation: UInt64) -> Bool {
-        guard let record = moshInvalidations[hostID] else { return false }
-        return record.cause == .userChoseSSH || record.generation >= generation
+    /// Feeds the Host's mosh eligibility (`MoshEligibilityMachine`), keeps
+    /// the observed capsule inputs in step, and performs what it asks that
+    /// needs nothing from the caller. A `startProbe` comes back to the
+    /// caller, which holds the projection the probe runs over.
+    @discardableResult
+    func sendMosh(_ event: MoshEligibilityMachine.Event) -> [MoshEligibilityMachine.Effect] {
+        let effects = moshEligibility.handle(event)
+        let outcomes = moshEligibility.outcomes.mapValues {
+            MoshProbeOutcome(generation: $0.generation, available: $0.available)
+        }
+        if moshStates != outcomes { moshStates = outcomes }
+        let reprobing = moshEligibility.reprobingHosts
+        if moshReprobingHosts != reprobing { moshReprobingHosts = reprobing }
+        var startProbes: [MoshEligibilityMachine.Effect] = []
+        for effect in effects {
+            switch effect {
+            case .startProbe:
+                startProbes.append(effect)
+            case .upgrade(let hostID, let connectingOnly):
+                agentTerminals.upgradeSSHAttachToMosh(for: hostID, connectingOnly: connectingOnly)
+            case .cancelProbe(let hostID):
+                moshProbeTasks.removeValue(forKey: hostID)?.cancel()
+            case .cancelAllProbes:
+                for probe in moshProbeTasks.values { probe.cancel() }
+                moshProbeTasks = [:]
+            case .reconcileAll:
+                reconcileMoshAvailability()
+            }
+        }
+        return startProbes
     }
 
-    private func userChoseSSH(on hostID: Host.ID) -> Bool {
-        moshInvalidations[hostID]?.cause == .userChoseSSH
+    /// The automatic fallback or the user's SSH choice standing for each
+    /// Host (test surface).
+    var moshInvalidations: [Host.ID: MoshInvalidationRecord] {
+        moshEligibility.state.compactMapValues { entry in
+            entry.invalidation.map { MoshInvalidationRecord(generation: $0.generation, cause: $0.cause) }
+        }
     }
 
     /// The mosh runner's availability input: what is known now — this
@@ -47,8 +76,7 @@ struct MoshProbeOutcome: Equatable {
         // per-generation one: the last proven outcome stands for every
         // attach until a newer probe (fresh connection generation, manual
         // test, network change, or a runtime mosh failure) replaces it.
-        if userChoseSSH(on: hostID) { return false }
-        if let state = moshStates[hostID] { return state.available }
+        if let known = moshEligibility.knownAvailability(of: hostID) { return known }
         return rememberedMoshOutcome(for: hostID) == .available
     }
 
@@ -69,11 +97,7 @@ struct MoshProbeOutcome: Equatable {
     /// automatic fallback: a mosh run that began before it may still fail.
     func invalidateMosh(for hostID: Host.ID, cause: MoshInvalidationCause) {
         let generation = hostConnectionGenerations[hostID] ?? 0
-        moshStates[hostID] = MoshProbeOutcome(generation: generation, available: false)
-        if cause == .automaticFallback, moshInvalidations[hostID]?.cause == .userChoseSSH {
-            return
-        }
-        moshInvalidations[hostID] = MoshInvalidationRecord(generation: generation, cause: cause)
+        sendMosh(.invalidate(hostID, generation: generation, cause: cause))
     }
 
     /// What a mosh session's first contact proved (#105): an answer means
@@ -88,11 +112,7 @@ struct MoshProbeOutcome: Equatable {
         guard let host = catalog[hostID], network == moshFastPath.currentNetwork else { return }
         moshFastPath.availability.record(outcome, for: host, network: network)
         let generation = hostConnectionGenerations[hostID] ?? 0
-        if outcome == .available, moshInvalidated(hostID, through: generation) {
-            return
-        }
-        let state = MoshProbeOutcome(generation: generation, available: outcome == .available)
-        if moshStates[hostID] != state { moshStates[hostID] = state }
+        sendMosh(.recordOutcome(hostID, generation: generation, available: outcome == .available))
     }
 
     /// Test surface: the cached probe outcome, proving the probe ran (once)
@@ -110,7 +130,7 @@ struct MoshProbeOutcome: Equatable {
     /// shows testing; otherwise the last proven outcome, or untested
     /// before any probe has landed for the Host.
     func moshCapsuleState(for hostID: Host.ID) -> MoshHostCapsuleState {
-        if moshProbeClaims[hostID] != nil { return .testing }
+        if moshReprobingHosts.contains(hostID) { return .testing }
         guard let outcome = moshStates[hostID] else { return .untested }
         return outcome.available ? .available : .unavailable
     }
@@ -123,35 +143,26 @@ struct MoshProbeOutcome: Equatable {
     /// Instead". An invalidation during this probe still wins.
     func forceMoshReprobe(for hostID: Host.ID) async {
         guard !SampleHost.isSample(hostID) else { return }
-        guard moshProbeClaims[hostID] == nil,
+        guard !moshEligibility.isReprobing(hostID),
             let projection = moshProjection(on: hostID),
             projection.status == .connected
         else { return }
-        moshInvalidations[hostID] = nil
         let generation = projection.transportGeneration
         // One probe per connection generation, whichever kicks first: a
         // capsule tap claims the generation so the connect-time probe
         // does not duplicate it.
-        moshProbedGenerations[hostID] = generation
-        let claim = UUID()
-        moshProbeClaims[hostID] = claim
-        startMoshProbe(on: hostID) { [weak self, weak projection] in
-            guard let self else { return }
-            defer {
-                if moshProbeClaims[hostID] == claim {
-                    moshProbeClaims[hostID] = nil
+        for case .startProbe(_, .reprobe(let token, _)) in sendMosh(.reprobe(hostID, generation: generation)) {
+            startMoshProbe(on: hostID) { [weak self, weak projection] in
+                guard let self else { return }
+                var available: Bool?
+                if let projection, moshProjection(on: hostID) === projection,
+                    projection.transportGeneration == generation,
+                    projection.status == .connected
+                {
+                    available = await probeMosh(over: projection)
                 }
-            }
-            guard let projection, moshProjection(on: hostID) === projection,
-                projection.transportGeneration == generation,
-                projection.status == .connected,
-                let available = await probeMosh(over: projection)
-            else { return }
-            if moshProbeLandedStale(on: hostID, generation: generation) { return }
-            moshStates[hostID] = MoshProbeOutcome(
-                generation: generation, available: available)
-            if available {
-                agentTerminals.upgradeSSHAttachToMosh(for: hostID)
+                sendMosh(.reprobeEnded(
+                    hostID, token: token, generation: generation, available: available))
             }
         }
     }
@@ -190,15 +201,6 @@ struct MoshProbeOutcome: Equatable {
         return available
     }
 
-    /// Newest-generation-wins and invalidation guards: a probe landing for
-    /// a replaced connection must not override a newer generation's
-    /// outcome, and a probe racing an invalidation must not re-mark a
-    /// failed handshake as available before the next generation.
-    private func moshProbeLandedStale(on hostID: Host.ID, generation: UInt64) -> Bool {
-        if moshStates[hostID].map({ $0.generation > generation }) ?? false { return true }
-        return moshInvalidated(hostID, through: generation)
-    }
-
     /// The connect-time half of the Host's mosh availability, once per
     /// connection generation on a mosh-capable projection (#105). What is
     /// remembered for this network answers at once — before the Host has
@@ -212,43 +214,28 @@ struct MoshProbeOutcome: Equatable {
         guard !SampleHost.isSample(hostID) else { return }
         let generation = projection.transportGeneration
         guard projection === moshProjection(on: hostID),
-            moshProbedGenerations[hostID] != generation
+            !moshEligibility.isSettled(hostID, generation: generation)
         else { return }
-        if let remembered = rememberedMoshOutcome(for: hostID) {
-            moshProbedGenerations[hostID] = generation
-            guard !moshInvalidated(hostID, through: generation) else {
-                return
-            }
-            let state = MoshProbeOutcome(
-                generation: generation, available: remembered == .available)
-            if moshStates[hostID] != state { moshStates[hostID] = state }
-            return
-        }
-        guard projection.status == .connected, !projection.isAwaitingSnapshot,
-            !userChoseSSH(on: hostID),
-            !moshFastPath.standbys.hasAttachBootstrap(on: hostID)
-        else { return }
-        moshProbedGenerations[hostID] = generation
-        startMoshProbe(on: hostID) { [weak self, weak projection] in
-            guard let self, let projection, moshProjection(on: hostID) === projection,
-                projection.transportGeneration == generation
-            else { return }
-            guard let available = await probeMosh(over: projection) else {
-                // The answer no longer counts because the network changed
-                // (and maybe changed back inside the debounce): give the
-                // generation back so the next reconcile probes again. A
-                // cancelled probe gives nothing back: whatever cancelled it
-                // — a capsule re-probe, a new network — holds the claim now.
-                if !Task.isCancelled, moshProbedGenerations[hostID] == generation {
-                    moshProbedGenerations[hostID] = nil
-                }
-                return
-            }
-            if moshProbeLandedStale(on: hostID, generation: generation) { return }
-            moshStates[hostID] = MoshProbeOutcome(
-                generation: generation, available: available)
-            if available {
-                agentTerminals.upgradeSSHAttachToMosh(for: hostID, connectingOnly: true)
+        let remembered = rememberedMoshOutcome(for: hostID).map { $0 == .available }
+        let canProbe = projection.status == .connected && !projection.isAwaitingSnapshot
+            && !moshFastPath.standbys.hasAttachBootstrap(on: hostID)
+        let event = MoshEligibilityMachine.Event.reconcile(
+            hostID, generation: generation, remembered: remembered, canProbe: canProbe)
+        for case .startProbe(_, .connect) in sendMosh(event) {
+            startMoshProbe(on: hostID) { [weak self, weak projection] in
+                guard let self, let projection, moshProjection(on: hostID) === projection,
+                    projection.transportGeneration == generation
+                else { return }
+                let available = await probeMosh(over: projection)
+                // A nil answer no longer counts because the network changed
+                // (and maybe changed back inside the debounce): the machine
+                // gives the generation back so the next reconcile probes
+                // again. A cancelled probe gives nothing back: whatever
+                // cancelled it — a capsule re-probe, a new network — holds
+                // the claim now.
+                sendMosh(.connectProbeFinished(
+                    hostID, generation: generation, available: available,
+                    cancelled: Task.isCancelled))
             }
         }
     }
@@ -324,16 +311,7 @@ struct MoshProbeOutcome: Equatable {
     /// there and nothing can be probed, so what is known stays for the
     /// path's return.
     private func moshNetworkDidChange(to network: NetworkPathKey?) {
-        for probe in moshProbeTasks.values { probe.cancel() }
-        moshProbeTasks = [:]
-        guard network != nil else { return }
-        let userChoices = moshInvalidations.filter { $0.value.cause == .userChoseSSH }
-        for hostID in moshStates.keys where userChoices[hostID] == nil {
-            moshStates[hostID] = nil
-        }
-        moshProbedGenerations = moshProbedGenerations.filter { userChoices[$0.key] != nil }
-        moshInvalidations = userChoices
-        reconcileMoshAvailability()
+        sendMosh(.networkChanged(hasPath: network != nil))
     }
 
     // MARK: Standby mosh (#105)

@@ -15,6 +15,12 @@ struct StandbyMoshStoreTests {
     private let key = StandbyMoshStore.Key(
         hostID: UUID(), backend: .herdr, target: .agentPane("w1:p1"))
 
+    /// The Hosts whose attach bootstraps settled, in order.
+    @MainActor
+    private final class SettledHosts {
+        var ids: [Host.ID] = []
+    }
+
     /// Counts the bootstraps a store asked for.
     private final class Bootstraps: Sendable {
         private let count = Mutex(0)
@@ -97,6 +103,146 @@ struct StandbyMoshStoreTests {
         }?.value
         #expect(started.duration(to: .now) < .seconds(1))
         #expect(await store.take(key) == nil)
+    }
+
+    // MARK: Lifecycle (MOSH-03)
+
+    /// A renewal keeps the target's standby usable until the new one is
+    /// ready, which then replaces it; a renewal that fails leaves the old one.
+    @Test func aRenewalKeepsTheOldStandbyUntilItsReplacementIsReady() async throws {
+        let store = StandbyMoshStore()
+        await store.prepare(key, origin: .speculative) { MoshFlowFixture.standbyBootstrap }?.value
+
+        let gate = ScriptedTransportCallGate()
+        let renewal = store.prepare(key, origin: .speculative) {
+            await gate.waitUntilOpen()
+            return MoshFlowFixture.laterBootstrap
+        }
+        await gate.waitForEntry()
+        #expect(store.isPreparing(key))
+        #expect(store.standby(for: key)?.bootstrap == MoshFlowFixture.standbyBootstrap)
+        await gate.open()
+        await renewal?.value
+        #expect(!store.isPreparing(key))
+        #expect(store.standby(for: key)?.bootstrap == MoshFlowFixture.laterBootstrap)
+
+        struct Refused: Error {}
+        await store.prepare(key, origin: .speculative) { throw Refused() }?.value
+        #expect(
+            store.standby(for: key)?.bootstrap == MoshFlowFixture.laterBootstrap,
+            "a failed renewal leaves the standby it was renewing")
+    }
+
+    /// A second preparation for a target joins the one in flight, even
+    /// while an attach bootstraps it, instead of starting another server.
+    @Test func aSecondPreparationJoinsTheFirst() async throws {
+        let store = StandbyMoshStore()
+        let bootstraps = Bootstraps()
+        let gate = ScriptedTransportCallGate()
+        let first = store.prepare(key, origin: .speculative) {
+            await gate.waitUntilOpen()
+            return MoshFlowFixture.standbyBootstrap
+        }
+        let second = store.prepare(
+            key, origin: .graceExpiry, bootstrap: bootstraps.make(MoshFlowFixture.laterBootstrap))
+        #expect(first != nil && first == second)
+        await gate.open()
+        await first?.value
+        #expect(bootstraps.made == 0)
+        #expect(await store.take(key)?.origin == .speculative)
+    }
+
+    /// `take` waits for a standby still being prepared, and uses it.
+    @Test func aTakeWaitsForThePreparationInFlight() async throws {
+        let store = StandbyMoshStore()
+        let gate = ScriptedTransportCallGate()
+        store.prepare(key, origin: .graceExpiry) {
+            await gate.waitUntilOpen()
+            return MoshFlowFixture.standbyBootstrap
+        }
+        let taking = Task { await store.take(key) }
+        await gate.waitForEntry()
+        await gate.open()
+        #expect(await taking.value?.bootstrap == MoshFlowFixture.standbyBootstrap)
+        #expect(store.standby(for: key) == nil)
+    }
+
+    /// A standby past its age is dropped when an attach claims the target,
+    /// which then bootstraps itself.
+    @Test func aClaimDropsAStaleStandbyAndBootstraps() async throws {
+        let clock = StandbyClock()
+        let store = StandbyMoshStore(now: { clock.now })
+        await store.prepare(key, origin: .speculative) { MoshFlowFixture.standbyBootstrap }?.value
+        clock.advance(by: StandbyMoshStore.maxAge)
+        #expect(await store.claimAttachBootstrap(key) == nil)
+        #expect(store.hasAttachBootstrap(on: key.hostID))
+        clock.advance(by: .seconds(-30))
+        #expect(store.standby(for: key) == nil, "the stale standby was dropped, not kept")
+        store.finishAttachBootstrap(key)
+    }
+
+    /// Dropping a Host cancels its preparations, so one that finishes later
+    /// leaves nothing, and drops its standbys; an attach bootstrap in
+    /// flight still holds its target.
+    @Test func discardingAHostCancelsItsPreparationsAndKeepsItsAttachBootstraps() async throws {
+        let store = StandbyMoshStore()
+        let other = StandbyMoshStore.Key(hostID: key.hostID, backend: .herdr, target: .agentPane("w1:p2"))
+        let elsewhere = StandbyMoshStore.Key(hostID: UUID(), backend: .herdr, target: .agentPane("w1:p1"))
+        await store.prepare(other, origin: .speculative) { MoshFlowFixture.standbyBootstrap }?.value
+        await store.prepare(elsewhere, origin: .speculative) { MoshFlowFixture.standbyBootstrap }?.value
+        let gate = ScriptedTransportCallGate()
+        let preparation = store.prepare(key, origin: .speculative) {
+            await gate.waitUntilOpen()
+            return MoshFlowFixture.standbyBootstrap
+        }
+        await gate.waitForEntry()
+        let busy = StandbyMoshStore.Key(hostID: key.hostID, backend: .tmux, target: .agentPane("%1"))
+        #expect(await store.claimAttachBootstrap(busy) == nil)
+
+        store.discard(hostID: key.hostID)
+        #expect(!store.isPreparing(key))
+        #expect(store.standby(for: other) == nil)
+        #expect(store.standby(for: elsewhere) != nil, "another Host's standby stays")
+        await gate.open()
+        await preparation?.value
+        #expect(store.standby(for: key) == nil, "a cancelled preparation leaves no standby")
+        #expect(store.hasAttachBootstrap(on: key.hostID))
+        #expect(store.prepare(busy, origin: .speculative) { MoshFlowFixture.standbyBootstrap } == nil)
+        store.finishAttachBootstrap(busy)
+    }
+
+    /// Dropping one target leaves the Host's others.
+    @Test func discardingATargetLeavesTheOthers() async throws {
+        let store = StandbyMoshStore()
+        let other = StandbyMoshStore.Key(hostID: key.hostID, backend: .herdr, target: .agentPane("w1:p2"))
+        await store.prepare(key, origin: .speculative) { MoshFlowFixture.standbyBootstrap }?.value
+        await store.prepare(other, origin: .speculative) { MoshFlowFixture.laterBootstrap }?.value
+        store.discard(key)
+        #expect(store.standby(for: key) == nil)
+        #expect(store.standby(for: other)?.bootstrap == MoshFlowFixture.laterBootstrap)
+    }
+
+    /// The Host's attach bootstraps settle once the last on any of its
+    /// targets finishes, and only then.
+    @Test func attachBootstrapsSettleWhenTheHostsLastOneFinishes() async throws {
+        let store = StandbyMoshStore()
+        let settledHosts = SettledHosts()
+        store.attachBootstrapsDidSettle = { settledHosts.ids.append($0) }
+        var settled: [Host.ID] { settledHosts.ids }
+        let other = StandbyMoshStore.Key(hostID: key.hostID, backend: .herdr, target: .agentPane("w1:p2"))
+        #expect(await store.claimAttachBootstrap(key) == nil)
+        #expect(await store.claimAttachBootstrap(key) == nil)
+        #expect(await store.claimAttachBootstrap(other) == nil)
+
+        store.finishAttachBootstrap(key)
+        store.finishAttachBootstrap(other)
+        #expect(settled.isEmpty, "one bootstrap on the Host is still running")
+        #expect(store.prepare(key, origin: .speculative) { MoshFlowFixture.standbyBootstrap } == nil)
+        store.finishAttachBootstrap(key)
+        #expect(settled == [key.hostID])
+        store.finishAttachBootstrap(key)
+        #expect(settled == [key.hostID], "finishing an unclaimed target reports nothing")
+        #expect(!store.hasAttachBootstrap(on: key.hostID))
     }
 }
 

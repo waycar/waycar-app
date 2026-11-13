@@ -1008,6 +1008,56 @@ struct MoshFastPathEdgeTests {
         await flow.tearDown()
     }
 
+    /// A new network cancels a capsule re-probe, but the capsule shows
+    /// testing until that re-probe ends, beside the new network's own
+    /// probe; its answer is not recorded (MOSH-02).
+    @Test func aNetworkChangeDuringAReprobeKeepsTestingUntilTheReprobeEnds() async throws {
+        let transport = await moshTransport()
+        let flow = MoshFlowFixture(transports: [transport])
+        flow.path.read(ScriptedNetworkPathSource.home)
+        try await flow.startOnMosh()
+        let reprobe = ScriptedTransportCallGate()
+        await transport.gateNextMoshProbe(on: reprobe)
+        await flow.console.forceMoshReprobe(for: flow.host.id)
+        await reprobe.waitForEntry()
+        #expect(flow.console.moshCapsuleState(for: flow.host.id) == .testing)
+
+        flow.path.read(ScriptedNetworkPathSource.cafe)
+        try await pollUntil("the new network should be probed") {
+            await transport.moshProbeCount == 3
+                && flow.console.moshProbe(for: flow.host.id)?.available == true
+        }
+        #expect(flow.console.moshCapsuleState(for: flow.host.id) == .testing)
+
+        await reprobe.open()
+        try await pollUntil("the cancelled re-probe should end its testing state") {
+            flow.console.moshCapsuleState(for: flow.host.id) == .available
+        }
+        #expect(await transport.moshProbeCount == 3)
+        await flow.tearDown()
+    }
+
+    /// A session's proof that mosh works is remembered for the network, but
+    /// does not lift this connection's automatic fallback (MOSH-02).
+    @Test func aFirstContactProofDoesNotLiftAnInvalidation() async throws {
+        let availability = MoshAvailabilityStore()
+        let flow = MoshFlowFixture(transports: [await moshTransport()], availability: availability)
+        flow.path.read(ScriptedNetworkPathSource.home)
+        try await flow.startOnMosh()
+        flow.console.invalidateMosh(for: flow.host.id, cause: .automaticFallback)
+        availability.record(.unavailable, for: flow.host, network: homeNetwork)
+
+        flow.console.recordMoshOutcome(.available, for: flow.host.id, on: flow.fastPath.currentNetwork)
+        let generation = flow.console.hostConnectionGenerations[flow.host.id] ?? 0
+        #expect(availability.outcome(for: flow.host, network: homeNetwork) == .available)
+        #expect(!flow.console.moshAvailability(for: flow.host.id, generation: generation))
+        #expect(flow.console.moshCapsuleState(for: flow.host.id) == .unavailable)
+
+        flow.console.recordMoshOutcome(.unavailable, for: flow.host.id, on: flow.fastPath.currentNetwork)
+        #expect(flow.console.moshProbe(for: flow.host.id)?.available == false)
+        await flow.tearDown()
+    }
+
     /// A session's first contact is learned for the network it started
     /// on; settling after a network change, it records nothing.
     @Test func aFirstContactAfterANetworkChangeRecordsNothing() async throws {

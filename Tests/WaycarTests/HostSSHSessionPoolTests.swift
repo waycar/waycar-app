@@ -263,6 +263,242 @@ struct HostSSHSessionPoolTests {
         await orphan.waitUntilClosed()
         #expect(await !session.isClosed)
     }
+
+    // MARK: Pinned interleavings (P3c, SSH-01)
+
+    @Test func keepingTwiceTakesOneHold() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let first = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let connection = try #require(first.id)
+
+        #expect(await pool.keep(connection))
+        #expect(await pool.keep(connection))
+        #expect(await first.session.holds == 2)
+    }
+
+    @Test func twoKeepsRacingTheirRetainsLeaveOneKeptHold() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let first = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let connection = try #require(first.id)
+        let gate = DialGate()
+        await first.session.gateNextRetain(gate)
+
+        let slow = Task { await pool.keep(connection) }
+        await gate.waitUntilEntered()
+        // The second keep retains and wins while the first one's retain is
+        // still in flight.
+        #expect(await pool.keep(connection))
+        await gate.open()
+        #expect(await slow.value)
+        try await waitUntil("the losing keep should give its extra hold back") {
+            await first.session.holds == 2
+        }
+
+        // One release of the kept hold leaves the acquirer's.
+        await pool.releaseKept(connection)
+        try await waitUntil("the kept hold should go back") { await first.session.holds == 1 }
+    }
+
+    @Test func keepRefusesAConnectionThatIsNotTheKeysLiveOne() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let first = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let connection = try #require(first.id)
+
+        #expect(await !pool.keep(PooledConnectionID(key: "host", serial: connection.serial + 99)))
+        #expect(await !pool.keep(PooledConnectionID(key: "other", serial: connection.serial)))
+        await pool.retire(connection)
+        #expect(await !pool.keep(connection))
+        #expect(await first.session.holds == 1)
+    }
+
+    @Test func releaseKeptOfAnotherConnectionKeepsTheKeptHold() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let first = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let connection = try #require(first.id)
+        #expect(await pool.keep(connection))
+
+        await pool.releaseKept(PooledConnectionID(key: "host", serial: connection.serial + 99))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await first.session.holds == 2)
+    }
+
+    @Test func aHedgeThatLandsAfterItsConnectionWasRetiredIsShared() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let kept = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let keptID = try #require(kept.id)
+        let gate = DialGate()
+        await dialer.holdNextDial(gate)
+
+        let hedge = Task {
+            try await pool.acquire(key: "host", replacing: keptID) { try await dialer.dial() }
+        }
+        await gate.waitUntilEntered()
+        await pool.retire(keptID)
+        await gate.open()
+        let hedged = try await hedge.value
+
+        let next = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        #expect(next.session === hedged.session)
+        #expect(next.id == hedged.id)
+        #expect(await dialer.dials == 2)
+    }
+
+    @Test func retiringWithADeadReplacementLeavesTheNextAcquireToDial() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let kept = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let keptID = try #require(kept.id)
+        let hedge = try await pool.acquire(key: "host", replacing: keptID) {
+            try await dialer.dial()
+        }
+        await hedge.session.dropConnection()
+
+        await pool.retire(keptID)
+        let next = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        #expect(next.session !== hedge.session)
+        #expect(next.session !== kept.session)
+        #expect(await dialer.dials == 3)
+    }
+
+    @Test func aSecondReplacingAcquireGetsTheHedgeAlreadyDialed() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let kept = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let keptID = try #require(kept.id)
+        let hedge = try await pool.acquire(key: "host", replacing: keptID) {
+            try await dialer.dial()
+        }
+
+        let again = try await pool.acquire(key: "host", replacing: keptID) {
+            try await dialer.dial()
+        }
+        #expect(again.session === hedge.session)
+        #expect(again.id == hedge.id)
+        #expect(await hedge.session.holds == 2)
+        #expect(await dialer.dials == 2)
+    }
+
+    @Test func replacingAConnectionThatIsNoLongerLiveDialsTheSharedOne() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let first = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        let firstID = try #require(first.id)
+        await pool.retire(firstID)
+
+        let fresh = try await pool.acquire(key: "host", replacing: firstID) {
+            try await dialer.dial()
+        }
+        let next = try await pool.acquire(key: "host", replacing: nil) { try await dialer.dial() }
+        #expect(next.session === fresh.session)
+        #expect(await dialer.dials == 2)
+    }
+
+    @Test func anAbandonedDialLandingAfterANewerSharedOneStaysWithItsWaiters() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let gate = DialGate()
+        await dialer.holdNextDial(gate)
+        let stuck = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        await gate.waitUntilEntered()
+        await pool.abandonDial(key: "host")
+        let fresh = try await pool.acquire(key: "host") { try await dialer.dial() }
+
+        await gate.open()
+        let late = try await stuck.value
+        #expect(late !== fresh)
+        #expect(await late.holds == 1)
+        let next = try await pool.acquire(key: "host") { try await dialer.dial() }
+        #expect(next === fresh)
+        #expect(await dialer.dials == 2)
+    }
+
+    @Test func anAbandonedDialLandingAfterTheSharedOneDiedBecomesShared() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let gate = DialGate()
+        await dialer.holdNextDial(gate)
+        let stuck = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        await gate.waitUntilEntered()
+        await pool.abandonDial(key: "host")
+        let fresh = try await pool.acquire(key: "host") { try await dialer.dial() }
+        await fresh.dropConnection()
+
+        await gate.open()
+        let late = try await stuck.value
+        let next = try await pool.acquire(key: "host") { try await dialer.dial() }
+        #expect(next === late)
+        #expect(await late.holds == 2)
+        #expect(await dialer.dials == 2)
+    }
+
+    @Test func waitersBeyondWhatTheSessionCanHoldAreToldItClosed() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let gate = DialGate()
+        await dialer.holdNextDial(gate)
+        await dialer.refuseRetainsOnNextSession()
+
+        let first = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        await gate.waitUntilEntered()
+        let second = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        try await waitUntil("the second acquirer should join the dial") {
+            await pool.waiterCountForTesting(key: "host") == 2
+        }
+        await gate.open()
+
+        var outcomes: [String] = []
+        for task in [first, second] {
+            do {
+                _ = try await task.value
+                outcomes.append("session")
+            } catch {
+                outcomes.append(String(describing: error))
+            }
+        }
+        #expect(outcomes.filter { $0 == "session" }.count == 1)
+        #expect(
+            outcomes.contains(
+                String(describing: TransportError.sshUnreachable(
+                    detail: "the SSH connection closed"))))
+    }
+
+    @Test func oneWaiterLeavingAnAbandonedDialKeepsItForTheOthers() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let gate = DialGate()
+        await dialer.holdNextDial(gate)
+        let leaving = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        await gate.waitUntilEntered()
+        let staying = Task { try await pool.acquire(key: "host") { try await dialer.dial() } }
+        try await waitUntil("the second acquirer should join the dial") {
+            await pool.waiterCountForTesting(key: "host") == 2
+        }
+        await pool.abandonDial(key: "host")
+
+        leaving.cancel()
+        await #expect(throws: TransportError.cancelled) { _ = try await leaving.value }
+        await gate.open()
+        let session = try await staying.value
+        #expect(await session.holds == 1)
+        #expect(await !session.isClosed)
+    }
+
+    @Test func anAcquireCancelledBeforeItWaitsDialsNothing() async throws {
+        let pool = SSHSessionPool<FakePooledSession>()
+        let dialer = FakeSessionDialer()
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await pool.acquire(key: "host") { try await dialer.dial() }
+        }
+        await #expect(throws: TransportError.cancelled) { _ = try await cancelled.value }
+        #expect(await dialer.dials == 0)
+        #expect(await pool.waiterCountForTesting(key: "host") == 0)
+    }
 }
 
 /// A pooled session that counts holds and closes with its last release.
@@ -275,13 +511,18 @@ private actor FakePooledSession: SSHPooledSession {
     var isConnected: Bool { connectionAlive && !isClosed }
 
     private var retainGate: DialGate?
+    private var refusesRetains = false
 
     func gateNextRetain(_ gate: DialGate) {
         retainGate = gate
     }
 
+    func refuseRetains() {
+        refusesRetains = true
+    }
+
     func retain() async -> Bool {
-        guard !isClosed else { return false }
+        guard !isClosed, !refusesRetains else { return false }
         holds += 1
         let gate = retainGate
         retainGate = nil
@@ -315,6 +556,11 @@ private actor FakeSessionDialer {
     private var sessionWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private var gate: DialGate?
     private var failure: (any Error)?
+    private var refusesRetains = false
+
+    func refuseRetainsOnNextSession() {
+        refusesRetains = true
+    }
 
     func holdNextDial(_ gate: DialGate) {
         self.gate = gate
@@ -342,6 +588,10 @@ private actor FakeSessionDialer {
         }
         if let failure { throw failure }
         let session = FakePooledSession()
+        if refusesRetains {
+            refusesRetains = false
+            await session.refuseRetains()
+        }
         sessions.append(session)
         let ready = sessionWaiters.filter { $0.count <= sessions.count }
         sessionWaiters.removeAll { $0.count <= sessions.count }

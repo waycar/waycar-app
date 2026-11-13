@@ -58,13 +58,13 @@ jobs:
     outputs:
       key: ${{ steps.key.outputs.key }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Cache key
         id: key
         run: echo "key=native-waycar-${{ hashFiles('plugin/Cargo.toml', 'plugin/Cargo.lock', 'plugin/rust-toolchain.toml', 'plugin/rust/**', 'scripts/ci/provision-plugin-build.sh') }}" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: cache
         with:
           path: native-bin
@@ -95,7 +95,7 @@ jobs:
     steps:
       # The images have tar but no git, so checkout fetches the tree through
       # the API. The script needs no git.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # actions/cache hashes the compression tool into the cache version: the
@@ -108,7 +108,7 @@ jobs:
           else
             dnf -y install zstd
           fi
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: native-bin
           key: ${{ needs.native-binary.outputs.key }}

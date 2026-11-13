@@ -129,6 +129,10 @@ Entries reference the issue that motivated them.
   Done.
 - **New Agent › OpenCode**: retrying a chat whose setup failed finishes that
   chat instead of creating a second one.
+- **Network changes**: after a quick network blip, Waycar no longer
+  reconnects before the new network has settled.
+- **Jump Hosts**: closing a connection through a Jump Host no longer hangs
+  past its time limit.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

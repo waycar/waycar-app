@@ -576,6 +576,116 @@ struct TerminalAttachTests {
             """)
     }
 
+    // MARK: Pinned output gate interleavings (P3c, SSH-06)
+
+    @Test func aFailedFinishDrainsBufferedOutputThenThrows() async throws {
+        let source = WaycarSSHAttachOutputGate.makeStream()
+        var iterator = source.output.makeAsyncIterator()
+        source.gate.yield(Data("a".utf8))
+        source.gate.yield(Data("b".utf8))
+        source.gate.finish(throwing: TransportError.timedOut)
+
+        #expect(try await iterator.next() == Data("a".utf8))
+        #expect(try await iterator.next() == Data("b".utf8))
+        await #expect(throws: TransportError.timedOut) { _ = try await iterator.next() }
+    }
+
+    @Test func theFirstFinishWinsAndLaterOutputIsDropped() async throws {
+        let source = WaycarSSHAttachOutputGate.makeStream()
+        var iterator = source.output.makeAsyncIterator()
+        source.gate.yield(Data("kept".utf8))
+        source.gate.finish()
+        source.gate.finish(throwing: TransportError.timedOut)
+        source.gate.yield(Data("late".utf8))
+
+        #expect(try await iterator.next() == Data("kept".utf8))
+        #expect(try await iterator.next() == nil)
+    }
+
+    @Test func anExplicitEndAfterAFinishStillDiscardsUnreadOutput() async throws {
+        let source = WaycarSSHAttachOutputGate.makeStream()
+        var iterator = source.output.makeAsyncIterator()
+        source.gate.yield(Data("unread".utf8))
+        source.gate.finish(throwing: TransportError.timedOut)
+        source.gate.beginExplicitEnd()
+        source.gate.beginExplicitEnd()
+
+        #expect(try await iterator.next() == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aParkedReaderIsHandedTheNextChunkTheEndOrTheFailure() async throws {
+        for ending in ["chunk", "explicit end", "failure", "finish"] {
+            let source = WaycarSSHAttachOutputGate.makeStream()
+            let gate = source.gate
+            let stream = source.output
+            let reader = Task { () -> AttachConsumerOutcome in
+                var iterator = stream.makeAsyncIterator()
+                do {
+                    guard let bytes = try await iterator.next() else { return .drained([]) }
+                    return .drained([bytes])
+                } catch {
+                    return .failed(String(describing: error))
+                }
+            }
+            #expect(await Self.waitForParkedConsumer(gate), "\(ending): never parked")
+            switch ending {
+            case "chunk": gate.yield(Data("chunk".utf8))
+            case "explicit end": gate.beginExplicitEnd()
+            case "failure": gate.finish(throwing: TransportError.timedOut)
+            default: gate.finish()
+            }
+            let outcome = await Self.outcome(of: reader)
+            let expected: AttachConsumerOutcome =
+                switch ending {
+                case "chunk": .drained([Data("chunk".utf8)])
+                case "failure": .failed(String(describing: TransportError.timedOut))
+                default: .drained([])
+                }
+            #expect(outcome == expected, "\(ending)")
+            #expect(!gate.hasParkedConsumerForTesting, "\(ending)")
+        }
+    }
+
+    /// Once the claimant's task is cancelled, nothing more is delivered: a
+    /// later yield is dropped and another task is still refused.
+    @Test(.timeLimit(.minutes(1)))
+    func afterTheClaimantIsCancelledOutputIsDroppedAndOthersAreRefused() async throws {
+        let source = WaycarSSHAttachOutputGate.makeStream()
+        let gate = source.gate
+        let stream = source.output
+        gate.yield(Data("buffered".utf8))
+        let claimant = Task { () -> AttachConsumerOutcome in
+            var seen: [Data] = []
+            do {
+                for try await bytes in stream { seen.append(bytes) }
+                return .drained(seen)
+            } catch {
+                return .failed(String(describing: error))
+            }
+        }
+        #expect(await Self.waitForParkedConsumer(gate))
+        claimant.cancel()
+        #expect(await Self.outcome(of: claimant) == .drained([Data("buffered".utf8)]))
+
+        gate.yield(Data("late".utf8))
+        let other = Task { () -> AttachConsumerOutcome in
+            var iterator = gate.makeOutput().makeAsyncIterator()
+            do {
+                guard let bytes = try await iterator.next() else { return .drained([]) }
+                return .drained([bytes])
+            } catch {
+                return .failed(String(describing: error))
+            }
+        }
+        #expect(
+            await Self.outcome(of: other)
+                == .failed(String(describing: TransportError.terminalChannelAlreadyOpen)))
+        #expect(!gate.hasParkedConsumerForTesting)
+        // The claimant's task identity must not be reused by `other`'s.
+        withExtendedLifetime(claimant) {}
+    }
+
     /// Polls until a consumer is registered on the gate, so the test enters
     /// the double-consumer window deterministically rather than by sleeping.
     private static func waitForParkedConsumer(

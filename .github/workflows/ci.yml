@@ -106,11 +106,11 @@ jobs:
       # Full history: scripts/test-sim-slot.sh runs the sim-slot copy other
       # worktrees still use (an older commit) against the current one when
       # that commit is in the clone.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
 
@@ -119,7 +119,7 @@ jobs:
       # the cloned SourcePackages tree and the SwiftPM download cache keyed on
       # Package.resolved so a pin change still misses and re-fetches.
       - name: Cache SwiftPM checkouts
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .ci/source-packages
@@ -194,7 +194,7 @@ jobs:
         run: brew install tmux pkg-config libevent ncurses utf8proc
 
       - name: Cache the pinned tmux builds
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/waycar-ci/tmux
           key: tmux-${{ runner.os }}-${{ hashFiles('scripts/build-ci-tmux.sh') }}
@@ -231,7 +231,7 @@ jobs:
 
       - name: Upload iOS CI diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/waycar-ci-diagnostics-*
@@ -244,7 +244,7 @@ jobs:
     # The package step's 57 plus the steps before it.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -271,7 +271,7 @@ jobs:
 
       - name: Upload package CI diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: waycarssh-package-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/waycar-ci-diagnostics-*
@@ -281,23 +281,40 @@ jobs:
   # The vendored swift-mosh package suite (ADR 0021), including the tests
   # pinning the Waycar patches. Its own job keeps build-test inside the
   # deadline scripts/test-run-with-timeout.sh pins. It runs on the macOS host,
-  # not a simulator; the real-server tests skip unless SWIFTMOSH_REAL_E2E=1,
-  # which CI leaves unset because the runner has no mosh-server.
+  # not a simulator, with SWIFTMOSH_REAL_E2E=1: the real-server suites launch
+  # the brew-installed mosh-server on loopback, and the step fails when any of
+  # them skipped (a launch failure is a skip) or their test count changed.
   swiftmosh-package:
     name: SwiftMosh package (macOS host)
     runs-on: xcode-27
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Select the newest Xcode 27
         run: |
           # shellcheck disable=SC2012 # sort -V needs the plain list
           sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
-      # MoshBootstrapTests resolve mosh-server on PATH (the Mac has it;
-      # the hosted image doesn't). The real-server suites still skip.
+      # MoshBootstrapTests and the real-server suites resolve mosh-server on
+      # PATH (the Mac has it; the hosted image doesn't).
       - name: Install mosh-server
         run: brew install mosh
       - name: Test SwiftMosh package
-        run: swift test --package-path Packages/SwiftMosh
+        env:
+          SWIFTMOSH_REAL_E2E: "1"
+        run: |
+          log="$RUNNER_TEMP/swiftmosh-test.log"
+          swift test --package-path Packages/SwiftMosh 2>&1 | tee "$log"
+          # Every real-server test must run: <suite>=<test count>.
+          status=0
+          for pin in RealMoshServerE2ETests=7 MoshProtocolE2ETests=6; do
+            suite=${pin%=*} count=${pin#*=}
+            summary=$(grep -A1 "Test Suite '$suite' \(passed\|failed\)" "$log" | grep 'Executed' | tail -1)
+            echo "$suite: ${summary:-no summary}"
+            case $summary in
+              *"Executed $count tests, with 0 failures"*) ;;
+              *) echo "::error::$suite must run all $count tests with none skipped"; status=1 ;;
+            esac
+          done
+          exit "$status"

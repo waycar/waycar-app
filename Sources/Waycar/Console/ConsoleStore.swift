@@ -138,17 +138,20 @@ final class ConsoleStore {
     /// so a reconnect naturally invalidates, and evicted per Host on insert
     /// so stale generations cannot accumulate.
     @ObservationIgnored private var skillsCache: [SkillsCacheKey: [AgentSkill]] = [:]
-    /// mosh availability per Host: the connection generation's probe, the
-    /// outcome remembered for the network the device is on (#105), or what
-    /// a mosh session's first contact proved. A thrown probe caches
-    /// unavailable — SSH stays the backbone, mosh only upgrades the Agent
-    /// terminal when it is demonstrably there. Tracked on purpose: mosh
-    /// compatibility is a Host property, so the Console index's per-Host
-    /// capsule reads this dict live.
+    /// Each Host's mosh eligibility (MOSH-02): what is known per connection
+    /// generation, the automatic fallback or the user's SSH choice, the
+    /// generation already probed or answered from memory, and the capsule's
+    /// re-probe in flight. `sendMosh` feeds it.
+    @ObservationIgnored var moshEligibility = MoshEligibilityMachine()
+    /// mosh availability per Host, as `moshEligibility` knows it: the
+    /// connection generation's probe, the outcome remembered for the network
+    /// the device is on (#105), or what a mosh session's first contact
+    /// proved. A thrown probe caches unavailable — SSH stays the backbone,
+    /// mosh only upgrades the Agent terminal when it is demonstrably there.
+    /// Tracked on purpose: mosh compatibility is a Host property, so the
+    /// Console index's per-Host capsule reads this dict live. Only
+    /// `sendMosh` writes it.
     var moshStates: [Host.ID: MoshProbeOutcome] = [:]
-    /// Generations already settled — probed, or answered from what is
-    /// remembered — so repeated rebuilds do not pile up duplicate probes.
-    @ObservationIgnored var moshProbedGenerations: [Host.ID: UInt64] = [:]
     /// Remembered mosh outcomes, standbys, the network path and the running
     /// mosh sessions (#105); `installMoshFastPath` puts in the app's.
     @ObservationIgnored var moshFastPath = MoshFastPath()
@@ -163,14 +166,13 @@ final class ConsoleStore {
 
     /// Mosh availability invalidated by a failed handshake or the user's
     /// "Use SSH Instead" (`invalidateMosh(for:cause:)`), and for which
-    /// connection generation. The in-flight background probe for that
-    /// generation must not override the invalidation; only the next
-    /// connection generation may re-probe after an automatic fallback. The
-    /// user's choice holds across connection generations and network
-    /// changes alike — it is not the connection's or the network's — until
-    /// the capsule's re-probe asks again (#105).
-    @ObservationIgnored var moshInvalidations: [Host.ID: MoshInvalidationRecord] = [:]
-
+    /// connection generation (`moshInvalidations`, from `moshEligibility`).
+    /// The in-flight background probe for that generation must not override
+    /// the invalidation; only the next connection generation may re-probe
+    /// after an automatic fallback. The user's choice holds across
+    /// connection generations and network changes alike — it is not the
+    /// connection's or the network's — until the capsule's re-probe asks
+    /// again (#105).
     struct MoshInvalidationRecord {
         let generation: UInt64
         let cause: MoshInvalidationCause
@@ -182,13 +184,12 @@ final class ConsoleStore {
     @ObservationIgnored var moshRecoveryRedials: [Host.ID: ContinuousClock.Instant] = [:]
     @ObservationIgnored var moshRecoveryRedialInterval: Duration = .seconds(2)
 
-    /// In-flight capsule re-probes, keyed per Host so a second tap is a
-    /// no-op instead of piling up duplicate probes. The claim is a fresh
-    /// UUID: the finishing task confirms the claim is still its own before
-    /// clearing, so a Host removed and re-added mid-probe (whose fresh
-    /// claim replaces this one) is not wiped by the stale probe. Tracked:
-    /// the capsule renders its spinner from this.
-    var moshProbeClaims: [Host.ID: UUID] = [:]
+    /// The Hosts with a capsule re-probe in flight, as `moshEligibility`
+    /// holds them: a second tap is a no-op instead of piling up duplicate
+    /// probes, and each re-probe's token fences a Host removed and re-added
+    /// mid-probe, so the stale probe does not end the new one. Tracked: the
+    /// capsule renders its spinner from this. Only `sendMosh` writes it.
+    var moshReprobingHosts: Set<Host.ID> = []
 
     /// Each Host's in-flight mosh probe; a network change cancels them all
     /// (#105): what they would find held for the network they began on.
@@ -908,7 +909,6 @@ final class ConsoleStore {
                 chatMediaHomes[id] = nil
                 chatMediaTransfers[id] = nil
                 moshFastPath.availability.forget(hostID: id)
-                moshInvalidations[id] = nil
                 // Queued Messages were for the old target's Agents: none may
                 // go out to whatever answers on the new one.
                 for (agentID, store) in composerStores where agentID.hostID == id {
@@ -935,10 +935,7 @@ final class ConsoleStore {
                 launchDrainMachines[id] = nil
             }
             endReconnectGrace(id)
-            moshStates[id] = nil
-            moshProbedGenerations[id] = nil
-            moshProbeClaims[id] = nil
-            moshProbeTasks.removeValue(forKey: id)?.cancel()
+            sendMosh(.hostChanged(id, keepsTarget: keepsTarget))
             forgetMoshStandbys(on: id)
             chatModeMarkerReads.removeValue(forKey: id)?.task?.cancel()
             sendBackendDetection(.hostChanged(keepsTarget: keepsTarget), on: id)
@@ -2262,9 +2259,7 @@ final class ConsoleStore {
             // The herdr runtime was the primary projection: the Host-level
             // probes and Chat Marker reads move to tmux's connection.
             sidebarSnapshots.invalidate(hostID)
-            moshStates[hostID] = nil
-            moshProbedGenerations[hostID] = nil
-            moshProbeClaims[hostID] = nil
+            sendMosh(.primaryProjectionEnded(hostID))
             chatModeMarkerReads.removeValue(forKey: hostID)?.task?.cancel()
         }
         let backend = scope.backend

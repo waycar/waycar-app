@@ -320,6 +320,266 @@ final class TransportTests: XCTestCase {
         }
     }
 
+    // MARK: - Endpoint lifecycle (MOSH-11)
+
+    /// A stopped endpoint starts again on a fresh connection, and the new
+    /// connection's callbacks drive it as the first one's did.
+    func testNetworkEndpointStartsAgainOnAFreshConnectionAfterStop() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60010),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+
+        let first = try await startReady(endpoint, on: connections, index: 0)
+        await endpoint.stop()
+        XCTAssertEqual(first.cancelCallCount, 1, "stop cancels the connection")
+        do {
+            _ = try await endpoint.receive()
+            XCTFail("Expected notStarted after stop")
+        } catch {
+            guard case .notStarted = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let second = try await startReady(endpoint, on: connections, index: 1)
+        XCTAssertEqual(connections.count, 2, "a restart opens a new connection")
+        XCTAssertEqual(second.receiveRegistrationCount, 1, "the new connection's receive loop is armed")
+
+        let waiting = Task { try await endpoint.receive() }
+        let receiveAwaited = await waitUntil { await endpoint._testPendingReceiveCount() == 1 }
+        XCTAssertTrue(receiveAwaited)
+        second.emitReceive(content: Data([0x42]), error: nil)
+        let datagram = try await waiting.value
+        XCTAssertEqual(datagram.data, Data([0x42]))
+        await endpoint.stop()
+    }
+
+    /// A start while one is connecting, or after one failed, is refused:
+    /// the failed connection stays the endpoint's until `stop()`.
+    func testNetworkEndpointRefusesASecondStartUntilStopped() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60011),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+
+        let starting = Task { try await endpoint.start() }
+        let opened = await waitUntil { connections.count == 1 && connections[0].startCallCount == 1 }
+        XCTAssertTrue(opened)
+        do {
+            try await endpoint.start()
+            XCTFail("Expected alreadyStarted while connecting")
+        } catch {
+            guard case .alreadyStarted = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        connections[0].emitState(.failed(.posix(.ENETUNREACH)))
+        do {
+            try await starting.value
+            XCTFail("Expected networkFailure")
+        } catch {
+            guard case .networkFailure = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(connections[0].receiveRegistrationCount, 0, "a failed start arms no receive")
+        do {
+            try await endpoint.start()
+            XCTFail("Expected alreadyStarted after a failed start")
+        } catch {
+            guard case .alreadyStarted = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(connections.count, 1)
+
+        await endpoint.stop()
+        _ = try await startReady(endpoint, on: connections, index: 1)
+        await endpoint.stop()
+    }
+
+    /// `stop()` ends a start still waiting for its connection.
+    func testNetworkEndpointStopEndsAStartInFlight() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60012),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+        let starting = Task { try await endpoint.start() }
+        let opened = await waitUntil { connections.count == 1 && connections[0].startCallCount == 1 }
+        XCTAssertTrue(opened)
+        await endpoint.stop()
+        do {
+            try await starting.value
+            XCTFail("Expected cancelled")
+        } catch {
+            guard case .cancelled = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(connections[0].cancelCallCount, 1)
+        do {
+            try await endpoint.send(Data([1]))
+            XCTFail("Expected notStarted")
+        } catch {
+            guard case .notStarted = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    /// A connection that fails after it was ready fails the receives
+    /// waiting on it; a buffered datagram is kept until `stop()`, which
+    /// drops it.
+    func testNetworkEndpointFailureAfterReadyFailsWaitingReceives() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60013),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+        let connection = try await startReady(endpoint, on: connections, index: 0)
+
+        let waiting = Task { try await endpoint.receive() }
+        let receiveAwaited = await waitUntil { await endpoint._testPendingReceiveCount() == 1 }
+        XCTAssertTrue(receiveAwaited)
+        connection.emitState(.failed(.posix(.ENETDOWN)))
+        do {
+            _ = try await waiting.value
+            XCTFail("Expected networkFailure")
+        } catch {
+            guard case .networkFailure = error as? TransportError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        connection.emitReceive(content: Data([0x07]), error: nil)
+        let rearmed = await waitUntil { connection.receiveRegistrationCount == 2 }
+        XCTAssertTrue(rearmed)
+        let buffered = try await endpoint.receive()
+        XCTAssertEqual(buffered.data, Data([0x07]), "a datagram that arrives is still delivered")
+
+        connection.emitReceive(content: Data([0x08]), error: nil)
+        let rearmedAgain = await waitUntil { connection.receiveRegistrationCount == 3 }
+        XCTAssertTrue(rearmedAgain)
+        await endpoint.stop()
+        let restarted = try await startReady(endpoint, on: connections, index: 1)
+        let waitingAfterRestart = Task { try await endpoint.receive() }
+        let restartAwaited = await waitUntil { await endpoint._testPendingReceiveCount() == 1 }
+        XCTAssertTrue(restartAwaited, "stop drops the old connection's buffered datagram")
+        restarted.emitReceive(content: Data([0x09]), error: nil)
+        let fresh = try await waitingAfterRestart.value
+        XCTAssertEqual(fresh.data, Data([0x09]))
+        await endpoint.stop()
+    }
+
+    // MARK: - Late callbacks from a stopped connection (B-28)
+
+    /// `stop()` cancels the connection, and NWConnection reports
+    /// `.cancelled` later. Arriving after a restart began, it must not fail
+    /// the new connection's start.
+    func testALateCancelFromAStoppedConnectionDoesNotFailTheRestart() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60020),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+        let old = try await startReady(endpoint, on: connections, index: 0)
+        await endpoint.stop()
+
+        let outcome = StartOutcome()
+        let restarting = Task {
+            do {
+                try await endpoint.start()
+                outcome.set("started")
+            } catch {
+                outcome.set("\(error)")
+            }
+        }
+        let opened = await waitUntil { connections.count == 2 && connections[1].startCallCount == 1 }
+        XCTAssertTrue(opened)
+        old.emitState(.cancelled)
+        let settledEarly = await waitUntil(within: 0.3) { outcome.value != nil }
+        XCTAssertFalse(settledEarly, "the old connection's cancel settled the restart: \(outcome.value ?? "")")
+
+        connections[1].emitState(.ready)
+        await restarting.value
+        XCTAssertEqual(outcome.value, "started")
+        await endpoint.stop()
+    }
+
+    /// A receive the stopped connection completes late (with the error
+    /// cancelling it brings) must not fail a receive on the new connection,
+    /// nor arm a second receive there.
+    func testALateReceiveErrorFromAStoppedConnectionDoesNotFailTheNewOne() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60021),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+        let old = try await startReady(endpoint, on: connections, index: 0)
+        await endpoint.stop()
+        let current = try await startReady(endpoint, on: connections, index: 1)
+
+        let waiting = Task { try await endpoint.receive() }
+        let receiveAwaited = await waitUntil { await endpoint._testPendingReceiveCount() == 1 }
+        XCTAssertTrue(receiveAwaited)
+        old.emitReceive(content: nil, error: .posix(.ECANCELED))
+        let disturbed = await waitUntil(within: 0.3) {
+            if current.receiveRegistrationCount != 1 { return true }
+            return await endpoint._testPendingReceiveCount() != 1
+        }
+        XCTAssertFalse(disturbed, "the old connection's receive reached the new connection")
+
+        current.emitReceive(content: Data([0x0B]), error: nil)
+        let datagram = try await waiting.value
+        XCTAssertEqual(datagram.data, Data([0x0B]))
+        await endpoint.stop()
+    }
+
+    /// A datagram the stopped connection delivers late is not the next
+    /// connection's to receive.
+    func testALateDatagramFromAStoppedConnectionIsNotReceivedAfterTheRestart() async throws {
+        let connections = FakeConnectionSequence()
+        let endpoint = NetworkDatagramEndpoint(
+            remote: .init(host: "127.0.0.1", port: 60022),
+            connectionFactory: { _, _, _ in connections.next() }
+        )
+        let old = try await startReady(endpoint, on: connections, index: 0)
+        await endpoint.stop()
+        old.emitReceive(content: Data([0x0A]), error: nil)
+        // Gives the late delivery time to reach the endpoint, as it would
+        // between a stop and the next start.
+        _ = await waitUntil(within: 0.3) { false }
+
+        let current = try await startReady(endpoint, on: connections, index: 1)
+        let waiting = Task { try await endpoint.receive() }
+        let receiveAwaited = await waitUntil { await endpoint._testPendingReceiveCount() == 1 }
+        XCTAssertTrue(receiveAwaited, "nothing from the old connection waits in the buffer")
+        current.emitReceive(content: Data([0x0B]), error: nil)
+        let datagram = try await waiting.value
+        XCTAssertEqual(datagram.data, Data([0x0B]))
+        await endpoint.stop()
+    }
+
+    /// Starts `endpoint` on `connections[index]`, reporting it ready.
+    private func startReady(
+        _ endpoint: NetworkDatagramEndpoint, on connections: FakeConnectionSequence, index: Int
+    ) async throws -> FakeUDPConnection {
+        let starting = Task { try await endpoint.start() }
+        let opened = await waitUntil {
+            connections.count > index && connections[index].hasStateHandler
+                && connections[index].startCallCount == 1
+        }
+        XCTAssertTrue(opened, "start must open connection \(index)")
+        let connection = connections[index]
+        connection.emitState(.ready)
+        try await starting.value
+        return connection
+    }
+
     func testTransportEngineSendReceiveSnapshotRestoreAndFiltering() async throws {
         setenv("SWIFTMOSH_DEBUG_REAL_E2E", "1", 1)
         defer { unsetenv("SWIFTMOSH_DEBUG_REAL_E2E") }
@@ -547,6 +807,7 @@ private final class FakeUDPConnection: UDPConnection, @unchecked Sendable {
 
     private(set) var startCallCount: Int = 0
     private(set) var receiveRegistrationCount: Int = 0
+    private(set) var cancelCallCount: Int = 0
     var sendError: NWError?
 
     var hasStateHandler: Bool {
@@ -573,7 +834,11 @@ private final class FakeUDPConnection: UDPConnection, @unchecked Sendable {
         lock.unlock()
     }
 
-    func cancel() {}
+    func cancel() {
+        lock.lock()
+        cancelCallCount += 1
+        lock.unlock()
+    }
 
     func send(content: Data?, completion: NWConnection.SendCompletion) {
         let error: NWError?
@@ -607,5 +872,40 @@ private final class FakeUDPConnection: UDPConnection, @unchecked Sendable {
         callback = _receiveCompletion
         lock.unlock()
         callback?(content, nil, true, error)
+    }
+}
+
+/// How a start ended, set once from the task that awaited it.
+private final class StartOutcome: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: String?
+
+    var value: String? {
+        lock.withLock { outcome }
+    }
+
+    func set(_ value: String) {
+        lock.withLock { outcome = value }
+    }
+}
+
+/// Hands out a new `FakeUDPConnection` per `NetworkDatagramEndpoint`
+/// start, keeping each so a test can drive an old one's callbacks.
+private final class FakeConnectionSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var made: [FakeUDPConnection] = []
+
+    var count: Int {
+        lock.withLock { made.count }
+    }
+
+    subscript(index: Int) -> FakeUDPConnection {
+        lock.withLock { made[index] }
+    }
+
+    func next() -> FakeUDPConnection {
+        let connection = FakeUDPConnection()
+        lock.withLock { made.append(connection) }
+        return connection
     }
 }
