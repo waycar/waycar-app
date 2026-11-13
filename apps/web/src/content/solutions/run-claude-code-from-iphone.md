@@ -8,7 +8,7 @@ answer: Claude Code does not run on the phone. It runs on a computer, either you
 needs:
   - "An iPhone or iPad on iOS or iPadOS 18 or later."
   - "A Mac or Linux machine that is on and awake, with Claude Code installed and signed in."
-  - "tmux 3.2 or later, herdr 0.7.5 or later, or herdr-core 0.1.10 or later on that machine. Claude Code runs inside one of them."
+  - "tmux 3.2 or later, herdr 0.7.5 or later, or Herdr Core 0.1.10 or later on that machine, or Zellij 0.46+ from the next update. Claude Code runs inside one."
   - "SSH access to it: Remote Login on a Mac, or an SSH server on Linux. herdr also needs AllowTcpForwarding set to local or yes."
   - "`curl` and `tar` on the machine, for the install command that sets up the Waycar host tools. No Node needed."
   - "Optional: mosh-server on the machine, so the terminal keeps going when your network changes."
@@ -19,7 +19,7 @@ faq:
   - q: Can I run Claude Code from my iPhone?
     a: You can steer it from your iPhone. Claude Code itself runs on a computer, not on the phone. Waycar connects your iPhone to a Claude Code session that runs on your own Mac or Linux machine, so you can watch it and answer it from anywhere. Anthropic's own Remote Control and cloud sessions are other ways.
   - q: Do I need a Claude plan or API key to use Waycar?
-    a: Waycar has no Claude login of its own. Claude Code signs in on your machine as it always does, with whatever it already uses. Waycar itself is free, with every feature included and unlimited launches.
+    a: Waycar has no Claude login of its own. Claude Code signs in on your machine as it always does, with whatever it already uses. Waycar is free.
   - q: Can I approve Claude Code permission requests from my phone?
     a: Yes. In Chat Mode, tap Allow or Cancel on the card that shows the request. In the terminal, answer with the toolbar keys. On tmux, Allow and Cancel need the Waycar hooks that the install command adds.
   - q: Does it work when my laptop is asleep?
@@ -58,12 +58,13 @@ Waycar has an optional push relay. Your machine encrypts each notification first
 - **Use the real terminal.** You see exactly what Claude Code draws, with a toolbar for Esc, Tab, arrows and Ctrl.
 - **Send photos and files.** Attach up to 10 per message. Files can be up to 64 MiB each. Photos are resized to fit 16 MiB. The file lands in a private folder on your machine, and its path is added to your message when you send it.
 - **Dictate a prompt.** On iOS 26 or later, dictation runs on your phone.
+- **Answer it in the car.** In CarPlay, on an iPhone with iOS 26.4 or later, Waycar reads a Claude Code command approval out loud and you say "allow" or "deny". It holds risky or long commands until you're stopped. See [Approve commands by voice](/help/carplay-voice).
 - **Bring back a closed session.** Closed Sessions keep an agent for 30 days. Tap it to reopen it in the same folder.
 
 ## What Waycar cannot do
 
 - Claude Code runs on your machine, not in the app, and Waycar keeps no cloud copy. Your machine must be on and awake.
-- Its agent terminals need tmux, herdr or herdr-core. It cannot open an arbitrary SSH server.
+- Its agent terminals need tmux, herdr or Herdr Core, or Zellij from the next update. It cannot open an arbitrary SSH server.
 - Waycar supports Mac and Linux machines. Claude Code also runs on Windows, which Waycar does not support.
 - It is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
 - Chat Mode covers 14 agents; see [Chat Mode](/help/chat-mode).

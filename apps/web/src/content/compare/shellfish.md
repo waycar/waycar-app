@@ -24,6 +24,7 @@ rows:
   live-activity: { level: yes, text: "Yes (Pro), follows active terminal, incl. agent questions" }
   attach: { level: yes, text: "Yes, paste uploads the file and can insert its path" }
   voice: { level: yes, text: "Yes, long-tap Paste to dictate prompts" }
+  carplay: { level: unknown, text: "Not documented" }
   usage: { level: unknown, text: "Not documented" }
   resume: { level: partial, text: "Partial: pick tmux sessions. Agent resume not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17.4 or later" }
@@ -49,7 +50,7 @@ faq:
   - q: Can Secure ShellFish notify me when Claude Code or Codex finishes?
     a: Yes, after you install the hooks from Shell Integration on the server. Pro users can also turn on a Live Activity for questions from the agent. Waycar sends a push when an agent is Blocked or Done, and it adds a Console and Chat Mode.
   - q: Is Secure ShellFish a subscription or a one-time purchase?
-    a: Both. The US App Store lists a Monthly subscription at $2.99, an Annual subscription at $14.99 and a Lifetime Pro Unlock at $29.99. The free version shows ads at the bottom of the terminal. Waycar is free, with every feature included and unlimited launches.
+    a: Both. The US App Store lists a Monthly subscription at $2.99, an Annual subscription at $14.99 and a Lifetime Pro Unlock at $29.99. The free version shows ads at the bottom of the terminal. Waycar is free.
   - q: Does Secure ShellFish keep a session alive on iPhone?
     a: It has built-in tmux support, turned on per server. A Location Persistence setting keeps the SSH connection running in the background. It uses location access, which stays on the device. Waycar keeps its terminal for about 20 seconds after you leave, then re-attaches on its own while the agent keeps running in herdr or tmux.
 sources:
@@ -111,7 +112,7 @@ On the rows we share, it matches Waycar: full terminal, alerts, Live Activity, v
 
 Secure ShellFish is free to download, and the free version shows ads at the bottom of the terminal. Pro features such as upload through the Files app, unlimited servers, offline folders and Live Activity need Pro. On the US App Store listing (checked 2026-10-18) Pro is $2.99 a month, $14.99 a year or $29.99 once. The one-time unlock covers iPhone, iPad and Mac.
 
-Waycar is free, with every feature included and unlimited agent and shell launches. No account or subscription.
+Waycar is free.
 
 ## Can you use both?
 

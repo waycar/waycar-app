@@ -19,14 +19,14 @@ export const ARTICLE_MODULE_IDS = [...RAIL_MODULE_IDS, 'toc-card'] as const;
 
 export const GET_APP = {
   heading: 'Check your coding agents from your phone',
-  body: 'Waycar connects to herdr or tmux on your own machines. For iPhone and iPad.',
+  body: 'Waycar connects to herdr, tmux and more on your own machines. For iPhone and iPad.',
   note: 'No Waycar account. No cloud relay for sessions. Your machine must stay on, awake and reachable.',
 };
 
 /** The card pinned under the table of contents. Same App Store link as `get-app`. */
 export const TOC_CARD = {
   heading: 'Your agents, away from your desk',
-  body: 'Check herdr and tmux sessions on your own machine. For iPhone and iPad.',
+  body: 'Check your agents in herdr, tmux and more on your own machine. For iPhone and iPad.',
 };
 
 export const START_HERE = {

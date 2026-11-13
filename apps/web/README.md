@@ -186,9 +186,9 @@ related: [new-chat, composer, notifications, chat-mode-troubleshooting]
   Toolbar, Console. "Tap" and "touch and hold" for touch, "press" for keys,
   "click" only for a trackpad or mouse.
 - No em or en dashes in prose, no marketing filler, no "simply" or "just", no
-  emoji. Waycar is free, with every feature included and unlimited launches.
+  emoji. Keep pricing out of feature lists.
 - Links: other help pages as `/help/<slug>` (optionally `#anchor`), site
-  pages as `/pricing`, `/privacy`, `/support`, external links only to primary
+  pages as `/privacy`, `/support`, external links only to primary
   sources (herdr.dev, github.com/steipete/CodexBar, mosh.org). Never link
   `/install.sh`; the install command appears only as the code block
   `curl -fsSL https://waycar.dev/install.sh | sh` (fenced as `sh`).
@@ -497,7 +497,7 @@ what Waycar cannot do: it needs herdr or tmux on the machine, the machine must
 be on and awake, and it has no native desktop or web client. Write "no cloud between you and your sessions" as "for your sessions",
 because the optional push relay carries notifications, encrypted on the Host so
 it cannot read them, and sees how many agents are in each status for Live
-Activities. Waycar is free, with every feature included and unlimited launches. Users still pay for their own machines and AI providers. Link site pages as
+Activities. Users still pay for their own machines and AI providers. Link site pages as
 `/help/<slug>`, `/compare/<slug>` or `/solutions/<slug>`, never `/install.sh`.
 
 **Routes.** `src/pages/compare/index.astro` (`/compare`: a card per comparison
@@ -518,7 +518,7 @@ and `appStoreUrl(pathname, section)`, the same listing tagged with the
 surface's own campaign (`?pt=…&ct=<token>&mt=8`, see
 [Campaign tokens](#campaign-tokens)); the picker's App Store link is the tagged one.
 Every store button (header, hero, Setup step 1, Closing, the article's TOC card,
-rail and footer, the site footer, pricing, compare and solutions pages)
+rail and footer, the site footer, compare and solutions pages)
 is one component, `src/components/AppStoreCta.astro`, which follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
@@ -639,8 +639,9 @@ enforces it in `src/lib/ad-links.mjs`:
 - **Organic**: `ORGANIC_CT`, a closed list, never read from a URL. A CTA's token is
   built in: `<AppStoreCta ct="site-hero">` (`site-hero`, `site-hero-b`,
   `site-closing`, `site-nav`), default `site`. A page type outranks it
-  (`organicCampaign`): every CTA on `/pricing` is `pricing`, on `/help/*` `help`,
-  on `/articles/*` `article` (header and footer included). The article's setup
+  (`organicCampaign`): every CTA on `/help/*` is `help`, on `/articles/*`
+  `article` (header and footer included). The retired `pricing` token stays
+  valid for links already shared. The article's setup
   prompt link is `setup-prompt`. An unknown `ct` throws at build time, and
   `scripts/ad-links.test.mjs` checks every literal token in `src/`.
 - A visitor who arrived from a paid ad (`utm_campaign` matching `PAID_CT`) gets that
@@ -700,24 +701,26 @@ does not infer it from request headers.
 
 `main` runs ahead of the App Store build, and the site deploys from `main`, so
 the site never promises what a visitor cannot get. The App Store has 1.3.0
-(`APP_STORE_RELEASE` in `src/data/unreleased.ts`), and `main` adds the Codex
-and OpenCode 2 server runtimes and queueing messages to a Waiting launch. The
-**help gate** keeps those off the site:
+(`APP_STORE_RELEASE` in `src/data/unreleased.ts`), and `main` adds Zellij, the
+Codex and OpenCode 2 server runtimes and queueing messages to a Waiting launch.
+The **help gate** handles the difference:
 
 - **Help**: `src/content/help/` is bundled whole into the iOS app and holds
   the pages `main` ships, so no page is moved, renamed or edited for this.
   While the gate holds, `src/lib/help-loader.ts` stands in for the glob
-  loader: it skips the pages in `HIDDEN_HELP_PAGES` (`codex`, `opencode`),
-  applies `RELEASED_HELP_EDITS` to the text of the others (`replace`,
-  `dropLine`, `setLine`, `dropSection`), so each reads as 1.3.0's, and removes
-  hidden slugs from every `related` list. Hidden pages leave `/help`, the
-  sidebar, search, `/help.md`, `/llms.txt` and the sitemap, since all of them
-  read the collection. The build fails when an edit matches nothing (its page
-  changed: update the entry), when a body link points at a hidden page (add an
-  edit that drops it), and when a released page still says `Codex server`,
-  `Codex thread`, `OpenCode 2` or `OpenCode server`. A PR that adds help text
-  for a feature the App Store build lacks needs a `RELEASED_HELP_EDITS` entry
-  in the same PR.
+  loader: it skips the pages in `HIDDEN_HELP_PAGES` (none today), applies
+  `RELEASED_HELP_EDITS` to the text of the others (`replace`, `dropLine`,
+  `setLine`, `dropSection`, `prependBody`), and removes hidden slugs from
+  every `related` list. The `codex`, `opencode` and `zellij` pages stay on the
+  site, each opening with "Coming in the next update of Waycar." (the
+  `nextUpdateNote` edit), and the other pages keep their links to them; edits
+  turn text for smaller unreleased changes back into 1.3.0's. Hidden pages
+  leave `/help`, the sidebar, search, `/help.md`, `/llms.txt` and the sitemap,
+  since all of them read the collection. The build fails when an edit matches
+  nothing (its page changed: update the entry) and when a body link points at
+  a hidden page (add an edit that drops it). A PR that adds help text for a
+  feature the App Store build lacks needs a `RELEASED_HELP_EDITS` entry in the
+  same PR: a note for a new page, an edit for a changed one.
 - **`/changelog`**: the Unreleased section (from the repo-root `CHANGELOG.md`)
   is not shown.
 
@@ -731,9 +734,11 @@ beyond it to gate again.
 
 Not gated: the landing pages, `/index.md` (`src/llms/index.md`), `/support`,
 and `src/data/compare-waycar.ts` with the pages in `src/content/compare/` and
-`src/content/solutions/`, which describe the App Store build (1.3.0); copy for
-a newer feature waits until the gate lifts. Also `/privacy` (the policy
-describes the app as built from `main`).
+`src/content/solutions/`. They describe `main`, naming Zellij, Codex and
+OpenCode 2 beside herdr, Herdr Core and tmux, and say "in the next update"
+wherever a 1.3.0 user would otherwise be misled (a requirement, a setup step, a
+comparison cell); drop those words once the next release ships. Also
+`/privacy` (the policy describes the app as built from `main`).
 
 ## Home page A/B test (ended)
 
@@ -782,13 +787,13 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 
 | Path | What it holds |
 | --- | --- |
-| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `pricing` (free, everything included), `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
+| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
 | `src/content/help/` | Help pages, one Markdown file per feature (see [Help docs](#help-docs)); schema in `src/content.config.ts` |
 | `src/content/changelog/` | Released versions, one Markdown file per version (see [Changelog](#changelog)); schema in `src/content.config.ts` |
 | `src/content/compare/`, `src/content/solutions/` | Comparisons and solution pages, one Markdown file each (see [Compare and solutions](#compare-and-solutions)); schemas in `src/content.config.ts` |
 | `src/data/help.ts` | Help categories (ids, labels, order) from `src/content/help/categories.json`, and help URLs (`help-paths.ts` holds the URL helpers the help search script imports) |
 | `src/data/links.ts`, `src/data/unreleased.ts` | The App Store URL; the help gate, what it hides and the release it holds for (see [Release content switch](#release-content-switch)) |
-| `src/data/compare-waycar.ts` | Waycar's column of every comparison table, as the released App Store build behaves |
+| `src/data/compare-waycar.ts` | Waycar's column of every comparison table, as `main` behaves, with what 1.3.0 lacks marked as the next update |
 | `src/lib/` | `help.ts` (the help collection in order, cross-page checks, Markdown twins, search entries), `help-loader.ts` (the help collection and the Unreleased changelog section through the help gate), `help-search.mjs` (search ranking), `changelog.mjs` (changelog order, reference stripping, paging), `changelog-loader.ts` (the changelog's content loaders), `changelog-entries.ts` (the changelog pages from the collections), `compare.ts` and `solutions.ts` (the comparison and solution collections, their checks and Markdown twins), `compare-rows.mjs` (the table rows and the checks, plain JavaScript so the tests import it), and `landing.ts` (what both share: twins, JSON-LD, the paths a body may link to) |
 | `src/layouts/` | `Layout` (every page's head, header, footer, analytics) and `HelpLayout` (a help page) |
 | `src/llms/index.md` | Full landing-page content for AI agents, served at `/index.md` |
@@ -796,7 +801,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 | `src/styles/global.css` | Design tokens and shared building blocks |
 | `src/data/screens.ts` | Screenshot imports, alt text, captions |
 | `src/assets/` | Logo and screenshots, resized to WebP at build time |
-| `src/worker.ts` | The Worker: host redirect, the `/b` redirect, home page A or B for `/`, then static assets, with security headers on all of them |
+| `src/worker.ts` | The Worker: host redirect, retired page redirects, then static assets, with security headers on all of them |
 | `integrations/sitemap.mjs` | Astro integration that writes `dist/sitemap.xml` from the built pages' canonical URLs |
 | `scripts/` | `site-pages.mjs` (indexable pages and their text, read back from `dist/`), `generate-llms-txt.mjs` (the deploy-time llms.txt generator and its validator), their tests, `help-search.test.mjs` (search ranking), `changelog.test.mjs` (changelog rules), and `compare.test.mjs` (the comparison and solution checks) |
 
@@ -822,7 +827,8 @@ with `Layout`'s `image` and `imageAlt` props.
 `waycar.dev`, `www.waycar.dev`, `waycar.app`, and `www.waycar.app`. The Worker
 runs before asset lookup: any host other than `waycar.dev` gets a `301` to
 `https://waycar.dev` with the same path and query string; `waycar.dev` is served
-from `dist/`, with `dist/404.html` for unmatched paths. Every response, redirects
+from `dist/`, with `dist/404.html` for unmatched paths. Retired pricing URLs
+redirect to `/` with their query string intact. Every response, redirects
 included, gets a strict `Content-Security-Policy` (scripts from this origin
 only, never inline, plus `https://www.redditstatic.com` and
 `https://static.ads-twitter.com` for the ad pixels; no workers; `connect-src`

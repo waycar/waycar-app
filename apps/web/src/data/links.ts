@@ -20,8 +20,8 @@ export const ON_PLAY_STORE = PLAY_STORE_LISTING_URL.startsWith('https://');
 // What the site links to: the listing tagged with Apple's campaign (`ct`), so
 // App Analytics counts installs that started on the site, per surface. `section`
 // is the CTA's organic token (`site-hero`, `site-closing`, `site-nav`, ...; default
-// `site`); `pathname` is the page's, because a page type (`/pricing`, `/help/*`,
-// `/articles/*`) outranks the section (`organicCampaign`). A visitor who arrived
+// `site`); `pathname` is the page's, because a page type (`/help/*`, `/articles/*`)
+// outranks the section (`organicCampaign`). A visitor who arrived
 // from a paid ad (`utm_campaign` in the URL) gets that campaign's `ct` instead
 // (Layout.astro), and `/go/<token>` ad links carry their own (src/lib/ad-links.mjs).
 // Empty when the listing is not live.

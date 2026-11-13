@@ -1,0 +1,214 @@
+---
+// A spoken CarPlay exchange, written out: what Waycar says, what you say back,
+// and the taps between them. Not a picture of the car's screen: the car shows
+// only the list, and everything quoted here is heard, never shown. Waycar's
+// lines are the app's own (Sources/Waycar/Voice/CarVoiceScript.swift, v1.3.0).
+import { Image } from 'astro:assets';
+import logo from '../assets/logo.png';
+
+export type ExchangeLine =
+  | { by: 'tap'; text: string }
+  | { by: 'waycar' | 'you'; text: string };
+
+interface Props {
+  lines: ExchangeLine[];
+  /** Accessible name of the list. */
+  label: string;
+  /** Tighter type and spacing, for a second exchange beside the first. */
+  compact?: boolean;
+}
+
+const { lines, label, compact = false } = Astro.props;
+---
+
+<ol class:list={['exchange', { compact }]} aria-label={label}>
+  {
+    lines.map((line) =>
+      line.by === 'tap' ? (
+        <li class="tap">
+          <span class="tap-tag">tap</span>
+          <span>{line.text}</span>
+        </li>
+      ) : (
+        <li class:list={['said', line.by]}>
+          {line.by === 'waycar' ? (
+            <Image class="who-mark" src={logo} alt="" width={24} height={24} densities={[1, 2, 3]} />
+          ) : (
+            <span class="who-mark you-mark" aria-hidden="true" />
+          )}
+          <p class="who">
+            {line.by === 'waycar' ? 'Waycar' : 'You'}{' '}
+            <span class="visually-hidden">{line.by === 'waycar' ? 'says' : 'say'}</span>
+            <span class="wave" aria-hidden="true">
+              <i /><i /><i /><i /><i />
+            </span>
+          </p>
+          <q>{line.text}</q>
+        </li>
+      ),
+    )
+  }
+</ol>
+
+<style>
+  .exchange {
+    position: relative;
+    display: grid;
+    gap: 18px;
+  }
+
+  /* The thread that ties the turns together, behind the marks. */
+  .exchange::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 11.5px;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--line-2) 8%, var(--line-2) 92%, transparent);
+  }
+
+  .said {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 4px;
+    align-items: center;
+  }
+
+  .who-mark {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+  }
+
+  .you-mark {
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    border: 1px solid rgb(var(--violet-soft-rgb) / 0.5);
+    border-radius: 50%;
+  }
+
+  .you-mark::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--violet-soft);
+    border-radius: 50%;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font: var(--fw-caption) var(--fs-caption) / 1 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .you .who {
+    color: var(--violet-soft);
+  }
+
+  q {
+    grid-column: 2;
+    font-size: 19px;
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    quotes: '“' '”';
+  }
+
+  .you q {
+    color: var(--violet-soft);
+  }
+
+  /* A few still bars: this line is heard. */
+  .wave {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 12px;
+  }
+
+  .wave i {
+    width: 2px;
+    height: 100%;
+    background: var(--grad);
+    background-size: 14px 100%;
+    border-radius: 1px;
+    opacity: 0.8;
+  }
+
+  .wave i:nth-child(1),
+  .wave i:nth-child(5) {
+    height: 40%;
+  }
+
+  .wave i:nth-child(2) {
+    height: 75%;
+    background-position: -3px 0;
+  }
+
+  .wave i:nth-child(3) {
+    background-position: -6px 0;
+  }
+
+  .wave i:nth-child(4) {
+    height: 60%;
+    background-position: -9px 0;
+  }
+
+  .wave i:nth-child(5) {
+    background-position: -12px 0;
+  }
+
+  .you .wave i {
+    background: var(--violet-soft);
+  }
+
+  .tap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 40px;
+    font: var(--fs-caption) / 1.4 var(--font-mono);
+    color: var(--text-2);
+  }
+
+  /* A small knot on the thread where you tap. */
+  .tap::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    width: 8px;
+    height: 8px;
+    background: var(--bg);
+    border: 1px solid var(--line-2);
+    border-radius: 50%;
+  }
+
+  .tap-tag {
+    padding: 2px 7px;
+    font-size: 11px;
+    color: var(--text-3);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-pill);
+  }
+
+  .compact {
+    gap: 14px;
+  }
+
+  .compact q {
+    font-size: 17px;
+  }
+
+  @media (max-width: 560px) {
+    q {
+      font-size: 17px;
+    }
+  }
+</style>

@@ -20,11 +20,11 @@ const product = [
   { href: section('how'), label: 'How it works' },
   { href: section('features'), label: 'Features' },
   { href: section('setup'), label: 'Setup' },
-  { href: '/pricing', label: 'Pricing' },
 ];
 
 const more = [
   { href: '/ipad', label: 'iPad gallery' },
+  { href: '/carplay', label: 'CarPlay' },
   { href: section('security'), label: 'Security' },
   { href: '/help', label: 'Help' },
   { href: '/articles', label: 'Articles' },
@@ -57,7 +57,7 @@ const solutions = [
           <Image class="mark" src={logo} alt="" width={24} height={24} densities={[1, 2, 3]} />
           Waycar
         </p>
-        <p class="blurb">Your herdr and tmux agents on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions. Android app coming soon.</p>
+        <p class="blurb">Your agents in herdr, tmux, Herdr Core and Zellij, plus Codex and OpenCode chats, on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions. Android app coming soon.</p>
       </div>
       <nav aria-labelledby="foot-product">
         <h2 id="foot-product">Product</h2>
@@ -88,7 +88,10 @@ const solutions = [
           <span>Coming soon to the App Store for iPhone &amp; iPad</span>
         )
       }
-      <span>Android app coming soon. Android is a trademark of Google LLC.</span>
+      <span>
+        Android app coming soon. Apple, the Apple logo, iPhone, iPad, Mac, Apple Watch, CarPlay, iCloud and App Store are
+        trademarks of Apple Inc., registered in the U.S. and other countries and regions. Android is a trademark of Google LLC.
+      </span>
     </div>
   </div>
 </footer>

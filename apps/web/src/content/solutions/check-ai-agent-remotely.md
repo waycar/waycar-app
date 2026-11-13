@@ -8,7 +8,8 @@ answer: Install Waycar's host tools on the machine where your coding agents run,
 needs:
   - "An iPhone or iPad on iOS or iPadOS 18 or later."
   - "A Mac or Linux machine that is on, awake and reachable over SSH. On a Mac, turn on Remote Login."
-  - "Your coding agents running in tmux 3.2+, herdr 0.7.5+ or herdr-core 0.1.10+. herdr also needs AllowTcpForwarding set to local or yes."
+  - "Your coding agents running in tmux 3.2+, herdr 0.7.5+ or Herdr Core 0.1.10+. herdr also needs AllowTcpForwarding set to local or yes."
+  - "Or Zellij 0.46 or later, from the next update of Waycar."
   - "`curl` and `tar` on that machine, for the install command that sets up the Waycar host tools. No Node needed."
   - "Notifications allowed for Waycar in iOS, and turned on for the machine in the app, to get a push when an agent needs you."
 order: 4
@@ -48,7 +49,7 @@ With AI Summaries on, Agent Progress estimates how far along an agent is from it
 - **A badge.** The Waycar icon counts the agents that need you, across all your machines.
 - **Lock Screen.** A Live Activity can keep a machine on your Lock Screen and in the Dynamic Island.
 - **Apple Watch.** The watch app shows agent status and replies through a nearby paired iPhone.
-- **CarPlay.** On an iPhone with iOS 26.4 or later, talk to agents and hear their answers in the car.
+- **CarPlay.** On an iPhone with iOS 26.4 or later, hear what needs you, ask an agent out loud and hear its answer in a sentence or two. Nothing an agent writes is shown on the car's screen. See [CarPlay](/help/carplay).
 
 ## Answer it from the phone
 
@@ -60,7 +61,7 @@ With AI Summaries on, Agent Progress estimates how far along an agent is from it
 ## What Waycar cannot do
 
 - It cannot run agents when your machine is off or asleep. Keep it on and awake.
-- Its agent terminals need tmux, herdr or herdr-core. On tmux, [Status Hooks for 17 agents](/help/tmux-hooks) provide status and alerts. Other agents show Unknown.
+- Its agent terminals need tmux, herdr or Herdr Core, or Zellij from the next update. On tmux, [Status Hooks for 17 agents](/help/tmux-hooks) provide status and alerts. Other agents show Unknown.
 - It is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
 - The terminal session ends about 20 seconds after you leave the app and re-attaches on its own when you return. The agent keeps running.
 
