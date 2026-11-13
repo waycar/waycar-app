@@ -51,6 +51,7 @@ pub mod native;
 pub mod notification_config;
 pub mod notification_envelope;
 pub mod notify_core;
+pub mod notify_delivery;
 pub mod notify_hook;
 pub mod notify_seams;
 pub mod opencode_hook;

@@ -4585,6 +4585,56 @@ stateDiagram-v2
     pushing --> beating: pushed / beat, then the loop top's
 ```
 
+### NotificationDeliveryMachine
+
+- **File:** `plugin/rust/notify_delivery.rs`
+- **Owner:** `notify_core::run_notification`, for every trigger's `Backend`
+  (herdr, tmux, herdr-core, Zellij, Codex): reads the per-pane dedupe state and the
+  registration file, makes the summary within the hold and sleeps the rest,
+  re-checks through the backend, reads the Chat Mode reply, stores the
+  summary, seals, claims (`claim_notification`, under the dedupe lock),
+  posts, releases its own claim and prunes tokens. Push ids and payloads are
+  the backends' and unchanged.
+- **States:** `deciding`, `readingMarker`, `holding`, `rechecking(second)`,
+  `replying`, `resummarizing`, `checkingDedupe`, `sealing`, `claiming`,
+  `posting(claim)`, `finished(skipped | gone | movedOn | rearmed | stored |
+  deduped | noDevices | delivered | undelivered)`.
+- **Events:** `begin(lastNotified, hasDevices, summaryEnabled)`,
+  `markerRead`, `held`, `rechecked(status?)`, `replied`, `resummarized`,
+  `dedupeChecked`, `sealed`, `claimed(token?)`, `posted(delivered)`.
+- **Effects:** `readChatMarker`, `hold(summarize)`, `recheck`,
+  `clearLastNotified`, `reply(chat)`, `resummarize`, `persistSummary`,
+  `checkDedupe`, `seal`, `claim`, `post`, `releaseClaim(token)`,
+  `pruneTokens`.
+- **Tests:** `notify_delivery::tests` (transitions), `notify_core::tests`,
+  `notify_core::hc_tests`, `notify_hook` tests (dedupe, departure re-arm,
+  hold, Chat Mode reply and fallback, seal failure, a failed POST releasing
+  only its own claim, 410 pruning).
+- **Catalogue:** HT-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> deciding
+    deciding --> finished: nothing to push, store or re-arm
+    deciding --> readingMarker: a Done to push / readChatMarker
+    deciding --> holding: hold
+    readingMarker --> holding: markerRead / hold
+    holding --> rechecking: held / recheck
+    rechecking --> finished: gone (clearLastNotified), moved on, or a departure (clearLastNotified)
+    rechecking --> replying: held / reply
+    replying --> resummarizing: Chat Mode with no reply / resummarize
+    resummarizing --> rechecking: resummarized / recheck (second)
+    replying --> checkingDedupe: persistSummary, checkDedupe
+    replying --> finished: summary only / persistSummary
+    checkingDedupe --> finished: already notified or no device
+    checkingDedupe --> sealing: seal
+    sealing --> claiming: sealed / claim
+    claiming --> finished: claimed by another
+    claiming --> posting: claimed / post
+    posting --> finished: delivered / pruneTokens
+    posting --> finished: undelivered / releaseClaim, pruneTokens
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4989,7 +5039,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| HT-01 | Notification delivery and dedupe | `plugin/rust/notify_core.rs` | implicit | H/H | convert | P4 |
+| HT-01 | Notification delivery and dedupe | `plugin/rust/notify_core.rs` | implicit | H/H | converted → `NotificationDeliveryMachine` | P4 |
 | HT-02 | Activity progress tick | `plugin/rust/activity_tick.rs` | implicit | H/H | converted → `ActivityTickMachine`; a plan read that outlives its turn can still put steps back until the next tick prunes them, as before | P4 |
 | HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `SessionReleaseMachine`; bug B-34 fixed (tmux) | P4 |
 | HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
