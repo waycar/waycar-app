@@ -51,6 +51,121 @@ extension WaycarPatchTests {
         await serverEnd.stop()
     }
 
+    /// Connectivity is judged only while the session runs: during a
+    /// shutdown waiting for its ack, silence past the stall threshold
+    /// publishes nothing and a server datagram still counts as contact; the
+    /// stream finishes, and the value clears, only when the runtime stops.
+    func testConnectivityIsNotJudgedWhileAShutdownWaitsForItsAck() async throws {
+        var config = MoshClientConfig()
+        config.stallThresholdMs = 200
+        config.networkTimeoutMs = 400
+        config.heartbeatIntervalMs = 60_000
+        let clock = ManualClock()
+        let (session, server, serverEnd) = try await makeLinkedSession(config: config, clock: clock)
+        let log = ConnectivityLog()
+        let collector = log.collect(await session.connectivityStream())
+        let connected = await waitUntil { await log.values == [.connected] }
+        XCTAssertTrue(connected)
+
+        let acks = AckLog()
+        let recorder = recordAcks(from: server, into: acks)
+        Task { await session.shutdown(ackTimeoutMs: 60_000) }
+        let inFlight = await waitUntil { await acks.newNums().contains(UInt64.max) }
+        XCTAssertTrue(inFlight, "the shutdown must be waiting for its ack")
+
+        clock.advance(byMs: 500)
+        let judged = await session._testRunMaintenanceLoopIteration()
+        XCTAssertFalse(judged, "nothing is judged once the session stops running")
+        try await sendAck(from: server, ackNum: 0)
+        let contact = await waitUntil { await session._testLastServerContactAtMs() == clock.nowMs }
+        XCTAssertTrue(contact, "a server datagram during the shutdown still counts as contact")
+        let values = await log.values
+        XCTAssertEqual(values, [.connected], "no stall and no timeout while the shutdown runs")
+        let current = await session.connectivity
+        XCTAssertEqual(current, .connected, "the last value stands until the runtime stops")
+        let state = await session.state
+        XCTAssertEqual(state, .stopping)
+
+        await session.abandon()
+        let finished = await waitUntil { await log.isFinished }
+        XCTAssertTrue(finished)
+        let cleared = await session.connectivity
+        XCTAssertNil(cleared)
+        collector.cancel()
+        await collector.value
+        await serverEnd.stop()
+        await recorder.value
+    }
+
+    /// A suspension clears connectivity without finishing the stream; the
+    /// resumed session counts as heard from at its restart, whatever the
+    /// silence before, and publishes `.connected` again.
+    func testASuspensionClearsConnectivityAndTheResumeCountsAsContact() async throws {
+        var config = MoshClientConfig()
+        config.stallThresholdMs = 200
+        config.networkTimeoutMs = 10_000
+        config.heartbeatIntervalMs = 60_000
+        let clock = ManualClock()
+        let (session, _, serverEnd) = try await makeLinkedSession(config: config, clock: clock)
+        let log = ConnectivityLog()
+        let collector = log.collect(await session.connectivityStream())
+
+        clock.advance(byMs: 200)
+        _ = await session._testRunMaintenanceLoopIteration()
+        let stalled = await waitUntil { await log.values == [.connected, .stalled] }
+        XCTAssertTrue(stalled)
+
+        _ = try await session.prepareForApplicationBackground()
+        let suspended = await session.connectivity
+        XCTAssertNil(suspended, "connectivity is not judged while suspended")
+        let suspendedState = await session.state
+        XCTAssertEqual(suspendedState, .suspended)
+        clock.advance(byMs: 5_000)
+
+        try await session.resumeFromApplicationBackground()
+        let resumedContact = await session._testLastServerContactAtMs()
+        XCTAssertEqual(resumedContact, clock.nowMs, "the restart counts as contact")
+        let reconnected = await waitUntil { await log.values == [.connected, .stalled, .connected] }
+        XCTAssertTrue(reconnected, "the same stream hears the resumed session")
+        let finishedEarly = await log.isFinished
+        XCTAssertFalse(finishedEarly, "a suspension does not finish the stream")
+
+        await session.stop()
+        let finished = await waitUntil { await log.isFinished }
+        XCTAssertTrue(finished)
+        collector.cancel()
+        await collector.value
+        await serverEnd.stop()
+    }
+
+    /// A timeout publishes no stall first when the stall threshold is the
+    /// longer window, and the failure ends the stream.
+    func testATimeoutBeforeTheStallThresholdEndsTheStreamWithoutAStall() async throws {
+        var config = MoshClientConfig()
+        config.stallThresholdMs = 1_000
+        config.networkTimeoutMs = 300
+        config.heartbeatIntervalMs = 60_000
+        let clock = ManualClock()
+        let (session, _, serverEnd) = try await makeLinkedSession(config: config, clock: clock)
+        let log = ConnectivityLog()
+        let collector = log.collect(await session.connectivityStream())
+        let connected = await waitUntil { await log.values == [.connected] }
+        XCTAssertTrue(connected)
+
+        clock.advance(byMs: 300)
+        let ended = await waitUntil { await session.state == .failed(.timeout(timeoutMs: 300)) }
+        XCTAssertTrue(ended)
+        let finished = await waitUntil { await log.isFinished }
+        XCTAssertTrue(finished)
+        let values = await log.values
+        XCTAssertEqual(values, [.connected], "the timeout is judged before the stall")
+        let cleared = await session.connectivity
+        XCTAssertNil(cleared)
+        collector.cancel()
+        await collector.value
+        await serverEnd.stop()
+    }
+
     func testHeartbeatsKeepAHealthyIdleSessionConnectedAndAlive() async throws {
         var config = MoshClientConfig()
         config.heartbeatIntervalMs = 100
