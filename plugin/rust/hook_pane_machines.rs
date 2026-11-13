@@ -132,12 +132,21 @@ impl StateMachine for SessionReleaseMachine {
 /// always, a status (`working`, or a conditional `working-if-active`, see
 /// [`next_status`]) only when it moves the pane, with `@waycar_agent` when
 /// the options lack it and a raised `@waycar_seq`. A conditional status is
-/// written only while the pane's seq is still the one read (B-35); the new
-/// status is notified once written.
+/// a compare-and-swap on the pane's seq (B-35): written only while the seq
+/// is still the one read; when another write moved it first, the pane is
+/// read again, the status decided again from the fresh status, and the
+/// write retried, [`STATUS_WRITE_ATTEMPTS`] times in all. The new status is
+/// notified once written.
 #[derive(Debug, Default)]
 pub struct PaneStatusWriteMachine {
     state: StatusWriteState,
+    want: Option<&'static str>,
+    options_have_agent: bool,
+    pane_is_target: bool,
 }
+
+/// How many guarded writes one hook makes before it gives up.
+pub const STATUS_WRITE_ATTEMPTS: u8 = 3;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum StatusWriteState {
@@ -145,15 +154,19 @@ pub enum StatusWriteState {
     #[default]
     Reading,
     /// The write was sent. `status`: the status and seq it writes, if any.
+    /// `attempt`: 1 for the first write.
     Writing {
         status: Option<(&'static str, String)>,
         guarded: bool,
+        attempt: u8,
     },
+    /// A guarded write was refused; the pane is being read again.
+    Rereading { attempt: u8 },
     /// Written; `status`: the status it moved the pane to.
     Written { status: Option<&'static str> },
     /// Nothing to write.
     Unchanged,
-    /// The pane's seq moved on before the guarded status landed.
+    /// The pane's seq moved on before every guarded attempt landed.
     Superseded,
     /// tmux refused (the pane is gone).
     Failed,
@@ -177,6 +190,16 @@ pub enum StatusWriteEvent {
     /// The write's tmux output (`None`: tmux failed); a guarded one ends
     /// with the pane's `@waycar_seq` read back.
     Answered(Option<String>),
+    /// The pane read again after a refused guarded write (`None`: gone).
+    Reread(Option<PaneRead>),
+}
+
+/// A fresh read of the pane's status and seq, with the clock.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaneRead {
+    pub status: Option<String>,
+    pub seq: Option<String>,
+    pub now_ns: u128,
 }
 
 /// The status part of a pane write.
@@ -192,11 +215,56 @@ pub struct StatusWrite {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatusWriteEffect {
-    /// Write the event's options, then `status` when there is one.
+    /// Write the event's options (with `options`), then `status` when there
+    /// is one. A retry writes the status alone: the options landed already.
     Write {
+        options: bool,
         status: Option<StatusWrite>,
     },
+    /// Read the pane's status and seq again.
+    Reread,
     Notify(&'static str),
+}
+
+impl PaneStatusWriteMachine {
+    /// Decide the write from the pane's status and seq: attempt 1 writes the
+    /// options too.
+    fn decide(
+        &mut self,
+        status: Option<String>,
+        seq: Option<String>,
+        options: bool,
+        now_ns: u128,
+        attempt: u8,
+    ) -> Vec<StatusWriteEffect> {
+        let want = self.want;
+        let next = want
+            .and_then(|want| next_status(want, status.as_deref()))
+            .filter(|next| Some(*next) != status.as_deref());
+        if next.is_none() && !options {
+            self.state = StatusWriteState::Unchanged;
+            return Vec::new();
+        }
+        let read_seq = seq.as_deref().unwrap_or("");
+        let guarded = want.is_some_and(is_conditional)
+            && self.pane_is_target
+            && read_seq.bytes().all(|b| b.is_ascii_digit());
+        let write = next.map(|next| StatusWrite {
+            agent: !self.options_have_agent,
+            status: next,
+            seq: next_seq(seq.as_deref(), now_ns),
+            only_if_seq: guarded.then(|| read_seq.to_string()),
+        });
+        self.state = StatusWriteState::Writing {
+            status: write.as_ref().map(|w| (w.status, w.seq.clone())),
+            guarded: write.is_some() && guarded,
+            attempt,
+        };
+        vec![StatusWriteEffect::Write {
+            options,
+            status: write,
+        }]
+    }
 }
 
 impl StateMachine for PaneStatusWriteMachine {
@@ -209,7 +277,7 @@ impl StateMachine for PaneStatusWriteMachine {
     }
 
     fn handle(&mut self, event: StatusWriteEvent) -> Vec<StatusWriteEffect> {
-        match (&self.state, event) {
+        match (self.state.clone(), event) {
             (
                 StatusWriteState::Reading,
                 StatusWriteEvent::Read {
@@ -222,39 +290,33 @@ impl StateMachine for PaneStatusWriteMachine {
                     now_ns,
                 },
             ) => {
-                let next = want
-                    .and_then(|want| next_status(want, status.as_deref()))
-                    .filter(|next| Some(*next) != status.as_deref());
-                if next.is_none() && !options {
-                    self.state = StatusWriteState::Unchanged;
-                    return Vec::new();
-                }
-                let read_seq = seq.as_deref().unwrap_or("");
-                let guarded = want.is_some_and(is_conditional)
-                    && pane_is_target
-                    && read_seq.bytes().all(|b| b.is_ascii_digit());
-                let write = next.map(|next| StatusWrite {
-                    agent: !options_have_agent,
-                    status: next,
-                    seq: next_seq(seq.as_deref(), now_ns),
-                    only_if_seq: guarded.then(|| read_seq.to_string()),
-                });
-                self.state = StatusWriteState::Writing {
-                    status: write.as_ref().map(|w| (w.status, w.seq.clone())),
-                    guarded: write.is_some() && guarded,
-                };
-                vec![StatusWriteEffect::Write { status: write }]
+                self.want = want;
+                self.options_have_agent = options_have_agent;
+                self.pane_is_target = pane_is_target;
+                self.decide(status, seq, options, now_ns, 1)
             }
-            (StatusWriteState::Writing { status, guarded }, StatusWriteEvent::Answered(out)) => {
+            (
+                StatusWriteState::Writing {
+                    status,
+                    guarded,
+                    attempt,
+                },
+                StatusWriteEvent::Answered(out),
+            ) => {
                 let Some(out) = out else {
                     self.state = StatusWriteState::Failed;
                     return Vec::new();
                 };
-                let status = status.clone();
-                if *guarded
+                if guarded
                     && let Some((_, seq)) = &status
                     && out.trim_end_matches('\n') != seq
                 {
+                    // Another write moved the seq first: decide again from
+                    // the pane as it is now, a bounded number of times.
+                    if attempt < STATUS_WRITE_ATTEMPTS {
+                        self.state = StatusWriteState::Rereading { attempt };
+                        return vec![StatusWriteEffect::Reread];
+                    }
                     self.state = StatusWriteState::Superseded;
                     return Vec::new();
                 }
@@ -262,8 +324,25 @@ impl StateMachine for PaneStatusWriteMachine {
                 self.state = StatusWriteState::Written { status: next };
                 next.map(StatusWriteEffect::Notify).into_iter().collect()
             }
-            (StatusWriteState::Reading, StatusWriteEvent::Answered(_)) => Vec::new(),
-            (StatusWriteState::Writing { .. }, StatusWriteEvent::Read { .. }) => Vec::new(),
+            (StatusWriteState::Rereading { attempt }, StatusWriteEvent::Reread(pane)) => {
+                let Some(pane) = pane else {
+                    self.state = StatusWriteState::Failed;
+                    return Vec::new();
+                };
+                self.decide(pane.status, pane.seq, false, pane.now_ns, attempt + 1)
+            }
+            (
+                StatusWriteState::Reading,
+                StatusWriteEvent::Answered(_) | StatusWriteEvent::Reread(_),
+            ) => Vec::new(),
+            (
+                StatusWriteState::Writing { .. },
+                StatusWriteEvent::Read { .. } | StatusWriteEvent::Reread(_),
+            ) => Vec::new(),
+            (
+                StatusWriteState::Rereading { .. },
+                StatusWriteEvent::Read { .. } | StatusWriteEvent::Answered(_),
+            ) => Vec::new(),
             (
                 StatusWriteState::Written { .. }
                 | StatusWriteState::Unchanged
@@ -428,7 +507,13 @@ mod tests {
             pane_is_target: true,
             now_ns: 1_000,
         });
-        assert_eq!(effects, [StatusWriteEffect::Write { status: None }]);
+        assert_eq!(
+            effects,
+            [StatusWriteEffect::Write {
+                options: true,
+                status: None
+            }]
+        );
         assert_eq!(
             write.handle(StatusWriteEvent::Answered(Some(String::new()))),
             []
@@ -442,6 +527,7 @@ mod tests {
         assert_eq!(
             write.handle(read_status(Some("done"), Some("working"), "5000")),
             [StatusWriteEffect::Write {
+                options: false,
                 status: Some(StatusWrite {
                     agent: true,
                     status: "done",
@@ -470,6 +556,7 @@ mod tests {
             assert_eq!(
                 effects,
                 [StatusWriteEffect::Write {
+                    options: false,
                     status: Some(StatusWrite {
                         agent: true,
                         status: "idle",
@@ -488,6 +575,7 @@ mod tests {
         let [
             StatusWriteEffect::Write {
                 status: Some(status),
+                ..
             },
         ] = &effects[..]
         else {
@@ -507,6 +595,7 @@ mod tests {
         let [
             StatusWriteEffect::Write {
                 status: Some(status),
+                ..
             },
         ] = &effects[..]
         else {
@@ -515,21 +604,92 @@ mod tests {
         assert_eq!(status.only_if_seq, None);
     }
 
+    fn reread(status: &str, seq: &str) -> StatusWriteEvent {
+        StatusWriteEvent::Reread(Some(PaneRead {
+            status: Some(status.into()),
+            seq: Some(seq.into()),
+            now_ns: 1_000,
+        }))
+    }
+
     #[test]
-    fn a_guarded_write_whose_seq_did_not_land_was_superseded() {
+    fn a_refused_guarded_write_rereads_decides_again_and_retries_the_status_alone() {
         let mut write = PaneStatusWriteMachine::default();
-        let _ = write.handle(read_status(Some("idle-if-working"), Some("working"), "100"));
+        let _ = write.handle(StatusWriteEvent::Read {
+            want: Some("done-if-active"),
+            status: Some("working".into()),
+            seq: Some("100".into()),
+            options: true,
+            options_have_agent: false,
+            pane_is_target: true,
+            now_ns: 1_000,
+        });
         assert_eq!(
             write.handle(StatusWriteEvent::Answered(Some("200\n".into()))),
+            [StatusWriteEffect::Reread]
+        );
+        assert_eq!(write.state(), &StatusWriteState::Rereading { attempt: 1 });
+        // Blocked is still active: Done again, guarded by the fresh seq, and
+        // without the options, which landed with the first write.
+        assert_eq!(
+            write.handle(reread("blocked", "200")),
+            [StatusWriteEffect::Write {
+                options: false,
+                status: Some(StatusWrite {
+                    agent: true,
+                    status: "done",
+                    seq: "1000".into(),
+                    only_if_seq: Some("200".into()),
+                })
+            }]
+        );
+        assert_eq!(
+            write.handle(StatusWriteEvent::Answered(Some("1000\n".into()))),
+            [StatusWriteEffect::Notify("done")]
+        );
+    }
+
+    #[test]
+    fn a_retry_whose_condition_no_longer_holds_or_whose_pane_is_gone_writes_nothing() {
+        let mut write = PaneStatusWriteMachine::default();
+        let _ = write.handle(read_status(Some("done-if-active"), Some("working"), "100"));
+        let _ = write.handle(StatusWriteEvent::Answered(Some("200\n".into())));
+        assert_eq!(write.handle(reread("idle", "200")), []);
+        assert_eq!(write.state(), &StatusWriteState::Unchanged);
+        let mut write = PaneStatusWriteMachine::default();
+        let _ = write.handle(read_status(Some("done-if-active"), Some("working"), "100"));
+        let _ = write.handle(StatusWriteEvent::Answered(Some("200\n".into())));
+        assert_eq!(write.handle(StatusWriteEvent::Reread(None)), []);
+        assert_eq!(write.state(), &StatusWriteState::Failed);
+    }
+
+    #[test]
+    fn a_guarded_write_refused_on_every_attempt_is_superseded() {
+        let mut write = PaneStatusWriteMachine::default();
+        let _ = write.handle(read_status(Some("idle-if-working"), Some("working"), "100"));
+        for attempt in 1..STATUS_WRITE_ATTEMPTS {
+            assert_eq!(
+                write.handle(StatusWriteEvent::Answered(Some("999\n".into()))),
+                [StatusWriteEffect::Reread],
+                "attempt {attempt}"
+            );
+            let _ = write.handle(reread("working", &format!("{}", 200 + u32::from(attempt))));
+        }
+        assert_eq!(
+            write.handle(StatusWriteEvent::Answered(Some("999\n".into()))),
             []
         );
         assert_eq!(write.state(), &StatusWriteState::Superseded);
+    }
 
+    #[test]
+    fn a_guarded_write_that_landed_notifies() {
         let mut write = PaneStatusWriteMachine::default();
         let effects = write.handle(read_status(Some("idle-if-working"), Some("working"), "100"));
         let [
             StatusWriteEffect::Write {
                 status: Some(status),
+                ..
             },
         ] = &effects[..]
         else {
@@ -548,6 +708,7 @@ mod tests {
         assert_eq!(write.handle(StatusWriteEvent::Answered(None)), []);
         let _ = write.handle(read_status(Some("done"), Some("working"), "1"));
         assert_eq!(write.handle(read_status(Some("done"), None, "1")), []);
+        assert_eq!(write.handle(reread("working", "1")), []);
         assert_eq!(write.handle(StatusWriteEvent::Answered(None)), []);
         assert_eq!(write.state(), &StatusWriteState::Failed);
         assert_eq!(

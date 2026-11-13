@@ -329,8 +329,10 @@ grok marker. Statuses `working-if-active`, `working-if-blocked`,
 Idle or Done (herdr #198). On tmux both hooks write a guarded status only
 while the pane's `@waycar_seq` is still the one they decided from, checked
 inside the tmux server in the same call (`if-shell -F`), so a late tool event
-never overwrites a status written after its read (a turn's Done); with a
-stored seq that is no digit string the write is unconditional, as before. A SessionEnd release (`hook-session`) unsets the
+never overwrites a status written after its read (a turn's Done). When
+another write moved the seq first, the hook reads the pane again, decides
+the status again from the fresh one and retries, three attempts in all; with
+a stored seq that is no digit string the write is unconditional, as before. A SessionEnd release (`hook-session`) unsets the
 pane's options only while the pane still records that session or none,
 checked inside the tmux server in the same call as the unset (`if-shell -F`),
 so a session that replaced it after the hook's read keeps the pane; an id a

@@ -46,8 +46,8 @@ use serde_json::{Map, Value};
 use crate::env::Env;
 use crate::exec::run_program_with_timeout;
 use crate::hook_pane_machines::{
-    PaneStatusWriteMachine, ReleaseEffect, ReleaseEvent, SessionReleaseMachine, StatusWrite,
-    StatusWriteEffect, StatusWriteEvent,
+    PaneRead, PaneStatusWriteMachine, ReleaseEffect, ReleaseEvent, SessionReleaseMachine,
+    StatusWrite, StatusWriteEffect, StatusWriteEvent,
 };
 use crate::state_machine::StateMachine;
 
@@ -1238,16 +1238,19 @@ fn apply_to_pane(
     while let Some(event) = events.pop() {
         for effect in machine.handle(event) {
             match effect {
-                StatusWriteEffect::Write { status } => {
-                    let out = write_pane(
-                        pane,
-                        agent,
-                        &update.options,
-                        status.as_ref(),
-                        child_env,
-                        host,
-                    );
+                StatusWriteEffect::Write { options, status } => {
+                    let options: &[(&'static str, String)] =
+                        if options { &update.options } else { &[] };
+                    let out = write_pane(pane, agent, options, status.as_ref(), child_env, host);
                     events.push(StatusWriteEvent::Answered(out));
+                }
+                StatusWriteEffect::Reread => {
+                    let read = read_pane(pane, child_env, host).map(|read| PaneRead {
+                        status: read.status,
+                        seq: read.seq,
+                        now_ns: now_ns(),
+                    });
+                    events.push(StatusWriteEvent::Reread(read));
                 }
                 StatusWriteEffect::Notify(next) => host.notify(pane, next, child_env),
             }
@@ -3119,6 +3122,84 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_conditional_status_is_decided_again_from_the_fresh_status_and_retried() {
+        // grok's idle prompt read Working at seq 100; another write of
+        // Working (the approval watch after a dialog) moved the seq first.
+        // Idle still applies to Working, so the retry writes it.
+        let payloads = captured_payloads();
+        let idle = with(
+            &payloads["grok"]["Notification"]["input"],
+            &[("notificationType", json!("idle_prompt"))],
+        );
+        let notification_run = || Run {
+            event: Some("Notification"),
+            ..Run::default()
+        };
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
+        *fake.interleave.borrow_mut() = Some(Box::new(|panes| {
+            set(panes, "@waycar_seq", "200");
+        }));
+        run(&fake, "grok", &idle, notification_run());
+        let options = fake.pane_options();
+        assert_eq!(opt(&options, "@waycar_status").as_deref(), Some("idle"));
+        assert!(options["@waycar_seq"].parse::<u128>().unwrap() > 200);
+        assert_eq!(*fake.notifications.borrow(), [notification("idle")]);
+
+        // A pane whose seq moves before every write gives up after three
+        // attempts, writing nothing.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
+        let bumps = std::rc::Rc::new(std::cell::Cell::new(100u32));
+        struct Bumping<'a>(&'a Fake, std::rc::Rc<std::cell::Cell<u32>>);
+        impl HookHost for Bumping<'_> {
+            fn tmux(&self, args: &[&str], env: &Env) -> Option<String> {
+                if args.contains(&"if-shell") {
+                    self.1.set(self.1.get() + 100);
+                    let seq = self.1.get().to_string();
+                    let mut panes = self.0.panes.borrow_mut();
+                    set(&mut panes, "@waycar_seq", &seq);
+                }
+                self.0.tmux(args, env)
+            }
+            fn tty(&self, pid: &str) -> String {
+                self.0.tty(pid)
+            }
+            fn ppid(&self, pid: &str) -> String {
+                self.0.ppid(pid)
+            }
+            fn notify(&self, pane: &str, status: &str, env: &Env) {
+                self.0.notify(pane, status, env);
+            }
+        }
+        let host = Bumping(&fake, bumps);
+        run_hook_session(
+            "grok",
+            "Notification",
+            &idle.to_string(),
+            &env_of(&[
+                ("PATH", Some("/usr/bin:/bin")),
+                ("TMUX", Some("/tmp/fake-tmux-socket,1,0")),
+                ("TMUX_PANE", Some(PANE)),
+            ]),
+            PPID,
+            &host,
+        );
+        let guarded = fake
+            .log
+            .borrow()
+            .iter()
+            .filter(|argv| argv.iter().any(|arg| arg == "if-shell"))
+            .count();
+        assert_eq!(guarded, 3);
+        assert_eq!(
+            opt(&fake.pane_options(), "@waycar_status").as_deref(),
+            Some("working")
+        );
+        assert!(fake.notifications.borrow().is_empty());
+    }
+
+    #[test]
     fn a_payload_status_equal_to_the_panes_writes_only_the_options() {
         let fake = Fake::new();
         fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
@@ -3457,6 +3538,34 @@ mod tests {
         reset("working");
         run_shell_hook(&tmux, &pane, pid, "blocked", &done);
         assert_eq!(option("@waycar_status"), "blocked");
+    }
+
+    #[test]
+    fn real_tmux_the_shell_hook_retries_a_guarded_status_whose_condition_still_holds() {
+        use crate::real_tmux::RealTmux;
+
+        let Some(tmux) = RealTmux::start() else {
+            return;
+        };
+        tmux.ok(&["new-session", "-d", "-s", "s", "sleep 60"]);
+        let pane = tmux.ok(&["list-panes", "-a", "-F", "#{pane_id}"]);
+        let pid: u32 = tmux
+            .ok(&["display-message", "-p", "-t", &pane, "#{pane_pid}"])
+            .parse()
+            .unwrap();
+        let option = |name: &str| tmux.ok(&["show-options", "-p", "-v", "-t", &pane, name]);
+        for (name, value) in [("@waycar_status", "working"), ("@waycar_seq", "100")] {
+            tmux.ok(&["set-option", "-p", "-t", &pane, name, value]);
+        }
+        // A done-if-active Stop (grok, cursor) read Working; a Blocked
+        // (another hook) moved the seq before its write. Done still applies
+        // to Blocked, so the retry writes it.
+        let blocked = format!(
+            "set-option -p -t {pane} @waycar_status blocked \\; set-option -p -t {pane} @waycar_seq 200"
+        );
+        run_shell_hook(&tmux, &pane, pid, "done-if-active", &blocked);
+        assert_eq!(option("@waycar_status"), "done");
+        assert!(option("@waycar_seq").parse::<u128>().unwrap() > 200);
     }
 
     #[test]

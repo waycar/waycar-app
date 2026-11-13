@@ -4297,16 +4297,21 @@ stateDiagram-v2
   call (`write_pane`: options, then `@waycar_agent`, status and seq) and
   notifies through `HookHost`. `bin/waycar-hook` makes the same decision in
   POSIX sh for the statuses an event name decides.
-- **States:** `reading`, `writing(status?, guarded)`, `written(status?)`,
-  `unchanged`, `superseded`, `failed`.
+- **States:** `reading`, `writing(status?, guarded, attempt)`,
+  `rereading(attempt)`, `written(status?)`, `unchanged`, `superseded`,
+  `failed`.
 - **Events:** `read(want, status, seq, options, optionsHaveAgent,
-  paneIsTarget, nowNs)`, `answered(out?)`.
-- **Effects:** `write(status?)` (a conditional status guarded by the seq it
-  read, B-35), `notify(status)` once written.
+  paneIsTarget, nowNs)`, `answered(out?)`, `reread(pane?)`.
+- **Effects:** `write(options, status?)` (a conditional status is a
+  compare-and-swap on the seq it read, B-35), `reread` (the swap was refused:
+  decide again from the fresh status, `STATUS_WRITE_ATTEMPTS` = 3 attempts
+  in all, the status alone), `notify(status)` once written. `bin/waycar-hook`
+  runs the same bounded loop.
 - **Tests:** `hook_pane_machines::tests` (transitions), `hook_session::tests`
   (payload statuses, conditional statuses from each state, equal status,
-  gone pane, a newer Done between read and write on the fake, a real tmux
-  and the shell hook).
+  gone pane, a newer Done between read and write, a refused swap whose
+  condition still holds and one refused three times, on the fake, a real
+  tmux and the shell hook).
 - **Catalogue:** HT-04.
 
 ```mermaid
@@ -4315,7 +4320,11 @@ stateDiagram-v2
     reading --> unchanged: read, no move and no options
     reading --> writing: read / write
     writing --> written: answered / notify if a status moved
-    writing --> superseded: answered, guarded seq did not land
+    writing --> rereading: guarded seq did not land, attempts left / reread
+    rereading --> writing: reread, condition still moves the pane / write (status only)
+    rereading --> unchanged: reread, nothing to write
+    rereading --> failed: pane gone
+    writing --> superseded: guarded seq did not land on the last attempt
     writing --> failed: tmux failed
 ```
 

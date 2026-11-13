@@ -311,32 +311,56 @@ if [ "$want" = release ]; then
   exit 0
 fi
 
-case $want in
-  working-if-active)
-    case $current in working|blocked) next=working ;; *) exit 0 ;; esac ;;
-  working-if-blocked)
-    [ "$current" = blocked ] || exit 0
-    next=working ;;
-  idle-if-working)
-    [ "$current" = working ] || exit 0
-    next=idle ;;
-  done-if-active)
-    case $current in working|blocked) next=done ;; *) exit 0 ;; esac ;;
-  *) next=$want ;;
-esac
+# The status `want` sets from $current, in $next; fails when it sets none.
+decide() {
+  case $want in
+    working-if-active)
+      case $current in working|blocked) next=working ;; *) return 1 ;; esac ;;
+    working-if-blocked)
+      [ "$current" = blocked ] || return 1
+      next=working ;;
+    idle-if-working)
+      [ "$current" = working ] || return 1
+      next=idle ;;
+    done-if-active)
+      case $current in working|blocked) next=done ;; *) return 1 ;; esac ;;
+    *) next=$want ;;
+  esac
+  [ "$next" != "$current" ]
+}
 
-[ "$next" = "$current" ] && exit 0
+# The new seq in $now: nanoseconds; BSD date has no %N, so fall back to whole
+# seconds. Either way the seq never goes backwards or repeats for this pane.
+stamp() {
+  now=$(date +%s%N 2>/dev/null)
+  case $now in
+    ''|*[!0-9]*) now="$(date +%s)000000000" ;;
+  esac
+  case $prev_seq in
+    ''|*[!0-9]*) ;;
+    *) [ "$now" -gt "$prev_seq" ] 2>/dev/null || now=$((prev_seq + 1)) ;;
+  esac
+}
 
-# Nanoseconds; BSD date has no %N, so fall back to whole seconds. Either way
-# the seq never goes backwards or repeats for this pane.
-now=$(date +%s%N 2>/dev/null)
-case $now in
-  ''|*[!0-9]*) now="$(date +%s)000000000" ;;
-esac
-case $prev_seq in
-  ''|*[!0-9]*) ;;
-  *) [ "$now" -gt "$prev_seq" ] 2>/dev/null || now=$((prev_seq + 1)) ;;
-esac
+# Read @waycar_status and @waycar_seq again into $current and $prev_seq.
+reread() {
+  snapshot=$(tmux show-options -p -q -t "$TMUX_PANE" @waycar_status \; \
+    show-options -p -q -t "$TMUX_PANE" @waycar_seq 2>/dev/null) || return 1
+  current=
+  prev_seq=
+  IFS=$newline
+  set -f
+  for line in $snapshot; do
+    case $line in
+      "@waycar_status "*) current=${line#@waycar_status } ;;
+      "@waycar_seq "*) prev_seq=${line#@waycar_seq } ;;
+    esac
+  done
+  set +f
+  IFS=$old_ifs
+  current=${current#\"}; current=${current%\"}
+  prev_seq=${prev_seq#\"}; prev_seq=${prev_seq%\"}
+}
 
 case $agent in
   claude|codex|omp|pi|opencode|copilot|qwen|gemini|grok|agy|hermes|kilo|cline|cursor|devin|kiro|muse)
@@ -344,31 +368,43 @@ case $agent in
   *) known_agent= ;;
 esac
 
-# A conditional status is written only while the pane's seq is still the one
-# read above, decided inside the tmux server in the same call: a status
-# written since (a turn's Done) is never overwritten by a late tool event.
-guarded=
-case $want in
-  *-if-*)
-    case ${TMUX_PANE#%} in
-      "$TMUX_PANE" | "" | *[!0-9]*) ;;
-      *) case $prev_seq in *[!0-9]*) ;; *) guarded=1 ;; esac ;;
-    esac ;;
-esac
-if [ -n "$guarded" ]; then
-  writes="set-option -p -t $TMUX_PANE @waycar_status $next ; set-option -p -t $TMUX_PANE @waycar_seq $now"
-  [ -z "$known_agent" ] || writes="$writes ; set-option -p -t $TMUX_PANE @waycar_agent $agent"
-  written=$(tmux if-shell -F -t "$TMUX_PANE" "#{==:#{@waycar_seq},$prev_seq}" "$writes" \; \
-    show-options -p -q -v -t "$TMUX_PANE" @waycar_seq 2>/dev/null) || exit 0
-  [ "$written" = "$now" ] || exit 0
-elif [ -n "$known_agent" ]; then
-  tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
-    set-option -p -t "$TMUX_PANE" @waycar_seq "$now" \; \
-    set-option -p -t "$TMUX_PANE" @waycar_agent "$agent" >/dev/null 2>&1 || exit 0
-else
-  tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
-    set-option -p -t "$TMUX_PANE" @waycar_seq "$now" >/dev/null 2>&1 || exit 0
-fi
+# A conditional status is a compare-and-swap on the seq read above, decided
+# inside the tmux server in the same call: a status written since (a turn's
+# Done) is never overwritten by a late tool event. When another write moved
+# the seq first, the pane is read again, the status decided again from the
+# fresh status, and the write retried: three attempts in all.
+attempt=1
+while :; do
+  decide || exit 0
+  stamp
+  guarded=
+  case $want in
+    *-if-*)
+      case ${TMUX_PANE#%} in
+        "$TMUX_PANE" | "" | *[!0-9]*) ;;
+        *) case $prev_seq in *[!0-9]*) ;; *) guarded=1 ;; esac ;;
+      esac ;;
+  esac
+  if [ -n "$guarded" ]; then
+    writes="set-option -p -t $TMUX_PANE @waycar_status $next ; set-option -p -t $TMUX_PANE @waycar_seq $now"
+    [ -z "$known_agent" ] || writes="$writes ; set-option -p -t $TMUX_PANE @waycar_agent $agent"
+    written=$(tmux if-shell -F -t "$TMUX_PANE" "#{==:#{@waycar_seq},$prev_seq}" "$writes" \; \
+      show-options -p -q -v -t "$TMUX_PANE" @waycar_seq 2>/dev/null) || exit 0
+    [ "$written" = "$now" ] && break
+    [ "$attempt" -lt 3 ] || exit 0
+    attempt=$((attempt + 1))
+    reread || exit 0
+  elif [ -n "$known_agent" ]; then
+    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_agent "$agent" >/dev/null 2>&1 || exit 0
+    break
+  else
+    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" >/dev/null 2>&1 || exit 0
+    break
+  fi
+done
 
 notify "$next"
 exit 0
