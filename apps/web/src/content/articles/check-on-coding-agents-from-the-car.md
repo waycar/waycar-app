@@ -30,7 +30,7 @@ Each agent row shows its Workspace and tab name, its status and its age, such as
 
 ## Hear what needs you
 
-Tap **Talk to Waycar** and it reads out the agents that need you. With one, it says "One Agent needs you." and then names it, such as "my-app Claude is blocked." With nothing waiting, it says "Nothing needs you."
+Tap **Talk to Waycar** and it reads out the agents that need you. With one, it says "One Agent needs you." and then names it, such as "api Claude is blocked." With nothing waiting, it says "Nothing needs you."
 
 Waycar never says "Nothing needs you" about a machine it can't vouch for. A Host that is still connecting is named as "*Host* is still connecting." One it can't reach is named as "I can't reach *Host*." That Host's agents are unknown, not quiet.
 

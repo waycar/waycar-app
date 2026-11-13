@@ -37,7 +37,7 @@ const { lines, label, compact = false } = Astro.props;
             <span class="who-mark you-mark" aria-hidden="true" />
           )}
           <p class="who">
-            {line.by === 'waycar' ? 'Waycar' : 'You'}
+            {line.by === 'waycar' ? 'Waycar' : 'You'}{' '}
             <span class="visually-hidden">{line.by === 'waycar' ? 'says' : 'say'}</span>
             <span class="wave" aria-hidden="true">
               <i /><i /><i /><i /><i />

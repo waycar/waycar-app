@@ -7,11 +7,12 @@
 // kicker), never more prominent than "Waycar", no Apple art.
 import AppStoreCta from '../components/AppStoreCta.astro';
 import VoiceExchange, { type ExchangeLine } from '../components/VoiceExchange.astro';
+import { ON_APP_STORE } from '../data/links';
 import Layout from '../layouts/Layout.astro';
 
 const briefing: ExchangeLine[] = [
   { by: 'tap', text: 'Talk to Waycar' },
-  { by: 'waycar', text: '2 Agents need you. api Claude Code is blocked. web Codex is done.' },
+  { by: 'waycar', text: '2 Agents need you. api Claude is blocked. web Codex is done.' },
   { by: 'tap', text: 'web · Codex' },
   { by: 'waycar', text: 'web Codex is done: The checkout form uses the new API. What should I ask?' },
   { by: 'you', text: 'Did the tests pass?' },
@@ -23,7 +24,7 @@ const moments: { title: string; text: string; lines: ExchangeLine[] }[] = [
     title: 'Allow or deny out loud',
     text: 'Claude Code and Codex approvals. Waycar reads the command and waits for your answer.',
     lines: [
-      { by: 'waycar', text: 'api Claude Code is waiting on approval to run npm test. Allow or deny?' },
+      { by: 'waycar', text: 'api Claude is waiting on approval to run npm test. Allow or deny?' },
       { by: 'you', text: 'Allow.' },
       { by: 'waycar', text: 'Allowed.' },
     ],
@@ -33,7 +34,7 @@ const moments: { title: string; text: string; lines: ExchangeLine[] }[] = [
     text: 'More than "deny". Waycar denies the command, then sends your words to the agent.',
     lines: [
       { by: 'you', text: 'Run only the unit tests.' },
-      { by: 'waycar', text: 'Tell api Claude Code: Run only the unit tests. Send?' },
+      { by: 'waycar', text: 'Tell api Claude: Run only the unit tests. Send?' },
       { by: 'you', text: 'Send.' },
       { by: 'waycar', text: 'Denied. Sent your correction.' },
     ],
@@ -44,7 +45,7 @@ const moments: { title: string; text: string; lines: ExchangeLine[] }[] = [
     lines: [
       {
         by: 'waycar',
-        text: "infra Claude Code wants to run git push --force origin main. This one looks risky: it force-pushes. I'll hold it until you're stopped.",
+        text: "infra Claude wants to run git push --force origin main. This one looks risky: it force-pushes. I'll hold it until you're stopped.",
       },
       { by: 'tap', text: 'Hold' },
       { by: 'waycar', text: 'Holding it for later.' },
@@ -54,7 +55,7 @@ const moments: { title: string; text: string; lines: ExchangeLine[] }[] = [
 
 const rows = [
   { name: 'Talk to Waycar', detail: 'a spoken briefing of what needs you' },
-  { name: 'Need you', detail: 'Blocked, then Done', example: 'api · Claude Code', status: 'Blocked · 2m' },
+  { name: 'Need you', detail: 'Blocked, then Done', example: 'api · Claude', status: 'Blocked · 2m' },
   { name: 'Working', detail: 'with its progress, when there is an estimate', example: 'web · Codex', status: 'Working · 3/7 · 6m' },
   { name: 'Idle', detail: 'everything else; shells are not listed', example: 'infra · OMP', status: 'Idle · 1h' },
 ];
@@ -66,7 +67,7 @@ const details = [
   },
   {
     title: 'Your Live Activity, in the car',
-    text: "On the CarPlay Dashboard: the Host's name, how many agents need you, and the top three agents.",
+    text: "On the CarPlay Dashboard: the Host's name and lead count, then its top three agents.",
   },
   {
     title: 'Transcribed on your iPhone',
@@ -102,7 +103,7 @@ const help = [
         </p>
         <div class="get">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
-          <span class="get-note"><span>Free on the App Store</span> · <span>iPhone, iOS 26.4 or later</span></span>
+          <span class="get-note">{ON_APP_STORE && <><span>Free on the App Store</span> · </>}<span>iPhone, iOS 26.4 or later</span></span>
         </div>
       </div>
 
@@ -211,7 +212,7 @@ const help = [
         </div>
         <div class="needs-cta">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
-          <span class="get-note">Free on the App Store</span>
+          {ON_APP_STORE && <span class="get-note">Free on the App Store</span>}
         </div>
       </div>
 
