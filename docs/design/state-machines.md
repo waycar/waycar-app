@@ -4296,6 +4296,40 @@ stateDiagram-v2
     refused --> [*]: finished
 ```
 
+### AttachOutputMachine
+
+- **File:** `Sources/Waycar/Transport/AttachOutputMachine.swift`
+- **Owner:** `WaycarSSHAttachOutputGate` feeds it under its lock from the
+  pumps (`yield`, `finish`), the session's `beginExplicitEnd` and each read
+  and its cancellation handler, and keeps the parked consumer's
+  continuation and the finish's failure.
+- **States:** delivery `open(buffer, waiting)`, `finishing(buffer,
+  failed)`, `ended`; the claiming reader.
+- **Events:** `read(reader)`, `yield(bytes)`, `finish(failed)`,
+  `beginExplicitEnd`, `consumerCancelled(reader)`.
+- **Effects:** `answer(bytes | end | failure | alreadyClaimed)`, `park`,
+  `resumeWaiter(answer)`, `keepFailure`. A finish drains what was accepted;
+  an explicit end or the claimant's cancellation discards it. The first
+  reader claims the stream, another is refused without touching it, and
+  only the claimant (or a reader racing the first claim) ends delivery by
+  cancellation (#137, #153, #164).
+- **Tests:** `AttachOutputMachineTests`, `TerminalAttachTests` (startup
+  chatter, explicit end, clean drain, second consumers, cancellation,
+  finishes).
+- **Catalogue:** SSH-06.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+    open --> open: yield / buffer or resumeWaiter
+    open --> open: read / answer bytes or park
+    open --> finishing: finish / resumeWaiter(end or failure) if parked
+    finishing --> finishing: read / drain, then end or failure
+    open --> ended: beginExplicitEnd or claimant cancelled / resumeWaiter(end)
+    finishing --> ended: beginExplicitEnd or claimant cancelled
+    ended --> ended: read / end; yield, finish dropped
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4645,7 +4679,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
 | SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
 | SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | converted → `ChannelAdmissionMachine` | P3c |
-| SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | convert | P3c |
+| SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | converted → `AttachOutputMachine` | P3c |
 | SSH-07 | Attach pump completion | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | implicit | M/M | leave: structured scope bounds it | — |
 | SSH-08 | Attachment upload transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
 | SSH-09 | Notification file transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
