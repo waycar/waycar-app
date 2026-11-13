@@ -3405,6 +3405,40 @@ stateDiagram-v2
     settling --> settling: request cleared
 ```
 
+### ShellOpeningMachine
+
+- **File:** `Sources/Waycar/Console/ShellOpeningMachine.swift`
+- **Owner:** `AgentDetailView` (`@State`) keeps the chooser and failure
+  presentations, the shell handoff (`TerminalKeyboardHandoff`) and one Task
+  per attempt, which performs the machine's steps (create or refresh, then
+  wait for the row) in turn and finishes the attempt in its `defer`, after
+  the last step's effects, as before.
+- **States:** the captured handoff token, the terminal this detail created
+  (identity and row), attempt `idle`/`resolving(attempt, handoffToken)`.
+- **Events:** Open Terminal (token, shells, request, sample), shell chosen,
+  chooser cancelled, New Terminal, created, creation failed, refreshed, row
+  awaited (found, visible), attempt finished.
+- **Effects:** present the chooser, open a shell with a token, cancel a
+  token, connect the Sample, start or continue the attempt, present a
+  failure. Every outcome consumes or cancels the token its attempt
+  started with.
+- **Tests:** `ShellOpeningMachineTests`, `ShellOpeningLifecycleTests`,
+  `ShellOpeningDeferredOwnerTests`, `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-21.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> idle: one shell / open with token
+    idle --> idle: several shells / chooser
+    idle --> resolving: no shell or a remembered one / create or refresh
+    resolving --> resolving: tap / give its token back
+    resolving --> resolving: created / remember, await row
+    resolving --> resolving: row found and visible / open with token
+    resolving --> resolving: row missing, not visible or failure / cancel token (report)
+    resolving --> idle: attempt finished
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5644,7 +5678,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
-| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | convert (deferred: private View creation/inventory state crosses awaits and token-scoped UIKit keyboard handoff; requires hosted Mac visibility/handoff tests); existing-API failure safety net `ShellOpeningDeferredOwnerTests` does not cover that private lifecycle | P2c |
+| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | converted → `ShellOpeningMachine`; one Task per attempt runs its steps and finishes it after the last effects. Hosted pins: `ShellOpeningLifecycleTests` | P2c |
 | ATTACH-22 | Link interaction | `Sources/Waycar/Console/AgentTerminalView.swift`, `Sources/Waycar/Console/AgentAttachStore.swift` | implicit | M/M | leave: open id guards it | — |
 | ATTACH-23 | Ignition loader | `Sources/Waycar/Console/TerminalIgnitionLifecycle.swift` | explicit | L/L | explicit | — |
 | ATTACH-24 | Link evidence | `Sources/Waycar/Console/AttachLinkIndex.swift` | implicit | M/M | leave: set-based evidence | — |
