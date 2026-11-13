@@ -17,9 +17,9 @@ Entries reference the issue that motivated them.
   My Network (also in Hosts › + › Find Computers), and Set up by hand folds
   away until you open it. The scan lists the computers on your Wi-Fi that have
   SSH on, such as a Mac with Remote Login on. Tap one, sign in with its username and password (or a key), and confirm
-  its host key. Check Every Address also finds computers that don't announce
-  themselves, only when you tap it. If Local Network access is off, Find
-  Computers says so and opens Settings.
+  its host key. The scan also tries every address on your Wi-Fi, so computers
+  that don't announce themselves show up too. If Local Network access is off,
+  Find Computers says so and opens Settings.
 - **Keys-only computers**: when a computer doesn't accept password sign-in,
   its Host page says so and shows one command to run on it that adds this
   device's key; Check Again then signs in with the key.

@@ -7,38 +7,52 @@ import Testing
 @Suite("Find Computers store")
 @MainActor
 struct FindComputersStoreTests {
-    @Test func startsBonjourImmediatelyAndScansOnlyAfterATap() async throws {
+    @Test func oneStartBrowsesAndChecksEveryAddress() async throws {
         let browser = DiscoveryTestBrowser()
         let sweeper = DiscoveryTestSweeper()
         let store = FindComputersStore(
-            browser: browser, sweeper: sweeper, localSubnet: { nil }, settleDelay: .seconds(60))
+            browser: browser, sweeper: sweeper, localSubnet: { nil }, settleDelay: .seconds(60),
+            isAppActive: { true })
         var milestones: [Milestone] = []
         store.start { milestones.append($0) }
         defer { store.stop() }
         #expect(browser.calls == 1)
-        #expect(sweeper.calls == 0)
+        #expect(sweeper.calls == 1)
         #expect(milestones == [.lanScanStarted])
         browser.continuation.yield(.ready)
         browser.continuation.yield(.computers([
             FoundComputer(address: "192.168.1.20", port: 22, serviceName: "Studio Mac", software: nil, source: .bonjour)
         ]))
         try await waitUntil { store.hasSettled }
-        #expect(milestones == [.lanScanStarted, .lanScanFound(count: 1)])
-
-        store.scanNetwork()
-        #expect(sweeper.calls == 1)
         sweeper.continuation.yield(.found(FoundComputer(
             address: "192.168.1.20", port: 22, serviceName: nil, software: "OpenSSH_test", source: .sweep)))
         sweeper.continuation.yield(.finished)
         try await waitUntil { store.sweep == .finished }
         #expect(store.computers.count == 1)
         #expect(store.computers.first?.software == "OpenSSH_test")
-        #expect(milestones.count == 2)
+        #expect(milestones == [.lanScanStarted, .lanScanFound(count: 1)])
+    }
+
+    /// While iOS's Local Network prompt is up the app is inactive, and what a
+    /// search sees then says nothing about the network: no milestone goes out.
+    @Test func milestonesWaitForAnActiveApp() async throws {
+        let browser = DiscoveryTestBrowser()
+        let store = FindComputersStore(
+            browser: browser, sweeper: DiscoveryTestSweeper(), localSubnet: { nil },
+            isAppActive: { false })
+        var milestones: [Milestone] = []
+        store.start { milestones.append($0) }
+        defer { store.stop() }
+        browser.continuation.yield(.denied)
+        try await waitUntil { store.isDenied }
+        #expect(milestones.isEmpty)
     }
 
     @Test func browseDenialReportsOnlyThePermissionMilestone() async throws {
         let browser = DiscoveryTestBrowser()
-        let store = FindComputersStore(browser: browser, localSubnet: { nil })
+        let store = FindComputersStore(
+            browser: browser, sweeper: DiscoveryTestSweeper(), localSubnet: { nil },
+            isAppActive: { true })
         var milestones: [Milestone] = []
         store.start { milestones.append($0) }
         defer { store.stop() }

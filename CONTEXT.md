@@ -9,7 +9,7 @@ A remote machine reachable over SSH that runs herdr, herdr-core, tmux, Zellij, U
 _Avoid_: server, machine, connection
 
 **Find Computers**:
-The local-network search for computers with SSH on, offered before the first Host and from Hosts. Opening it (**Scan Computers on My Network** on the first-run card, or **Find Computers**) browses Bonjour immediately. **Check Every Address** is a separate tap that tries port 22 on private Wi-Fi addresses, capped to the /24 around the phone. It discovers no Backends and adds no Host until the user signs in.
+The local-network search for computers with SSH on, offered before the first Host and from Hosts. Opening it (**Scan Computers on My Network** on the first-run card, or **Find Computers**) browses Bonjour and, with the same tap, tries port 22 on every private Wi-Fi address, capped to the /24 around the phone (the sweep). It discovers no Backends and adds no Host until the user signs in.
 _Avoid_: backend detection, automatic scan (the network sweep requires a tap)
 
 **Found Computer**:

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// Feeds discovery events into the machine and performs its I/O. Results and
 /// lifecycle state belong to the machine, never to the Tasks performing them.
@@ -7,10 +8,9 @@ import Observation
 @Observable
 final class FindComputersStore {
     private var machine = FindComputersMachine()
-    private(set) var diagnostics: [String] = []
 
     var computers: [FoundComputer] { machine.computers }
-    var sweep: FindComputersMachine.Sweep { machine.sweep }
+    var sweep: FindComputersMachine.Sweep? { machine.sweep }
     var hasSettled: Bool { machine.hasSettled }
     var isDenied: Bool { machine.isDenied }
 
@@ -19,24 +19,33 @@ final class FindComputersStore {
     @ObservationIgnored private let localSubnet: @Sendable () -> IPv4Subnet?
     @ObservationIgnored private let settleDelay: Duration
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let isAppActive: @MainActor () -> Bool
     @ObservationIgnored private var milestone: (Milestone) -> Void = { _ in }
     @ObservationIgnored private var browseTasks: [UInt64: Task<Void, Never>] = [:]
     @ObservationIgnored private var settleTasks: [UInt64: Task<Void, Never>] = [:]
     @ObservationIgnored private var sweepTasks: [UInt64: Task<Void, Never>] = [:]
-    @ObservationIgnored private var searchStartedAt = ContinuousClock.now
 
+    /// `isAppActive` gates the milestones: while iOS shows its Local Network
+    /// prompt the app is inactive, and what a search sees then (a denial
+    /// before the answer, a sweep whose probes waited out the prompt) says
+    /// nothing about the user's network. The view searches again once the
+    /// app is active.
     init(
         browser: any ComputerBrowsing = NetworkComputerBrowser(),
         sweeper: any NetworkSweeping = SubnetSweeper(),
         localSubnet: @escaping @Sendable () -> IPv4Subnet? = { LocalWiFiSubnet.current() },
         settleDelay: Duration = .seconds(6),
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        isAppActive: @escaping @MainActor () -> Bool = {
+            UIApplication.shared.applicationState == .active
+        }
     ) {
         self.browser = browser
         self.sweeper = sweeper
         self.localSubnet = localSubnet
         self.settleDelay = settleDelay
         self.sleep = sleep
+        self.isAppActive = isAppActive
     }
 
     static func makeForPresentation() -> FindComputersStore {
@@ -57,7 +66,6 @@ final class FindComputersStore {
     }
 
     func search() { send(.searchAgain(localSubnet())) }
-    func scanNetwork() { send(.scanTapped) }
     func stop() { send(.stop) }
 
     private func send(_ event: FindComputersMachine.Event) {
@@ -70,14 +78,10 @@ final class FindComputersStore {
                 sweepTasks = [:]
                 cancelSettle()
             case .browse(let token):
-                diagnostics = []
-                searchStartedAt = .now
-                note("browse started")
                 let events = browser.events()
                 browseTasks[token] = Task { [weak self] in
                     for await event in events {
                         guard let self, !Task.isCancelled else { return }
-                        self.note("browse: \(event)")
                         self.send(.browse(token, event))
                     }
                     self?.browseTasks[token] = nil
@@ -92,18 +96,16 @@ final class FindComputersStore {
             case .cancelSettle:
                 cancelSettle()
             case .sweep(let token):
-                note("sweep started")
                 let events = sweeper.sweep()
                 sweepTasks[token] = Task { [weak self] in
                     for await event in events {
                         guard let self, !Task.isCancelled else { return }
-                        self.note("sweep: \(event)")
                         self.send(.sweep(token, event))
                     }
                     self?.sweepTasks[token] = nil
                 }
             case .milestone(let value):
-                milestone(value)
+                if isAppActive() { milestone(value) }
             }
         }
     }
@@ -111,14 +113,5 @@ final class FindComputersStore {
     private func cancelSettle() {
         for task in settleTasks.values { task.cancel() }
         settleTasks = [:]
-    }
-
-    private func note(_ text: String) {
-        #if DEBUG || WAYCAR_ADMIN
-            let elapsed = ContinuousClock.now - searchStartedAt
-            let seconds = Double(elapsed.components.seconds)
-                + Double(elapsed.components.attoseconds) / 1e18
-            diagnostics.append(String(format: "+%.1fs ", seconds) + text)
-        #endif
     }
 }

@@ -1,33 +1,33 @@
 import Foundation
 
-/// One Bonjour search, its settling timer, and the sweep requested by a tap.
-/// Every asynchronous event belongs to a search or sweep token; a stopped or
+/// One search for computers: a Bonjour browse, its settling timer, and a
+/// sweep of every address on the Wi-Fi, both started by the same tap. Every
+/// asynchronous event belongs to a search, timer or sweep token; a stopped or
 /// replaced search can never change the next search's results.
 struct FindComputersMachine: StateMachine {
     enum Sweep: Equatable, Sendable {
-        case idle, running(UInt64), finished, unavailable
-
-        /// Every state but a running sweep takes a tap: an unavailable one
-        /// may have since joined Wi-Fi, and the sweeper reads the subnet anew.
-        var canStart: Bool {
-            if case .running = self { return false }
-            return true
-        }
+        case running(UInt64), finished, unavailable
     }
 
     struct Search: Equatable, Sendable {
         let token: UInt64
         let subnet: IPv4Subnet?
-        var sweep: Sweep = .idle
+        var sweep: Sweep
         var bonjour: [FoundComputer] = []
         var swept: [FoundComputer] = []
+        /// Whether this search has reported how many computers it listed.
+        var reported = false
 
         var computers: [FoundComputer] { FoundComputer.merged(bonjour + swept, subnet: subnet) }
+        var isSweeping: Bool {
+            if case .running = sweep { return true }
+            return false
+        }
     }
 
     enum State: Equatable, Sendable {
         case idle
-        case searching(Search, timer: UInt64?)
+        case searching(Search, timer: UInt64)
         case settled(Search)
         case denied
         case stopped
@@ -38,7 +38,6 @@ struct FindComputersMachine: StateMachine {
         case searchAgain(IPv4Subnet?)
         case browse(UInt64, BrowseEvent)
         case settleElapsed(UInt64)
-        case scanTapped
         case sweep(UInt64, SweepEvent)
         case stop
     }
@@ -56,7 +55,7 @@ struct FindComputersMachine: StateMachine {
     private var lastToken: UInt64 = 0
 
     var computers: [FoundComputer] { search?.computers ?? [] }
-    var sweep: Sweep { search?.sweep ?? .idle }
+    var sweep: Sweep? { search?.sweep }
     var hasSettled: Bool {
         if case .settled = state { return true }
         return false
@@ -74,16 +73,16 @@ struct FindComputersMachine: StateMachine {
         switch (state, event) {
         case (.idle, .start(let subnet)), (.stopped, .start(let subnet)),
             (_, .searchAgain(let subnet)):
-            lastToken += 1
-            let search = Search(token: lastToken, subnet: subnet)
             // The settle timer starts with the search, not at `.ready`: a
             // browser that only ever waits (Wi-Fi off, no usable interface)
             // must still end in the empty state and its Search Again.
-            lastToken += 1
-            state = .searching(search, timer: lastToken)
+            let search = nextToken()
+            let timer = nextToken()
+            let sweep = nextToken()
+            state = .searching(Search(token: search, subnet: subnet, sweep: .running(sweep)), timer: timer)
             return [
-                .cancelSearch, .milestone(.lanScanStarted), .browse(search.token),
-                .armSettle(lastToken),
+                .cancelSearch, .milestone(.lanScanStarted), .browse(search),
+                .armSettle(timer), .sweep(sweep),
             ]
 
         case (.searching(var search, let timer), .browse(let token, let event)):
@@ -117,21 +116,6 @@ struct FindComputersMachine: StateMachine {
             guard token == timer else { return [] }
             return settle(search)
 
-        case (.searching(var search, let timer), .scanTapped):
-            guard search.sweep.canStart else { return [] }
-            lastToken += 1
-            search.sweep = .running(lastToken)
-            search.swept = []
-            state = .searching(search, timer: timer)
-            return [.sweep(lastToken)]
-        case (.settled(var search), .scanTapped):
-            guard search.sweep.canStart else { return [] }
-            lastToken += 1
-            search.sweep = .running(lastToken)
-            search.swept = []
-            state = .settled(search)
-            return [.sweep(lastToken)]
-
         case (.searching(var search, let timer), .sweep(let token, let event)):
             guard search.sweep == .running(token) else { return [] }
             if event == .denied { return deny() }
@@ -143,7 +127,7 @@ struct FindComputersMachine: StateMachine {
             if event == .denied { return deny() }
             update(&search, with: event)
             state = .settled(search)
-            return []
+            return report(&search)
 
         case (_, .stop):
             state = .stopped
@@ -154,9 +138,24 @@ struct FindComputersMachine: StateMachine {
         }
     }
 
+    private mutating func nextToken() -> UInt64 {
+        lastToken += 1
+        return lastToken
+    }
+
     private mutating func settle(_ search: Search) -> [Effect] {
+        var search = search
         state = .settled(search)
-        return [.cancelSettle, .milestone(.lanScanFound(count: search.computers.count))]
+        return [.cancelSettle] + report(&search)
+    }
+
+    /// Reports the row count once, when the browse has settled and the sweep
+    /// is over, so the count includes what only the sweep found.
+    private mutating func report(_ search: inout Search) -> [Effect] {
+        guard !search.reported, !search.isSweeping else { return [] }
+        search.reported = true
+        state = .settled(search)
+        return [.milestone(.lanScanFound(count: search.computers.count))]
     }
 
     private mutating func deny() -> [Effect] {

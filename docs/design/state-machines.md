@@ -2278,24 +2278,26 @@ stateDiagram-v2
 ### FindComputersMachine
 
 - **File:** `Sources/Waycar/Discovery/FindComputersMachine.swift`
-- **Owner:** `FindComputersStore` browses Bonjour, runs tap-requested sweeps,
-  arms settling Tasks and reports anonymous milestones.
+- **Owner:** `FindComputersStore` browses Bonjour and sweeps every address on
+  the Wi-Fi, arms settling Tasks and reports anonymous milestones (only while
+  the app is active, never behind iOS's Local Network prompt).
 - **States:** `idle`, `searching(search, timer)`, `settled(search)`, `denied`,
-  `stopped`; the search carries sweep `idle/running(token)/finished/unavailable`.
-- **Events:** start, searchAgain, browse(token), settleElapsed(token), scanTapped,
+  `stopped`; the search carries sweep `running(token)/finished/unavailable`.
+- **Events:** start, searchAgain, browse(token), settleElapsed(token),
   sweep(token), stop.
 - **Effects:** cancelSearch, browse(token), armSettle(token), cancelSettle,
-  sweep(token), milestone. Search and sweep tokens discard cancelled streams;
-  only a tap starts the sweep, again after it finished or was unavailable.
-  The settle timer starts with the search, so a browser that never reports
-  ready still settles. Settling reports the merged row count once.
+  sweep(token), milestone. One tap (start or searchAgain) starts the browse,
+  the settle timer and the sweep; search, timer and sweep tokens discard
+  cancelled streams. The settle timer starts with the search, so a browser
+  that never reports ready still settles. The merged row count is reported
+  once per search, after the browse settled and the sweep ended.
 - **Tests:** `FindComputersMachineTests`, `FindComputersStoreTests`, `FoundComputerTests`.
 - **Catalogue:** HOST-19.
 
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> searching: start / browse, armSettle
+    idle --> searching: start / browse, armSettle, sweep
     searching --> settled: computers or settleElapsed or failed
     settled --> settled: browse or sweep results
     searching --> denied: browse or sweep denial / cancelSearch
@@ -5469,7 +5471,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HOST-16 | Host addition sheet handoff | `Sources/Waycar/Hosts/HostAdditionSheet.swift` | implicit | L/M | leave: dismissal-driven | — |
 | HOST-17 | Host removal confirmation | `Sources/Waycar/Hosts/HostListView.swift` | implicit | L/L | leave: synchronous | — |
 | HOST-18 | Detection output parser | `Sources/Waycar/Transport/HostBackendDetection.swift` | implicit | L/L | leave: pure parser | — |
-| HOST-19 | Find Computers search and tap-requested sweep | `Sources/Waycar/Discovery/FindComputersStore.swift` | explicit | M/H | converted → `FindComputersMachine` | #311 |
+| HOST-19 | Find Computers search: Bonjour browse and address sweep | `Sources/Waycar/Discovery/FindComputersStore.swift` | explicit | M/H | converted → `FindComputersMachine` | #311 |
 | HOST-20 | SSH connect and banner read | `Sources/Waycar/Discovery/SubnetSweeper.swift` | explicit | M/H | converted → `SSHBannerProbeMachine` | #311 |
 | HOST-21 | Bonjour browse session and service resolvers | `Sources/Waycar/Discovery/ComputerBrowser.swift` | explicit | L/M | leave: queue-confined resource registry with one stopped bit; stop clears all resources, start and callbacks check it; each resolver has one finished bit | — |
 | CODEX-11 | Start Codex (and OpenCode) server | `Sources/Waycar/Console/ServerRuntimeState.swift`, `Sources/Waycar/Console/ConsoleStore.swift` | explicit | H/M | converted → `RuntimeStartMachine`, with HOST-09; bug B-31 | P2a |

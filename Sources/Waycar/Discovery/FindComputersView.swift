@@ -45,9 +45,13 @@ struct FindComputersView: View {
         }
         .task { store.start { analytics?.milestone($0) } }
         .onDisappear { store.stop() }
-        // Back from Settings with the permission on: look again.
+        // Active again after iOS's Local Network prompt, or back from
+        // Settings: a search that ran while the prompt was up saw nothing
+        // (its probes waited out the answer), so look again.
         .onChange(of: scenePhase) {
-            if scenePhase == .active, store.isDenied { store.search() }
+            if scenePhase == .active, store.isDenied || store.computers.isEmpty {
+                store.search()
+            }
         }
     }
 
@@ -92,36 +96,40 @@ struct FindComputersView: View {
                 }
                 if store.computers.isEmpty {
                     emptyRow
+                } else if isSweeping {
+                    checkingRow
                 }
             } header: {
                 Text("Computers with SSH on")
             } footer: {
-                Text("Waycar learns what runs on a computer after you sign in.")
-            }
-            Section {
-                sweepRow
-            } footer: {
-                sweepFooter
-            }
-            #if DEBUG || WAYCAR_ADMIN
-                // Internal builds only: what each search saw and when, for the
-                // device checks (first search after Allow, a Linux server with
-                // no avahi).
-                Section("Diagnostics (internal)") {
-                    ForEach(Array(store.diagnostics.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.footnote.monospaced())
-                            .textSelection(.enabled)
-                    }
+                if store.sweep == .unavailable {
+                    Text("Join a home or office Wi-Fi to check every address.")
+                } else {
+                    Text("Waycar learns what runs on a computer after you sign in.")
                 }
-            #endif
+            }
         }
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
+    private var isSweeping: Bool {
+        if case .running = store.sweep { return true }
+        return false
+    }
+
+    /// The sweep tries every address on the Wi-Fi, so computers that don't
+    /// announce themselves can still be arriving after Bonjour's have.
+    private var checkingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text("Checking every address…")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder
     private var emptyRow: some View {
-        if store.hasSettled {
+        if store.hasSettled, !isSweeping {
             VStack(alignment: .leading, spacing: 8) {
                 Text("No computers found")
                     .font(.headline)
@@ -138,36 +146,6 @@ struct FindComputersView: View {
                 Text("Looking for computers…")
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var sweepRow: some View {
-        switch store.sweep {
-        case .running:
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Scanning…")
-                    .foregroundStyle(.secondary)
-            }
-        case .idle, .finished, .unavailable:
-            Button("Check Every Address") { store.scanNetwork() }
-        }
-    }
-
-    @ViewBuilder
-    private var sweepFooter: some View {
-        switch store.sweep {
-        case .idle:
-            Text(
-                "Finds computers that don't announce themselves by trying port 22 on every address on this Wi-Fi."
-            )
-        case .running:
-            EmptyView()
-        case .finished:
-            Text("Checked every address.")
-        case .unavailable:
-            Text("Join a home or office Wi-Fi to check every address.")
         }
     }
 }

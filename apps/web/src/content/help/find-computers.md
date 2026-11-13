@@ -22,7 +22,7 @@ If the computer accepts only keys, its Host page says so and shows one command t
 
 ## If your computer is missing
 
-Some computers do not announce themselves. Tap **Check Every Address** to try port 22 on the other addresses on this Wi-Fi. This runs only when you tap, only on private home or office networks, and checks at most the small address range around your phone. A scan can appear in your network's logs.
+Some computers do not announce themselves, so a scan also tries port 22 on the other addresses on this Wi-Fi. While it does, the list shows **Checking every address…**. It runs only when you tap to scan, only on private home or office networks, and checks at most the small address range around your phone. A scan can appear in your network's logs.
 
 If no computers appear, check SSH and Wi-Fi, then tap **Search Again**. A computer using a different SSH port can be [added by hand](/help/add-host-manually).
 
