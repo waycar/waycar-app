@@ -1,6 +1,9 @@
 # CodeQL for the languages that need no build: GitHub Actions workflows,
-# JavaScript/TypeScript (apps/web, relay, scripts) and Rust (plugin/). Swift is
-# codeql-swift.yml (it needs a macOS build). Advanced setup: keep GitHub's
+# JavaScript/TypeScript (apps/web, relay, scripts) and Rust (plugin/). No Swift
+# yet: CodeQL extracts Swift by tracing a build, and its tracer cannot trace
+# Xcode 27 / Swift 6.4 builds (posix_spawn "Bad CPU type" on the xcode-27
+# runner; github/codeql#22742). Issue #3 tracks adding it once a new
+# extractor ships. Advanced setup: keep GitHub's
 # default setup off, or the two upload conflicting analyses.
 
 name: CodeQL
