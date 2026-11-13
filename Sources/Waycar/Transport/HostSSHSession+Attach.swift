@@ -44,33 +44,21 @@ private final class WaycarSSHAttachPumpCancellation: Sendable {
 /// the stream; reads from another task are refused with
 /// `TransportError.terminalChannelAlreadyOpen` and leave the claimant running,
 /// whether output is parked or buffered; see `next()`.
+///
+/// The buffer, the ending and the claim are `AttachOutputMachine`'s; the gate
+/// keeps the parked consumer's continuation and the finish's failure.
 final class WaycarSSHAttachOutputGate: Sendable {
-    private enum Completion {
-        case finished
-        case failed(any Error)
-    }
-
     private struct State: ~Copyable {
-        var buffered: [Data] = []
-        var bufferedIndex = 0
+        var machine = AttachOutputMachine()
         var waiter: CheckedContinuation<Data?, any Error>?
-        var completion: Completion?
-        var isExplicitlyEnding = false
-        var isConsumerCancelled = false
-        var consumer: TaskIdentity?
+        var failure: (any Error)?
     }
 
     /// A stable scalar derived from the task performing a read. The unfolding
     /// stream does not expose iterator identity, and `UnsafeCurrentTask` is
     /// explicitly non-Sendable, so the gate retains only its hash value.
-    private struct TaskIdentity: Equatable {
-        private let value: Int
-
-        static var current: TaskIdentity {
-            withUnsafeCurrentTask { task in
-                TaskIdentity(value: task?.hashValue ?? 0)
-            }
-        }
+    private static var currentReader: Int {
+        withUnsafeCurrentTask { task in task?.hashValue ?? 0 }
     }
 
     private let state = Mutex(State())
@@ -104,92 +92,74 @@ final class WaycarSSHAttachOutputGate: Sendable {
     }
 
     func beginExplicitEnd() {
-        state.withLock { state in
-            guard !state.isExplicitlyEnding else { return }
-            state.isExplicitlyEnding = true
-            state.buffered.removeAll(keepingCapacity: false)
-            state.bufferedIndex = 0
-            state.waiter?.resume(returning: nil)
-            state.waiter = nil
-        }
+        send(.beginExplicitEnd)
     }
 
     func yield(_ bytes: Data) {
+        send(.yield(bytes))
+    }
+
+    func finish(throwing failure: (any Error)? = nil) {
+        send(.finish(failed: failure != nil), failure: failure)
+    }
+
+    private func send(_ event: AttachOutputMachine.Event, failure: (any Error)? = nil) {
         state.withLock { state in
-            guard
-                !state.isExplicitlyEnding,
-                !state.isConsumerCancelled,
-                state.completion == nil
-            else { return }
-            if let waiting = state.waiter {
-                state.waiter = nil
-                waiting.resume(returning: bytes)
-            } else {
-                state.buffered.append(bytes)
+            for effect in state.machine.handle(event) {
+                switch effect {
+                case .keepFailure:
+                    state.failure = failure
+                case .resumeWaiter(let answer):
+                    guard let waiter = state.waiter else { continue }
+                    state.waiter = nil
+                    Self.resume(waiter, with: answer, failure: state.failure)
+                case .answer, .park:
+                    // Only a read answers or parks.
+                    continue
+                }
             }
         }
     }
 
-    func finish(throwing failure: (any Error)? = nil) {
-        state.withLock { state in
-            guard state.completion == nil else { return }
-            state.completion = failure.map(Completion.failed) ?? .finished
-            guard
-                state.bufferedIndex == state.buffered.count,
-                let waiter = state.waiter
-            else { return }
-            state.waiter = nil
-            if let failure {
-                waiter.resume(throwing: failure)
-            } else {
-                waiter.resume(returning: nil)
-            }
+    private static func resume(
+        _ continuation: CheckedContinuation<Data?, any Error>,
+        with answer: AttachOutputMachine.Answer,
+        failure: (any Error)?
+    ) {
+        switch answer {
+        case .bytes(let bytes):
+            continuation.resume(returning: bytes)
+        case .end:
+            continuation.resume(returning: nil)
+        case .failure:
+            continuation.resume(throwing: failure ?? TransportError.cancelled)
+        case .alreadyClaimed:
+            continuation.resume(throwing: TransportError.terminalChannelAlreadyOpen)
         }
     }
 
     private func next() async throws -> Data? {
-        let reader = TaskIdentity.current
+        let reader = Self.currentReader
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 state.withLock { state in
-                    // A parked waiter only identifies overlapping reads. A
-                    // buffered read completes synchronously, so the claim
-                    // must persist across calls and be checked before every
-                    // branch. The first task to read owns the stream (#153).
-                    guard state.consumer == nil || state.consumer == reader else {
-                        continuation.resume(
-                            throwing: TransportError.terminalChannelAlreadyOpen)
-                        return
-                    }
-                    state.consumer = reader
-                    if state.isExplicitlyEnding || state.isConsumerCancelled {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-                    if state.bufferedIndex < state.buffered.count {
-                        let bytes = state.buffered[state.bufferedIndex]
-                        state.bufferedIndex += 1
-                        if state.bufferedIndex == state.buffered.count {
-                            state.buffered.removeAll(keepingCapacity: true)
-                            state.bufferedIndex = 0
-                        }
-                        continuation.resume(returning: bytes)
-                        return
-                    }
-                    if let completion = state.completion {
-                        switch completion {
-                        case .finished:
-                            continuation.resume(returning: nil)
-                        case .failed(let failure):
-                            continuation.resume(throwing: failure)
-                        }
-                        return
-                    }
                     // Throwing at the extra consumer is load-bearing: an
                     // unfolding stream shares storage across iterators, and
-                    // returning nil here would end the legitimate consumer's
-                    // stream too (#137).
-                    state.waiter = continuation
+                    // returning nil there would end the legitimate
+                    // consumer's stream too (#137). The claim persists
+                    // across reads, since a buffered read completes at once
+                    // (#153).
+                    for effect in state.machine.handle(.read(reader: reader)) {
+                        switch effect {
+                        case .answer(let answer):
+                            Self.resume(continuation, with: answer, failure: state.failure)
+                        case .park:
+                            state.waiter = continuation
+                        case .resumeWaiter, .keepFailure:
+                            // A read never answers another or finishes.
+                            continue
+                        }
+                    }
                 }
             }
         } onCancel: {
@@ -206,16 +176,8 @@ final class WaycarSSHAttachOutputGate: Sendable {
     /// buffer and resume the claimant's waiter with nil — silently ending a
     /// terminal it never owned (#164). Only the claimant, or a first reader
     /// still racing its own claim, may cancel delivery.
-    private func cancelConsumer(_ reader: TaskIdentity) {
-        state.withLock { state in
-            guard state.consumer == nil || state.consumer == reader else { return }
-            guard !state.isConsumerCancelled else { return }
-            state.isConsumerCancelled = true
-            state.buffered.removeAll(keepingCapacity: false)
-            state.bufferedIndex = 0
-            state.waiter?.resume(returning: nil)
-            state.waiter = nil
-        }
+    private func cancelConsumer(_ reader: Int) {
+        send(.consumerCancelled(reader: reader))
     }
 }
 

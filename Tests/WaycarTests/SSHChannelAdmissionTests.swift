@@ -365,6 +365,181 @@ struct SSHChannelAdmissionTests {
         }
         #expect(await admission.snapshot().connection == 0)
     }
+
+    // MARK: Pinned interleavings (P3c, SSH-05)
+
+    /// A release goes to the first parked waiter it can admit, in arrival
+    /// order, passing over waiters of a class still at its limit.
+    @Test func aReleaseGoesToTheFirstWaiterItAdmitsInArrivalOrder() async throws {
+        let admission = SSHChannelAdmission(
+            limits: .init(
+                ordinaryForwarding: 1, events: 1, ordinarySession: 1, attach: 1, connection: 4))
+        let session = try await admission.acquire(.ordinarySession)
+        let attach = try await admission.acquire(.attach)
+        let order = GrantOrder()
+        var waiters: [Task<SSHChannelAdmissionLease, any Error>] = []
+        for (name, channelClass) in [
+            ("attach-1", SSHChannelAdmission.ChannelClass.attach),
+            ("session", .ordinarySession),
+            ("attach-2", .attach),
+        ] {
+            let count = waiters.count
+            waiters.append(Task {
+                let lease = try await admission.acquire(channelClass)
+                await order.append(name)
+                return lease
+            })
+            try await waitUntil("\(name) should park") {
+                await admission.waiterCountForTesting() == count + 1
+            }
+        }
+
+        await session.release()
+        try await waitUntil("the session waiter should be admitted") {
+            await order.names == ["session"]
+        }
+        await attach.release()
+        try await waitUntil("the first attach waiter should be admitted") {
+            await order.names == ["session", "attach-1"]
+        }
+        #expect(await admission.waiterCountForTesting() == 1)
+
+        let firstAttach = try await waiters[0].value
+        await firstAttach.release()
+        try await waitUntil("the second attach waiter should be admitted") {
+            await order.names == ["session", "attach-1", "attach-2"]
+        }
+        for waiter in waiters.dropFirst() { try await waiter.value.release() }
+        #expect(await admission.snapshot().connection == 0)
+    }
+
+    /// One release can admit several waiters of different classes.
+    @Test func oneReleaseAdmitsEveryWaiterItMakesRoomFor() async throws {
+        let admission = SSHChannelAdmission(
+            limits: .init(
+                ordinaryForwarding: 1, events: 1, ordinarySession: 1, attach: 1, connection: 1))
+        let held = try await admission.acquire(.ordinaryForwarding)
+        let events = Task { try await admission.acquire(.events) }
+        try await waitUntil("events should park") { await admission.waiterCountForTesting() == 1 }
+        let attach = Task { try await admission.acquire(.attach) }
+        try await waitUntil("attach should park") { await admission.waiterCountForTesting() == 2 }
+
+        await held.release()
+        let eventsLease = try await events.value
+        #expect(await admission.waiterCountForTesting() == 1)
+        await eventsLease.release()
+        let attachLease = try await attach.value
+        #expect(await admission.snapshot().attach == 1)
+        await attachLease.release()
+        #expect(await admission.snapshot().connection == 0)
+    }
+
+    @Test func aDeadlineAfterTheGrantChangesNothing() async throws {
+        let admission = SSHChannelAdmission()
+        let held = try await admission.acquire(.control)
+        let waiting = Task { try await admission.acquire(.control, within: .milliseconds(200)) }
+        try await waitUntil("the control wait should park") {
+            await admission.waiterCountForTesting() == 1
+        }
+        await held.release()
+        let lease = try await waiting.value
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(await admission.snapshot().control == 1)
+        #expect(await admission.snapshot().connection == 1)
+        await lease.release()
+        #expect(await admission.snapshot().connection == 0)
+    }
+
+    @Test func anImmediateGrantIsNeverRefusedByItsDeadline() async throws {
+        let admission = SSHChannelAdmission()
+        let lease = try await admission.acquire(.ordinarySession, within: .zero)
+        #expect(await admission.snapshot().ordinarySession == 1)
+        await lease.release()
+    }
+
+    @Test func zellijSharesTheOrdinarySessionBudget() async throws {
+        let admission = SSHChannelAdmission()
+        let control = try await admission.acquire(.control)
+        let core = try await admission.acquire(.core)
+        let zellij = try await admission.acquire(.zellij)
+        let ordinary = try await admission.acquire(.ordinarySession)
+        await #expect(throws: TransportError.timedOut) {
+            _ = try await admission.acquire(.ordinarySession, within: .milliseconds(50))
+        }
+        await #expect(throws: TransportError.timedOut) {
+            _ = try await admission.acquire(.zellij, within: .milliseconds(50))
+        }
+        #expect(await admission.snapshot().zellij == 1)
+        await zellij.release()
+        let second = try await admission.acquire(.zellij, within: .milliseconds(50))
+        #expect(await admission.snapshot().zellij == 1)
+        for lease in [control, core, second, ordinary] { await lease.release() }
+        #expect(await admission.snapshot().connection == 0)
+    }
+
+    @Test func aLeaseReleasedTwiceFreesOneSlot() async throws {
+        let admission = SSHChannelAdmission()
+        let first = try await admission.acquire(.attach)
+        let second = try await admission.acquire(.attach)
+        await first.release()
+        await first.release()
+        #expect(await admission.snapshot().attach == 1)
+        await second.release()
+        #expect(await admission.snapshot().connection == 0)
+    }
+
+    @Test func aLeaseDroppedUnreleasedGivesItsSlotBack() async throws {
+        let admission = SSHChannelAdmission()
+        do {
+            _ = try await admission.acquire(.events)
+        }
+        try await waitUntil("the dropped lease should give its slot back") {
+            await admission.snapshot().connection == 0
+        }
+        let next = try await admission.acquire(.events, within: .milliseconds(50))
+        await next.release()
+    }
+
+    @Test func anAlreadyCancelledAcquireCountsNothing() async throws {
+        let admission = SSHChannelAdmission()
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await admission.acquire(.ordinarySession)
+        }
+        await #expect(throws: CancellationError.self) { _ = try await cancelled.value }
+        #expect(await admission.snapshot().connection == 0)
+        #expect(await admission.waiterCountForTesting() == 0)
+    }
+
+    /// A parked waiter that is cancelled leaves the queue: the next release
+    /// goes to the waiter behind it.
+    @Test func aCancelledWaiterHandsItsPlaceToTheNext() async throws {
+        let admission = SSHChannelAdmission()
+        let held = try await admission.acquire(.control)
+        let first = Task { try await admission.acquire(.control) }
+        try await waitUntil("the first wait should park") {
+            await admission.waiterCountForTesting() == 1
+        }
+        let second = Task { try await admission.acquire(.control) }
+        try await waitUntil("the second wait should park") {
+            await admission.waiterCountForTesting() == 2
+        }
+        first.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await first.value }
+        #expect(await admission.waiterCountForTesting() == 1)
+
+        await held.release()
+        let lease = try await second.value
+        #expect(await admission.snapshot().control == 1)
+        await lease.release()
+        #expect(await admission.snapshot().connection == 0)
+    }
+}
+
+private actor GrantOrder {
+    private(set) var names: [String] = []
+
+    func append(_ name: String) { names.append(name) }
 }
 
 private actor ChannelAdmissionGate {

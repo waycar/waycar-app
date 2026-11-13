@@ -178,10 +178,7 @@ actor SessionDriver {
 
     /// `.stock` is SFTP init, the one open left on libssh2's session-owned
     /// `open_state`; `.pipelined` keeps its state on its own channel.
-    private enum ChannelOpenKind: Equatable {
-        case pipelined
-        case stock
-    }
+    private typealias ChannelOpenKind = ChannelOpenSlotMachine.Kind
 
     private struct OneShotChannel {
         let channel: OpaquePointer
@@ -198,10 +195,12 @@ actor SessionDriver {
     private var nextOneShotID: UInt64 = 0
     private var oneShotChannels: [UInt64: OneShotChannel] = [:]
     private var nextTransportSendIdentity: UInt64 = 0
+    /// Who owns the pending outbound packet (`TransportSendOwnerMachine`).
+    private var sendOwnership = TransportSendOwnerMachine()
     /// The logical libssh2 call that last returned `EAGAIN` with an outbound
     /// block. Cleared only by that same call returning non-`EAGAIN`, or by
     /// completed whole-session invalidation. Cancellation does not clear it.
-    private var transportSendOwner: UInt64?
+    private var transportSendOwner: UInt64? { sendOwnership.owner }
     /// How many pipelined opens may await their replies at once. A bound on
     /// native state, not a scheduling knob: it sits above the most channels
     /// the app's channel budgets admit on one connection, so those decide.
@@ -213,10 +212,10 @@ actor SessionDriver {
     /// connection carries. SFTP init is the one stock open left, driven
     /// through the session's single `open_state`, so a second stock open
     /// waits while `stockChannelOpenInFlight`; it may overlap pipelined ones.
-    /// A released slot passes straight to the first waiter it can admit.
-    private var channelOpensInFlight = 0
-    private var stockChannelOpenInFlight = false
-    private var channelOpenLimit = SessionDriver.pipelinedChannelOpenLimit
+    /// A released slot passes straight to the first waiter it can admit
+    /// (`ChannelOpenSlotMachine`).
+    private var channelOpenSlots = ChannelOpenSlotMachine(
+        limit: SessionDriver.pipelinedChannelOpenLimit)
     private var nextPendingChannelOpenID: UInt64 = 0
     private var pendingChannelOpens: [UInt64: PendingChannelOpen] = [:]
     private var nextChannelOpenWaiterID: UInt64 = 0
@@ -228,12 +227,8 @@ actor SessionDriver {
         let identity: ChannelIdentity
         let waiter: DriverWaiter
     }
-    private struct ChannelOpenWaiter {
-        let id: UInt64
-        let kind: ChannelOpenKind
-        let waiter: DriverWaiter
-    }
-    private var channelOpenWaiters = PriorityWaiterQueue<ChannelOpenWaiter>()
+    /// Each parked opener's continuation and deadline, by waiter id.
+    private var channelOpenWaiters: [UInt64: DriverWaiter] = [:]
     private var nextChannelTeardownWaiterID: UInt64 = 0
     private var channelTeardownWaiters: [UInt64: ChannelTeardownWaiter] = [:]
     private var sftpUses: [UInt64: Int] = [:]
@@ -3216,7 +3211,7 @@ actor SessionDriver {
                 ptyChannels.removeAll()
                 execStreamChannels.removeAll()
                 sftpClients.removeAll()
-                transportSendOwner = nil
+                _ = sendOwnership.handle(.sessionReleased)
                 activity.releaseAllWaiters()
                 closeDescriptor()
             } catch {
@@ -3351,14 +3346,13 @@ actor SessionDriver {
     }
 
     func channelOpenWaiterCountForTesting() -> Int {
-        channelOpenWaiters.count
+        channelOpenSlots.waiterCount
     }
 
     /// Changes how many opens may be in flight at once, admitting any
     /// waiters a higher limit lets in.
     func setChannelOpenLimitForTesting(_ limit: Int) {
-        channelOpenLimit = max(1, limit)
-        admitChannelOpenWaiters()
+        performChannelOpenSlots(channelOpenSlots.handle(.setLimit(limit)))
     }
 
     func holdNextAbandonedChannelOpenFreeForTesting(
@@ -3919,18 +3913,20 @@ actor SessionDriver {
     ) -> TransportSendOwnerDisposition {
         SSHDiagnosticOperation.current?.recordResult(result)
         if result == LIBSSH2_ERROR_EAGAIN {
-            if sessionReportsOutbound(session), transportSendOwner == nil {
-                transportSendOwner = owner
-            }
+            _ = sendOwnership.handle(
+                .wouldBlock(call: owner, outboundPending: sessionReportsOutbound(session)))
             return .unchanged
         }
         guard transportSendOwner == owner else { return .unchanged }
-        let disposition = Self.transportSendOwnerDisposition(
-            result: result,
-            isCurrentOwner: true,
-            hasOutbound: sessionReportsOutbound(session))
-        if disposition == .clear { transportSendOwner = nil }
-        return disposition
+        let effects = sendOwnership.handle(
+            .finished(
+                call: owner, result: result,
+                outboundPending: sessionReportsOutbound(session)))
+        switch effects.first {
+        case .cleared: return .clear
+        case .invalidate: return .invalidate
+        case nil: return .unchanged
+        }
     }
 
     static func transportSendOwnerDisposition(
@@ -4168,7 +4164,7 @@ actor SessionDriver {
                     deadline: deadline,
                     cancellable: true)
             } onCancel: {
-                Task { await self.resumeChannelOpenWaiter(id: id, .failure(SSHError.cancelled)) }
+                Task { await self.resumeChannelOpenWaiter(id: id, .cancelled) }
             }
         } else {
             try await parkChannelOpenWaiterUntilDeadline(
@@ -4199,62 +4195,51 @@ actor SessionDriver {
                 } catch {
                     return
                 }
-                self.resumeChannelOpenWaiter(id: id, .failure(SSHError.timedOut))
+                self.resumeChannelOpenWaiter(id: id, .timedOut)
             }
-            channelOpenWaiters.append(
-                ChannelOpenWaiter(
-                    id: id,
-                    kind: kind,
-                    waiter: DriverWaiter(continuation: continuation, deadlineTask: deadlineTask)),
-                priority: priority)
+            channelOpenWaiters[id] = DriverWaiter(
+                continuation: continuation, deadlineTask: deadlineTask)
+            _ = channelOpenSlots.handle(.park(id: id, kind, priority: priority))
             releaseOperation()
         }
     }
 
     /// Fails one parked waiter (deadline, cancellation). A waiter already
     /// handed the slot has left the queue, so this cannot take it back.
-    private func resumeChannelOpenWaiter(id: UInt64, _ result: Result<Void, any Error>) {
-        guard let entry = channelOpenWaiters.remove(where: { $0.id == id }) else { return }
-        entry.waiter.deadlineTask.cancel()
-        entry.waiter.continuation.resume(with: result)
+    private func resumeChannelOpenWaiter(id: UInt64, _ error: SSHError) {
+        performChannelOpenSlots(channelOpenSlots.handle(.withdraw(id: id, error)))
     }
 
     private func canAdmitChannelOpen(_ kind: ChannelOpenKind) -> Bool {
-        guard channelOpensInFlight < channelOpenLimit else { return false }
-        return kind == .pipelined || !stockChannelOpenInFlight
+        channelOpenSlots.canAdmit(kind)
     }
 
     private func takeChannelOpenSlot(_ kind: ChannelOpenKind) {
-        channelOpensInFlight += 1
-        if kind == .stock { stockChannelOpenInFlight = true }
+        _ = channelOpenSlots.handle(.take(kind))
     }
 
     /// Frees a `kind` slot and hands slots to the waiters it lets in.
     private func releaseChannelOpenSlot(_ kind: ChannelOpenKind) {
-        channelOpensInFlight -= 1
-        if kind == .stock { stockChannelOpenInFlight = false }
-        admitChannelOpenWaiters()
-    }
-
-    private func admitChannelOpenWaiters() {
-        while channelOpensInFlight < channelOpenLimit {
-            let stockInFlight = stockChannelOpenInFlight
-            guard
-                let next = channelOpenWaiters.remove(where: { waiter in
-                    waiter.kind == .pipelined || !stockInFlight
-                })
-            else { return }
-            takeChannelOpenSlot(next.kind)
-            next.waiter.deadlineTask.cancel()
-            next.waiter.continuation.resume()
-        }
+        performChannelOpenSlots(channelOpenSlots.handle(.release(kind)))
     }
 
     /// Invalidation: no slot remains to hand over.
     private func failAllChannelOpenWaiters() {
-        for entry in channelOpenWaiters.removeAll() {
-            entry.waiter.deadlineTask.cancel()
-            entry.waiter.continuation.resume(throwing: SSHError.connectionInvalidated)
+        performChannelOpenSlots(channelOpenSlots.handle(.invalidate))
+    }
+
+    private func performChannelOpenSlots(_ effects: [ChannelOpenSlotMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .grant(let id):
+                guard let waiter = channelOpenWaiters.removeValue(forKey: id) else { continue }
+                waiter.deadlineTask.cancel()
+                waiter.continuation.resume()
+            case .fail(let id, let error):
+                guard let waiter = channelOpenWaiters.removeValue(forKey: id) else { continue }
+                waiter.deadlineTask.cancel()
+                waiter.continuation.resume(throwing: error)
+            }
         }
     }
 
@@ -6277,7 +6262,7 @@ actor SessionDriver {
         wakeSFTPIdleWaiters()
         activity.releaseAllWaiters()
         InvalidatedSessionTeardown.reclaim(&session)
-        transportSendOwner = nil
+        _ = sendOwnership.handle(.sessionReleased)
         closeDescriptor()
     }
 
