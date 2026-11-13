@@ -228,7 +228,7 @@ curl -fsSL https://waycar.dev/install.sh | sh
 
 ### Can I try it before I set up a machine?
 
-Yes. The app opens with a labelled Sample of Blocked, Done and Working agents that you can browse offline. It goes away when you add a Host.
+Yes. Before you add a machine, the first screen offers a Sample: example Blocked, Done and Working agents you can browse offline. It is read-only, and it goes away when you add a Host.
 
 ### Which agents work in Chat Mode?
 

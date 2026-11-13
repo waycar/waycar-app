@@ -31,12 +31,15 @@ inside a `data-ph-module="<id>"` wrapper also carries `module: <id>` (the
 article page's `get-app`, `start-here`, `host-setup`, `first-launch` and
 `toc-card`; see [Articles](#articles)), so a store tap in the rail's picker reads
 `app_store_clicked` with `module=get-app` and `ct=article`. The id is written
-at build time, never read from element text. Every store button opens a Get
-Waycar picker (see [App Store switch](#app-store-switch)): the button sends
-`get_picker_opened` with the `ct` of the App Store link inside its picker (a
-paid ad's `ct` after the rewrite) and its `module`; the picker's App Store link
-sends `app_store_clicked` with that same `ct` and `module`. The Android tile,
-Close and the backdrop send nothing. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
+at build time, never read from element text. On an iPhone or iPad a store
+button is a direct App Store link and sends `app_store_clicked`; everywhere
+else it opens a Get Waycar picker (see [App Store switch](#app-store-switch)):
+the button sends `get_picker_opened` with the `ct` of the App Store link inside
+its picker (a paid ad's `ct` after the rewrite) and its `module`; the picker's
+App Store link sends `app_store_clicked` with that same `ct` and `module`. So
+`get_picker_opened` counts computers and Android only, and `app_store_clicked`
+without one before it is an iPhone or iPad. The Android tile, Close and the
+backdrop send nothing. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
 The Worker (`src/worker.ts`) also sends anonymous server-side events:
 `plugin_install_requested` per `GET /install.sh`, `plugin_package_downloaded`
 per plugin package download (see [Plugin install events](#plugin-install-events)),
@@ -805,7 +808,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 
 | Path | What it holds |
 | --- | --- |
-| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
+| `src/pages/` | `index` (the home page), `x` (its `noindex` twin for X ad clicks, see [Ad links](#ad-links)), `carplay`, `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
 | `src/content/help/` | Help pages, one Markdown file per feature (see [Help docs](#help-docs)); schema in `src/content.config.ts` |
 | `src/content/changelog/` | Released versions, one Markdown file per version (see [Changelog](#changelog)); schema in `src/content.config.ts` |
 | `src/content/compare/`, `src/content/solutions/` | Comparisons and solution pages, one Markdown file each (see [Compare and solutions](#compare-and-solutions)); schemas in `src/content.config.ts` |
@@ -837,7 +840,9 @@ The share cards are `public/og.png` (every page's default) and
 `og/`, which use the site's fonts, the screenshots in `src/assets/screens/`,
 and `docs/images/waycar-icon.svg`. After changing any of those, run
 `og/render.sh` (needs Google Chrome) and commit the PNGs. A page picks its card
-with `Layout`'s `image` and `imageAlt` props.
+with `Layout`'s `image` and `imageAlt` props. The default card repeats the home
+page's headline: change `og/home.html` and `Layout`'s default `imageAlt` with
+it.
 
 ## Domains and deployment
 
