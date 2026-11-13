@@ -84,8 +84,14 @@ final class HostSSHSessionPool: Sendable {
 /// connection that does not answer is replaced by a hedged dial
 /// (`acquire(key:replacing:dial:)`) and stops being shared once its user
 /// gives up on it (`retire`).
+///
+/// Which connection is live, kept or a hedge, and the dials and their
+/// waiters, are `SessionPoolMachine`'s; the pool performs the probes,
+/// retains, releases and dials, and keeps the waiters' continuations and the
+/// dial Tasks by id.
 actor SSHSessionPool<Session: SSHPooledSession> {
     typealias Dial = @Sendable () async throws -> Session
+    private typealias Machine = SessionPoolMachine<Session>
 
     /// A session handed out, held once for the caller, with the pooled
     /// connection it is; nil for a private (nil-key) dial.
@@ -94,32 +100,9 @@ actor SSHSessionPool<Session: SSHPooledSession> {
         let id: PooledConnectionID?
     }
 
-    private struct Entry {
-        let session: Session
-        let serial: UInt64
-    }
-
-    private struct PendingDial {
-        let id: UInt64
-        let task: Task<Void, Never>
-        /// The serial of the live connection this dial replaces, if one
-        /// asked for a replacement.
-        let replaces: UInt64?
-        var waiters: [UInt64: CheckedContinuation<Acquired, any Error>]
-    }
-
-    private var live: [String: Entry] = [:]
-    /// Connections held open across a suspension, one hold each (`keep`).
-    private var kept: [String: Entry] = [:]
-    /// A replacement that finished dialing while the connection it replaces
-    /// was still live: it is shared only once that one is retired, since
-    /// the one it replaces may still prove itself.
-    private var replacements: [String: Entry] = [:]
-    private var dials: [String: PendingDial] = [:]
-    /// Dials new acquirers no longer join (`abandonDial`), by dial id. Each
-    /// still serves the waiters it has and is cancelled when they leave.
-    private var abandoned: [UInt64: (key: String, dial: PendingDial)] = [:]
-    private var nextID: UInt64 = 0
+    private var machine = Machine()
+    private var waiters: [UInt64: CheckedContinuation<Acquired, any Error>] = [:]
+    private var dialTasks: [UInt64: Task<Void, Never>] = [:]
 
     init() {}
 
@@ -138,29 +121,50 @@ actor SSHSessionPool<Session: SSHPooledSession> {
     ) async throws -> Acquired {
         guard let key else { return Acquired(session: try await dial(), id: nil) }
         let staleSerial = stale?.key == key ? stale?.serial : nil
-        while let entry = live[key], entry.serial != staleSerial {
-            if await entry.session.isConnected, await entry.session.retain() {
+        var step = machine.handle(.lookUp(key: key, stale: staleSerial))
+        while let effect = step.first {
+            switch effect {
+            case .probeLive(let entry):
+                let retained = await Self.probe(entry.session)
+                step = machine.handle(
+                    .liveProbed(key: key, entry, retained: retained, stale: staleSerial))
+            case .probeReplacement(let entry):
+                let retained = await Self.probe(entry.session)
+                step = machine.handle(
+                    .replacementProbed(key: key, entry, retained: retained, stale: staleSerial))
+            case .handOut(let entry):
                 return Acquired(session: entry.session, id: id(key, entry))
+            case .wait(let waiterID):
+                return try await wait(
+                    key: key, waiterID: waiterID, stale: staleSerial, dial: dial)
+            default:
+                step.removeFirst()
             }
-            if live[key]?.serial == entry.serial { live[key] = nil }
         }
-        if staleSerial != nil, let replacement = replacements[key],
-            await replacement.session.isConnected, await replacement.session.retain()
-        {
-            return Acquired(session: replacement.session, id: id(key, replacement))
-        }
-        let replaces = staleSerial.flatMap { live[key]?.serial == $0 ? $0 : nil }
-        nextID &+= 1
-        let waiterID = nextID
-        return try await withTaskCancellationHandler {
+        throw TransportError.cancelled
+    }
+
+    /// Connected, and one more hold taken.
+    private static func probe(_ session: Session) async -> Bool {
+        guard await session.isConnected else { return false }
+        return await session.retain()
+    }
+
+    private func wait(
+        key: String, waiterID: UInt64, stale: UInt64?, dial: @escaping Dial
+    ) async throws -> Acquired {
+        try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 guard !Task.isCancelled else {
                     continuation.resume(throwing: TransportError.cancelled)
                     return
                 }
-                enqueue(
-                    key: key, waiterID: waiterID, continuation: continuation,
-                    replaces: replaces, dial: dial)
+                waiters[waiterID] = continuation
+                for effect in machine.handle(.join(key: key, waiter: waiterID, stale: stale)) {
+                    if case .startDial(let dialID) = effect {
+                        startDial(key: key, dialID: dialID, dial: dial)
+                    }
+                }
             }
         } onCancel: {
             Task { await self.cancelWaiter(key: key, waiterID: waiterID) }
@@ -173,35 +177,35 @@ actor SSHSessionPool<Session: SSHPooledSession> {
     /// most one connection.
     func keep(_ connection: PooledConnectionID) async -> Bool {
         let key = connection.key
-        if kept[key]?.serial == connection.serial { return true }
-        guard let entry = live[key], entry.serial == connection.serial,
-            await entry.session.retain()
-        else { return false }
-        guard live[key]?.serial == entry.serial else {
-            // Retired while retain was in flight: do not restore its keep.
-            await entry.session.release()
-            return false
+        var step = machine.handle(.keep(key: key, serial: connection.serial))
+        while let effect = step.first {
+            step.removeFirst()
+            switch effect {
+            case .retainForKeep(let entry):
+                let retained = await entry.session.retain()
+                step = machine.handle(.keepRetained(key: key, entry, retained: retained))
+            case .release(let entry):
+                await entry.session.release()
+            case .releaseLater(let entry):
+                Task { await entry.session.release() }
+            case .keepAnswered(let kept):
+                return kept
+            default:
+                continue
+            }
         }
-        if kept[key]?.serial == connection.serial {
-            // Another keep won while this one retained: one hold is enough.
-            await entry.session.release()
-            return true
-        }
-        if let previous = kept.updateValue(entry, forKey: key) {
-            Task { await previous.session.release() }
-        }
-        return true
+        return false
     }
 
     /// `keep`'s hold goes back: the kept connection answered, and the
     /// Transport that proved it holds it now. A replacement dialed for it
     /// meanwhile is never shared.
     func releaseKept(_ connection: PooledConnectionID) {
-        let key = connection.key
-        guard let entry = kept[key], entry.serial == connection.serial else { return }
-        kept[key] = nil
-        if live[key]?.serial == connection.serial { replacements[key] = nil }
-        Task { await entry.session.release() }
+        for case .releaseLater(let entry) in machine.handle(
+            .releaseKept(key: connection.key, serial: connection.serial))
+        {
+            Task { await entry.session.release() }
+        }
     }
 
     /// Stops sharing `connection`: its user found it dead. A replacement
@@ -211,45 +215,33 @@ actor SSHSessionPool<Session: SSHPooledSession> {
     /// a close.
     func retire(_ connection: PooledConnectionID) async {
         let key = connection.key
-        if let entry = kept[key], entry.serial == connection.serial {
-            kept[key] = nil
-            Task { await entry.session.release() }
+        for effect in machine.handle(.retire(key: key, serial: connection.serial)) {
+            switch effect {
+            case .releaseLater(let entry):
+                Task { await entry.session.release() }
+            case .checkReplacement(let replacement):
+                let connected = await replacement.session.isConnected
+                _ = machine.handle(
+                    .replacementChecked(key: key, replacement, connected: connected))
+            default:
+                continue
+            }
         }
-        guard live[key]?.serial == connection.serial else { return }
-        live[key] = nil
-        guard let replacement = replacements.removeValue(forKey: key),
-            await replacement.session.isConnected, live[key] == nil
-        else { return }
-        live[key] = replacement
     }
 
     /// New acquirers of `key` no longer join the dial in flight: the network
     /// path it started on went away, and it may sit retrying a SYN there.
     /// It goes on for the waiters it has, and is cancelled once they leave.
     func abandonDial(key: String) {
-        guard let pending = dials.removeValue(forKey: key) else { return }
-        abandoned[pending.id] = (key, pending)
+        _ = machine.handle(.abandonDial(key: key))
     }
 
-    private func id(_ key: String, _ entry: Entry) -> PooledConnectionID {
+    private func id(_ key: String, _ entry: Machine.Entry) -> PooledConnectionID {
         PooledConnectionID(key: key, serial: entry.serial)
     }
 
-    private func enqueue(
-        key: String,
-        waiterID: UInt64,
-        continuation: CheckedContinuation<Acquired, any Error>,
-        replaces: UInt64?,
-        dial: @escaping Dial
-    ) {
-        if var pending = dials[key] {
-            pending.waiters[waiterID] = continuation
-            dials[key] = pending
-            return
-        }
-        nextID &+= 1
-        let dialID = nextID
-        let task = Task {
+    private func startDial(key: String, dialID: UInt64, dial: @escaping Dial) {
+        dialTasks[dialID] = Task {
             let result: Result<Session, any Error>
             do {
                 result = .success(try await dial())
@@ -258,85 +250,69 @@ actor SSHSessionPool<Session: SSHPooledSession> {
             }
             await self.dialFinished(key: key, dialID: dialID, result: result)
         }
-        dials[key] = PendingDial(
-            id: dialID, task: task, replaces: replaces, waiters: [waiterID: continuation])
     }
 
     private func dialFinished(
         key: String, dialID: UInt64, result: Result<Session, any Error>
     ) async {
-        var finished: PendingDial?
-        if let pending = dials[key], pending.id == dialID {
-            dials[key] = nil
-            finished = pending
-        } else if let orphan = abandoned.removeValue(forKey: dialID) {
-            finished = orphan.dial
-        }
-        let waiters = finished.map { Array($0.waiters.values) } ?? []
-        switch result {
-        case .failure(let error):
-            for waiter in waiters { waiter.resume(throwing: error) }
-        case .success(let session):
-            guard !waiters.isEmpty else {
+        dialTasks[dialID] = nil
+        let session = try? result.get()
+        var step = machine.handle(.dialEnded(key: key, dial: dialID, session: session))
+        while let effect = step.first {
+            step.removeFirst()
+            switch effect {
+            case .failWaiters(let ids):
+                guard case .failure(let error) = result else { continue }
+                for id in ids { waiters.removeValue(forKey: id)?.resume(throwing: error) }
+            case .releaseUnclaimed:
                 // Every waiter gave up; nobody takes the dial's hold.
-                await session.release()
-                return
+                await session?.release()
+            case .checkCurrent(let current, let entry, let ids):
+                let connected = await current.session.isConnected
+                step = machine.handle(
+                    .currentChecked(key: key, placing: entry, waiters: ids, connected: connected))
+            case .distribute(let entry, let ids):
+                await distribute(entry, key: key, to: ids)
+            default:
+                continue
             }
-            nextID &+= 1
-            let entry = Entry(session: session, serial: nextID)
-            if let replaces = finished?.replaces, live[key]?.serial == replaces {
-                replacements[key] = entry
-            } else if let current = live[key], await current.session.isConnected {
-                // A later dial got there first (this one was abandoned): it
-                // stays the shared one, and these waiters keep their own.
+        }
+    }
+
+    /// The dial's own hold goes to the first waiter; one more each.
+    private func distribute(_ entry: Machine.Entry, key: String, to ids: [UInt64]) async {
+        let waiting = ids.compactMap { waiters.removeValue(forKey: $0) }
+        var holders = 1
+        while holders < waiting.count, await entry.session.retain() {
+            holders += 1
+        }
+        for (index, waiter) in waiting.enumerated() {
+            if index < holders {
+                waiter.resume(returning: Acquired(session: entry.session, id: id(key, entry)))
             } else {
-                live[key] = entry
-            }
-            // The dial's own hold goes to the first waiter; one more each.
-            var holders = 1
-            while holders < waiters.count, await session.retain() {
-                holders += 1
-            }
-            for (index, waiter) in waiters.enumerated() {
-                if index < holders {
-                    waiter.resume(returning: Acquired(session: session, id: id(key, entry)))
-                } else {
-                    waiter.resume(throwing: TransportError.sshUnreachable(
-                        detail: "the SSH connection closed"))
-                }
+                waiter.resume(throwing: TransportError.sshUnreachable(
+                    detail: "the SSH connection closed"))
             }
         }
     }
 
     private func cancelWaiter(key: String, waiterID: UInt64) {
-        if var pending = dials[key], let waiter = pending.waiters.removeValue(forKey: waiterID) {
-            waiter.resume(throwing: TransportError.cancelled)
-            if pending.waiters.isEmpty {
-                dials[key] = nil
-                pending.task.cancel()
-            } else {
-                dials[key] = pending
+        for effect in machine.handle(.cancelWaiter(key: key, waiter: waiterID)) {
+            switch effect {
+            case .cancelWaiter(let id):
+                waiters.removeValue(forKey: id)?.resume(throwing: TransportError.cancelled)
+            case .cancelDial(let id):
+                dialTasks.removeValue(forKey: id)?.cancel()
+            default:
+                continue
             }
-            return
-        }
-        for (dialID, orphan) in abandoned where orphan.key == key {
-            var pending = orphan.dial
-            guard let waiter = pending.waiters.removeValue(forKey: waiterID) else { continue }
-            waiter.resume(throwing: TransportError.cancelled)
-            if pending.waiters.isEmpty {
-                abandoned[dialID] = nil
-                pending.task.cancel()
-            } else {
-                abandoned[dialID] = (key, pending)
-            }
-            return
         }
     }
 
 #if DEBUG
     /// Acquirers waiting on the dial in flight for `key`.
     func waiterCountForTesting(key: String) -> Int {
-        dials[key]?.waiters.count ?? 0
+        machine.waiterCount(key: key)
     }
 #endif
 }

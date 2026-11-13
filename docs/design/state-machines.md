@@ -4228,6 +4228,56 @@ stateDiagram-v2
 
 **SSH and mosh**
 
+### SessionPoolMachine
+
+- **File:** `Sources/Waycar/Transport/SessionPoolMachine.swift`
+- **Owner:** `SSHSessionPool` (behind `HostSSHSessionPool`) performs every
+  await the machine asks for (probe and retain a connection, check whether
+  one is connected, release one, dial) and comes back with an event; it
+  keeps the waiters' continuations and the dial Tasks by id. A nil key
+  dials privately, outside the machine.
+- **States:** per key the `live`, `kept` and hedged `replacements`
+  connections (session and serial), the dial in flight (id, the serial it
+  replaces, waiters in arrival order), and the abandoned dials by id.
+- **Events:** `lookUp`, `liveProbed`, `replacementProbed`, `join`,
+  `cancelWaiter`, `dialEnded`, `currentChecked`, `keep`, `keepRetained`,
+  `releaseKept`, `retire`, `replacementChecked`, `abandonDial`.
+- **Effects:** `probeLive`, `probeReplacement`, `handOut`, `wait`,
+  `startDial`, `cancelDial`, `cancelWaiter`, `failWaiters`,
+  `releaseUnclaimed`, `checkCurrent`, `distribute`, `retainForKeep`,
+  `keepAnswered`, `release`, `releaseLater`, `checkReplacement`. Serials
+  are the tokens: a probe or retain that finished after the key moved on
+  changes only what still names it. A hedge dialed for a connection that is
+  still live is shared only once that one is retired; the stale connection
+  is never handed out again to the call that named it; a dial nobody
+  waits for is cancelled and released when it lands; an abandoned dial
+  keeps its waiters and yields to a newer live connection that is still
+  connected. Kept race: a landed abandoned dial that finds the live
+  connection dead becomes live even if the key moved on during that check,
+  as before.
+- **Tests:** `SessionPoolMachineTests`, `HostSSHSessionPoolTests` (shared
+  dials, holds, dead connections, private keys, failed and abandoned dials,
+  keeps and their races, hedges, retire).
+- **Catalogue:** SSH-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> empty
+    empty --> dialing: join / startDial
+    dialing --> dialing: join / add waiter
+    dialing --> empty: last waiter cancelled / cancelDial
+    dialing --> live: dialEnded / distribute
+    dialing --> empty: dial failed / failWaiters
+    live --> live: lookUp / probeLive, handOut
+    live --> empty: probe failed
+    live --> kept: keep / retainForKeep
+    kept --> live: releaseKept / releaseLater
+    live --> hedged: replacing dial lands / distribute
+    hedged --> live: retire, hedge connected
+    kept --> empty: retire / releaseLater
+    hedged --> live: releaseKept / hedge dropped
+```
+
 ### NetworkPathSettleMachine
 
 - **File:** `Sources/Waycar/Transport/NetworkPathSettleMachine.swift`
@@ -4674,7 +4724,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | convert | P3c |
+| SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | converted → `SessionPoolMachine` | P3c |
 | SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
 | SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
 | SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
