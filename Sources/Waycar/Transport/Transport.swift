@@ -1548,9 +1548,11 @@ indirect enum TransportError: Error, Sendable, Equatable {
     /// The Jump Host accepted SSH authentication but its server or key policy
     /// prohibits the direct-tcpip channel required to reach the Host.
     case tcpForwardingUnavailable
-    /// The Host rejected our credentials (key not authorized, wrong
-    /// password, or the offered auth method is unavailable).
+    /// The Host rejected our credentials (key not authorized or wrong password).
     case authenticationFailed
+    /// The Host does not offer the plain SSH password method. No password
+    /// was sent; the user must authorize a key instead.
+    case passwordLoginUnavailable
     /// The device's stored Ed25519 private key cannot be decoded. Reconnecting
     /// cannot repair it; the user must explicitly replace the Device Key.
     case deviceKeyCorrupt
@@ -1667,7 +1669,7 @@ indirect enum TransportError: Error, Sendable, Equatable {
         case .sshUnreachable, .timedOut, .cancelled, .channelFailed,
             .apiRejected, .moshSessionFailed:
             true
-        case .authenticationFailed, .tcpForwardingUnavailable,
+        case .authenticationFailed, .passwordLoginUnavailable, .tcpForwardingUnavailable,
             .deviceKeyCorrupt, .rsaKeyCorrupt, .rsaSignatureUnsupported,
             .hostKeyRejected, .hostKeyMismatch,
             .socketNotFound, .herdrBinaryNotFound, .protocolVersionMismatch,

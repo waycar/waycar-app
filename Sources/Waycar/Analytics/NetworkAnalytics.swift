@@ -48,7 +48,7 @@ enum NetworkAnalytics {
             switch error {
             case .sshUnreachable: self = .unreachable
             case .jumpHostFailed, .tcpForwardingUnavailable: self = .jumpHost
-            case .authenticationFailed, .deviceKeyCorrupt, .rsaKeyCorrupt, .rsaSignatureUnsupported:
+            case .authenticationFailed, .passwordLoginUnavailable, .deviceKeyCorrupt, .rsaKeyCorrupt, .rsaSignatureUnsupported:
                 self = .auth
             case .hostKeyRejected, .hostKeyMismatch: self = .hostKey
             case .socketNotFound, .herdrBinaryNotFound, .streamLocalOpenFailed, .herdrNotRunning,

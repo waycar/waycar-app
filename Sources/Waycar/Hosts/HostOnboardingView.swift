@@ -241,7 +241,14 @@ struct HostOnboardingView: View {
     private var liveSections: some View {
         Group {
             let runtimeStart = self.runtimeStart
-            if !runtimeStart.offers.isEmpty {
+            if store.report?.needsDeviceKey == true {
+                HostDeviceKeyRecoverySection(
+                    hostName: host.displayName,
+                    isChecking: store.phase == .running,
+                    command: store.deviceKeyInstallCommand,
+                    checkAgain: { try store.useDeviceKey(in: catalog) },
+                    edit: { isEditing = true })
+            } else if !runtimeStart.offers.isEmpty {
                 runtimeStartSection(runtimeStart)
             } else if retryConnection != nil {
                 Section {
@@ -873,6 +880,83 @@ struct HostOnboardingConnectionPresentation: Equatable {
         }
         footerMessage = isManualReconnectInFlight ? nil : connectionErrorMessage
         reconnectNeedsHostKeyDecision = failure?.needsHostKeyDecision ?? false
+    }
+}
+
+/// A keys-only Host gets a concrete fix, rather than another password retry.
+struct HostDeviceKeyRecoverySection: View {
+    let hostName: String
+    let isChecking: Bool
+    let command: () throws -> String
+    let checkAgain: () throws -> Void
+    let edit: () -> Void
+
+    private enum KeyState {
+        case loading
+        case ready(String)
+        case corrupt
+        case unavailable
+    }
+
+    @State private var key: KeyState = .loading
+    @State private var didCopy = false
+    @State private var saveError: String?
+
+    var body: some View {
+        Section {
+            Text("\(hostName) accepts only keys")
+                .font(.headline)
+            switch key {
+            case .loading:
+                ProgressView()
+            case .ready(let command):
+                Text("Run this in Terminal on \(hostName), then tap Check Again.")
+                    .foregroundStyle(.secondary)
+                Text(command)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                Button {
+                    UIPasteboard.general.string = command
+                    didCopy = true
+                } label: {
+                    Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                }
+                Button("Check Again", systemImage: "arrow.clockwise") {
+                    do {
+                        try checkAgain()
+                    } catch DeviceKeyStoreError.storedKeyCorrupt {
+                        key = .corrupt
+                    } catch {
+                        saveError = "Could not save the Host. Open Edit Host and try again."
+                    }
+                }
+                .disabled(isChecking)
+            case .corrupt:
+                Label("Device key is corrupted", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Text(TransportError.deviceKeyCorrupt.presentation.message)
+                    .foregroundStyle(.secondary)
+                Button("Edit Host", action: edit)
+            case .unavailable:
+                Label("Device key unavailable", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Button("Try Again", action: loadCommand)
+                Button("Edit Host", action: edit)
+            }
+        } footer: {
+            if let saveError { Text(saveError).foregroundStyle(.red) }
+        }
+        .task { loadCommand() }
+    }
+
+    private func loadCommand() {
+        do {
+            key = .ready(try command())
+        } catch DeviceKeyStoreError.storedKeyCorrupt {
+            key = .corrupt
+        } catch {
+            key = .unavailable
+        }
     }
 }
 

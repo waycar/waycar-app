@@ -8,6 +8,19 @@ struct PreflightReportTests {
     private let fingerprintA = HostKeyFingerprint(publicKeyBlob: Data("blob-a".utf8))
     private let fingerprintB = HostKeyFingerprint(publicKeyBlob: Data("blob-b".utf8))
 
+    @Test(arguments: HostBackend.allCases)
+    func keysOnlyPasswordHostOffersDeviceKeyRecovery(backend: HostBackend) {
+        let report = PreflightReport.failure(
+            .passwordLoginUnavailable, authMethod: .password, backend: backend, hostName: "Studio Mac")
+        #expect(report.backend == backend)
+        #expect(report.needsDeviceKey)
+        #expect(report.stoppedRuntime == nil)
+        #expect(report[.connection] == .failed(
+            hint: "Studio Mac accepts only keys. Run the command below in Terminal on "
+                + "Studio Mac, then tap Check Again."))
+        #expect(!report.isFullyPassed)
+    }
+
     @Test func successPassesEveryCheck() {
         let report = PreflightReport.allPassed
         for check in PreflightCheck.allCases {

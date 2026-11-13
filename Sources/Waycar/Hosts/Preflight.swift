@@ -250,7 +250,11 @@ struct PreflightReport: Equatable, Sendable {
         /// The run's runtime, when the failure says it is installed but
         /// stopped (`TransportError.startableRuntime`).
         var stoppedRuntime: HostBackend?
+        /// Password login is unavailable on the target Host, not its Jump Host.
+        var needsDeviceKey = false
     }
+
+    var needsDeviceKey: Bool { failure?.needsDeviceKey == true }
 
     /// The runtime this run found installed but not running (#389), whose
     /// Start the Host page offers: Herdr TUI on herdr's checklist, Herdr
@@ -304,8 +308,12 @@ struct PreflightReport: Equatable, Sendable {
     /// checklist. tmux has one check past the connection, so everything
     /// herdr spreads over install, server and protocol lands on it.
     static func failure(
-        _ error: TransportError, authMethod: Host.AuthMethod, backend: HostBackend
+        _ error: TransportError, authMethod: Host.AuthMethod, backend: HostBackend,
+        hostName: String = "This Host"
     ) -> PreflightReport {
+        if error == .passwordLoginUnavailable {
+            return keysOnly(hostName: hostName, backend: backend)
+        }
         switch backend {
         case .ultimate, .codex:
             return failure(check: .connection, hint: error.presentation.message, backend: backend)
@@ -408,13 +416,17 @@ struct PreflightReport: Equatable, Sendable {
     /// Maps a transport failure onto the check it disproves, with a fix-it
     /// hint. `authMethod` steers the credential hint: a rejected device key
     /// and a wrong password have different fixes.
-    static func failure(_ error: TransportError, authMethod: Host.AuthMethod) -> PreflightReport {
+    static func failure(
+        _ error: TransportError, authMethod: Host.AuthMethod, hostName: String = "This Host"
+    ) -> PreflightReport {
         let check: PreflightCheck
         let hint: String
         switch error {
         case .sshUnreachable(let detail):
             check = .connection
             hint = "Could not reach the Host over SSH. Check the address and port. (\(detail))"
+        case .passwordLoginUnavailable:
+            return keysOnly(hostName: hostName, backend: .herdr)
         case .authenticationFailed:
             check = .connection
             switch authMethod {
@@ -553,6 +565,16 @@ struct PreflightReport: Equatable, Sendable {
                 stoppedRuntime: error.startableRuntime == .herdr ? .herdr : nil))
     }
 
+    private static func keysOnly(hostName: String, backend: HostBackend) -> PreflightReport {
+        PreflightReport(
+            backend: backend,
+            failure: Failure(
+                check: .connection,
+                hint: "\(hostName) accepts only keys. Run the command below in Terminal on "
+                    + "\(hostName), then tap Check Again.",
+                needsDeviceKey: true))
+    }
+
     /// Guidance for a first-hop failure. Deliberately not a recursive call
     /// into the Host-facing hints: every one of those tells the user to go fix
     /// something on the Host, which is exactly the wrong machine here.
@@ -562,6 +584,9 @@ struct PreflightReport: Equatable, Sendable {
         switch error {
         case .sshUnreachable(let detail):
             "Could not reach the Jump Host. Check its address and port. (\(detail))"
+        case .passwordLoginUnavailable:
+            "The Jump Host accepts only keys. Authorize a key on both machines, then choose "
+                + "Device Key in Edit Host and run the checks again."
         case .authenticationFailed:
             switch authMethod {
             case .deviceKey:

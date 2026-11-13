@@ -355,6 +355,31 @@ actor SessionDriver {
             let deadline = ContinuousClock.now.advanced(by: timeout)
 
             do {
+                // A `none` request discovers the methods without submitting
+                // the password. Keep its I/O under the same operation and
+                // deadline as authentication, including EAGAIN send ownership.
+                var methods: String?
+                let listResult = try await repeatUntilComplete(deadline: deadline) {
+                    let list = username.withCString {
+                        libssh2_userauth_list(session, $0, UInt32(username.utf8.count))
+                    }
+                    if let list {
+                        methods = String(cString: list)
+                        return 0
+                    }
+                    // A server may accept `none`; libssh2 then returns nil.
+                    if libssh2_userauth_authenticated(session) != 0 { return 0 }
+                    let code = libssh2_session_last_errno(session)
+                    return code == 0 ? LIBSSH2_ERROR_AUTHENTICATION_FAILED : code
+                }
+                guard listResult == 0 else { throw mapAuthenticationError(listResult) }
+                if libssh2_userauth_authenticated(session) != 0 {
+                    authenticated = true
+                    return
+                }
+                guard methods?.split(separator: ",").contains("password") == true else {
+                    throw SSHError.passwordAuthenticationUnavailable
+                }
                 let result = try await repeatUntilComplete(deadline: deadline) {
                     username.withCString { usernamePointer in
                         password.withCString { passwordPointer in
@@ -372,7 +397,7 @@ actor SessionDriver {
                 authenticated = true
             } catch {
                 let normalized = normalize(error)
-                if normalized != .authenticationFailed {
+                if normalized != .authenticationFailed && normalized != .passwordAuthenticationUnavailable {
                     invalidateResources()
                 }
                 throw normalized

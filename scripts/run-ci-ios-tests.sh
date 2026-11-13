@@ -3514,6 +3514,7 @@ run_xcodebuild "WaycarSSH package E2E" "$xcodebuild_test_timeout_seconds" \
 clear_simulator_environment
 
 package_e2e_tests=(
+    '"password authentication on a keys-only server offers key recovery"'
     '"exec stream round-trips several writes through cat without a PTY"'
     '"exec stream drains a stderr flood so stdout is not stalled"'
     '"exec stream stdout that the stderr drain queued is read at once"'
@@ -3567,9 +3568,9 @@ done
 
 if grep -q 'Suite "Session driver resource e2e" skipped' "$package_e2e_log" \
     || grep -q 'skipped:' "$package_e2e_log" \
-    || ! grep -q 'Test run with 111 tests in 7 suites passed' "$package_e2e_log" \
+    || ! grep -q 'Test run with 112 tests in 7 suites passed' "$package_e2e_log" \
     || [[ "$package_e2e_proven" != "1" ]]; then
-    echo "The mandatory WaycarSSH package suites did not execute all one hundred eleven tests" >&2
+    echo "The mandatory WaycarSSH package suites did not execute all one hundred twelve tests" >&2
     exit 1
 fi
 exit 0

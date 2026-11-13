@@ -49,6 +49,11 @@ extension TransportError {
                 summary: "Authentication failed",
                 detail: nil,
                 recoverySuggestion: "Update this Host's credentials or authorized key.")
+        case .passwordLoginUnavailable:
+            TransportErrorPresentation(
+                summary: "This Host accepts only keys",
+                detail: nil,
+                recoverySuggestion: nil)
         case .deviceKeyCorrupt:
             TransportErrorPresentation(
                 summary: "The Device Key is corrupted",
@@ -257,6 +262,11 @@ extension TransportError {
                 summary: "The Jump Host rejected authentication",
                 detail: nil,
                 recoverySuggestion: "Update the Jump Host's credentials or authorized key.")
+        case .passwordLoginUnavailable:
+            TransportErrorPresentation(
+                summary: "The Jump Host accepts only keys",
+                detail: nil,
+                recoverySuggestion: "Authorize a key on both machines, then choose Device Key in Edit Host.")
         case .hostKeyRejected:
             TransportErrorPresentation(
                 summary: "The Jump Host's key is not trusted",

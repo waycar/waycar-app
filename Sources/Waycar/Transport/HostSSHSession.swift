@@ -819,7 +819,7 @@ actor HostSSHSession: HostSSHServices {
         case .channelFailed, .ptyDenied, .streamLocalOpenFailed, .unexpectedEOF,
             .responseTooLarge, .sftpUnavailable, .sftpFailure:
             return .channelFailed(detail: sshErrorDetail(for: error))
-        case .authenticationFailed, .timedOut, .cancelled, .forwardingDenied:
+        case .authenticationFailed, .passwordAuthenticationUnavailable, .timedOut, .cancelled, .forwardingDenied:
             // Exhaustiveness only: `sharedClassification` is total over these.
             return .channelFailed(detail: sshErrorDetail(for: error))
         }
@@ -852,7 +852,7 @@ actor HostSSHSession: HostSSHServices {
             .channelFailed, .ptyDenied, .streamLocalOpenFailed,
             .targetUnreachable, .sftpUnavailable, .sftpFailure:
             return .channelFailed(detail: sshErrorDetail(for: error))
-        case .authenticationFailed, .timedOut, .cancelled, .forwardingDenied:
+        case .authenticationFailed, .passwordAuthenticationUnavailable, .timedOut, .cancelled, .forwardingDenied:
             // Exhaustiveness only: `sharedClassification` is total over these.
             return .channelFailed(detail: sshErrorDetail(for: error))
         }
@@ -865,6 +865,8 @@ actor HostSSHSession: HostSSHServices {
         switch error {
         case .authenticationFailed:
             return .authenticationFailed
+        case .passwordAuthenticationUnavailable:
+            return .passwordLoginUnavailable
         case .timedOut:
             return .timedOut
         case .cancelled:
@@ -888,6 +890,7 @@ actor HostSSHSession: HostSSHServices {
         case .connectionFailed: "could not connect"
         case .algorithmNegotiationFailed: "no SSH settings in common with the Host"
         case .authenticationFailed: "the login was refused"
+        case .passwordAuthenticationUnavailable: "the Host does not accept password login"
         case .timedOut: "no answer in time"
         case .cancelled: "cancelled"
         case .channelFailed: "an SSH channel failed"

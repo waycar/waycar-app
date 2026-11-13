@@ -17,6 +17,28 @@ import Testing
     // runner out to the xcodebuild timeout.
     .timeLimit(.minutes(2)))
 struct SessionDriverE2ETests {
+    @Test("password authentication on a keys-only server offers key recovery")
+    func passwordUnavailableLeavesTheSessionReadyForAKey() async throws {
+        // The shared fixture explicitly disables both PasswordAuthentication
+        // and KbdInteractiveAuthentication. It accepts this Device Key.
+        let environment = try #require(SessionDriverTestEnvironment.current)
+        let connection = try await SSHConnection.connect(
+            to: environment.endpoint, timeout: .sshdBudget(10))
+        do {
+            await #expect(throws: SSHError.passwordAuthenticationUnavailable) {
+                try await connection.authenticate(
+                    username: environment.username, password: "not-sent", timeout: .sshdBudget(10))
+            }
+            try await environment.authenticate(connection)
+            let result = try await connection.execute("printf recovered", timeout: .sshdBudget(5))
+            #expect(result.stdout == Data("recovered".utf8))
+        } catch {
+            try? await connection.close(timeout: .sshdBudget(2))
+            throw error
+        }
+        try await connection.close(timeout: .sshdBudget(2))
+    }
+
     @Test("handshake negotiates post-quantum key exchange")
     func handshakeNegotiatesPostQuantumKeyExchange() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)

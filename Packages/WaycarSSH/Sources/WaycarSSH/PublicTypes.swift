@@ -63,6 +63,9 @@ public enum SSHError: Error, Sendable, Equatable {
     case connectionFailed
     case algorithmNegotiationFailed
     case authenticationFailed
+    /// The server did not offer the plain SSH password method. No password
+    /// was sent; the session can still authenticate with a key.
+    case passwordAuthenticationUnavailable
     case timedOut
     case cancelled
     case channelFailed

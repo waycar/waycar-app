@@ -574,6 +574,28 @@ final class HostOnboardingStore {
         }
     }
 
+    /// The public-key command only. Corrupt keys are never replaced here.
+    func deviceKeyInstallCommand() throws -> String {
+        let line = try credentials.deviceKey().authorizedKeysLine(comment: "waycar")
+        return Self.deviceKeyInstallCommand(authorizedKeysLine: line)
+    }
+
+    nonisolated static func deviceKeyInstallCommand(authorizedKeysLine line: String) -> String {
+        "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo \(ShellWord.quoted(line))"
+            + " >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    }
+
+    /// Like Edit Host and session selection, changing the saved record
+    /// recreates this page's store and its arrival task reruns the checks.
+    /// HostStore removes the saved password when authentication changes.
+    func useDeviceKey(in catalog: HostStore) throws {
+        guard isHostEnabled, phase != .running, report?.needsDeviceKey == true else { return }
+        _ = try credentials.deviceKey()
+        var updated = host
+        updated.authMethod = .deviceKey
+        try catalog.update(updated)
+    }
+
     /// Persists a discovered session through the Host catalog. The enclosing
     /// navigation destination is keyed by the Host value, so this recreates
     /// onboarding and immediately checks the selected socket.
@@ -597,7 +619,9 @@ final class HostOnboardingStore {
 
     private func failureReport(_ error: any Error, backend: HostBackend) -> PreflightReport {
         if let transportError = error as? TransportError {
-            .failure(transportError, authMethod: host.authMethod, backend: backend)
+            .failure(
+                transportError, authMethod: host.authMethod, backend: backend,
+                hostName: host.displayName)
         } else {
             .failure(
                 check: .connection,

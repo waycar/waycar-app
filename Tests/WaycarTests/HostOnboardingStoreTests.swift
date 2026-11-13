@@ -37,6 +37,47 @@ struct HostOnboardingStoreTests {
         return (store, connector)
     }
 
+    @Test func deviceKeyCommandIsReadyToPaste() {
+        #expect(HostOnboardingStore.deviceKeyInstallCommand(
+            authorizedKeysLine: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest waycar")
+            == "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo "
+                + "'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest waycar'"
+                + " >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys")
+    }
+
+    @Test func keysOnlyHostSwitchesTheSavedRecordAndRemovesItsPassword() async throws {
+        let host = Host.fixture(authMethod: .password)
+        let suiteName = "HostOnboardingStoreTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let secrets = InMemorySecretStore()
+        let catalog = HostStore(defaults: defaults, secrets: secrets)
+        try catalog.add(host, password: "secret")
+        let credentials = HostCredentialsProvider(
+            deviceKeys: DeviceKeyStore(secrets: InMemorySecretStore()), secrets: secrets)
+        let connector = FakeTransportConnector(outcome: .connectFails(.passwordLoginUnavailable))
+        let store = HostOnboardingStore(
+            host: host, connector: connector, knownHosts: InMemoryKnownHostsStore(), credentials: credentials)
+        await store.runChecks()
+        #expect(store.report?.needsDeviceKey == true)
+        #expect(try store.deviceKeyInstallCommand().contains(" waycar' >> ~/.ssh/authorized_keys"))
+
+        try store.useDeviceKey(in: catalog)
+
+        let updated = try #require(catalog.hosts.first)
+        #expect(updated.authMethod == .deviceKey)
+        #expect(try catalog.password(for: updated) == nil)
+        // HostListView keys the page by recordForm, so its arrival task
+        // checks the new record with the same Device Key shown in the card.
+        let retry = HostOnboardingStore(
+            host: updated,
+            connector: FakeTransportConnector(outcome: .connects(pingResult: Self.healthyPing)),
+            knownHosts: InMemoryKnownHostsStore(), credentials: credentials)
+        #expect(try retry.deviceKeyInstallCommand() == store.deviceKeyInstallCommand())
+        await retry.runChecks()
+        #expect(retry.report?.isFullyPassed == true)
+    }
+
     @Test func healthyHostGoesAllGreen() async throws {
         let (store, connector) = try makeStore()
 
