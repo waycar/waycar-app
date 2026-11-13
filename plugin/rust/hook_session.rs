@@ -1308,8 +1308,13 @@ pub mod fake {
     /// A process: its tty and its parent, as `ps` prints them (`None`: nothing).
     pub type FakeProcess = (Option<String>, Option<String>);
 
+    /// Another tmux client's commands, run on the panes just before the
+    /// hook's next tmux call (after its read, before its write).
+    pub type Interleave = Box<dyn FnOnce(&mut BTreeMap<String, FakePane>)>;
+
     pub struct Fake {
         pub panes: RefCell<BTreeMap<String, FakePane>>,
+        pub interleave: RefCell<Option<Interleave>>,
         pub log: RefCell<Vec<Vec<String>>>,
         pub envs: RefCell<Vec<Env>>,
         pub ps_table: RefCell<HashMap<String, FakeProcess>>,
@@ -1329,6 +1334,7 @@ pub mod fake {
         pub fn new() -> Self {
             let fake = Self {
                 panes: RefCell::default(),
+                interleave: RefCell::default(),
                 log: RefCell::default(),
                 envs: RefCell::default(),
                 ps_table: RefCell::default(),
@@ -1386,6 +1392,11 @@ pub mod fake {
 
         // The JS test's fake tmux.
         fn tmux(&self, args: &[&str], env: &Env) -> Option<String> {
+            if !self.log.borrow().is_empty()
+                && let Some(interleave) = self.interleave.borrow_mut().take()
+            {
+                interleave(&mut self.panes.borrow_mut());
+            }
             self.log
                 .borrow_mut()
                 .push(args.iter().map(|a| (*a).to_string()).collect());
@@ -2798,6 +2809,156 @@ mod tests {
         );
         assert!(fake.pane_options().is_empty());
         assert_eq!(*fake.notifications.borrow(), [notification("release")]);
+    }
+
+    fn session_end(fake: &Fake, agent: &str, input: &Value) {
+        run(
+            fake,
+            agent,
+            input,
+            Run {
+                event: Some("SessionEnd"),
+                ..Run::default()
+            },
+        );
+    }
+
+    #[test]
+    fn a_release_without_a_session_id_or_of_a_pane_that_records_none_unsets_everything() {
+        for held in [None, Some("")] {
+            let fake = Fake::new();
+            let mut options = vec![("@waycar_status", "working"), ("@waycar_seq", "9")];
+            if let Some(held) = held {
+                options.push(("@waycar_session", held));
+            }
+            fake.set_pane(&options);
+            session_end(&fake, "copilot", &json!({"session_id": "any"}));
+            assert!(fake.pane_options().is_empty(), "{held:?}");
+            assert_eq!(*fake.notifications.borrow(), [notification("release")]);
+        }
+        // No id in the payload: whatever session the pane records.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "done"), ("@waycar_session", "s1")]);
+        session_end(&fake, "copilot", &json!({}));
+        assert!(fake.pane_options().is_empty());
+        assert_eq!(*fake.notifications.borrow(), [notification("release")]);
+    }
+
+    #[test]
+    fn a_release_notifies_only_a_pane_that_had_a_status_and_only_after_the_unset() {
+        // No status: unset, no notification.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_session", "s1"), ("@waycar_agent", "copilot")]);
+        session_end(&fake, "copilot", &json!({"session_id": "s1"}));
+        assert!(fake.pane_options().is_empty());
+        assert!(fake.notifications.borrow().is_empty());
+        // The pane went away between the read and the unset: no notification.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "done"), ("@waycar_session", "s1")]);
+        *fake.interleave.borrow_mut() = Some(Box::new(|panes| {
+            panes.clear();
+        }));
+        session_end(&fake, "copilot", &json!({"session_id": "s1"}));
+        assert_eq!(fake.log.borrow().len(), 2, "the read, then the unset");
+        assert!(fake.notifications.borrow().is_empty());
+        // grok's SessionEnd releases the same way; its id may come from the env.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "idle"), ("@waycar_session", "g1")]);
+        run(
+            &fake,
+            "grok",
+            &json!({}),
+            Run {
+                event: Some("SessionEnd"),
+                env: vec![("GROK_SESSION_ID", Some("g2"))],
+                ..Run::default()
+            },
+        );
+        assert_eq!(
+            opt(&fake.pane_options(), "@waycar_session").as_deref(),
+            Some("g1")
+        );
+    }
+
+    #[test]
+    fn a_payload_status_equal_to_the_panes_writes_only_the_options() {
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
+        let payloads = captured_payloads();
+        run(
+            &fake,
+            "hermes",
+            &payloads["hermes"]["pre_llm_call"]["input"],
+            Run {
+                event: Some("pre_llm_call"),
+                ..Run::default()
+            },
+        );
+        let options = fake.pane_options();
+        assert_eq!(opt(&options, "@waycar_seq").as_deref(), Some("100"));
+        assert!(opt(&options, "@waycar_session").is_some());
+        assert_eq!(fake.writes().len(), 1);
+        assert!(fake.notifications.borrow().is_empty());
+        // Nothing to write at all: no tmux write.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "blocked"), ("@waycar_seq", "7")]);
+        let blocked = with(
+            &payloads["grok"]["Notification"]["input"],
+            &[("notificationType", json!("permission_prompt"))],
+        );
+        let notification_run = || Run {
+            event: Some("Notification"),
+            ..Run::default()
+        };
+        run(&fake, "grok", &blocked, notification_run());
+        assert!(fake.writes().is_empty());
+    }
+
+    #[test]
+    fn a_conditional_payload_status_moves_only_from_its_states_and_notifies_after_the_write() {
+        let payloads = captured_payloads();
+        let idle = with(
+            &payloads["grok"]["Notification"]["input"],
+            &[("notificationType", json!("idle_prompt"))],
+        );
+        let notification_run = || Run {
+            event: Some("Notification"),
+            ..Run::default()
+        };
+        for (current, expected) in [
+            (Some("working"), Some("idle")),
+            (Some("blocked"), Some("blocked")),
+            (Some("done"), Some("done")),
+            (None, None),
+        ] {
+            let fake = Fake::new();
+            let mut options = vec![("@waycar_seq", "100")];
+            if let Some(current) = current {
+                options.push(("@waycar_status", current));
+            }
+            fake.set_pane(&options);
+            run(&fake, "grok", &idle, notification_run());
+            let pane = fake.pane_options();
+            assert_eq!(
+                opt(&pane, "@waycar_status").as_deref(),
+                expected,
+                "{current:?}"
+            );
+            let moved = expected != current;
+            assert_eq!(fake.notifications.borrow().len(), usize::from(moved));
+            if moved {
+                assert_eq!(opt(&pane, "@waycar_agent").as_deref(), Some("grok"));
+                assert!(pane["@waycar_seq"].parse::<u128>().unwrap() > 100);
+            }
+        }
+        // The pane went away before the write: no notification.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
+        *fake.interleave.borrow_mut() = Some(Box::new(|panes| {
+            panes.clear();
+        }));
+        run(&fake, "grok", &idle, notification_run());
+        assert!(fake.notifications.borrow().is_empty());
     }
 
     #[test]
