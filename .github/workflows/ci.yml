@@ -281,12 +281,13 @@ jobs:
   # The vendored swift-mosh package suite (ADR 0021), including the tests
   # pinning the Waycar patches. Its own job keeps build-test inside the
   # deadline scripts/test-run-with-timeout.sh pins. It runs on the macOS host,
-  # not a simulator; the real-server tests skip unless SWIFTMOSH_REAL_E2E=1,
-  # which CI leaves unset because the runner has no mosh-server.
+  # not a simulator, with SWIFTMOSH_REAL_E2E=1: the real-server suites launch
+  # the brew-installed mosh-server on loopback, and the step fails when any of
+  # them skipped (a launch failure is a skip) or their test count changed.
   swiftmosh-package:
     name: SwiftMosh package (macOS host)
     runs-on: xcode-27
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -295,9 +296,25 @@ jobs:
         run: |
           # shellcheck disable=SC2012 # sort -V needs the plain list
           sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
-      # MoshBootstrapTests resolve mosh-server on PATH (the Mac has it;
-      # the hosted image doesn't). The real-server suites still skip.
+      # MoshBootstrapTests and the real-server suites resolve mosh-server on
+      # PATH (the Mac has it; the hosted image doesn't).
       - name: Install mosh-server
         run: brew install mosh
       - name: Test SwiftMosh package
-        run: swift test --package-path Packages/SwiftMosh
+        env:
+          SWIFTMOSH_REAL_E2E: "1"
+        run: |
+          log="$RUNNER_TEMP/swiftmosh-test.log"
+          swift test --package-path Packages/SwiftMosh 2>&1 | tee "$log"
+          # Every real-server test must run: <suite>=<test count>.
+          status=0
+          for pin in RealMoshServerE2ETests=7 MoshProtocolE2ETests=6; do
+            suite=${pin%=*} count=${pin#*=}
+            summary=$(grep -A1 "Test Suite '$suite' \(passed\|failed\)" "$log" | grep 'Executed' | tail -1)
+            echo "$suite: ${summary:-no summary}"
+            case $summary in
+              *"Executed $count tests, with 0 failures"*) ;;
+              *) echo "::error::$suite must run all $count tests with none skipped"; status=1 ;;
+            esac
+          done
+          exit "$status"

@@ -163,7 +163,8 @@ goes to Mike as a screenshot first, and a conversion never adds one on its own.
 ### Packages and the plugin
 
 `Packages/WaycarSSH` and `Packages/SwiftMosh` cannot see the app, so each
-declares the same protocol internally under the same name; the check finds
+declares the same protocol under the same name (internal in WaycarSSH,
+`package` in SwiftMosh, whose modules share one declaration); the check finds
 their machines the same way. `Packages/SwiftMosh` is vendored: a conversion
 there is a Waycar patch listed in its `PROVENANCE.md`. The Host Tools in
 `plugin/rust` declare a `StateMachine` trait with the same shape; a change
