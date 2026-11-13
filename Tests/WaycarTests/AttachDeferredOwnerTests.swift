@@ -405,6 +405,96 @@ struct PaneHistoryDeferredOwnerTests {
         #expect(history.position == .live, "a failed leave still releases input, as before")
         #expect(!history.holdsInput)
     }
+
+    /// A leave asked for while a scroll is in flight waits for that scroll
+    /// and drops the rows queued behind it: they never go out.
+    @Test func aLeaveWaitsForTheScrollInFlightAndDropsTheRowsQueuedBehindIt() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var scrolls: [Int] = []
+        var leaves = 0
+        let history = TmuxPaneHistory(scroll: { _, rows in
+            scrolls.append(rows)
+            if scrolls.count == 1 { await gate.wait() }
+            return PaneHistoryScroll(position: .inHistory, enteredHistory: scrolls.count == 1)
+        }, leave: { leaves += 1 })
+        history.scroll(towardOlderContent: true, rows: 3)
+        try await waitUntil { gate.isWaiting }
+        history.scroll(towardOlderContent: true, rows: 5)
+        history.refresh()
+        var leaveCalled = false
+        let leave = Task {
+            leaveCalled = true
+            await history.leave()
+        }
+        try await waitUntil { leaveCalled }
+        history.scroll(towardOlderContent: true, rows: 7)
+        #expect(history.holdsInput)
+        gate.open()
+        await leave.value
+        #expect(scrolls == [3])
+        #expect(leaves == 1)
+        #expect(history.position == .live)
+        #expect(!history.enteredHistory)
+        #expect(!history.holdsInput)
+    }
+
+    /// A departure that arrives while input's leave runs joins it: copy
+    /// mode is left once, and the departure returns with it.
+    @Test func aDepartureJoiningAnInputLeaveLeavesOnce() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var leaves = 0
+        let history = TmuxPaneHistory(scroll: { _, _ in
+            PaneHistoryScroll(position: .inHistory, enteredHistory: true)
+        }, leave: {
+            leaves += 1
+            await gate.wait()
+        })
+        history.scroll(towardOlderContent: true, rows: 4)
+        try await waitUntil { history.enteredHistory && !history.isMoving }
+        let leave = Task { await history.leave() }
+        try await waitUntil { gate.isWaiting }
+        var departed = false
+        let depart = Task {
+            await history.depart()
+            departed = true
+        }
+        gate.open()
+        await leave.value
+        await depart.value
+        #expect(departed)
+        #expect(leaves == 1)
+        #expect(history.position == .live)
+        #expect(!history.holdsInput)
+    }
+
+    /// A failed request drops what piled up behind it, and the pump ends;
+    /// the next scroll starts again with only its own rows.
+    @Test func aFailedScrollDropsWhatQueuedBehindItAndTheNextScrollAsksAgain() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var scrolls: [Int] = []
+        let history = TmuxPaneHistory(scroll: { _, rows in
+            scrolls.append(rows)
+            if scrolls.count == 1 {
+                await gate.wait()
+                throw TransportError.cancelled
+            }
+            return PaneHistoryScroll(position: .inHistory)
+        }, leave: {})
+        history.scroll(towardOlderContent: true, rows: 2)
+        try await waitUntil { gate.isWaiting }
+        history.scroll(towardOlderContent: true, rows: 6)
+        history.refresh()
+        gate.open()
+        try await waitUntil { !history.holdsInput }
+        #expect(scrolls == [2])
+        #expect(history.position == nil)
+        history.scroll(towardOlderContent: false, rows: 1)
+        try await waitUntil { history.position == .inHistory }
+        #expect(scrolls == [2, 1])
+    }
 }
 
 @MainActor
