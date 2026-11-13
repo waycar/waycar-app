@@ -1562,6 +1562,41 @@ struct SessionDriverE2ETests {
         try await connection.close(timeout: .sshdBudget(2))
     }
 
+    /// A one-shot exec turn reads stdout, then stderr, and each read drains
+    /// the whole socket. Output, EOF and CLOSE that arrive between the two
+    /// reads are queued by the stderr read: it finds no stderr bytes, the
+    /// queued stdout masks the EOF, and the socket has no edge left. Waiting
+    /// on readiness with a watch taken after that read slept out the whole
+    /// timeout on an exec sshd had already finished (CI, twice). The hold
+    /// widens the window from a few instructions to seconds.
+    @Test("exec output and EOF that the stderr read queued finish the exec at once")
+    func execFinishesOnOutputTheStandardErrorReadQueued() async throws {
+        let environment = try #require(SessionDriverTestEnvironment.current)
+        let connection = try await environment.connect()
+        let hold = SessionWaitHold()
+
+        await connection.holdNextExecExchangeStandardErrorReadForTesting {
+            await hold.waitUntilReleased()
+        }
+        let exec = Task {
+            try await connection.execute("sleep 1; printf done", timeout: .sshdBudget(8))
+        }
+        try await waitUntilTrue("the exec should reach its stderr read") { await hold.hasEntered }
+
+        // The output, exit status, EOF and CLOSE reach the socket while the
+        // turn sits past its stdout read.
+        try await Task.sleep(for: .seconds(2))
+        await hold.release()
+        let released = ContinuousClock.now
+        let result = try await exec.value
+        #expect(result.stdout == Data("done".utf8))
+        #expect(result.exitStatus == 0)
+        #expect(released.duration(to: .now) < .seconds(2))
+
+        #expect(await connection.isConnected)
+        try await connection.close(timeout: .sshdBudget(2))
+    }
+
     @Test("exec stream reports EOF as nil, then the exit status")
     func execStreamReportsEOFThenExitStatus() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)
