@@ -42,7 +42,7 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
   const { outDir, cleanup } = buildSite();
   t.after(cleanup);
   const files = htmlFiles(outDir);
-  for (const required of ['index.html', 'pricing.html', 'help/install.html']) assert.ok(files.includes(required), `${required} was built`);
+  for (const required of ['index.html', 'compare.html', 'help/install.html']) assert.ok(files.includes(required), `${required} was built`);
   for (const prefix of ['articles/', 'compare/', 'solutions/']) {
     assert.ok(files.some((file) => file.startsWith(prefix)), `a page under ${prefix} was built`);
   }
@@ -120,7 +120,7 @@ test('with APP_STORE_LISTING_URL emptied, buttons are plain "Coming soon" labels
   assert.deepEqual(problems, []);
   const home = readFileSync(join(outDir, 'index.html'), 'utf8');
   assert.ok(home.includes('Coming soon to the App Store'), 'the home page says it is coming soon');
-  assert.ok(existsSync(join(outDir, 'pricing.html')));
+  assert.ok(existsSync(join(outDir, 'compare.html')));
   assert.ok(!existsSync(join(outDir, 'qr')), 'no QR file for a listing that is not live');
 });
 

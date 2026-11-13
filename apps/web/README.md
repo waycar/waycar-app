@@ -186,9 +186,9 @@ related: [new-chat, composer, notifications, chat-mode-troubleshooting]
   Toolbar, Console. "Tap" and "touch and hold" for touch, "press" for keys,
   "click" only for a trackpad or mouse.
 - No em or en dashes in prose, no marketing filler, no "simply" or "just", no
-  emoji. Waycar is free, with every feature included and unlimited launches.
+  emoji. Keep pricing out of feature lists.
 - Links: other help pages as `/help/<slug>` (optionally `#anchor`), site
-  pages as `/pricing`, `/privacy`, `/support`, external links only to primary
+  pages as `/privacy`, `/support`, external links only to primary
   sources (herdr.dev, github.com/steipete/CodexBar, mosh.org). Never link
   `/install.sh`; the install command appears only as the code block
   `curl -fsSL https://waycar.dev/install.sh | sh` (fenced as `sh`).
@@ -497,7 +497,7 @@ what Waycar cannot do: it needs herdr or tmux on the machine, the machine must
 be on and awake, and it has no native desktop or web client. Write "no cloud between you and your sessions" as "for your sessions",
 because the optional push relay carries notifications, encrypted on the Host so
 it cannot read them, and sees how many agents are in each status for Live
-Activities. Waycar is free, with every feature included and unlimited launches. Users still pay for their own machines and AI providers. Link site pages as
+Activities. Users still pay for their own machines and AI providers. Link site pages as
 `/help/<slug>`, `/compare/<slug>` or `/solutions/<slug>`, never `/install.sh`.
 
 **Routes.** `src/pages/compare/index.astro` (`/compare`: a card per comparison
@@ -518,7 +518,7 @@ and `appStoreUrl(pathname, section)`, the same listing tagged with the
 surface's own campaign (`?pt=…&ct=<token>&mt=8`, see
 [Campaign tokens](#campaign-tokens)); the picker's App Store link is the tagged one.
 Every store button (header, hero, Setup step 1, Closing, the article's TOC card,
-rail and footer, the site footer, pricing, compare and solutions pages)
+rail and footer, the site footer, compare and solutions pages)
 is one component, `src/components/AppStoreCta.astro`, which follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
@@ -639,8 +639,9 @@ enforces it in `src/lib/ad-links.mjs`:
 - **Organic**: `ORGANIC_CT`, a closed list, never read from a URL. A CTA's token is
   built in: `<AppStoreCta ct="site-hero">` (`site-hero`, `site-hero-b`,
   `site-closing`, `site-nav`), default `site`. A page type outranks it
-  (`organicCampaign`): every CTA on `/pricing` is `pricing`, on `/help/*` `help`,
-  on `/articles/*` `article` (header and footer included). The article's setup
+  (`organicCampaign`): every CTA on `/help/*` is `help`, on `/articles/*`
+  `article` (header and footer included). The retired `pricing` token stays
+  valid for links already shared. The article's setup
   prompt link is `setup-prompt`. An unknown `ct` throws at build time, and
   `scripts/ad-links.test.mjs` checks every literal token in `src/`.
 - A visitor who arrived from a paid ad (`utm_campaign` matching `PAID_CT`) gets that
@@ -782,7 +783,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 
 | Path | What it holds |
 | --- | --- |
-| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `pricing` (free, everything included), `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
+| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
 | `src/content/help/` | Help pages, one Markdown file per feature (see [Help docs](#help-docs)); schema in `src/content.config.ts` |
 | `src/content/changelog/` | Released versions, one Markdown file per version (see [Changelog](#changelog)); schema in `src/content.config.ts` |
 | `src/content/compare/`, `src/content/solutions/` | Comparisons and solution pages, one Markdown file each (see [Compare and solutions](#compare-and-solutions)); schemas in `src/content.config.ts` |
@@ -796,7 +797,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 | `src/styles/global.css` | Design tokens and shared building blocks |
 | `src/data/screens.ts` | Screenshot imports, alt text, captions |
 | `src/assets/` | Logo and screenshots, resized to WebP at build time |
-| `src/worker.ts` | The Worker: host redirect, the `/b` redirect, home page A or B for `/`, then static assets, with security headers on all of them |
+| `src/worker.ts` | The Worker: host redirect, retired page redirects, then static assets, with security headers on all of them |
 | `integrations/sitemap.mjs` | Astro integration that writes `dist/sitemap.xml` from the built pages' canonical URLs |
 | `scripts/` | `site-pages.mjs` (indexable pages and their text, read back from `dist/`), `generate-llms-txt.mjs` (the deploy-time llms.txt generator and its validator), their tests, `help-search.test.mjs` (search ranking), `changelog.test.mjs` (changelog rules), and `compare.test.mjs` (the comparison and solution checks) |
 
@@ -822,7 +823,8 @@ with `Layout`'s `image` and `imageAlt` props.
 `waycar.dev`, `www.waycar.dev`, `waycar.app`, and `www.waycar.app`. The Worker
 runs before asset lookup: any host other than `waycar.dev` gets a `301` to
 `https://waycar.dev` with the same path and query string; `waycar.dev` is served
-from `dist/`, with `dist/404.html` for unmatched paths. Every response, redirects
+from `dist/`, with `dist/404.html` for unmatched paths. Retired pricing URLs
+redirect to `/` with their query string intact. Every response, redirects
 included, gets a strict `Content-Security-Policy` (scripts from this origin
 only, never inline, plus `https://www.redditstatic.com` and
 `https://static.ads-twitter.com` for the ad pixels; no workers; `connect-src`

@@ -166,6 +166,9 @@ const EXPIRED_LEGACY_COOKIE = `${LEGACY_COOKIE}=; Path=/; Max-Age=0; Secure; Htt
 // `/b` was variant B's asset path while the test ran; keep old links working.
 const VARIANT_B_PATHS: Record<string, true> = { '/b': true, '/b/': true, '/b.html': true };
 
+// The pricing page is retired; keep old bookmarks and shared links working.
+const PRICING_PATHS: Record<string, true> = { '/pricing': true, '/pricing/': true, '/pricing.html': true };
+
 // Set-Cookie values that delete the retired test cookies. Only cookies the
 // request carries are deleted, so a visitor without one gets no Set-Cookie at
 // all.
@@ -262,6 +265,11 @@ export default {
           headers: { Location: shortTarget, 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
         }),
       );
+    }
+    if (PRICING_PATHS[url.pathname] === true) {
+      const target = new URL(url);
+      target.pathname = '/';
+      return withSecurityHeaders(Response.redirect(target.href, 301));
     }
     if (VARIANT_B_PATHS[url.pathname] === true) {
       const target = new URL(url);

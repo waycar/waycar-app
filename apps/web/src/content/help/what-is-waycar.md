@@ -39,6 +39,6 @@ A Host is a Mac or Linux machine you reach over SSH that runs herdr or tmux. You
 
 ## Good to know
 
-- Waycar is free. Every feature is free for everyone, with no subscription and no limit on how many agents you start.
+- Waycar is free.
 - Waycar is an independent app from OTREVA, LLC. It is not affiliated with herdr, CodexBar, Anthropic, OpenAI, or Google. Learn about herdr at [herdr.dev](https://herdr.dev).
 - Stuck? See [Get help and contact support](/help/get-help), or open **Settings** › **Support** in the app to email support or join r/waycar.

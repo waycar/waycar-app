@@ -79,9 +79,6 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })
 
       <section class="glass closing" aria-labelledby="closing-title">
         <h2 id="closing-title">Try Waycar on your own machine</h2>
-        <p>
-          Waycar is <a href="/pricing">free</a>. Every feature included, unlimited launches, no account or subscription.
-        </p>
         <div class="actions">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           <a class="btn btn-ghost btn-lg" href="/solutions">See how people use it</a>
@@ -174,8 +171,7 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })
     color: var(--violet-soft);
   }
 
-  .fit a,
-  .closing p a {
+  .fit a {
     color: var(--cyan);
     text-decoration: underline;
     text-underline-offset: 3px;
@@ -189,12 +185,6 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })
 
   .closing h2 {
     font-size: 24px;
-  }
-
-  .closing p {
-    max-width: 62ch;
-    margin-top: 10px;
-    color: var(--text-2);
   }
 
   .actions {
