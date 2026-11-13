@@ -4228,6 +4228,47 @@ stateDiagram-v2
 
 **SSH and mosh**
 
+### DatagramEndpointMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshTransport/DatagramEndpointMachine.swift`
+- **Owner:** `NetworkDatagramEndpoint` (actor) keeps the `NWConnection`,
+  `start()`'s continuation, the waiting receives and the receive buffer;
+  it opens the connection the `start` effect names, hands every callback
+  its connection's token, and performs the effects. `send()` and
+  `receive()` go to the held connection; `start()` is refused unless
+  `stopped`, before its port checks, as before.
+- **States:** `stopped`, `connecting(connection)`, `open(connection)`,
+  `failed(connection)` (held until `stop()`: a start is refused, sends,
+  receives and its receive callbacks still go on).
+- **Events:** `start`, `reported(connection, ready|failed|cancelled|other)`,
+  `startReturned(connection)`, `receiveCompleted(connection)`, `stop`.
+- **Effects:** `open(connection)`, `resumeStart`, `failAll(failure)`,
+  `armReceive(connection)`, `deliverReceive`, `close`. A callback or a
+  start return whose token is not the held connection's does nothing
+  (B-28, SwiftMosh patch 18). SwiftMosh patch 19.
+- **Tests:** `DatagramEndpointMachineTests`, `TransportTests` (restart on a
+  fresh connection, a second start refused until stopped, stop during a
+  start, failure after ready, B-28's late cancel, receive error and
+  datagram).
+- **Catalogue:** MOSH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> stopped
+    stopped --> connecting: start / open(token)
+    connecting --> open: reported ready / resumeStart
+    open --> open: startReturned / armReceive
+    connecting --> failed: reported failed or cancelled / failAll
+    open --> failed: reported failed or cancelled / failAll
+    failed --> failed: reported failed or cancelled / failAll
+    open --> open: receiveCompleted / deliverReceive, armReceive
+    failed --> failed: receiveCompleted / deliverReceive, armReceive
+    connecting --> stopped: stop / close
+    open --> stopped: stop / close
+    failed --> stopped: stop / close
+    stopped --> stopped: stale token / ignored
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4603,7 +4644,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | MOSH-08 | Recovery redial cooldown | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | L/L | leave: one timestamp | — |
 | MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
 | MOSH-10 | mosh availability file | `Sources/Waycar/Transport/MoshAvailabilityStore.swift` | implicit | M/L | leave: two states, guarded | — |
-| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | convert; bug B-28 | P3c |
+| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | converted → `DatagramEndpointMachine`; bug B-28 fixed | P3c |
 | MOSH-12 | mosh screen history | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | M/H | leave: fallback handles missing bases | — |
 | MOSH-13 | ECMA-48 parser | `Packages/SwiftMosh/Sources/MoshCore/MoshScreen.swift` | explicit | L/M | explicit | — |
 | MOSH-14 | Fragment assembly | `Packages/SwiftMosh/Sources/MoshWire/WirePrimitives.swift` | implicit | L/L | leave: pure, reset in one place | — |
@@ -4687,7 +4728,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
 | B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | open |
 | B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | open |
-| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | open |
+| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | fixed (P3c, `134f172d`): each connection's callbacks carry its token; a stopped connection's are ignored (not reachable from the app, which builds a new endpoint per engine) |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |

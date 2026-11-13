@@ -284,6 +284,17 @@ taken.
     longer holds is ignored. `MoshClientSession` builds a new endpoint for
     every engine, so the app never restarts one; the fix is for any caller
     that does.
+19. **Endpoint state machine** (`DatagramEndpointMachine`,
+    `StateMachine`). The endpoint's connection lifecycle (stopped,
+    connecting, open, failed) is one pure value type, as the app's
+    lifecycles are (its `docs/design/state-machines.md`); the package
+    declares the same `StateMachine` protocol with `package` access, since
+    it cannot see the app's. `NetworkDatagramEndpoint` feeds it every call
+    and callback and performs what it returns; the machine's connection
+    token is patch 18's number. Behaviour is patch 18's, plus one stale
+    case of the same kind: a `start()` that returns after a `stop()` and
+    a new `start()` no longer arms a second receive on the new connection.
+    No wire or timing change.
 
 `Tests/SwiftMoshTests/WaycarPatchTests.swift` covers the shutdown state
 (final screen applied, maximum state acked, session ends `.stopped` without a
@@ -308,7 +319,8 @@ small, never decreases); that it counts device sleep is not testable on the
 host. It also covers patch 18 with a fake connection per start: a late
 `.cancelled`, a late receive error and a late datagram from a stopped
 connection leave the restarted endpoint alone (each fails against the
-unpatched endpoint).
+unpatched endpoint). `DatagramEndpointMachineTests` covers patch 19's
+transitions, stale tokens included.
 
 `Tests/SwiftMoshTests/WaycarNetworkPatchTests.swift` covers patches 11 and
 13–15: connectivity stalling on silence, recovering on the next server
