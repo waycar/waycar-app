@@ -3373,6 +3373,38 @@ stateDiagram-v2
     frozen --> live: cancel / thaw bridge, report cancelled
 ```
 
+### DirectKeyboardHandoffMachine
+
+- **File:** `Sources/Waycar/Console/DirectKeyboardHandoffMachine.swift`
+- **Owner:** `AgentTerminalView` (`@State`) begins it inside the same
+  animation-free transaction as before, after the shared inset froze and
+  minted the id; the terminal's update-time claim, its answer and its
+  settle or cancel arrive through the screen's callbacks unchanged, and the
+  owner applies Direct Input, drops the intent and ends or cancels the
+  inset's handoff as effects.
+- **States:** `idle`, `requested(id)`, `settling(id, requestHeld)`.
+- **Events:** begin, destination answered (accepted or refused),
+  destination settled, cancel(id), cancel current, request cleared.
+- **Effects:** enter Direct Input preserving the handoff, drop the keyboard
+  intent, end or cancel the inset's handoff. Ownership is this screen's
+  state, never inferred from the shared inset's active id.
+- **Tests:** `DirectKeyboardHandoffMachineTests`,
+  `ComposerDirectHandoffLifecycleTests`, `AgentDirectInputTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> requested: begin (inset frozen)
+    requested --> settling: matching acceptance / enter Direct Input
+    requested --> idle: refusal or cancel / drop intent, cancel inset
+    requested --> idle: request cleared
+    settling --> idle: matching settle / end inset
+    settling --> idle: cancel / cancel inset
+    settling --> settling: request cleared
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5602,7 +5634,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | convert (deferred: protected-disk load/merge/sweep and queued JPEG completion need Mac persistence verification); owner safety net `AgentLastFrameDeferredOwnerTests` | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
-| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |
+| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | converted → `DirectKeyboardHandoffMachine` (the Composer-to-Direct handoff); the update-time claim, acceptance and inset release keep their callback order. The tools/system presentation flags stay view state resolved by `AgentDirectInputPresentation`. Pins: `ComposerDirectHandoffLifecycleTests` | P2c |
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
 | ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | converted → `SurfaceKeyboardFreezeMachine`; the queued reload and leash carry the cycle token, effects keep the layout/thaw order. Pins: `TerminalSurfaceFreezeLifecycleTests` | P2c |

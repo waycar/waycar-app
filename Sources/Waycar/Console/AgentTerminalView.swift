@@ -286,15 +286,11 @@ struct AgentTerminalView: View {
     @State private var composerKeyboardPresentation: AgentComposerKeyboardPresentation = .hidden
     /// One-shot: 💬 asks the freshly opened Composer to focus its text field.
     @State private var composerFocusRequested = false
-    /// Keeps Composer mounted while its visible system keyboard moves to the
-    /// terminal (⌨ while typing in Message Agent). Direct Input becomes the
-    /// rendered mode only after the terminal confirms first-responder
-    /// ownership.
-    @State private var composerToDirectHandoffID: UUID?
-    /// This view's handoff after the destination responder has accepted it but
-    /// before that responder's own keyboard frame settles. The inset is shared
-    /// by the Console, so ownership must never be inferred from its active ID.
-    @State private var settlingKeyboardHandoffID: UUID?
+    /// Message Agent's visible system keyboard moving to the terminal (⌨
+    /// while typing in Message Agent): Composer stays mounted until the
+    /// terminal confirms first-responder ownership, and the inset is released
+    /// once its keyboard frame settles. See ``DirectKeyboardHandoffMachine``.
+    @State private var keyboardHandoffToDirect = DirectKeyboardHandoffMachine()
     /// Direct Input's tools dock, separate from Composer focus presentation.
     @State private var usesDirectToolsKeyboard = false
     /// Holds `.system` presentation across the Tools→iOS coalesce window so
@@ -575,6 +571,7 @@ struct AgentTerminalView: View {
         // Keep the destination terminal enabled until Composer-to-Direct has
         // fully settled. The reverse handoff must disable this outgoing
         // terminal as soon as Composer accepts first responder.
+        let composerToDirectHandoffID = keyboardHandoffToDirect.requestID
         screen.isLocalInputEnabled = isDirectInput || composerToDirectHandoffID != nil
         // Plain keys and arrows reach the terminal with the keyboard down
         // (#80), unless the tools dock deliberately owns input without a
@@ -622,23 +619,17 @@ struct AgentTerminalView: View {
         screen.isKeyboardHandoffCurrent = { id in
             isOnStage()
                 && keyboardInset.activeResponderHandoffID == id
-                && composerToDirectHandoffID == id
+                && keyboardHandoffToDirect.requestID == id
         }
         screen.onKeyboardHandoffResult = { id, succeeded in
-            guard composerToDirectHandoffID == id else { return }
-            if succeeded {
-                settlingKeyboardHandoffID = id
-                applyInputMode(.direct, preservingKeyboardHandoff: true)
-            } else {
-                cancelKeyboardHandoff(id)
-            }
+            sendKeyboardHandoff(.destinationAnswered(id, accepted: succeeded))
         }
         screen.onKeyboardHandoffEnded = { id, outcome in
             switch outcome {
             case .settled, .timedOut:
-                endKeyboardHandoff(id)
+                sendKeyboardHandoff(.destinationSettled(id))
             case .cancelled:
-                cancelKeyboardHandoff(id)
+                sendKeyboardHandoff(.cancel(id))
             }
         }
         screen.theme = terminal.themes.theme
@@ -1838,7 +1829,7 @@ struct AgentTerminalView: View {
     /// Whether a responder handoff is still moving the keyboard; a second
     /// switch would strand it between the two inputs.
     private var isKeyboardHandoffInFlight: Bool {
-        composerToDirectHandoffID != nil || settlingKeyboardHandoffID != nil
+        keyboardHandoffToDirect.isInFlight
     }
 
     /// 💬: opens Message Agent and focuses its text field (the terminal
@@ -1881,12 +1872,12 @@ struct AgentTerminalView: View {
         let id = keyboardInset.beginDestinationOwnedResponderHandoff(
             currentHeight: currentWindowKeyboardHeight
         ) { expiredID in
-            cancelKeyboardHandoff(expiredID)
+            sendKeyboardHandoff(.cancel(expiredID))
         }
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            composerToDirectHandoffID = id
+            sendKeyboardHandoff(.begin(id))
         }
     }
 
@@ -1906,7 +1897,7 @@ struct AgentTerminalView: View {
                 composerFocusRequested = false
                 if !preservingKeyboardHandoff {
                     prepareComposerKeyboardPresentation(.hidden)
-                    composerToDirectHandoffID = nil
+                    sendKeyboardHandoff(.requestCleared)
                 }
                 composerKeyboardPresentation = .hidden
                 usesDirectToolsKeyboard = false
@@ -1954,23 +1945,22 @@ struct AgentTerminalView: View {
         }
     }
 
-    private func cancelKeyboardHandoff(_ id: UUID) {
-        let destinationAccepted = settlingKeyboardHandoffID == id
-        var ownsHandoff = false
-        if composerToDirectHandoffID == id {
-            composerToDirectHandoffID = nil
-            if !destinationAccepted {
+    /// Feeds the handoff machine and performs its effects in order.
+    private func sendKeyboardHandoff(_ event: DirectKeyboardHandoffMachine.Event) {
+        for effect in keyboardHandoffToDirect.handle(event) {
+            switch effect {
+            case .enterDirectInput:
+                applyInputMode(.direct, preservingKeyboardHandoff: true)
+            case .dropKeyboardIntent:
                 directKeyboardIntent.setWantsKeyboard(false)
+            case .endInsetHandoff(let id):
+                keyboardInset.endResponderHandoff(
+                    id, currentHeight: currentWindowKeyboardHeight)
+            case .cancelInsetHandoff(let id):
+                keyboardInset.cancelResponderHandoff(
+                    id, currentHeight: currentWindowKeyboardHeight)
             }
-            ownsHandoff = true
         }
-        if settlingKeyboardHandoffID == id {
-            settlingKeyboardHandoffID = nil
-            ownsHandoff = true
-        }
-        guard ownsHandoff else { return }
-        keyboardInset.cancelResponderHandoff(
-            id, currentHeight: currentWindowKeyboardHeight)
     }
 
     private func currentWindowKeyboardHeight() -> CGFloat? {
@@ -1979,19 +1969,7 @@ struct AgentTerminalView: View {
     }
 
     private func cancelKeyboardHandoffs() {
-        if let id = composerToDirectHandoffID ?? settlingKeyboardHandoffID {
-            cancelKeyboardHandoff(id)
-        }
-    }
-
-    private func endKeyboardHandoff(_ id: UUID) {
-        guard settlingKeyboardHandoffID == id else { return }
-        settlingKeyboardHandoffID = nil
-        if composerToDirectHandoffID == id {
-            composerToDirectHandoffID = nil
-        }
-        keyboardInset.endResponderHandoff(
-            id, currentHeight: currentWindowKeyboardHeight)
+        sendKeyboardHandoff(.cancelCurrent)
     }
 
     /// Draft-owned actions (Skills, Snippets, Add) run with Message Agent
