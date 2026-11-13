@@ -3253,6 +3253,42 @@ stateDiagram-v2
     failed --> failed: close viewer or gallery
 ```
 
+### AgentLastFrameIndexMachine
+
+- **File:** `Sources/Waycar/Terminal/AgentLastFrameIndexMachine.swift`
+- **Owner:** `AgentLastFrameStore` reads the protected index (`queue.sync`),
+  keeps the pixels (raw captures and JPEGs), and performs every disk effect
+  in order on its serial queue; it reads the clock and hands `now` in.
+- **States:** the load (`pending(discards, retentions)`, `loaded`), beside
+  the entries (most recent first), the last host catalog and the files whose
+  pixels are still raw captures.
+- **Events:** `memoryOnly`, `indexRead(unreadable/entries, now)`,
+  `record(entry, now)`, `remove(agent/hostsOutside/unlisted)`,
+  `deferDiscard`, `deferRetention`, `setRetainedTargets`, `encoded(file)`.
+- **Effects:** `dropPixels`, `persist(index, removedFiles, encode)`,
+  `sweep(keep, index, rewritesIndex)`, `storeEncoded`. Nothing is written
+  or deleted before the index loads; removals meanwhile are remembered for
+  the disk's frames, and the first load merges (recorded frames win, the
+  catalog applies, expired ones drop) and sweeps unnamed files. A queued
+  JPEG is kept only while its file (new per capture, so the token) still
+  holds the raw capture. As before, a frame recorded while locked is never
+  written to disk (its persist was skipped) though the load indexes it.
+- **Tests:** `AgentLastFrameIndexMachineTests`, `AgentLastFrameDeferredOwnerTests`,
+  `AgentLastFrameStoreTests`, `AgentLastFrameEntryTests`.
+- **Catalogue:** ATTACH-08.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> pending: indexRead unreadable
+    pending --> pending: record or remove / dropPixels (no disk)
+    pending --> pending: deferDiscard or deferRetention
+    pending --> loaded: indexRead entries / merge, sweep
+    pending --> loaded: memoryOnly
+    loaded --> loaded: record or remove / dropPixels, persist
+    loaded --> loaded: encoded(raw file) / storeEncoded
+```
+
 ### PaneHistoryScrollMachine
 
 - **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
@@ -5524,7 +5560,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-05 | Terminal cache entry retention | `Sources/Waycar/Console/AgentTerminalCache.swift` | explicit | H/H | converted → `AgentTerminalRetentionMachine` | P2c |
 | ATTACH-06 | Byte feed and surface binding | `Sources/Waycar/Terminal/TerminalByteFeed.swift` | implicit | M/M | leave: one-way latch | — |
 | ATTACH-07 | Last frame | `Sources/Waycar/Terminal/TerminalLastFrame.swift` | explicit | H/M | converted → `TerminalLastFrameMachine` | P2c |
-| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | convert (deferred: protected-disk load/merge/sweep and queued JPEG completion need Mac persistence verification); owner safety net `AgentLastFrameDeferredOwnerTests` | P2c |
+| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | converted → `AgentLastFrameIndexMachine` | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
 | ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |

@@ -70,22 +70,17 @@ final class AgentLastFrameStore {
     let directory: URL?
     private let now: () -> Date
     private let queue = DispatchQueue(label: "com.otreva.waycar.agent-last-frames")
-    /// Most recent first; read once from disk on first use.
-    private var entries: [Entry] = []
-    private var pixels: [String: Pixels] = [:]
-    /// The index has been read (or found missing). False while it exists
+    /// The entries, most recent first, read once from disk on first use,
+    /// and whether that read has happened. It has not while the index exists
     /// but is unreadable: a CarPlay launch can start the app with the phone
     /// locked, and reading the `.complete` index as empty then would sweep
     /// every frame as an orphan. Until it loads, nothing is written or
-    /// deleted on disk, and every use tries the read again.
-    private var isLoaded = false
-    /// The catalog `retainHosts` last asked for, applied once a deferred
-    /// load lands.
-    private var retainedTargets: [Host.ID: ConsoleInventoryCache.Target]?
-    /// Pane removals while the index is unreadable apply to its old frames,
-    /// not to fresh captures recorded after those removals.
-    private var deferredDiscards: Set<ConsoleAgent.ID> = []
-    private var deferredRetentions: [ConsoleScope: Set<ConsoleAgent.ID>] = [:]
+    /// deleted on disk, every use tries the read again, and pane removals
+    /// apply to its old frames, not to fresh captures recorded after them.
+    private var frameIndex = AgentLastFrameIndexMachine()
+    private var entries: [Entry] { frameIndex.entries }
+    private var isLoaded: Bool { frameIndex.isLoaded }
+    private var pixels: [String: Pixels] = [:]
     private let readIndex: @Sendable (URL) -> ConsoleInventoryCache.ReadResult
 
     init(
@@ -120,7 +115,7 @@ final class AgentLastFrameStore {
         loadIfNeeded()
         guard let host, let entry = entries.first(where: { $0.agentID == agent }) else { return nil }
         guard isFresh(entry), entry.target == ConsoleInventoryCache.Target(host) else {
-            remove { $0.agentID == agent }
+            remove(.agent(agent))
             return nil
         }
         let size = CGSize(width: entry.width, height: entry.height)
@@ -137,7 +132,7 @@ final class AgentLastFrameStore {
             }
             guard let data = read.data, let image = UIImage(data: data) else {
                 // A file that is there but unreadable is locked, not gone.
-                if !read.exists || read.data != nil { remove { $0.agentID == agent } }
+                if !read.exists || read.data != nil { remove(.agent(agent)) }
                 return nil
             }
             pixels[entry.file] = .encoded(data)
@@ -156,54 +151,31 @@ final class AgentLastFrameStore {
             target: ConsoleInventoryCache.Target(host),
             width: size.width, height: size.height,
             capturedAt: now(), file: "\(UUID().uuidString).jpg")
-        var removed = entries.filter { $0.agentID == agent.id || !isFresh($0) }
-        entries.removeAll { $0.agentID == agent.id || !isFresh($0) }
-        entries.insert(entry, at: 0)
-        if entries.count > Self.capacity {
-            removed += entries[Self.capacity...]
-            entries.removeLast(entries.count - Self.capacity)
-        }
-        let captured = CapturedImage(image: image)
-        pixels[entry.file] = .captured(captured)
-        for old in removed { pixels[old.file] = nil }
-        persist(removing: removed) { directory in
-            guard let data = Self.jpeg(captured.image) else { return nil }
-            try Self.prepare(directory)
-            try data.write(
-                to: directory.appending(path: entry.file),
-                options: [.atomic, .completeFileProtection])
-            return data
-        } then: { [weak self] data in
-            guard let self, let data, case .captured = pixels[entry.file] else { return }
-            pixels[entry.file] = .encoded(data)
-        }
+        pixels[entry.file] = .captured(CapturedImage(image: image))
+        perform(frameIndex.handle(.record(entry, now: now())))
     }
 
     /// Forgets `agent`'s frame: it no longer stands for anything its terminal
     /// will show again.
     func discard(_ agent: ConsoleAgent.ID) {
-        remove { $0.agentID == agent }
-        if !isLoaded { deferredDiscards.insert(agent) }
+        remove(.agent(agent))
+        perform(frameIndex.handle(.deferDiscard(agent)))
     }
 
     /// Forgets the frames of Hosts no longer in the catalog and of Hosts whose
     /// connection target changed.
     func retainHosts(_ hosts: [Host]) {
         let targets = Dictionary(hosts.map { ($0.id, ConsoleInventoryCache.Target($0)) }) { _, last in last }
-        retainedTargets = targets
-        remove { targets[$0.hostID] != $0.target }
+        perform(frameIndex.handle(.setRetainedTargets(targets)))
+        remove(.hostsOutside(targets))
     }
 
     /// Forgets the frames of Agents whose pane is gone: a verified scope (its
     /// rows proven by a live snapshot) no longer lists them. An unverified
     /// scope's rows are last-known, so its frames stay.
     func retainAgents(_ listed: Set<ConsoleAgent.ID>, verifiedScopes: Set<ConsoleScope>) {
-        remove { verifiedScopes.contains($0.scope) && !listed.contains($0.agentID) }
-        guard !isLoaded else { return }
-        for scope in verifiedScopes {
-            // Once pruned, an old frame cannot return in a later inventory.
-            deferredRetentions[scope] = deferredRetentions[scope].map { $0.intersection(listed) } ?? listed
-        }
+        remove(.unlisted(listed, verifiedScopes: verifiedScopes))
+        perform(frameIndex.handle(.deferRetention(listed, verifiedScopes: verifiedScopes)))
     }
 
     /// Returns once every disk write queued so far has finished.
@@ -216,35 +188,53 @@ final class AgentLastFrameStore {
     // MARK: Disk
 
     private func isFresh(_ entry: Entry) -> Bool {
-        now().timeIntervalSince(entry.capturedAt) <= Self.maxAge
+        AgentLastFrameIndexMachine.isFresh(entry, now: now())
     }
 
-    private func remove(where shouldRemove: (Entry) -> Bool) {
+    private func remove(_ removal: AgentLastFrameIndexMachine.Removal) {
         loadIfNeeded()
-        let removed = entries.filter(shouldRemove)
-        guard !removed.isEmpty else { return }
-        entries.removeAll(where: shouldRemove)
-        for entry in removed { pixels[entry.file] = nil }
-        persist(removing: removed) { _ in nil } then: { _ in }
+        perform(frameIndex.handle(.remove(removal)))
     }
 
-    /// Queues `write`, the removal of `removed`'s files, and the index as it
-    /// stands now, in that order, then hands `write`'s result back on the
-    /// main actor.
-    private func persist(
-        removing removed: [Entry],
-        write: @escaping @Sendable (URL) throws -> Data?,
-        then: @escaping @MainActor (Data?) -> Void
-    ) {
-        // Before the index loads, the disk holds entries memory doesn't:
-        // writing the index now would drop them.
-        guard let directory, isLoaded else { return }
+    private func perform(_ effects: [AgentLastFrameIndexMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .dropPixels(let files):
+                for file in files { pixels[file] = nil }
+            case .persist(let entries, let files, let encode):
+                persist(entries, removing: files, encode: encode)
+            case .sweep(let keep, let entries, let rewritesIndex):
+                sweep(keeping: keep, index: entries, rewritesIndex: rewritesIndex)
+            case .storeEncoded:
+                break // Only an encoding's completion emits it; it stores its own JPEG.
+            }
+        }
+    }
+
+    /// Queues the encoding and write of `encode`'s capture, the removal of
+    /// `files`, and `entries` as the index, in that order, then hands a
+    /// written JPEG back on the main actor.
+    private func persist(_ entries: [Entry], removing files: [String], encode file: String?) {
+        guard let directory else { return }
         let index = Index(version: Self.formatVersion, entries: entries)
-        let files = removed.map(\.file)
+        let captured: CapturedImage?
+        if let file, case .captured(let image) = pixels[file] {
+            captured = image
+        } else {
+            captured = nil
+        }
         queue.async {
             var written: Data?
             do {
-                written = try write(directory)
+                if let file, let captured {
+                    if let data = Self.jpeg(captured.image) {
+                        try Self.prepare(directory)
+                        try data.write(
+                            to: directory.appending(path: file),
+                            options: [.atomic, .completeFileProtection])
+                        written = data
+                    }
+                }
                 for file in files {
                     try? FileManager.default.removeItem(at: directory.appending(path: file))
                 }
@@ -256,7 +246,12 @@ final class AgentLastFrameStore {
                 Self.log.debug("Last frame write skipped: \(error.localizedDescription)")
             }
             let result = written
-            Task { @MainActor in then(result) }
+            Task { @MainActor [weak self] in
+                guard let file, let self, let result,
+                    self.frameIndex.handle(.encoded(file: file)) == [.storeEncoded(file)]
+                else { return }
+                self.pixels[file] = .encoded(result)
+            }
         }
     }
 
@@ -267,42 +262,36 @@ final class AgentLastFrameStore {
     private func loadIfNeeded() {
         guard !isLoaded else { return }
         guard let directory else {
-            isLoaded = true
+            perform(frameIndex.handle(.memoryOnly))
             return
         }
         let indexURL = directory.appending(path: Self.indexName)
         let read = queue.sync { readIndex(indexURL) }
-        let loaded: [Entry]
+        let loaded: AgentLastFrameIndexMachine.IndexRead
         switch read {
         case .unreadable:
-            return
+            loaded = .unreadable
         case .missing:
-            loaded = []
+            loaded = .entries([])
         case .data(let data):
             if let index = try? JSONDecoder().decode(Index.self, from: data),
                 index.version == Self.formatVersion
             {
-                loaded = index.entries
+                loaded = .entries(index.entries)
             } else {
-                loaded = []
+                loaded = .entries([])
             }
         }
-        isLoaded = true
-        let recorded = Set(entries.map(\.agentID))
-        var merged = entries + loaded.filter {
-            !recorded.contains($0.agentID) && !deferredDiscards.contains($0.agentID)
-                && (deferredRetentions[$0.scope]?.contains($0.agentID) ?? true)
-        }
-        deferredDiscards.removeAll()
-        deferredRetentions.removeAll()
-        if let retainedTargets {
-            merged.removeAll { retainedTargets[$0.hostID] != $0.target }
-        }
-        entries = Array(merged.filter(isFresh).sorted { $0.capturedAt > $1.capturedAt }
-            .prefix(Self.capacity))
-        let kept = Set(entries.map(\.file) + [Self.indexName])
+        perform(frameIndex.handle(.indexRead(loaded, now: now())))
+    }
+
+    /// The first load's sweep of files no entry names, and its index when
+    /// the merge changed it.
+    private func sweep(keeping keep: Set<String>, index entries: [Entry], rewritesIndex: Bool) {
+        guard let directory else { return }
+        let indexURL = directory.appending(path: Self.indexName)
+        let kept = keep.union([Self.indexName])
         let index = Index(version: Self.formatVersion, entries: entries)
-        let rewritesIndex = entries != loaded
         queue.async {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
             for name in names where !kept.contains(name) {
