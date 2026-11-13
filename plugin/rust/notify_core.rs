@@ -1596,6 +1596,79 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_failed_post_releases_its_own_claim_so_the_same_status_tries_again() {
+        let mut rig = tmux_rig("done");
+        rig.relay_answers(|_, index| {
+            if index == 0 {
+                Ok(answer(400, "bad"))
+            } else {
+                Ok(answer(200, r#"{"apnsId":"x"}"#))
+            }
+        });
+        let (result, _) = rig.notify("tmux:%3", "done");
+        assert!(result.is_err());
+        assert_eq!(read_last_notified(&rig.state_dir, "tmux:%3"), None);
+        notified(&rig, "tmux:%3", "done");
+        assert_eq!(rig.relay.posts().len(), 2);
+        assert_eq!(
+            read_last_notified(&rig.state_dir, "tmux:%3").as_deref(),
+            Some("done")
+        );
+    }
+
+    #[test]
+    fn a_failed_post_never_releases_the_claim_a_newer_turn_made_meanwhile() {
+        let rig = Rc::new_cyclic(|weak: &std::rc::Weak<Rig>| {
+            let mut rig = tmux_rig("done");
+            let weak = weak.clone();
+            let first = std::cell::Cell::new(true);
+            rig.relay_answers(move |_, _| {
+                if first.replace(false) {
+                    // The pane worked and blocked again while this Done
+                    // POST was in flight; that Blocked push claimed the pane.
+                    let rig = weak.upgrade().unwrap();
+                    set_status(&rig, "working");
+                    notified(&rig, "tmux:%3", "working");
+                    set_status(&rig, "blocked");
+                    notified(&rig, "tmux:%3", "blocked");
+                    return Ok(answer(400, "bad"));
+                }
+                Ok(answer(200, r#"{"apnsId":"x"}"#))
+            });
+            rig
+        });
+        let (result, _) = rig.notify("tmux:%3", "done");
+        assert!(result.is_err());
+        assert_eq!(
+            read_last_notified(&rig.state_dir, "tmux:%3").as_deref(),
+            Some("blocked")
+        );
+        // The Blocked push is still deduped.
+        notified(&rig, "tmux:%3", "blocked");
+        assert_eq!(rig.relay.posts().len(), 2);
+    }
+
+    #[test]
+    fn a_deduped_change_still_refreshes_its_summary_and_a_410_prunes_the_token() {
+        let rig = tmux_rig("blocked");
+        rig.write_config(json!({"summary_enabled": true}));
+        notified(&rig, "tmux:%3", "blocked");
+        notified(&rig, "tmux:%3", "blocked");
+        assert_eq!(rig.relay.posts().len(), 1);
+        assert!(
+            crate::summary::store::read_summary(&rig.config_dir.to_string_lossy(), "tmux:%3")
+                .is_some()
+        );
+        let mut rig = tmux_rig("done");
+        rig.relay_answers(|_, _| Ok(answer(410, r#"{"reason":"Unregistered"}"#)));
+        notified(&rig, "tmux:%3", "done");
+        assert_eq!(rig.relay.posts().len(), 1);
+        assert!(read_eligible_devices(&rig.config_dir, "done").is_empty());
+        // Nothing was delivered: the claim was released.
+        assert_eq!(read_last_notified(&rig.state_dir, "tmux:%3"), None);
+    }
+
     // test("release re-arms the pane for the next agent in it")
     #[test]
     fn release_rearms_the_pane_for_the_next_agent_in_it() {
