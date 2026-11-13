@@ -326,7 +326,11 @@ of the markers of grok, cursor, devin and copilot, which run
 `~/.claude/settings.json` hooks too; cursor's need `CURSOR_VERSION` and no
 grok marker. Statuses `working-if-active`, `working-if-blocked`,
 `idle-if-working` and `done-if-active` are guarded; tool events never revive
-Idle or Done (herdr #198). A SessionEnd release (`hook-session`) unsets the
+Idle or Done (herdr #198). On tmux both hooks write a guarded status only
+while the pane's `@waycar_seq` is still the one they decided from, checked
+inside the tmux server in the same call (`if-shell -F`), so a late tool event
+never overwrites a status written after its read (a turn's Done); with a
+stored seq that is no digit string the write is unconditional, as before. A SessionEnd release (`hook-session`) unsets the
 pane's options only while the pane still records that session or none,
 checked inside the tmux server in the same call as the unset (`if-shell -F`),
 so a session that replaced it after the hook's read keeps the pane; an id a

@@ -1300,14 +1300,31 @@ fn apply_to_pane(
         .status
         .and_then(|status| next_status(status, current.status.as_deref()))
         .filter(|next| Some(*next) != current.status.as_deref());
+    // A conditional status is written only while the pane's seq is still
+    // the one it was decided from: a status written after the read (a turn's
+    // Done) is never overwritten by a late tool event (B-35).
+    let read_seq = current.seq.as_deref().unwrap_or("");
+    let guarded = update.status.is_some_and(is_conditional)
+        && command_target(pane)
+        && read_seq.bytes().all(|b| b.is_ascii_digit());
+    let mut status_writes: Vec<(&str, String)> = Vec::new();
     if let Some(next) = next {
-        if !writes.iter().any(|(name, _)| *name == "@waycar_agent") {
-            writes.push(("@waycar_agent", agent.to_string()));
+        let target = if guarded {
+            &mut status_writes
+        } else {
+            &mut writes
+        };
+        if !update
+            .options
+            .iter()
+            .any(|(name, _)| *name == "@waycar_agent")
+        {
+            target.push(("@waycar_agent", agent.to_string()));
         }
-        writes.push(("@waycar_status", next.to_string()));
-        writes.push(("@waycar_seq", next_seq(current.seq.as_deref(), now_ns())));
+        target.push(("@waycar_status", next.to_string()));
+        target.push(("@waycar_seq", next_seq(current.seq.as_deref(), now_ns())));
     }
-    if writes.is_empty() {
+    if writes.is_empty() && status_writes.is_empty() {
         return;
     }
     let values: Vec<Cow<str>> = writes.iter().map(|(_, value)| tmux_arg(value)).collect();
@@ -1318,12 +1335,40 @@ fn apply_to_pane(
         }
         args.extend(["set-option", "-p", "-t", pane, name, value]);
     }
-    if host.tmux(&args, child_env).is_none() {
+    let condition = format!("#{{==:#{{@waycar_seq}},{read_seq}}}");
+    let conditional = status_writes
+        .iter()
+        .map(|(name, value)| format!("set-option -p -t {pane} {name} {value}"))
+        .collect::<Vec<_>>()
+        .join(" ; ");
+    if !status_writes.is_empty() {
+        if !args.is_empty() {
+            args.push(";");
+        }
+        args.extend(["if-shell", "-F", "-t", pane, &condition, &conditional]);
+        args.extend([";", "show-options", "-p", "-q", "-v", "-t", pane]);
+        args.push("@waycar_seq");
+    }
+    let Some(out) = host.tmux(&args, child_env) else {
         return;
-    }
+    };
     if let Some(next) = next {
-        host.notify(pane, next, child_env);
+        let written = match status_writes.last() {
+            Some((_, seq)) => out.trim_end_matches('\n') == seq,
+            None => true,
+        };
+        if written {
+            host.notify(pane, next, child_env);
+        }
     }
+}
+
+/// The statuses that depend on the pane's (see [`next_status`]).
+fn is_conditional(want: &str) -> bool {
+    matches!(
+        want,
+        "working-if-active" | "working-if-blocked" | "idle-if-working" | "done-if-active"
+    )
 }
 
 /// The command's entry point: `waycar hook-session <agent> [<event>]` with
@@ -2998,6 +3043,56 @@ mod tests {
     }
 
     #[test]
+    fn a_late_conditional_status_never_overwrites_a_status_written_after_its_read() {
+        // B-35: grok's idle prompt reads Working; the turn's Stop writes Done
+        // (a new seq) before the idle hook writes.
+        let payloads = captured_payloads();
+        let idle = with(
+            &payloads["grok"]["Notification"]["input"],
+            &[("notificationType", json!("idle_prompt"))],
+        );
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
+        *fake.interleave.borrow_mut() = Some(Box::new(|panes| {
+            set(panes, "@waycar_status", "done");
+            set(panes, "@waycar_seq", "200");
+        }));
+        run(
+            &fake,
+            "grok",
+            &idle,
+            Run {
+                event: Some("Notification"),
+                ..Run::default()
+            },
+        );
+        let options = fake.pane_options();
+        assert_eq!(opt(&options, "@waycar_status").as_deref(), Some("done"));
+        assert_eq!(opt(&options, "@waycar_seq").as_deref(), Some("200"));
+        assert!(fake.notifications.borrow().is_empty());
+
+        // A stored seq that is no digit string cannot sit in the condition:
+        // the write is unconditional, as before.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "x1")]);
+        run(
+            &fake,
+            "grok",
+            &idle,
+            Run {
+                event: Some("Notification"),
+                ..Run::default()
+            },
+        );
+        assert!(!fake.log.borrow()[1].iter().any(|arg| arg == "if-shell"));
+        assert_eq!(
+            opt(&fake.pane_options(), "@waycar_status").as_deref(),
+            Some("idle")
+        );
+        assert_eq!(*fake.notifications.borrow(), [notification("idle")]);
+    }
+
+    #[test]
     fn a_payload_status_equal_to_the_panes_writes_only_the_options() {
         let fake = Fake::new();
         fake.set_pane(&[("@waycar_status", "working"), ("@waycar_seq", "100")]);
@@ -3194,6 +3289,148 @@ mod tests {
         fn notify(&self, _pane: &str, status: &str, _env: &Env) {
             self.notified.borrow_mut().push(status.to_string());
         }
+    }
+
+    #[test]
+    fn real_tmux_a_late_conditional_status_keeps_the_status_written_after_its_read() {
+        use crate::real_tmux::RealTmux;
+
+        let Some(tmux) = RealTmux::start() else {
+            return;
+        };
+        tmux.ok(&["new-session", "-d", "-s", "s", "sleep 60"]);
+        let pane = tmux.ok(&["list-panes", "-a", "-F", "#{pane_id}"]);
+        let pid: u32 = tmux
+            .ok(&["display-message", "-p", "-t", &pane, "#{pane_pid}"])
+            .parse()
+            .unwrap();
+        let mut env = tmux.env.clone();
+        env.set("TMUX_PANE", &pane);
+        let idle = r#"{"notificationType": "idle_prompt"}"#;
+        let reset = || {
+            for (name, value) in [("@waycar_status", "working"), ("@waycar_seq", "100")] {
+                tmux.ok(&["set-option", "-p", "-t", &pane, name, value]);
+            }
+        };
+        let option = |name: &str| tmux.ok(&["show-options", "-p", "-v", "-t", &pane, name]);
+        reset();
+        let host = Racing {
+            system: SystemHost { env: &env },
+            tmux: &tmux,
+            calls: Default::default(),
+            between: vec![
+                vec!["set-option", "-p", "-t", &pane, "@waycar_status", "done"],
+                vec!["set-option", "-p", "-t", &pane, "@waycar_seq", "200"],
+            ],
+            notified: RefCell::default(),
+        };
+        run_hook_session("grok", "Notification", idle, &env, pid, &host);
+        assert_eq!(option("@waycar_status"), "done");
+        assert_eq!(option("@waycar_seq"), "200");
+        assert!(host.notified.borrow().is_empty());
+
+        // Without a race it moves Working to Idle and notifies.
+        reset();
+        let host = Racing {
+            between: Vec::new(),
+            calls: Default::default(),
+            ..host
+        };
+        run_hook_session("grok", "Notification", idle, &env, pid, &host);
+        assert_eq!(option("@waycar_status"), "idle");
+        assert_eq!(option("@waycar_agent"), "grok");
+        assert!(option("@waycar_seq").parse::<u128>().unwrap() > 100);
+        assert_eq!(*host.notified.borrow(), ["idle"]);
+    }
+
+    /// bin/waycar-hook against the real tmux, with `between` run by another
+    /// client right after the hook's snapshot (a `tmux` wrapper on PATH).
+    /// The hook's agent is the pane's own process (`CLAUDE_PID`).
+    fn run_shell_hook(
+        tmux: &crate::real_tmux::RealTmux,
+        pane: &str,
+        pid: u32,
+        want: &str,
+        between: &str,
+    ) {
+        let dir = temp_dir("shell-hook");
+        let real = String::from_utf8(
+            std::process::Command::new("sh")
+                .args(["-c", "command -v tmux"])
+                .env("PATH", tmux.env.get("PATH").unwrap())
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap();
+        let real = std::fs::canonicalize(real.trim()).unwrap();
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        crate::test_support::write_stub(
+            &dir.join("bin/tmux"),
+            &format!(
+                "#!/bin/sh\nn=$(cat '{count}' 2>/dev/null || echo 0)\necho $((n + 1)) > '{count}'\n[ \"$n\" = 1 ] && {real} -f /dev/null {between}\nexec {real} -f /dev/null \"$@\"\n",
+                count = dir.join("count").display(),
+                real = real.display(),
+            ),
+        );
+        let hook = concat!(env!("CARGO_MANIFEST_DIR"), "/bin/waycar-hook");
+        let path = format!("{}:{}", dir.join("bin").display(), "/usr/bin:/bin");
+        let status = std::process::Command::new("sh")
+            .args([hook, "claude", want])
+            .env_clear()
+            .env("PATH", path)
+            .env("TMUX_TMPDIR", tmux.env.get("TMUX_TMPDIR").unwrap())
+            .env("TMUX_PANE", pane)
+            .env("CLAUDECODE", "1")
+            .env("CLAUDE_PID", pid.to_string())
+            .stdin(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn real_tmux_the_shell_hooks_late_conditional_status_keeps_a_newer_write() {
+        use crate::real_tmux::RealTmux;
+
+        let Some(tmux) = RealTmux::start() else {
+            return;
+        };
+        tmux.ok(&["new-session", "-d", "-s", "s", "sleep 60"]);
+        let pane = tmux.ok(&["list-panes", "-a", "-F", "#{pane_id}"]);
+        let pid: u32 = tmux
+            .ok(&["display-message", "-p", "-t", &pane, "#{pane_pid}"])
+            .parse()
+            .unwrap();
+        let option = |name: &str| tmux.ok(&["show-options", "-p", "-v", "-t", &pane, name]);
+        let reset = |status: &str| {
+            for (name, value) in [("@waycar_status", status), ("@waycar_seq", "100")] {
+                tmux.ok(&["set-option", "-p", "-t", &pane, name, value]);
+            }
+        };
+        let done = format!(
+            "set-option -p -t {pane} @waycar_status done \\; set-option -p -t {pane} @waycar_seq 200"
+        );
+        // B-35: a PostToolUse (working-if-blocked) and a PreToolUse
+        // (working-if-active) that read Blocked, then the turn's Stop wrote
+        // Done: Done stays.
+        for want in ["working-if-blocked", "working-if-active"] {
+            reset("blocked");
+            run_shell_hook(&tmux, &pane, pid, want, &done);
+            assert_eq!(option("@waycar_status"), "done", "{want}");
+            assert_eq!(option("@waycar_seq"), "200", "{want}");
+        }
+        // Without a race the same hook still moves Blocked to Working.
+        reset("blocked");
+        run_shell_hook(&tmux, &pane, pid, "working-if-blocked", "-V >/dev/null");
+        assert_eq!(option("@waycar_status"), "working");
+        assert_eq!(option("@waycar_agent"), "claude");
+        assert!(option("@waycar_seq").parse::<u128>().unwrap() > 100);
+        // An unconditional status still wins over a newer write, as before.
+        reset("working");
+        run_shell_hook(&tmux, &pane, pid, "blocked", &done);
+        assert_eq!(option("@waycar_status"), "blocked");
     }
 
     #[test]

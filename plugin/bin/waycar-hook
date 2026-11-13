@@ -340,15 +340,35 @@ esac
 
 case $agent in
   claude|codex|omp|pi|opencode|copilot|qwen|gemini|grok|agy|hermes|kilo|cline|cursor|devin|kiro|muse)
-    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
-      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" \; \
-      set-option -p -t "$TMUX_PANE" @waycar_agent "$agent" >/dev/null 2>&1 || exit 0
-    ;;
-  *)
-    tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
-      set-option -p -t "$TMUX_PANE" @waycar_seq "$now" >/dev/null 2>&1 || exit 0
-    ;;
+    known_agent=1 ;;
+  *) known_agent= ;;
 esac
+
+# A conditional status is written only while the pane's seq is still the one
+# read above, decided inside the tmux server in the same call: a status
+# written since (a turn's Done) is never overwritten by a late tool event.
+guarded=
+case $want in
+  *-if-*)
+    case ${TMUX_PANE#%} in
+      "$TMUX_PANE" | "" | *[!0-9]*) ;;
+      *) case $prev_seq in *[!0-9]*) ;; *) guarded=1 ;; esac ;;
+    esac ;;
+esac
+if [ -n "$guarded" ]; then
+  writes="set-option -p -t $TMUX_PANE @waycar_status $next ; set-option -p -t $TMUX_PANE @waycar_seq $now"
+  [ -z "$known_agent" ] || writes="$writes ; set-option -p -t $TMUX_PANE @waycar_agent $agent"
+  written=$(tmux if-shell -F -t "$TMUX_PANE" "#{==:#{@waycar_seq},$prev_seq}" "$writes" \; \
+    show-options -p -q -v -t "$TMUX_PANE" @waycar_seq 2>/dev/null) || exit 0
+  [ "$written" = "$now" ] || exit 0
+elif [ -n "$known_agent" ]; then
+  tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+    set-option -p -t "$TMUX_PANE" @waycar_seq "$now" \; \
+    set-option -p -t "$TMUX_PANE" @waycar_agent "$agent" >/dev/null 2>&1 || exit 0
+else
+  tmux set-option -p -t "$TMUX_PANE" @waycar_status "$next" \; \
+    set-option -p -t "$TMUX_PANE" @waycar_seq "$now" >/dev/null 2>&1 || exit 0
+fi
 
 notify "$next"
 exit 0
