@@ -29,7 +29,7 @@ export const WAYCAR_ROWS: Record<CapabilityId, Cell> = {
   ios: { level: 'yes', text: 'Yes, iPhone and iPad, iOS 18 or later' },
   android: { level: 'no', text: 'No. An Android app is coming soon' },
   desktop: { level: 'no', text: 'No native desktop app or web client' },
-  source: { level: 'info', text: 'Closed source app. Host plugin is Apache-2.0' },
+  source: { level: 'info', text: 'Open source app + Host Tools, Apache-2.0, on GitHub' },
   price: { level: 'info', text: 'Free. Every feature, unlimited launches' },
   'general-ssh': { level: 'no', text: 'No. Terminals need herdr, tmux or herdr-core' },
 };

@@ -71,6 +71,7 @@ const heroSizes = '(min-width: 1024px) min(489px, calc(45vw - 73px)), (min-width
     <div class="meta">
     <ul class="proof" aria-label="What you get">
       {proof.map((item) => <li>{item}</li>)}
+      <li><a href="https://github.com/waycar/waycar-app">open source on GitHub</a></li>
     </ul>
     <p class="agents-row">
       <span>works with</span>
@@ -163,6 +164,12 @@ const heroSizes = '(min-width: 1024px) min(489px, calc(45vw - 73px)), (min-width
   .proof li::before {
     content: '✓';
     color: var(--cyan);
+  }
+
+  .proof a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .ctas {

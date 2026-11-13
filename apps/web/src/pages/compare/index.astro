@@ -21,12 +21,11 @@ const rated = (id: CapabilityId, ...levels: Level[]) => comparisons.filter((entr
 const generalSsh = rated('general-ssh', 'yes');
 const desktopOrWeb = rated('desktop', 'yes');
 const android = rated('android', 'yes', 'partial');
-const openSource = comparisons.filter((entry) => /^Open source/i.test(entry.data.rows.source.text));
 // The one hand-written pick: it must name a page that exists.
 const remoteControl = comparisons.find((entry) => entry.id === 'claude-code-remote-control');
 if (!remoteControl) throw new Error('src/pages/compare/index.astro names the claude-code-remote-control comparison, which is missing');
 // A pick built from the rows must not print an empty list if the rows change.
-for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android, openSource })) {
+for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })) {
   if (list.length === 0) throw new Error(`src/pages/compare/index.astro: no comparison qualifies for the "${pick}" pick`);
 }
 ---
@@ -73,7 +72,6 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android, o
         <ul>
           <li>You want a general SSH client with SFTP and port forwarding, for any server. Waycar needs herdr or tmux on the machine. Try <ComparisonLinks entries={generalSsh} join="or" />.</li>
           <li>You want a desktop or web client beside the phone app, or an Android app today. Waycar is an iPhone and iPad app with no native desktop or web client, and an Android app is coming soon. With a desktop or web client: <ComparisonLinks entries={desktopOrWeb} join="and" />. With an Android app: <ComparisonLinks entries={android} join="and" />.</li>
-          <li>You want an open source client. Waycar's app is closed source. Open source: <ComparisonLinks entries={openSource} join="and" />.</li>
           <li>You only use Claude Code and already pay for a Claude plan. <a href={comparePath(remoteControl.id)}>Remote Control</a> is built in and needs no SSH setup.</li>
           <li>You need agents to keep working with your computer off. Waycar reaches your own machine, so that machine has to be on and awake.</li>
         </ul>

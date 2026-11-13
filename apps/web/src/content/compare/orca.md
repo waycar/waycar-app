@@ -102,7 +102,6 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 - **Usage at a glance.** Orca shows usage, rate limits and reset countdowns, and can switch agent accounts, on desktop and on the phone.
 - **Always-on hosts.** A background daemon keeps agents running when the Orca window closes. `orca serve` runs without the desktop window, and the desktop app can open SSH worktrees.
 - **Android.** Orca has an Android app you download today. Waycar's Android app is coming soon.
-- **Open source.** Orca is MIT licensed, including the Relay server code. Its account and API services are in a private repository. Waycar's app is closed source.
 
 ## What each costs
 

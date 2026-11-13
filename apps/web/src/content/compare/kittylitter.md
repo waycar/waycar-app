@@ -38,7 +38,6 @@ pickWaycar:
   - You want one Console of agents from all your machines, with Blocked agents first.
   - You want a push when an agent is Blocked as well as Done, and Chat Mode for 14 agents.
 pickThem:
-  - You want a free, open source client with code you can read.
   - You want to run Codex on the phone itself, with no machine involved.
   - You want to reach your machine over a peer to peer link, with no VPN, public IP or port forwarding.
   - You use Android, or run your agents on a Windows machine.
@@ -100,7 +99,6 @@ Waycar's agent terminals need herdr (0.7.5 or newer), tmux (3.2 or newer) or her
 
 ## Where Kittylitter is better
 
-- **Open source.** You can read the code. Waycar is also free, but its app is closed source.
 - **Codex on the phone.** Its architecture notes say Codex can run on the device itself, with no machine. Waycar cannot.
 - **No VPN needed.** Pairing by QR code works through home routers and firewalls with no VPN, public IP or port forwarding, according to its site.
 - **More platforms.** It is on Android (labelled Beta in the README), and its daemon runs on Windows. Waycar is an iPhone and iPad app with no native desktop or web client, and an Android app is coming soon. Both iPad apps can be installed on Apple silicon Macs.

@@ -97,7 +97,6 @@ Waycar works differently. Nothing of ours runs as a server on your machine, othe
 
 ## Where T3 Code is better
 
-- **Open source.** The desktop, server and mobile code are in one public MIT repository. Waycar's app is closed source.
 - **Many agents in one place.** T3 Code lists Codex, Claude, Cursor, Grok Build, OpenCode, Antigravity and Pi, plus agents from its Agent Client Protocol (ACP) registry.
 - **Every platform.** It has desktop, web, iOS and Android. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
 - **More in the phone app.** It has push, Live Activities, on-device voice (iOS 26 or later), attachments, a terminal, subscription limits and home screen widgets, plus file browsing and diff review.

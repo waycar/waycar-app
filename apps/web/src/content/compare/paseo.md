@@ -50,7 +50,7 @@ faq:
   - q: Does Paseo need an account or a cloud service?
     a: Paseo says it has no required account and no telemetry. The relay is off by default and asks before you enable it. Its docs say traffic between phone and daemon is end-to-end encrypted. Paseo Hub is a separate optional service, hosted or self-hosted, and is not needed for phone access.
   - q: Is Paseo free and open source?
-    a: Yes. Paseo is Apache License 2.0, and its site says it is free. You bring your own agent CLIs and logins. It is an independent project. Waycar's app is closed source and free, with unlimited launches.
+    a: Yes. Paseo is Apache License 2.0, and its site says it is free. You bring your own agent CLIs and logins. It is an independent project. Waycar's app is open source under Apache-2.0 and free, with unlimited launches.
   - q: Which one should I use to check on an agent from my phone?
     a: If your agents run in tmux or herdr today, Waycar opens them as they are. If you want a managed workspace with apps for every platform, Paseo fits better. Both have push alerts, approvals and a chat view, so the choice is about how agents start and where you use them.
 sources:
@@ -96,7 +96,6 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 ## Where Paseo is better
 
 - **Every platform.** Paseo has desktop apps, a web app, a CLI and an Android app. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
-- **Open source.** The Paseo source is public under Apache 2.0. Waycar's app is closed source.
 - **More agents.** Paseo has native adapters for several agents and a catalog of agents that use the Agent Client Protocol. Waycar launches 23 agents, and Chat Mode covers 14.
 - **Managed workspaces.** Paseo runs many agents at once and can give each its own git worktree. It also shows subscription quota windows. Waycar can start an agent in a Workspace or on a fresh git worktree. Its usage view is partial.
 - **Older phones.** The Paseo iOS app needs iOS 15.1 or later. Waycar needs iOS 18 or later.

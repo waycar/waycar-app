@@ -104,7 +104,6 @@ Blink wins on these:
 - **Predictive local echo.** Blink guesses what a key press will show and lets you set that for each host. Waycar has no local echo prediction.
 - **Any server.** Blink connects to any SSH server. Waycar's agent terminals need herdr, tmux or herdr-core; it cannot open an arbitrary SSH server.
 - **Files and tunnels.** Remote files show up in the iOS Files app, and Blink supports local, remote and dynamic port forwarding. Waycar has no SFTP file browser and no port forwarding. It uses SFTP to upload the files you attach and to preview files an agent mentions.
-- **Open source.** Blink's code is public. Waycar's app is closed source.
 - **A deep keyboard.** Blink lets you remap shortcuts, modifiers and single key presses on a hardware keyboard.
 
 ## What each costs
