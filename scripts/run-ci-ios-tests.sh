@@ -119,6 +119,9 @@ codex_pid=""
 host_load_pid=""
 simulator_udid=""
 simulator_destination=""
+# Set once this run has booted (or begun booting) its simulator; until then
+# destination recovery leaves the boot to wait_for_simulator_boot.
+simulator_boot_started=0
 simulator_environment_variables=()
 simulator_listing=""
 
@@ -1689,8 +1692,12 @@ recover_simulator_destination() {
         fi
     fi
     printf 'Recovering simulator %s\n' "$simulator_udid" >&2
-    xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
-    xcrun simctl bootstatus "$simulator_udid" -b || return 1
+    # A deferred boot (WAYCAR_CI_BOOT_AFTER_BUILD) stays deferred: compilation
+    # needs the destination to exist, and wait_for_simulator_boot boots it.
+    if [[ "$simulator_boot_started" == "1" ]]; then
+        xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+        xcrun simctl bootstatus "$simulator_udid" -b || return 1
+    fi
     if [[ "${#simulator_environment_variables[@]}" -gt 0 ]]; then
         push_simulator_environment "${simulator_environment_variables[@]}" || return 1
     fi
@@ -1813,6 +1820,7 @@ boot_after_build=0
 if [[ "${WAYCAR_CI_BOOT_AFTER_BUILD:-0}" == "1" ]]; then
     boot_after_build=1
 else
+    simulator_boot_started=1
     xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
 fi
 
@@ -1830,6 +1838,7 @@ wait_for_simulator_boot() {
     local cores
 
     if [[ "$boot_after_build" == "1" ]]; then
+        simulator_boot_started=1
         xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
     fi
     xcrun simctl bootstatus "$simulator_udid" -b
