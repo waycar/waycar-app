@@ -762,6 +762,49 @@ fn clear_progress_drops_the_progress_and_keeps_the_record() {
     assert_eq!(progress_of(&dir), json!({"phase": "exploring"}));
 }
 
+#[test]
+fn a_progress_rewrite_never_replaces_a_record_another_writer_put_there_since_its_read() {
+    let dir = TempDir::new("summary-store");
+    write(
+        &dir,
+        "working",
+        Some("editing"),
+        1,
+        json!({"done": 1, "total": 3}),
+    );
+    let seen = stored(&dir);
+    // A Done summary lands between the progress write's read and its rewrite.
+    write(&dir, "done", Some("finished"), 2, Value::Null);
+    let done = raw_of(&dir, PANE);
+    let progress = normalize_progress(&json!({"done": 2, "total": 3}));
+    assert!(!rewrite_progress(dir.str(), PANE, &seen, progress, Some(3.0)).unwrap());
+    assert_eq!(raw_of(&dir, PANE), done);
+    // The same rewrite over the record it read lands.
+    let seen = stored(&dir);
+    assert!(rewrite_progress(dir.str(), PANE, &seen, None, None).unwrap());
+    assert_eq!(stored(&dir)["summary"], "finished");
+}
+
+#[test]
+fn a_summary_at_the_stored_ts_replaces_it_and_clear_progress_skips_what_has_none() {
+    let dir = TempDir::new("summary-store");
+    write(&dir, "working", Some("first"), 5, Value::Null);
+    assert!(write(&dir, "blocked", Some("second"), 5, Value::Null));
+    assert_eq!(stored(&dir)["summary"], "second");
+    // No progress and no progress_ts: nothing to clear.
+    let before = raw_of(&dir, PANE);
+    assert!(!clear_progress(dir.str(), PANE).unwrap());
+    assert_eq!(raw_of(&dir, PANE), before);
+    // A tombstone has no summary: nothing to clear either.
+    write(&dir, "done", None, 6, Value::Null);
+    assert!(!clear_progress(dir.str(), PANE).unwrap());
+    // A stored record that is not an entry is replaced by a write.
+    fs::write(path_of(&dir, PANE), "[1]\n").unwrap();
+    assert!(!clear_progress(dir.str(), PANE).unwrap());
+    assert!(!update(&dir, "working", json!({"done": 1, "total": 2}), 7));
+    assert!(write(&dir, "working", Some("third"), 1, Value::Null));
+}
+
 // MARK: - Node interop (no JS test: the parity cases cover Node-written files)
 
 #[test]
