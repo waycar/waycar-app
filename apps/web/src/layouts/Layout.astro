@@ -3,7 +3,7 @@ import ConsentBanner from '../components/ConsentBanner.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import '../styles/global.css';
-import { APP_SCHEMA_ID } from '../data/links';
+import { APP_SCHEMA_ID, APP_STORE_LISTING_URL, ON_APP_STORE } from '../data/links';
 import { color } from '../styles/tokens';
 
 interface Props {
@@ -69,6 +69,9 @@ const jsonLd = [
       'Check on your coding agents in herdr, tmux and more from iPhone or iPad. Agent terminals run over mosh and fall back to SSH. No account, no cloud relay for your sessions. Android app coming soon.',
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'iOS, iPadOS',
+    sameAs: ['https://github.com/waycar/waycar-app'],
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    ...(ON_APP_STORE ? { downloadUrl: APP_STORE_LISTING_URL } : {}),
   },
   ...schema,
 ].map((data) => JSON.stringify(data).replace(/</g, '\\u003c'));
