@@ -10,9 +10,12 @@ protocol SSHByteTransport: AnyObject, Sendable {
     func abort()
 }
 
+/// The descriptors' ownership and the pump's start are
+/// `ByteTransportMachine`'s, under the lock; the transport keeps the pump
+/// Task and performs the closes and the cancellation.
 final class DirectTCPIPByteTransport: SSHByteTransport, @unchecked Sendable {
     private let lock = NSLock()
-    private var innerDescriptor: Int32
+    private var machine: ByteTransportMachine
     private var pumpTask: Task<Result<Void, SSHError>, Never>?
 
     init() throws {
@@ -30,34 +33,29 @@ final class DirectTCPIPByteTransport: SSHByteTransport, @unchecked Sendable {
             Darwin.close(descriptors[1])
             throw error
         }
-        innerDescriptor = descriptors[0]
-        pumpDescriptor = descriptors[1]
+        machine = ByteTransportMachine(inner: descriptors[0], pump: descriptors[1])
     }
 
-    private var pumpDescriptor: Int32
-
     func takePumpDescriptor() throws -> Int32 {
-        lock.lock()
-        defer { lock.unlock() }
-        guard pumpDescriptor >= 0 else { throw SSHError.connectionInvalidated }
-        let descriptor = pumpDescriptor
-        pumpDescriptor = -1
-        return descriptor
+        try take(.takePumpDescriptor)
     }
 
     func start(_ task: Task<Result<Void, SSHError>, Never>) {
         lock.lock()
-        precondition(pumpTask == nil)
+        _ = machine.handle(.startPump)
         pumpTask = task
         lock.unlock()
     }
 
     func takeDescriptor() throws -> Int32 {
-        lock.lock()
-        defer { lock.unlock() }
-        guard innerDescriptor >= 0 else { throw SSHError.connectionInvalidated }
-        let descriptor = innerDescriptor
-        innerDescriptor = -1
+        try take(.takeInner)
+    }
+
+    private func take(_ event: ByteTransportMachine.Event) throws -> Int32 {
+        let effects = lock.withLock { machine.handle(event) }
+        guard case .hand(let descriptor) = effects.first else {
+            throw SSHError.connectionInvalidated
+        }
         return descriptor
     }
 
@@ -77,27 +75,32 @@ final class DirectTCPIPByteTransport: SSHByteTransport, @unchecked Sendable {
                 }
             }
             let first = await group.next() ?? .failure(.connectionFailed)
+            // Out of time: the pump is cancelled here, inside the group. The
+            // child awaiting `task.value` does not answer cancellation, and
+            // the group waits for it before returning, so a pump cancelled
+            // only after the group would never be cancelled at all (B-27).
+            if case .failure(.timedOut) = first { task.cancel() }
             group.cancelAll()
             return first
-        }
-        if case .failure(.timedOut) = result {
-            task.cancel()
-            _ = await task.value
         }
         try result.get()
     }
 
     func abort() {
         lock.lock()
-        let descriptor = innerDescriptor
-        innerDescriptor = -1
-        let unusedPumpDescriptor = pumpTask == nil ? pumpDescriptor : -1
-        if unusedPumpDescriptor >= 0 { pumpDescriptor = -1 }
+        let effects = machine.handle(.abort)
         let task = pumpTask
         lock.unlock()
-        if descriptor >= 0 { Darwin.close(descriptor) }
-        if unusedPumpDescriptor >= 0 { Darwin.close(unusedPumpDescriptor) }
-        task?.cancel()
+        for effect in effects {
+            switch effect {
+            case .closeDescriptor(let descriptor):
+                Darwin.close(descriptor)
+            case .cancelPump:
+                task?.cancel()
+            case .hand, .refuse:
+                continue
+            }
+        }
     }
 
     deinit {

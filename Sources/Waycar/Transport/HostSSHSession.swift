@@ -54,11 +54,12 @@ actor HostSSHSession: HostSSHServices {
     /// (`launchPromptCapabilities()`).
     let launchPromptCapabilityProbe =
         SharedAsyncOperation<LaunchPromptWriter.ProbeAnswer>(cachesSuccess: true)
+    /// Holds, invalidation and close (`HostSessionLifetimeMachine`).
+    private var lifetime = HostSessionLifetimeMachine()
     /// False once the connection has been found invalidated or the session
     /// closed: nothing new is started on it.
-    var connected = true
-    private var holds = 1
-    private var closed = false
+    var connected: Bool { lifetime.isOpen }
+    private var closed: Bool { lifetime.isClosed }
 
     var imageStageClients: [UUID: SSHSFTPClient] = [:]
     var notificationFileClients: [UUID: SSHSFTPClient] = [:]
@@ -73,7 +74,9 @@ actor HostSSHSession: HostSSHServices {
     /// share it: the actor is re-entered at every await inside that open, and
     /// two independent opens would each keep a channel, one of them unowned.
     var sessionFileClientOpening: Task<SSHSFTPClient, any Error>?
-    var sessionFileReadsInFlight = 0
+    /// Whether the holder is empty, opening or open, and the reads on it
+    /// (`RangedFileHolderMachine`).
+    var sessionFileHolder = RangedFileHolderMachine()
     /// Returns the channel once no follower has read for a while. A screen
     /// that stopped looking does not tell the Transport so; without this the
     /// channel and its lease would stay spent until the Host disconnects.
@@ -389,9 +392,7 @@ actor HostSSHSession: HostSSHServices {
     /// One more hold for a new holder; false once the session has closed, so
     /// the caller dials a fresh one instead.
     func retain() -> Bool {
-        guard !closed else { return false }
-        holds += 1
-        return true
+        lifetime.handle(.retain) == [.retained]
     }
 
     func release() async {
@@ -401,30 +402,40 @@ actor HostSSHSession: HostSSHServices {
     /// `release()`, reporting a failed connection teardown when this was the
     /// last hold: herdr's `close()` has always surfaced it.
     func releaseReportingTeardown() async throws {
-        guard holds > 0 else { return }
-        holds -= 1
-        guard holds == 0 else { return }
-        try await close()
+        guard lifetime.handle(.release).contains(.tearDown) else { return }
+        try await tearDown()
     }
 
-    /// Ends every channel the session itself holds and closes the connection.
-    /// A connection already found invalidated is left as it is, as the herdr
-    /// Transport always left it.
-    private func close() async throws {
-        guard !closed else { return }
-        closed = true
-        guard connected else { return }
-        connected = false
+    /// The SSH layer reported the connection invalidated: nothing new starts
+    /// on it, and its last release leaves it as it is.
+    func noteConnectionInvalidated() {
+        _ = lifetime.handle(.connectionInvalidated)
+    }
+
+    /// Ends every channel the session itself holds and closes the connection,
+    /// after the last release of a session still open. A connection already
+    /// found invalidated is left as it is, as the herdr Transport always
+    /// left it.
+    private func tearDown() async throws {
         let stagingClients = Array(imageStageClients.values)
         imageStageClients.removeAll()
         let notificationClients = Array(notificationFileClients.values)
         notificationFileClients.removeAll()
-        sessionFileClientIdleRelease?.cancel()
-        sessionFileClientIdleRelease = nil
-        let fileReader = sessionFileClient
-        sessionFileClient = nil
-        let fileReaderLease = sessionFileClientLease
-        sessionFileClientLease = nil
+        var fileReader: SSHSFTPClient?
+        var fileReaderLease: SSHChannelAdmissionLease?
+        for effect in sessionFileHolder.handle(.sessionClosed) {
+            switch effect {
+            case .cancelIdleRelease:
+                cancelSessionFileClientIdleRelease()
+            case .close:
+                fileReader = sessionFileClient
+                sessionFileClient = nil
+                fileReaderLease = sessionFileClientLease
+                sessionFileClientLease = nil
+            case .use, .joinOpening, .open, .armIdleRelease:
+                continue
+            }
+        }
         for sftp in stagingClients {
             try? await sftp.close(timeout: .seconds(2))
         }
@@ -797,7 +808,7 @@ actor HostSSHSession: HostSSHServices {
     /// layer reports the connection invalidated.
     func mapOperationError(_ error: any Error) -> TransportError {
         if error as? SSHError == .connectionInvalidated {
-            connected = false
+            noteConnectionInvalidated()
         }
         return Self.mapOperation(error)
     }

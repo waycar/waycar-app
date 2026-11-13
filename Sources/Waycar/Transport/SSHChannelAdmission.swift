@@ -113,26 +113,13 @@ actor SSHChannelAdmission {
         }
     }
 
-    private struct Waiter {
-        let id: UInt64
-        let channelClass: ChannelClass
-        let continuation: CheckedContinuation<Void, any Error>
-        /// Fails the wait with `TransportError.timedOut`; nil waits forever.
-        let deadline: Task<Void, Never>?
-    }
-
-    private let limits: Limits
-    private var counts = Snapshot(
-        ordinaryForwarding: 0,
-        events: 0,
-        ordinarySession: 0,
-        attach: 0,
-        control: 0,
-        core: 0,
-        connection: 0)
-    private var waiters: [Waiter] = []
-    private var pendingRequests: Set<UInt64> = []
-    private var cancelledRequests: Set<UInt64> = []
+    /// The counts, the parked requests and the pending ones
+    /// (`ChannelAdmissionMachine`); the actor keeps each request's
+    /// continuation and deadline Task by its id.
+    private var machine: ChannelAdmissionMachine
+    private var continuations: [UInt64: CheckedContinuation<Void, any Error>] = [:]
+    /// Fails a parked wait with `TransportError.timedOut`; none waits forever.
+    private var deadlines: [UInt64: Task<Void, Never>] = [:]
     private var nextRequestID: UInt64 = 0
 
     init(limits: Limits = .production) {
@@ -143,7 +130,7 @@ actor SSHChannelAdmission {
         precondition(limits.control > 0)
         precondition(limits.core > 0)
         precondition(limits.connection > 0)
-        self.limits = limits
+        machine = ChannelAdmissionMachine(limits: limits)
     }
 
     func withChannel<Value: Sendable>(
@@ -195,36 +182,17 @@ actor SSHChannelAdmission {
         try Task.checkCancellation()
         nextRequestID &+= 1
         let requestID = nextRequestID
-        pendingRequests.insert(requestID)
-        defer {
-            pendingRequests.remove(requestID)
-            cancelledRequests.remove(requestID)
-        }
+        send(.requested(id: requestID))
+        defer { send(.finished(id: requestID)) }
 
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Void, any Error>) in
-                if cancelledRequests.contains(requestID) {
-                    continuation.resume(throwing: CancellationError())
-                } else if canAcquire(channelClass) {
-                    increment(channelClass)
-                    continuation.resume()
-                } else {
-                    let timer = deadline.map { budget in
-                        Task { [weak self] in
-                            do { try await Task.sleep(for: budget) } catch { return }
-                            await self?.expire(requestID: requestID)
-                        }
-                    }
-                    waiters.append(Waiter(
-                        id: requestID,
-                        channelClass: channelClass,
-                        continuation: continuation,
-                        deadline: timer))
-                }
+                continuations[requestID] = continuation
+                send(.register(id: requestID, channelClass, deadline: deadline))
             }
         } onCancel: {
-            Task { await self.cancel(requestID: requestID) }
+            Task { await self.send(.cancel(id: requestID)) }
         }
 
         if Task.isCancelled {
@@ -234,96 +202,39 @@ actor SSHChannelAdmission {
         return SSHChannelAdmissionLease(admission: self, channelClass: channelClass)
     }
 
-    func snapshot() -> Snapshot { counts }
+    func snapshot() -> Snapshot { machine.state.counts }
 
 #if DEBUG
     /// Acquirers parked waiting for a slot.
-    func waiterCountForTesting() -> Int { waiters.count }
+    func waiterCountForTesting() -> Int { machine.state.waiters.count }
 #endif
 
     fileprivate func release(_ channelClass: ChannelClass) {
-        decrement(channelClass)
-        resumeEligibleWaiters()
+        send(.release(channelClass))
     }
 
-    private func cancel(requestID: UInt64) {
-        guard pendingRequests.contains(requestID) else { return }
-        if let index = waiters.firstIndex(where: { $0.id == requestID }) {
-            let waiter = waiters.remove(at: index)
-            waiter.deadline?.cancel()
-            waiter.continuation.resume(throwing: CancellationError())
-        } else {
-            cancelledRequests.insert(requestID)
+    private func send(_ event: ChannelAdmissionMachine.Event) {
+        for effect in machine.handle(event) {
+            switch effect {
+            case .grant(let id):
+                deadlines.removeValue(forKey: id)?.cancel()
+                continuations.removeValue(forKey: id)?.resume()
+            case .refuse(let id):
+                continuations.removeValue(forKey: id)?.resume(throwing: CancellationError())
+            case .cancelWait(let id):
+                deadlines.removeValue(forKey: id)?.cancel()
+                continuations.removeValue(forKey: id)?.resume(throwing: CancellationError())
+            case .timeOut(let id):
+                // The deadline Task is the one reporting this.
+                deadlines.removeValue(forKey: id)
+                continuations.removeValue(forKey: id)?.resume(throwing: TransportError.timedOut)
+            case .armDeadline(let id, let budget):
+                deadlines[id] = Task { [weak self] in
+                    do { try await Task.sleep(for: budget) } catch { return }
+                    await self?.send(.expire(id: id))
+                }
+            }
         }
-    }
-
-    /// A waiter's deadline passed before a slot freed.
-    private func expire(requestID: UInt64) {
-        guard let index = waiters.firstIndex(where: { $0.id == requestID }) else { return }
-        waiters.remove(at: index).continuation.resume(throwing: TransportError.timedOut)
-    }
-
-    private func resumeEligibleWaiters() {
-        while let index = waiters.firstIndex(where: { canAcquire($0.channelClass) }) {
-            let waiter = waiters.remove(at: index)
-            waiter.deadline?.cancel()
-            increment(waiter.channelClass)
-            waiter.continuation.resume()
-        }
-    }
-
-    private func canAcquire(_ channelClass: ChannelClass) -> Bool {
-        guard counts.connection < limits.connection else { return false }
-        switch channelClass {
-        case .ordinaryForwarding:
-            return counts.ordinaryForwarding < limits.ordinaryForwarding
-        case .events:
-            return counts.events < limits.events
-        case .ordinarySession:
-            // Held control and core channels each spend one ordinary session
-            // slot.
-            return counts.ordinarySession + counts.control + counts.core + counts.zellij < limits.ordinarySession
-        case .attach:
-            return counts.attach < limits.attach
-        case .control:
-            return counts.control < limits.control
-                && counts.ordinarySession + counts.control + counts.core + counts.zellij < limits.ordinarySession
-        case .core:
-            return counts.core < limits.core
-                && counts.ordinarySession + counts.control + counts.core + counts.zellij < limits.ordinarySession
-        case .zellij:
-            return counts.zellij < limits.zellij
-                && counts.ordinarySession + counts.control + counts.core + counts.zellij < limits.ordinarySession
-        }
-    }
-
-    private func increment(_ channelClass: ChannelClass) {
-        counts = Snapshot(
-            ordinaryForwarding: counts.ordinaryForwarding
-                + (channelClass == .ordinaryForwarding ? 1 : 0),
-            events: counts.events + (channelClass == .events ? 1 : 0),
-            ordinarySession: counts.ordinarySession
-                + (channelClass == .ordinarySession ? 1 : 0),
-            attach: counts.attach + (channelClass == .attach ? 1 : 0),
-            control: counts.control + (channelClass == .control ? 1 : 0),
-            core: counts.core + (channelClass == .core ? 1 : 0),
-            zellij: counts.zellij + (channelClass == .zellij ? 1 : 0),
-            connection: counts.connection + 1)
-    }
-
-    private func decrement(_ channelClass: ChannelClass) {
-        precondition(counts.connection > 0)
-        counts = Snapshot(
-            ordinaryForwarding: counts.ordinaryForwarding
-                - (channelClass == .ordinaryForwarding ? 1 : 0),
-            events: counts.events - (channelClass == .events ? 1 : 0),
-            ordinarySession: counts.ordinarySession
-                - (channelClass == .ordinarySession ? 1 : 0),
-            attach: counts.attach - (channelClass == .attach ? 1 : 0),
-            control: counts.control - (channelClass == .control ? 1 : 0),
-            core: counts.core - (channelClass == .core ? 1 : 0),
-            zellij: counts.zellij - (channelClass == .zellij ? 1 : 0),
-            connection: counts.connection - 1)
     }
 }
 

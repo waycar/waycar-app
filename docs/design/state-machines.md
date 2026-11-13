@@ -163,7 +163,8 @@ goes to Mike as a screenshot first, and a conversion never adds one on its own.
 ### Packages and the plugin
 
 `Packages/WaycarSSH` and `Packages/SwiftMosh` cannot see the app, so each
-declares the same protocol internally under the same name; the check finds
+declares the same protocol under the same name (internal in WaycarSSH,
+`package` in SwiftMosh, whose modules share one declaration); the check finds
 their machines the same way. `Packages/SwiftMosh` is vendored: a conversion
 there is a Waycar patch listed in its `PROVENANCE.md`. The Host Tools in
 `plugin/rust` declare a `StateMachine` trait with the same shape; a change
@@ -4228,13 +4229,580 @@ stateDiagram-v2
 
 **SSH and mosh**
 
+### SessionPoolMachine
+
+- **File:** `Sources/Waycar/Transport/SessionPoolMachine.swift`
+- **Owner:** `SSHSessionPool` (behind `HostSSHSessionPool`) performs every
+  await the machine asks for (probe and retain a connection, check whether
+  one is connected, release one, dial) and comes back with an event; it
+  keeps the waiters' continuations and the dial Tasks by id. A nil key
+  dials privately, outside the machine.
+- **States:** per key the `live`, `kept` and hedged `replacements`
+  connections (session and serial), the dial in flight (id, the serial it
+  replaces, waiters in arrival order), and the abandoned dials by id.
+- **Events:** `lookUp`, `liveProbed`, `replacementProbed`, `join`,
+  `cancelWaiter`, `dialEnded`, `currentChecked`, `keep`, `keepRetained`,
+  `releaseKept`, `retire`, `replacementChecked`, `abandonDial`.
+- **Effects:** `probeLive`, `probeReplacement`, `handOut`, `wait`,
+  `startDial`, `cancelDial`, `cancelWaiter`, `failWaiters`,
+  `releaseUnclaimed`, `checkCurrent`, `distribute`, `retainForKeep`,
+  `keepAnswered`, `release`, `releaseLater`, `checkReplacement`. Serials
+  are the tokens: a probe or retain that finished after the key moved on
+  changes only what still names it. A hedge dialed for a connection that is
+  still live is shared only once that one is retired; the stale connection
+  is never handed out again to the call that named it; a dial nobody
+  waits for is cancelled and released when it lands; an abandoned dial
+  keeps its waiters and yields to a newer live connection that is still
+  connected. Kept race: a landed abandoned dial that finds the live
+  connection dead becomes live even if the key moved on during that check,
+  as before.
+- **Tests:** `SessionPoolMachineTests`, `HostSSHSessionPoolTests` (shared
+  dials, holds, dead connections, private keys, failed and abandoned dials,
+  keeps and their races, hedges, retire).
+- **Catalogue:** SSH-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> empty
+    empty --> dialing: join / startDial
+    dialing --> dialing: join / add waiter
+    dialing --> empty: last waiter cancelled / cancelDial
+    dialing --> live: dialEnded / distribute
+    dialing --> empty: dial failed / failWaiters
+    live --> live: lookUp / probeLive, handOut
+    live --> empty: probe failed
+    live --> kept: keep / retainForKeep
+    kept --> live: releaseKept / releaseLater
+    live --> hedged: replacing dial lands / distribute
+    hedged --> live: retire, hedge connected
+    kept --> empty: retire / releaseLater
+    hedged --> live: releaseKept / hedge dropped
+```
+
+### HostSessionLifetimeMachine
+
+- **File:** `Sources/Waycar/Transport/HostSessionLifetimeMachine.swift`
+- **Owner:** `HostSSHSession`: `retain()`, `release()` /
+  `releaseReportingTeardown()` and `noteConnectionInvalidated()` (from
+  `mapOperationError` and the notification-file paths) feed it; on
+  `tearDown` the session closes its staging, notification and ranged-file
+  SFTP channels, returns the ranged-file lease and closes the connection
+  (2 s each), surfacing the connection's failure. `connected` ("nothing
+  new starts") and `isConnected` read it.
+- **States:** `open(holds)`, `invalidated(holds)`, `closed`.
+- **Events:** `retain`, `release`, `connectionInvalidated`.
+- **Effects:** `retained`, `refused`, `tearDown`. A closed session refuses a
+  hold, so the pool dials afresh; the last release of an invalidated
+  session closes without touching the connection, as before.
+- **Tests:** `HostSessionLifetimeMachineTests`; the session itself needs a
+  real connection, so its owner coverage is the real-SSH lanes
+  (`WaycarSSHSessionE2ETests`, `SharedFixtureE2ETests`, the backend E2E
+  suites) and the pool's `HostSSHSessionPoolTests`.
+- **Catalogue:** SSH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+    open --> open: retain / release, holds left
+    open --> invalidated: connectionInvalidated
+    invalidated --> invalidated: retain / release, holds left
+    open --> closed: last release / tearDown
+    invalidated --> closed: last release
+    closed --> closed: retain / refused
+```
+
+### RangedFileHolderMachine
+
+- **File:** `Sources/Waycar/Transport/RangedFileHolderMachine.swift`
+- **Owner:** `HostSSHSession.readFileSlice` and the session's teardown:
+  the session keeps the SFTP client and its `.ordinarySession` lease, the
+  open in flight (an actor-isolated Task under the machine's token, which
+  re-checks the session is still open before it installs the client) and
+  the idle release Task (30 s), and performs the closes.
+- **States:** holder `empty`, `opening(token)`, `open(token)`; the reads
+  in flight.
+- **Events:** `readStarted`, `opened`, `openFailed`, `readFailed`,
+  `readEnded`, `idleElapsed`, `sessionClosed`.
+- **Effects:** `cancelIdleRelease`, `use`, `joinOpening`, `open(token)`,
+  `close`, `armIdleRelease`. Reads arriving during an open join it; the
+  only read on a channel that fails drops it, one of several leaves it to
+  the others; the idle release is armed by the last read's end. The lease
+  lives as long as the channel (#148). Kept race: an idle release that had
+  already run out when a read started still closes the channel that read
+  left, early, as before.
+- **Tests:** `RangedFileHolderMachineTests`; the session itself needs a
+  real connection, and no real-SSH lane reads a file slice through it, so
+  the holder's owner coverage is the transition tests (reported in P3c).
+- **Catalogue:** SSH-04.
+
+```mermaid
+stateDiagram-v2
+    [*] --> empty
+    empty --> opening: readStarted / open(token)
+    opening --> opening: readStarted / joinOpening
+    opening --> open: opened(token)
+    opening --> empty: openFailed(token)
+    open --> open: readStarted / use; readEnded, last / armIdleRelease
+    open --> empty: readFailed, only read / close
+    open --> empty: idleElapsed, no read / close
+    open --> empty: sessionClosed / close
+```
+
+### NetworkPathSettleMachine
+
+- **File:** `Sources/Waycar/Transport/NetworkPathSettleMachine.swift`
+- **Owner:** `NetworkPathMonitor` feeds it under its lock, then outside it
+  starts and cancels the source, arms and cancels the debounce Task (which
+  sleeps, then sends its token back) and yields to or finishes the
+  `changes()` streams; `currentKey` and the baseline a new stream is handed
+  read the machine.
+- **States:** `isStarted`, with the readings `awaitingBaseline`,
+  `settled(key)`, `debouncing(settled, current, token)`.
+- **Events:** `start`, `read(key)`, `debounceElapsed(token)`, `stop`.
+- **Effects:** `startSource` (once), `reportBaseline(key)` (to the streams
+  that asked for it), `armDebounce(token)`, `reportChange(key)`,
+  `cancelDebounce`, `cancelSource`, `finishStreams`. Every reading takes a
+  fresh token, so only the latest reading's debounce settles (B-26); a
+  settle naming the path reported last is no change. Stop leaves the
+  readings as they were, as before.
+- **Tests:** `NetworkPathSettleMachineTests`, `NetworkPathMonitorTests`
+  (bursts, blips, baselines, buffering, stop, B-26).
+- **Catalogue:** SSH-02.
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaitingBaseline
+    awaitingBaseline --> settled: read / reportBaseline
+    settled --> debouncing: read / armDebounce(token)
+    debouncing --> debouncing: read / armDebounce(new token)
+    debouncing --> settled: debounceElapsed(current token) / reportChange if it moved
+    debouncing --> debouncing: debounceElapsed(replaced token) / ignored
+```
+
+### ChannelAdmissionMachine
+
+- **File:** `Sources/Waycar/Transport/ChannelAdmissionMachine.swift`
+- **Owner:** `SSHChannelAdmission` mints request ids, keeps each request's
+  continuation and deadline Task by id and performs the effects;
+  `snapshot()` and the waiter count read the machine. Leases
+  (`SSHChannelAdmissionLease`, released once, or by deinit) send `release`.
+- **States:** the admitted counts per class and on the connection, the
+  parked requests in arrival order, the pending requests and those
+  cancelled while not parked.
+- **Events:** `requested`, `register(class, deadline)`, `cancel`, `expire`,
+  `release(class)`, `finished`.
+- **Effects:** `grant`, `refuse`, `cancelWait`, `timeOut`, `armDeadline`.
+  The production budgets (forwarding 8, events 1, ordinary 4, attach 5,
+  ceiling 18) keep session channels under sshd's `MaxSessions`: `control`,
+  `core` and `zellij` each spend an ordinary slot. An immediate grant is
+  never refused by its deadline; a release goes to the first parked request
+  it admits, in arrival order; a request granted before its cancellation
+  arrives gives the slot back from `acquire`, as before.
+- **Tests:** `ChannelAdmissionMachineTests`, `SSHChannelAdmissionTests`
+  (budgets, ceiling, the long-lived classes, deadlines, cancellation, order,
+  leases).
+- **Catalogue:** SSH-05.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: requested
+    pending --> granted: register with room / grant
+    pending --> parked: register, class full / armDeadline
+    pending --> refused: register after cancel / refuse
+    parked --> granted: release makes room / grant
+    parked --> [*]: cancel / cancelWait
+    parked --> [*]: expire / timeOut
+    granted --> [*]: finished (lease kept, or given back if cancelled)
+    refused --> [*]: finished
+```
+
+### AttachOutputMachine
+
+- **File:** `Sources/Waycar/Transport/AttachOutputMachine.swift`
+- **Owner:** `WaycarSSHAttachOutputGate` feeds it under its lock from the
+  pumps (`yield`, `finish`), the session's `beginExplicitEnd` and each read
+  and its cancellation handler, and keeps the parked consumer's
+  continuation and the finish's failure.
+- **States:** delivery `open(buffer, waiting)`, `finishing(buffer,
+  failed)`, `ended`; the claiming reader.
+- **Events:** `read(reader)`, `yield(bytes)`, `finish(failed)`,
+  `beginExplicitEnd`, `consumerCancelled(reader)`.
+- **Effects:** `answer(bytes | end | failure | alreadyClaimed)`, `park`,
+  `resumeWaiter(answer)`, `keepFailure`. A finish drains what was accepted;
+  an explicit end or the claimant's cancellation discards it. The first
+  reader claims the stream, another is refused without touching it, and
+  only the claimant (or a reader racing the first claim) ends delivery by
+  cancellation (#137, #153, #164).
+- **Tests:** `AttachOutputMachineTests`, `TerminalAttachTests` (startup
+  chatter, explicit end, clean drain, second consumers, cancellation,
+  finishes).
+- **Catalogue:** SSH-06.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+    open --> open: yield / buffer or resumeWaiter
+    open --> open: read / answer bytes or park
+    open --> finishing: finish / resumeWaiter(end or failure) if parked
+    finishing --> finishing: read / drain, then end or failure
+    open --> ended: beginExplicitEnd or claimant cancelled / resumeWaiter(end)
+    finishing --> ended: beginExplicitEnd or claimant cancelled
+    ended --> ended: read / end; yield, finish dropped
+```
+
+### ByteTransportMachine
+
+- **File:** `Packages/WaycarSSH/Sources/WaycarSSH/ByteTransportMachine.swift`
+- **Owner:** `DirectTCPIPByteTransport` feeds it under its lock, keeps the
+  forwarding pump's Task, closes the descriptors and cancels the pump.
+  `close(timeout:)` waits for the pump outside the machine and cancels it
+  inside its task group once the timeout wins (B-27).
+  `SessionDriver.openDirectTCPIP` takes the pump descriptor and starts the
+  pump; the nested session's driver takes the inner one.
+- **States:** inner and pump descriptors `held(fd)` or `released`; the pump
+  `unstarted` or `started`.
+- **Events:** `takeInner`, `takePumpDescriptor`, `startPump`, `abort`.
+- **Effects:** `hand(fd)`, `refuse` (`connectionInvalidated`),
+  `closeDescriptor(fd)`, `cancelPump`. Each descriptor is handed out once;
+  once the pump runs, its descriptor is the pump's (closed when it ends).
+  The pump loop itself (buffers, EOF flags) stays a local loop in
+  `SessionDriver.runDirectTCPIPPump`. Teardown order is unchanged:
+  `SSHConnection.close` ends the target session, then this transport, then
+  the Jump Host session.
+- **Tests:** `ByteTransportMachineTests`, `DirectTCPIPBridgeTests`
+  (descriptors handed out once, aborts, close results, B-27), the Jump
+  Host gate in `WaycarSSHJumpHostGateE2ETests`.
+- **Catalogue:** SSH-17.
+
+```mermaid
+stateDiagram-v2
+    [*] --> unstarted
+    unstarted --> unstarted: takeInner / takePumpDescriptor (once each)
+    unstarted --> started: startPump
+    unstarted --> unstarted: abort / close held descriptors
+    started --> started: abort / close inner, cancelPump
+```
+
+### TransportSendOwnerMachine
+
+- **File:** `Packages/WaycarSSH/Sources/WaycarSSH/TransportSendOwnerMachine.swift`
+- **Owner:** `SessionDriver`: `notePacketProducingResult` feeds every
+  packet-producing libssh2 result with libssh2's outbound-block report
+  (read exactly where it always was) and maps the effect to the
+  `TransportSendOwnerDisposition` its callers act on; `close` and
+  `invalidateResources` release it; every wait and drain reads `owner`
+  (`transportSendOwner`).
+- **States:** `free`, `owned(call)`.
+- **Events:** `wouldBlock(call, outboundPending)`, `finished(call, result,
+  outboundPending)`, `sessionReleased`.
+- **Effects:** `cleared`, `invalidate` (the driver then abandons the owned
+  send or invalidates). Only the exact owning call's non-`EAGAIN` result
+  ends ownership; cancellation and timeouts never clear it (#130).
+- **Tests:** `TransportSendOwnerMachineTests`; owner coverage is the
+  fixture-backed `SessionDriverE2ETests` (`cancelling a transport-send owner
+  drains` / `invalidates`, `timing out a transport-send owner at loop-top
+  drains` / `invalidates`, `a transport-send owner error with outbound
+  pending invalidates`, `outbound backpressure does not livelock a channel
+  open`), which only `make test-ci-app` runs.
+- **Catalogue:** SSH-13.
+
+```mermaid
+stateDiagram-v2
+    [*] --> free
+    free --> owned: wouldBlock, outbound pending
+    owned --> owned: another call's wouldBlock or result
+    owned --> free: owner's result, nothing outbound / cleared
+    owned --> owned: owner's failure, outbound pending / invalidate
+    owned --> free: sessionReleased
+```
+
+### ChannelOpenSlotMachine
+
+- **File:** `Packages/WaycarSSH/Sources/WaycarSSH/ChannelOpenSlotMachine.swift`
+- **Owner:** `SessionDriver.claimChannelOpenSlot` asks `canAdmit`, takes a
+  slot or parks (after its deadline and cancellation checks, releasing the
+  operation mutex inside the continuation as before); the driver keeps each
+  parked opener's continuation and deadline Task by waiter id and performs
+  the grants and failures. `openChannel` and `openSFTP` release their slot
+  when the open settles; `invalidateResources` fails every parked opener.
+- **States:** opens in flight, whether the stock open (SFTP init) is among
+  them, the limit (`pipelinedChannelOpenLimit`, 32), parked openers by
+  priority and arrival.
+- **Events:** `take`, `park(id, kind, priority)`, `release`, `withdraw(id,
+  error)`, `invalidate`, `setLimit`.
+- **Effects:** `grant(id)`, `fail(id, error)`. One stock open at a time, so
+  an opener that releases the mutex between `open_finish` turns never lets
+  a second stock open resume the first one's session-owned state; a slot
+  goes to the first admissible opener, interactive first. The native open
+  itself (patch 0004's start and finish, the pending-open registry, freeing
+  a refused or abandoned open within its 2 s budget without costing the
+  session) stays procedural in the driver: its C calls sit between mutex
+  turns.
+- **Tests:** `ChannelOpenSlotMachineTests`; owner coverage is the
+  fixture-backed `SessionDriverSchedulingE2ETests` and
+  `SessionDriverPatchedLibSSH2E2ETests` (`a serialized channel-open wait
+  honors deadline and cancellation`, pipelined, refused and abandoned
+  opens), which only `make test-ci-app` runs.
+- **Catalogue:** SSH-12.
+
+```mermaid
+stateDiagram-v2
+    [*] --> free
+    free --> free: take while room
+    free --> full: take reaches the limit
+    full --> full: park
+    full --> full: release / grant first admissible waiter
+    full --> free: release, no waiter it admits
+    full --> full: withdraw / fail
+    full --> full: invalidate / fail every waiter
+```
+
+### DatagramEndpointMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshTransport/DatagramEndpointMachine.swift`
+- **Owner:** `NetworkDatagramEndpoint` (actor) keeps the `NWConnection`,
+  `start()`'s continuation, the waiting receives and the receive buffer;
+  it opens the connection the `start` effect names, hands every callback
+  its connection's token, and performs the effects. `send()` and
+  `receive()` go to the held connection; `start()` is refused unless
+  `stopped`, before its port checks, as before.
+- **States:** `stopped`, `connecting(connection)`, `open(connection)`,
+  `failed(connection)` (held until `stop()`: a start is refused, sends,
+  receives and its receive callbacks still go on).
+- **Events:** `start`, `reported(connection, ready|failed|cancelled|other)`,
+  `startReturned(connection)`, `receiveCompleted(connection)`, `stop`.
+- **Effects:** `open(connection)`, `resumeStart`, `failAll(failure)`,
+  `armReceive(connection)`, `deliverReceive`, `close`. A callback or a
+  start return whose token is not the held connection's does nothing
+  (B-28, SwiftMosh patch 18). SwiftMosh patch 19.
+- **Tests:** `DatagramEndpointMachineTests`, `TransportTests` (restart on a
+  fresh connection, a second start refused until stopped, stop during a
+  start, failure after ready, B-28's late cancel, receive error and
+  datagram).
+- **Catalogue:** MOSH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> stopped
+    stopped --> connecting: start / open(token)
+    connecting --> open: reported ready / resumeStart
+    open --> open: startReturned / armReceive
+    connecting --> failed: reported failed or cancelled / failAll
+    open --> failed: reported failed or cancelled / failAll
+    failed --> failed: reported failed or cancelled / failAll
+    open --> open: receiveCompleted / deliverReceive, armReceive
+    failed --> failed: receiveCompleted / deliverReceive, armReceive
+    connecting --> stopped: stop / close
+    open --> stopped: stop / close
+    failed --> stopped: stop / close
+    stopped --> stopped: stale token / ignored
+```
+
+### MoshContactHealthMachine
+
+- **File:** `Packages/SwiftMosh/Sources/MoshCore/MoshContactHealthMachine.swift`
+- **Owner:** `MoshClientSession` (actor) sends `started` when it starts
+  running, `contact` on every authenticated server datagram, `tick` on
+  each maintenance pass while running (50 ms), `ended` when its runtime
+  stops or suspends; it yields published values to the connectivity
+  streams and fails the session on `expire`. `connectivity` and the
+  stream's first value read the state; the streams' finishing stays the
+  owner's.
+- **States:** `notRunning(lastContact)`, `healthy(lastContact)`,
+  `stalled(lastContact)`, `expired(lastContact, connectivity)` (the
+  connectivity it had stands until the runtime stops).
+- **Events:** `started(now)`, `contact(now, judged)` (`judged` is whether
+  the session runs: during a shutdown a datagram is contact, not
+  judgment), `tick(now)`, `ended`.
+- **Effects:** `publish(connectivity)`, `expire(timeoutMs)`. The timeout
+  is checked before the stall. The app's thresholds (6.5 s stall, 65 s
+  timeout, `MoshAttachSession`) are the config's; nothing here reads a
+  clock. SwiftMosh patch 20.
+- **Tests:** `MoshContactHealthMachineTests`, `WaycarNetworkPatchTests`
+  (stall and recovery, idle heartbeats, not judged during a shutdown,
+  suspension and resume, timeout before the stall), `CoreAndAdapterTests`
+  (network timeout).
+- **Catalogue:** MOSH-07.
+
+```mermaid
+stateDiagram-v2
+    [*] --> notRunning
+    notRunning --> healthy: started / publish connected
+    healthy --> stalled: tick past stall threshold / publish stalled
+    stalled --> healthy: contact while running / publish connected
+    healthy --> healthy: contact
+    stalled --> stalled: contact while not running
+    healthy --> expired: tick past network timeout / expire
+    stalled --> expired: tick past network timeout / expire
+    healthy --> notRunning: ended
+    stalled --> notRunning: ended
+    expired --> notRunning: ended
+```
+
+### StandbyMoshMachine
+
+- **File:** `Sources/Waycar/Transport/StandbyMosh.swift`
+- **Owner:** `StandbyMoshStore` (main actor) runs each preparation's
+  bootstrap under its budget in a Task keyed by the machine's token, waits
+  for a target's preparation in flight before `take` and
+  `claimAttachBootstrap`, and reads `standby(for:)`, `isPreparing` and
+  `hasAttachBootstrap(on:)` from the state. `now` arrives in events.
+- **States:** per target absent, `preparing(token)`, `ready(standby)`,
+  `refreshing(standby, token)` (a renewal keeps the ready one),
+  `bootstrapping(count)`, and the overlap kept from before:
+  `bootstrappingBesidePreparation(count, token)` and
+  `bootstrappingBesideStandby(count, standby)`, reached only when a
+  preparation starts between the one an attach waited for finishing and
+  that attach's claim.
+- **Events:** `prepare`, `prepared(token, standby?)`, `take(now)`,
+  `claimAttachBootstrap(now)`, `finishAttachBootstrap`, `discardHost`,
+  `discard`.
+- **Effects:** `startPreparation(token)`, `joinPreparation(token)`,
+  `refusePreparation`, `cancelPreparation(token)`, `handOut(standby?)`,
+  `attachBootstrapsSettled(host)`. Single use; a standby counts only
+  while younger than `maxAge` (50 s); discarding keeps attach bootstraps.
+- **Tests:** `StandbyMoshMachineTests`, `StandbyMoshStoreTests` (taken
+  once, origin, age, never beside an attach bootstrap, budget, renewal,
+  joining, take waits, stale claim, discards, settling),
+  `MoshStandbySuspensionTests`, `SpeculativeMoshStandbyTests`.
+- **Catalogue:** MOSH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> preparing: prepare / startPreparation
+    preparing --> ready: prepared(token, standby)
+    preparing --> [*]: prepared(token, nil) / discard
+    ready --> refreshing: prepare / startPreparation
+    refreshing --> ready: prepared(token) / new or kept standby
+    refreshing --> preparing: take
+    ready --> [*]: take / handOut / discard
+    [*] --> bootstrapping: claimAttachBootstrap, no standby
+    ready --> [*]: claimAttachBootstrap / handOut
+    bootstrapping --> bootstrapping: claim / finish, count > 1
+    bootstrapping --> [*]: finish last / attachBootstrapsSettled
+    preparing --> bootstrappingBesidePreparation: claim in the overlap
+    bootstrappingBesidePreparation --> bootstrappingBesideStandby: prepared(token, standby)
+    bootstrappingBesidePreparation --> bootstrapping: prepared(token, nil) / discard
+    bootstrappingBesideStandby --> bootstrapping: take / discard
+    bootstrappingBesideStandby --> ready: finish last
+    bootstrappingBesidePreparation --> preparing: finish last
+```
+
+### MoshEligibilityMachine
+
+- **File:** `Sources/Waycar/Console/MoshEligibilityMachine.swift`
+- **Owner:** `ConsoleStore` (`ConsoleStore+Mosh.swift`, `sendMosh`) keeps
+  the probe Tasks per Host, the projections the probes run over and the
+  network's memory (`MoshAvailabilityStore`, read only for a generation
+  not settled yet); it starts the probe a `startProbe` names, upgrades SSH
+  terminals, cancels probes, reconciles every Host, and mirrors the
+  outcomes and re-probing Hosts into the tracked `moshStates` and
+  `moshReprobingHosts` the capsule renders, only when they change.
+- **States:** per Host four facets: known (`outcome` by generation),
+  invalidated (automatic for a generation, or the user's SSH choice),
+  settled (the generation probed or answered from memory), re-probing (the
+  capsule re-probe's token).
+- **Events:** `invalidate`, `recordOutcome`, `reprobe`,
+  `reconcile(remembered, canProbe)`, `connectProbeFinished(available?,
+  cancelled)`, `reprobeEnded(token, available?)`, `networkChanged(hasPath)`,
+  `hostChanged(keepsTarget)`, `primaryProjectionEnded`.
+- **Effects:** `startProbe(connect | reprobe(token))`,
+  `upgrade(connectingOnly)`, `cancelProbe`, `cancelAllProbes`,
+  `reconcileAll`. Newest generation wins and an invalidation outlasts its
+  generation's probe; a discarded connect answer gives its generation back
+  unless cancelled; the user's SSH choice survives networks and new
+  connections until the capsule's re-probe; a re-probe cancelled by a new
+  network shows testing until its task ends. Connect probes are fenced by
+  generation, not token, as before (one still running when the herdr
+  projection ends may record its answer).
+- **Tests:** `MoshEligibilityMachineTests`, `ConsoleMoshProbeTests`,
+  `MoshAvailabilityPerNetworkTests`, `MoshFastPathEdgeTests`
+  (`moshTransport`, `MoshAvailabilityStore` and `MoshTransportChoice`
+  unchanged).
+- **Catalogue:** MOSH-02.
+
+```mermaid
+stateDiagram-v2
+    state Known {
+        [*] --> unknown
+        unknown --> known: probe, proof or memory
+        known --> known: newer generation / invalidate (unavailable)
+        known --> unknown: network change, Host change
+    }
+    state Settled {
+        [*] --> unsettled
+        unsettled --> settled: reconcile probes or answers from memory / reprobe
+        settled --> unsettled: discarded connect answer, not cancelled
+        settled --> unsettled: network change, Host change
+    }
+    state Reprobing {
+        [*] --> idle
+        idle --> testing: reprobe / startProbe(token)
+        testing --> idle: reprobeEnded(token)
+        testing --> idle: Host change
+    }
+```
+
+### MoshAttachMachine
+
+- **File:** `Sources/Waycar/Transport/MoshAttachMachine.swift`
+- **Owner:** `MoshSessionLifecycle` (`MoshAttachSession.swift`) keeps the
+  machine with the swift-mosh session, the run, start, pump, relay and
+  watchdog Tasks, the first-contact waiters and connectivity subscribers
+  behind one mutex. Each step feeds the machine and does its effects'
+  bookkeeping in the lock section that step always used (the session is
+  published and the watchdog armed under one lock, so `end()` always finds
+  them); the async effects (reporting the start, the handshake or abandon)
+  go back to the step that holds what they need.
+- **States:** four facets: start `starting`, `started`, `abandoned`; first
+  contact pending, `answered`, `timedOut`, `ended`; ending requested; link
+  (the connectivity last relayed, ended).
+- **Events:** `sessionCreated`, `startSucceeded`, `startFailed`,
+  `endRequested(abandoning)`, `watchdogElapsed(token)`,
+  `firstContactTimedOut`, `firstHostOp`, `runReady`, `connectivity`,
+  `disarmWatchdog`, `runEnded`, `linkEnded`.
+- **Effects:** `armWatchdog(token)`, `skipRun`, `reportStart`,
+  `shutdownStartedSession`, `cancelWatchdog`, `stopSession(abandoning)`,
+  `settleFirstContact`, `timeOutFirstContact`, `failFirstContact`,
+  `abandonSession`, `startRelayAndPump`, `relayConnectivity`, `endLink`.
+  An explicit end uses the shutdown handshake, a first-contact timeout
+  `abandon()`; a link lost after an answer is `MoshLinkLost` (the owner
+  reads `hostAnswered`). Kept from before: the watchdog takes the start
+  and then first contact in two steps (an answer, `end()` or the run's end
+  can come between), a disarmed watchdog past its sleep still decides by
+  the state, and the run's end settles first contact before it ends the
+  link.
+- **Tests:** `MoshAttachMachineTests`, `MoshAttachSessionTests` (silent
+  server: timeout, abandon and end before first contact, unusable port,
+  registry; a loopback server answering with sealed states: first contact,
+  its shutdown, the watchdog disarmed, an end after an answer),
+  `MoshFastPathStoreTests` (registry), `MoshServerContactTests`.
+- **Catalogue:** MOSH-01.
+
+```mermaid
+stateDiagram-v2
+    state Start {
+        [*] --> starting
+        starting --> started: startSucceeded / reportStart
+        starting --> abandoned: endRequested or watchdog / reportStart abandoned
+        abandoned --> abandoned: startSucceeded / shutdownStartedSession
+    }
+    state FirstContact {
+        [*] --> pending
+        pending --> answered: firstHostOp / settle, cancelWatchdog
+        pending --> timedOut: firstContactTimedOut / settle, failFirstContact, abandonSession
+        pending --> ended: runEnded / settle
+    }
+    state Link {
+        [*] --> relaying
+        relaying --> relaying: connectivity changed / relayConnectivity
+        relaying --> linkEnded: linkEnded / endLink
+    }
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
-
-The trait is `plugin/rust/state_machine.rs`; transition tests sit in the
-owner file's `tests` module, beside its owner pins (`cargo test --locked` in
-`plugin/`).
 
 ### ExportRunMachine
 
@@ -4998,38 +5566,38 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | convert | P3c |
-| SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | convert; bug B-26 | P3c |
-| SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
-| SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
-| SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | convert | P3c |
-| SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | convert | P3c |
+| SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | converted → `SessionPoolMachine` | P3c |
+| SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
+| SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | converted → `HostSessionLifetimeMachine` | P3c |
+| SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | converted → `RangedFileHolderMachine`; early idle-release race kept | P3c |
+| SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | converted → `ChannelAdmissionMachine` | P3c |
+| SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | converted → `AttachOutputMachine` | P3c |
 | SSH-07 | Attach pump completion | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | implicit | M/M | leave: structured scope bounds it | — |
 | SSH-08 | Attachment upload transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
 | SSH-09 | Notification file transaction | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | M/H | leave: ordered steps, compensation | — |
-| SSH-10 | Native session connection | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-11 | Native channel lifecycle | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-12 | Native channel opening | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-13 | Transport-send ownership | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | convert unless the risk is huge | P3c |
+| SSH-10 | Native session connection | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert (deferred: the state is the native session pointer and descriptor, which `invalidateResources` must free synchronously, plus `valid`/`authenticated`/`forwarding` read under the operation mutex at over a hundred guard sites between C calls; a machine could only shadow the pointer's nil-ness, and the fixture-backed E2E lanes are its only pins) | P3c |
+| SSH-11 | Native channel lifecycle | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert (deferred: `acceptsIO`, `teardownInProgress` and EOF live per native channel in registries that close and free re-resolve by id after every yielded mutex turn, with teardown waiters woken from invalidation; the interleaving is C turns against the mutex and is pinned only by fixture-backed E2E tests such as `yielded channel teardown rejects same-id I/O and preserves close`) | P3c |
+| SSH-12 | Native channel opening | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | converted → `ChannelOpenSlotMachine` (slot admission); the native open and abandoned-open free stay procedural (C calls between mutex turns) | P3c |
+| SSH-13 | Transport-send ownership | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | converted → `TransportSendOwnerMachine` | P3c |
 | SSH-14 | Session operation mutex | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | M/H | leave: priority handoff primitive | — |
-| SSH-15 | SFTP use and shutdown | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| SSH-16 | One-shot exchange cleanup | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | convert unless the risk is huge | P3c |
-| SSH-17 | Jump Host byte transport | `Packages/WaycarSSH/Sources/WaycarSSH/SSHByteTransport.swift` | implicit | H/H | convert; bug B-27 | P3c |
+| SSH-15 | SFTP use and shutdown | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | implicit | H/H | convert (deferred: the use count guards libssh2's per-kind SFTP continuation slots while `withSFTPUse` runs its body without the mutex, and an interrupted use shuts the subsystem down before the use ends; the bookkeeping is a counter plus a broadcast wake, so a machine would shadow it, and only fixture-backed E2E tests pin the interleaving) | P3c |
+| SSH-16 | One-shot exchange cleanup | `Packages/WaycarSSH/Sources/WaycarSSH/SessionDriver.swift` | partial | H/H | convert (deferred: the background close drains an exec through `runExecExchange` and frees by identity across mutex turns, then runs `onChannelReleased` exactly once; its states are already the `OneShotFinish` enum and the registry, and the interleaving is pinned only by fixture-backed E2E tests) | P3c |
+| SSH-17 | Jump Host byte transport | `Packages/WaycarSSH/Sources/WaycarSSH/SSHByteTransport.swift` | implicit | H/H | converted → `ByteTransportMachine`; bug B-27 fixed; the pump loop stays local | P3c |
 | SSH-18 | DNS query gates | `Packages/WaycarSSH/Sources/WaycarSSH/DNSServiceAddressResolver.swift` | implicit | M/M | leave: first result wins | — |
 | SSH-19 | Socket readiness waiter | `Packages/WaycarSSH/Sources/WaycarSSH/SocketReadiness.swift` | implicit | M/H | leave: dispatch barrier primitive | — |
 | SSH-20 | Session activity watches | `Packages/WaycarSSH/Sources/WaycarSSH/SessionActivity.swift` | implicit | L/M | leave: generation-checked | — |
 | SSH-21 | Happy Eyeballs race | `Packages/WaycarSSH/Sources/WaycarSSH/SocketConnector.swift` | partial | M/M | leave: generation-checked | — |
-| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | convert | P3c |
-| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | convert | P3c |
-| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | convert | P3c |
+| MOSH-01 | mosh attach session and first contact | `Sources/Waycar/Transport/MoshAttachSession.swift` | partial | H/H | converted → `MoshAttachMachine`; the watchdog's two-step window kept | P3c |
+| MOSH-02 | Console mosh eligibility and probing | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | H/H | converted → `MoshEligibilityMachine` | P3c |
+| MOSH-03 | Standby mosh store | `Sources/Waycar/Transport/StandbyMosh.swift` | implicit | H/M | converted → `StandbyMoshMachine`; the claim-window overlap with a preparation kept | P3c |
 | MOSH-04 | Speculative standby renewal | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | M/M | leave: reconciled per pass | — |
-| MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert unless the risk is huge | P3c |
-| MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
-| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | convert | P3c |
+| MOSH-05 | mosh client session lifecycle and ending | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/H | convert (deferred: the public `state` is written by nine async methods with last-writer-wins across their awaits (`stop()` overwrites `.failed`, `abandon()` keeps it, a `shutdown` in flight is shared and ended by `abandon()`), which patches 1, 4, 7 and 14 rely on; a machine either admits every such interleaving as legal or changes the ending the app reads) | P3c |
+| MOSH-06 | mosh transport replacement | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert (deferred: `engine == nil` is the swap's state for the receive loop, `sendPayload`, the shutdown loop and the maintenance pass at once, and patch 13's order (claim, stop the old engine, then read its sequence state) is what keeps OCB nonces unique; a slip there reuses a nonce, which no owner test would see) | P3c |
+| MOSH-07 | mosh contact health (healthy, stalled, expired) | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | partial | H/M | converted → `MoshContactHealthMachine` | P3c |
 | MOSH-08 | Recovery redial cooldown | `Sources/Waycar/Console/ConsoleStore+Mosh.swift` | implicit | L/L | leave: one timestamp | — |
-| MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert unless the risk is huge | P3c |
+| MOSH-09 | mosh delivery and ack scheduling | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | H/H | convert (deferred: every datagram's send, retransmission, ack and heartbeat; patches 2, 3, 8 and 15 depend on what is recorded before each send suspends, so a machine would move the wire's timing and state numbering, which only the real-server suite checks) | P3c |
 | MOSH-10 | mosh availability file | `Sources/Waycar/Transport/MoshAvailabilityStore.swift` | implicit | M/L | leave: two states, guarded | — |
-| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | convert; bug B-28 | P3c |
+| MOSH-11 | UDP datagram endpoint | `Packages/SwiftMosh/Sources/MoshTransport/UDPTransport.swift` | implicit | M/H | converted → `DatagramEndpointMachine`; bug B-28 fixed | P3c |
 | MOSH-12 | mosh screen history | `Packages/SwiftMosh/Sources/MoshCore/MoshClientSession.swift` | implicit | M/H | leave: fallback handles missing bases | — |
 | MOSH-13 | ECMA-48 parser | `Packages/SwiftMosh/Sources/MoshCore/MoshScreen.swift` | explicit | L/M | explicit | — |
 | MOSH-14 | Fragment assembly | `Packages/SwiftMosh/Sources/MoshWire/WirePrimitives.swift` | implicit | L/L | leave: pure, reset in one place | — |
@@ -5111,9 +5679,9 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-23 | CORE-08 | A herdr-core Agent can stay Idle in a cached snapshot after a new turn starts | fixed (P3a, `032c2da7`): a notification that moves a terminal past its seen Done is a status change of that terminal |
 | B-24 | TMUX-06 | An older tmux inventory refresh can publish after a newer one | fixed (P3b, `7c49b616`): a refresh publishes only when none started after it has |
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
-| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | open |
-| B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | open |
-| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | open |
+| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | fixed (P3c, `7189b71c`): every reading takes a token, and only the latest reading's debounce settles. The regression test's `afterDebounce` seam is an init parameter defaulting to `{}`, like the existing `sleep:` seam: one empty `await` before each settle, no behaviour |
+| B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | fixed (P3c, `6bd2365f`): the pump is cancelled inside the close's task group once the timeout wins |
+| B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | fixed (P3c, `49778c26`): each connection's callbacks carry its token; a stopped connection's are ignored (not reachable from the app, which builds a new endpoint per engine) |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |
