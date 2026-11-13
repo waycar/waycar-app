@@ -27,8 +27,10 @@ struct AppInfoPlistTests {
         #expect(!purpose.localizedCaseInsensitiveContains("carplay"))
     }
 
-    /// Nothing browses Bonjour, so nothing is declared for it.
-    @Test func declaresNoBonjourServices() throws {
-        #expect(try infoPlist()["NSBonjourServices"] == nil)
+    /// Find Computers browses SSH only, never backend or unrelated services.
+    @Test func declaresOnlySSHBonjour() throws {
+        #expect(try infoPlist()["NSBonjourServices"] as? [String] == ["_ssh._tcp"])
+        #expect(try infoPlist()["NSLocalNetworkUsageDescription"] as? String
+            == "Waycar finds computers on your network that have SSH on, and connects to them over SSH and mosh.")
     }
 }

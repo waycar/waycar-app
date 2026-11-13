@@ -10,6 +10,7 @@ struct HostFormView: View {
     /// The Host a new one is being copied from; nil unless duplicating.
     var duplicating: Host?
     var onSaved: ((Host) -> Void)?
+    private let addMethod: HostAddMethod
 
     @State private var draft: HostDraft
     @State private var moshTestStore = HostFormMoshTestStore()
@@ -30,19 +31,21 @@ struct HostFormView: View {
 
     init(
         store: HostStore, editing: Host? = nil, duplicating: Host? = nil,
+        prefilled: HostDraft? = nil, addMethod: HostAddMethod = .manual,
         onSaved: ((Host) -> Void)? = nil
     ) {
         self.store = store
         self.editing = editing
         self.duplicating = duplicating
         self.onSaved = onSaved
+        self.addMethod = addMethod
         let draft =
             if let editing {
                 HostDraft(host: editing)
             } else if let duplicating {
                 HostDraft(duplicating: duplicating)
             } else {
-                HostDraft()
+                prefilled ?? HostDraft()
             }
         _draft = State(initialValue: draft)
     }
@@ -435,7 +438,7 @@ struct HostFormView: View {
         do {
             if editing == nil {
                 try store.add(host, password: draft.passwordUpdate)
-                analytics?.capture(.hostAdded(method: .manual))
+                analytics?.capture(.hostAdded(method: addMethod))
             } else {
                 try store.update(host, password: draft.passwordUpdate)
             }

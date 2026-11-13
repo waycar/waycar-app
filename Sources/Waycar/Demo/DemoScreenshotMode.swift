@@ -1,3 +1,53 @@
+#if DEBUG
+    import Foundation
+
+    /// Discovery fixtures also work on a device launched with devicectl.
+    /// None of these launch arguments or scripted results ship in Release.
+    enum DemoFindComputersMode {
+        static var opensAtLaunch: Bool {
+            ProcessInfo.processInfo.arguments.contains("--open-find-computers")
+        }
+
+        static var isEnabled: Bool {
+            let arguments = ProcessInfo.processInfo.arguments
+            return arguments.contains("--demo-find-computers")
+                || arguments.contains("--demo-find-computers-denied")
+        }
+
+        static let subnet = IPv4Subnet(address: 0xC0A8_012A, mask: 0xFFFF_FF00)
+
+        struct Browser: ComputerBrowsing {
+            func events() -> AsyncStream<BrowseEvent> {
+                AsyncStream { continuation in
+                    if ProcessInfo.processInfo.arguments.contains("--demo-find-computers-denied") {
+                        continuation.yield(.denied)
+                    } else {
+                        continuation.yield(.ready)
+                        continuation.yield(.computers(["192.168.1.20", "192.168.1.21"].map {
+                            FoundComputer(
+                                address: $0, port: 22, serviceName: "Studio Mac",
+                                software: nil, source: .bonjour)
+                        }))
+                    }
+                    continuation.finish()
+                }
+            }
+        }
+
+        struct Sweeper: NetworkSweeping {
+            func sweep() -> AsyncStream<SweepEvent> {
+                AsyncStream { continuation in
+                    continuation.yield(.found(FoundComputer(
+                        address: "192.168.1.31", port: 22, serviceName: nil,
+                        software: "OpenSSH_9.6p1 Ubuntu-3ubuntu13", source: .sweep)))
+                    continuation.yield(.finished)
+                    continuation.finish()
+                }
+            }
+        }
+    }
+#endif
+
 #if DEBUG && targetEnvironment(simulator)
     import Foundation
     import SwiftUI

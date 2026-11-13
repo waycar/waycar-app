@@ -22,7 +22,7 @@
 export const APP_STORE_RELEASE = '1.3.0';
 
 /** Help pages for features 1.3.0 does not have. */
-export const HIDDEN_HELP_PAGES: readonly string[] = ['codex', 'opencode', 'zellij'];
+export const HIDDEN_HELP_PAGES: readonly string[] = ['codex', 'opencode', 'zellij', 'find-computers'];
 
 export type HelpEdit =
   /** Replace every occurrence of `replace` with `with`. */
@@ -41,6 +41,13 @@ const OPENCODE_NOTE = dropLine('/help/opencode');
 
 /** Edits that turn the pages that stay into 1.3.0's text, by slug, applied to the whole file (front matter included). */
 export const RELEASED_HELP_EDITS: Readonly<Record<string, readonly HelpEdit[]>> = {
+  'add-host-manually': [
+    dropLine('/help/find-computers'),
+    setLine(
+      'In the Hosts sheet, tap **Add Host**, then **Add Manually**.',
+      '   - In the Hosts sheet, tap **Add Host**.',
+    ),
+  ],
   'ai-usage': [dropLine('**"Claude timed out"**')],
   'closed-sessions': [CODEX_NOTE, OPENCODE_NOTE],
   'host-page': [CODEX_NOTE, OPENCODE_NOTE],

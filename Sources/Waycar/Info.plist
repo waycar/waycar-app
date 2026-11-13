@@ -23,7 +23,11 @@
 	<key>NSAdvertisingAttributionReportEndpoint</key>
 	<string>https://singular-bi.net</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Waycar connects to your machines on the local network over SSH and mosh. mosh keeps terminals alive across network changes and sleep.</string>
+	<string>Waycar finds computers on your network that have SSH on, and connects to them over SSH and mosh.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ssh._tcp</string>
+	</array>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>com.otreva.waycar.agent</string>

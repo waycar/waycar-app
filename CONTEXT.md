@@ -8,6 +8,14 @@ A native iOS agent console for herdr, with tmux, Zellij, herdr-core, Ultimate, C
 A remote machine reachable over SSH that runs herdr, herdr-core, tmux, Zellij, Ultimate, Codex, OpenCode, or a mix (see Backend). The unit a user adds, names, and authenticates against. A Host with several shows one Console list: Agents from the Herdr TUI, herdr-core, tmux, Ultimate, Codex and OpenCode together, with independent visibility controls for the terminal Backends, Codex and OpenCode.
 _Avoid_: server, machine, connection
 
+**Find Computers**:
+The local-network search for computers with SSH on, offered before the first Host and from Hosts. Opening it browses Bonjour immediately. **Scan Network** is a separate tap that tries port 22 on private Wi-Fi addresses, capped to the /24 around the phone. It discovers no Backends and adds no Host until the user signs in.
+_Avoid_: backend detection, automatic scan (the network sweep requires a tap)
+
+**Found Computer**:
+A computer listed by Find Computers, not yet a saved Host. Bonjour names identify one row even across several interfaces; Waycar prefers the address on the phone's subnet. An SSH banner found by a sweep enriches that row, but says nothing about the Backends available after sign-in.
+_Avoid_: discovered Host (it is not a Host until saved)
+
 **Sample Host**:
 A labelled, read-only virtual Host offered while the real catalog is empty and readable. It shows fictional agents offline in a separate Console, never enters the real Host or enabled-Host lists, and is never saved or synced. Sample use does not count as an active Host. Adding any real Host, including a Disabled Host, removes the offer. "Connect your machine" returns to real setup with the install command and its Copy and Share actions.
 _Avoid_: live demo, connected computer, demo mode (the screenshot mode is separate)

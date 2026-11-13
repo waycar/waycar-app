@@ -49,6 +49,9 @@ struct ConsoleView: View {
     @State private var isHostSheetUpdatingPlugin = false
     /// Scan to Pair or the manual form, opened from the setup steps.
     @State private var hostAddition: HostAddition?
+    #if DEBUG
+        @State private var didOpenFindComputers = false
+    #endif
     /// The New Agent sheet; a New Chat quick action presents it in quick chat.
     @State private var startAgentSheet: StartAgentSheet?
     @State private var isShowingSettings = false
@@ -412,7 +415,17 @@ struct ConsoleView: View {
         }
         // Usage is account-level: the scoped Host is only the preferred
         // place to read it from, per window.
-        .onAppear { aiUsage.setScope(effectiveHostID, forWindow: aiUsageWindow) }
+        .onAppear {
+            aiUsage.setScope(effectiveHostID, forWindow: aiUsageWindow)
+            #if DEBUG
+                if DemoFindComputersMode.opensAtLaunch, sampleConnect == nil,
+                    !didOpenFindComputers
+                {
+                    didOpenFindComputers = true
+                    hostAddition = .find
+                }
+            #endif
+        }
         .onChange(of: effectiveHostID) { _, scope in
             aiUsage.setScope(scope, forWindow: aiUsageWindow)
         }
@@ -852,36 +865,15 @@ struct ConsoleView: View {
                         }
                     }
                 },
-                sampleHostRow: hosts.sampleHost.map { _ in AnyView(sampleHostRow) })
+                sampleHostRow: hosts.sampleHost.map { _ in AnyView(sampleHostRow) },
+                findComputersRow: AnyView(FindComputersSetupRow { hostAddition = .find }))
         }
     }
 
     private var sampleHostRow: some View {
-        Button(action: presentSample) {
-            HStack(spacing: 14) {
-                Image(systemName: "play.rectangle")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Sample")
-                        .font(.headline)
-                    Text("Fictional offline agents")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
-                in: .rect(cornerRadius: Brand.Radius.control))
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
+        HostSetupOptionRow(
+            title: "Sample", subtitle: "Fictional offline agents",
+            symbol: "play.rectangle", action: presentSample)
         .accessibilityIdentifier("setup.sample")
     }
 

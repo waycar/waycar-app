@@ -5,8 +5,9 @@ import SwiftUI
 /// camera can't scan. Duplicate opens the manual form prefilled from an
 /// existing Host.
 enum HostAddition: Identifiable, Hashable {
-    case scan, manual
+    case scan, manual, find
     case duplicate(Host)
+    case prefilled(HostDraft)
 
     var id: Self { self }
 }
@@ -23,9 +24,9 @@ struct HostAdditionSheet: ViewModifier {
     /// Runs after every dismissal, once the sheet is fully gone.
     var onDismissed: () -> Void = {}
     @State private var addedHostID: Host.ID?
-    /// The scanner's Add Manually: the form follows once the scanner is gone,
-    /// so the two sheets never overlap.
-    @State private var fallsBackToManual = false
+    /// Discovery's sign-in and the scanner can hand off to a form, but only
+    /// after the first sheet has finished dismissing.
+    @State private var followUp: HostAddition?
 
     func body(content: Content) -> some View {
         content.sheet(item: $addition, onDismiss: sheetDidDismiss) { method in
@@ -34,7 +35,16 @@ struct HostAdditionSheet: ViewModifier {
                 PairingScanView(catalog: store) { paired in
                     addedHostID = paired.id
                 } onAddManually: {
-                    fallsBackToManual = true
+                    followUp = .manual
+                }
+            case .find:
+                FindComputersView(
+                    catalog: store,
+                    onFollowUp: { followUp = $0 },
+                    onAdded: { addedHostID = $0.id })
+            case .prefilled(let draft):
+                HostFormView(store: store, prefilled: draft, addMethod: .discovered) { saved in
+                    addedHostID = saved.id
                 }
             case .manual:
                 HostFormView(store: store) { saved in
@@ -49,9 +59,9 @@ struct HostAdditionSheet: ViewModifier {
     }
 
     private func sheetDidDismiss() {
-        if fallsBackToManual {
-            fallsBackToManual = false
-            addition = .manual
+        if let next = followUp {
+            followUp = nil
+            addition = next
         } else if let id = addedHostID {
             addedHostID = nil
             onAdded(id)

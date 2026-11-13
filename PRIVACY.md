@@ -458,10 +458,11 @@ firsts, once for each on an install: `host_connected`, `agent_seen`,
 `attention_seen` (the Console showed an Agent that is Blocked or Done),
 `first_steer` (a message reached an Agent), `sample_host_opened` (you opened
 the offline sample). It carries the name and `days_since_first_open` (`0`,
-`1-3`, `4-7` or `8+`). Three more names are reserved for 1.3.0 and are not
-sent yet: `lan_scan_started`, `lan_scan_found` and `lan_permission_denied`. When
-`lan_scan_found` is sent it will also say how many computers the scan listed
-(`found`: `0`, `1` or `2+`).
+`1-3`, `4-7` or `8+`). Find Computers sends `lan_scan_started` when a search
+starts, `lan_scan_found` when it first settles, and `lan_permission_denied`
+when iOS refuses Local Network access. `lan_scan_found` also says how many
+computers the search listed (`found`: `0`, `1` or `2+`). No computer names,
+addresses or SSH banners are sent.
 `invite_shared` says that you opened the share sheet for the app's App Store link in
 Settings › About; sharing the app earns nothing, and who (if anyone) you
 shared it with, or whether they installed it, is never reported. Every

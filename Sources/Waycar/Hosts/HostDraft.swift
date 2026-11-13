@@ -3,7 +3,7 @@ import Foundation
 /// Editable form state behind `HostFormView`, validated before it becomes a
 /// catalog Host. Text-field friendly (port is a string) so the view stays
 /// dumb and the rules stay testable.
-struct HostDraft: Equatable, Sendable {
+struct HostDraft: Hashable, Sendable {
     var name = ""
     var address = ""
     var port = "22"

@@ -2274,6 +2274,65 @@ stateDiagram-v2
     }
 ```
 
+### FindComputersMachine
+
+- **File:** `Sources/Waycar/Discovery/FindComputersMachine.swift`
+- **Owner:** `FindComputersStore` browses Bonjour, runs tap-requested sweeps,
+  arms settling Tasks and reports anonymous milestones.
+- **States:** `idle`, `searching(search, timer)`, `settled(search)`, `denied`,
+  `stopped`; the search carries sweep `idle/running(token)/finished/unavailable`.
+- **Events:** start, searchAgain, browse(token), settleElapsed(token), scanTapped,
+  sweep(token), stop.
+- **Effects:** cancelSearch, browse(token), armSettle(token), cancelSettle,
+  sweep(token), milestone. Search and sweep tokens discard cancelled streams;
+  only a tap starts the sweep. Settling reports the merged row count once.
+- **Tests:** `FindComputersMachineTests`, `FindComputersStoreTests`, `FoundComputerTests`.
+- **Catalogue:** HOST-19.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> searching: start / browse
+    searching --> searching: ready / armSettle
+    searching --> settled: computers or settleElapsed or failed
+    settled --> settled: browse or sweep results
+    searching --> denied: browse or sweep denial / cancelSearch
+    settled --> denied: browse or sweep denial / cancelSearch
+    denied --> searching: searchAgain
+    settled --> searching: searchAgain
+    searching --> searching: searchAgain / replace tokens
+    searching --> stopped: stop / cancelSearch
+    settled --> stopped: stop / cancelSearch
+    stopped --> searching: start
+```
+
+### SSHBannerProbeMachine
+
+- **File:** `Sources/Waycar/Discovery/SSHBannerProbeMachine.swift`
+- **Owner:** `ProbeAttempt` serializes Network callbacks, owns the connection,
+  timeout work item and checked continuation.
+- **States:** `idle`, `cancelledBeforeStart`, `connecting(timer)`,
+  `reading(timer, bytes, received)`, `finished`.
+- **Events:** start, connected, received, failed, timeout(token), cancel.
+- **Effects:** connect, armTimeout(token), receive, finish(result). Cancellation
+  before start resumes the later continuation without connecting. Finished
+  attempts ignore callbacks and stale timeout tokens; reads are bounded.
+- **Tests:** `SSHBannerProbeMachineTests`, `SSHDiscoveryProbeTests`, `SubnetSweeperTests`.
+- **Catalogue:** HOST-20.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> connecting: start / connect, armTimeout
+    idle --> cancelledBeforeStart: cancel
+    cancelledBeforeStart --> finished: start / finish unreachable
+    connecting --> reading: connected / receive
+    reading --> reading: partial bytes / receive
+    reading --> finished: SSH banner or EOF or read limit
+    connecting --> finished: failed or timeout or cancel
+    reading --> finished: failed or timeout or cancel
+```
+
 **Chat**
 
 ### ChatApprovalMachine
@@ -4415,6 +4474,9 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HOST-16 | Host addition sheet handoff | `Sources/Waycar/Hosts/HostAdditionSheet.swift` | implicit | L/M | leave: dismissal-driven | — |
 | HOST-17 | Host removal confirmation | `Sources/Waycar/Hosts/HostListView.swift` | implicit | L/L | leave: synchronous | — |
 | HOST-18 | Detection output parser | `Sources/Waycar/Transport/HostBackendDetection.swift` | implicit | L/L | leave: pure parser | — |
+| HOST-19 | Find Computers search and tap-requested sweep | `Sources/Waycar/Discovery/FindComputersStore.swift` | explicit | M/H | converted → `FindComputersMachine` | #311 |
+| HOST-20 | SSH connect and banner read | `Sources/Waycar/Discovery/SubnetSweeper.swift` | explicit | M/H | converted → `SSHBannerProbeMachine` | #311 |
+| HOST-21 | Bonjour browse session and service resolvers | `Sources/Waycar/Discovery/ComputerBrowser.swift` | explicit | L/M | leave: queue-confined resource registry with one stopped bit; stop clears all resources, start and callbacks check it; each resolver has one finished bit | — |
 | CODEX-11 | Start Codex (and OpenCode) server | `Sources/Waycar/Console/ServerRuntimeState.swift`, `Sources/Waycar/Console/ConsoleStore.swift` | explicit | H/M | converted → `RuntimeStartMachine`, with HOST-09; bug B-31 | P2a |
 | CODEX-12 | Stopped Codex server rediscovery | `Sources/Waycar/Console/ConsoleStore.swift` | explicit | M/M | converted → `BackendDetectionMachine`, with HOST-10 | P2a |
 | CODEX-15 | Codex detection output parser | `Sources/Waycar/Transport/HostBackendDetection.swift` | implicit | L/L | leave: pure parser | — |

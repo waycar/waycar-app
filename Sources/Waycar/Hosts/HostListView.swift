@@ -127,7 +127,8 @@ struct HostListView: View {
                 } else if store.hosts.isEmpty {
                     HostSetupGuide(
                         scan: { addition = .scan },
-                        addManually: { addition = .manual })
+                        addManually: { addition = .manual },
+                        findComputersRow: AnyView(FindComputersSetupRow { addition = .find }))
                 } else {
                     // The Console's card list: each Host is its own card on
                     // the grouped backdrop.
@@ -204,7 +205,10 @@ struct HostListView: View {
                     .disabled(store.catalogLoadError != nil)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add Host", systemImage: "plus") { addition = .manual }
+                    Menu("Add Host", systemImage: "plus") {
+                        Button("Find Computers", systemImage: "wifi") { addition = .find }
+                        Button("Add Manually", systemImage: "square.and.pencil") { addition = .manual }
+                    }
                         .disabled(store.catalogLoadError != nil)
                 }
             }

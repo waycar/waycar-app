@@ -9,11 +9,13 @@ related: [pairing, ssh-keys, host-keys, jump-host]
 
 You can add a Host without scanning a Pairing Code. Type its address and user, pick how Waycar signs in, and add Waycar's key to the Host yourself. Waycar then runs its checks and asks you to trust the Host's key.
 
+On the same Wi-Fi, [Find Computers](/help/find-computers) lets you pick a computer with SSH on instead of typing its address.
+
 ## Add the Host
 
 1. Open the form:
    - With no Host yet, tap **Add Manually** under **Scan to Pair**.
-   - In the Hosts sheet, tap **Add Host**.
+   - In the Hosts sheet, tap **Add Host**, then **Add Manually**.
    - If the scanner shows **Camera Access Needed**, or your device can't scan codes, tap **Add Manually** there.
 2. Under **Host**, fill in **Address** and **User**. **Port** starts at 22. **Name (optional)** is the label you see in Waycar. A Pairing Code always uses port 22, so add a Host whose SSH server listens on another port here and enter that **Port**. See [Pair with a Pairing Code](/help/pairing#troubleshooting).
 3. Under **Authentication**, pick a **Method**: **Device Key**, **RSA Key**, or **Password**.
