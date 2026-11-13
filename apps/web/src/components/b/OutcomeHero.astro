@@ -22,8 +22,11 @@ const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
 // Reduced motion gets the still, which does go through astro:assets.
 const { still } = dictationHero;
 const stillSet = await getImage({ src: still, widths: [660, still.width], format: 'webp', quality: 82 });
-// The clip's drawn width (see `.talk` below), minus its bezel.
-const clipSizes = '(min-width: 1280px) 330px, (min-width: 1024px) 242px, (min-width: 640px) 362px, calc(100vw - 54px)';
+// The clip's drawn width (see `.talk` below), minus its bezel, on computers.
+// Phones and tablets are told a smaller width than they draw, so a 3x screen
+// takes the 660px file (about 290 KB) instead of the full one (about 525 KB):
+// most visitors are on phones, and the clip is on their first load.
+const clipSizes = '(min-width: 1280px) 330px, (min-width: 1024px) 242px, (min-width: 640px) 330px, 220px';
 ---
 
 <section class="hero" aria-labelledby="hero-title">

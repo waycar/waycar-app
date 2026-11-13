@@ -3,7 +3,11 @@
 // attach leave you doing by hand, row by row. A real table; on phones each row
 // puts its question above the two answers, which stay side by side, so the
 // table never scrolls sideways. The roles keep it a table to screen readers
-// once CSS changes the cells' display.
+// once CSS changes the cells' display. The download sits right under the
+// argument, for the visitor it just convinced.
+import { ON_APP_STORE } from '../../data/links';
+import AppStoreCta from '../AppStoreCta.astro';
+
 const rows = [
   {
     q: 'Who needs you?',
@@ -32,7 +36,7 @@ const rows = [
   <div class="wrap">
     <div class="sec-head">
       <span class="kicker">Why not SSH</span>
-      <h2 id="why-title" class="sec-title">You could just SSH in.<br /> <span class="muted">Here is what you would still do by hand.</span></h2>
+      <h2 id="why-title" class="sec-title">You could just SSH in. <span class="muted">Here is what you would still do by hand.</span></h2>
     </div>
 
     <div class="glass board">
@@ -58,15 +62,22 @@ const rows = [
       </table>
     </div>
 
+    <p class="still">It is still your terminal. Open any agent's real TUI when you want it.</p>
     <div class="after">
-      <p>It is still your terminal. Open any agent's real TUI when you want it.</p>
-      <a href="/compare">See Waycar next to Termius, Blink Shell and Claude Code Remote Control →</a>
+      <div class="get">
+        <AppStoreCta kind="button">Get Waycar</AppStoreCta>
+        {ON_APP_STORE && <span class="cta-note">Free on the App Store · iOS 18 or later</span>}
+      </div>
+      <a class="more" href="/compare">See Waycar next to Termius, Blink Shell and Claude Code Remote Control →</a>
     </div>
   </div>
 </section>
 
 <style>
-  .sec-title {
+  /* The second sentence is its own block, so it balances by itself and never
+     leaves one word on the last line. */
+  .sec-title .muted {
+    display: block;
     text-wrap: balance;
   }
 
@@ -127,17 +138,28 @@ const rows = [
     color: var(--cyan);
   }
 
-  .after {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px 32px;
+  .still {
     margin-top: 28px;
     color: var(--text-2);
   }
 
-  .after a {
+  .after {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px 32px;
+    margin-top: 20px;
+  }
+
+  .get {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+  }
+
+  .more {
     font: 14px var(--font-mono);
     color: var(--violet-soft);
     text-decoration: underline;
@@ -145,7 +167,7 @@ const rows = [
     text-underline-offset: 3px;
   }
 
-  .after a:hover {
+  .more:hover {
     color: var(--text);
   }
 

@@ -8,6 +8,20 @@
 - **Worked:** one commit of shared data and markup first (`src/data/supported.ts`,
   the section order), then three children with disjoint files: a designer for
   the hero and two workers for the picker and the copy. No merge conflicts.
+- **Broke:** round 1 made the download easier (button on the first screen,
+  one tap on iPhone, a QR on desktop) and moved the dictation clip down the
+  page. The owner turned it down: he wanted more people to want the app, and
+  he sells it on two ideas, one list of every agent and talking to it. Before
+  restructuring a hero, ask which ideas sell the product and keep each one on
+  the first screen; less friction is not a reason to download.
+- **Worked:** round 2 put both ideas in the hero (headline, a lede that starts
+  with the problem, the Console beside the dictation clip) and answered the
+  audience's first objection in its own section, a four-row table against
+  plain SSH and tmux attach, with a download button under it.
+- **Watch out:** an animated WebP on the first load costs every phone visitor
+  its whole size. Give `sizes` a smaller width than the picture draws on
+  phones so a 3x screen takes the 660px file (292 KB against 525 KB), and
+  measure first-load bytes per viewport before and after.
 - **Broke:** a product claim written into a worker's brief was wrong ("the app
   opens with a Sample"; the first screen offers a Sample row). The worker was
   told to use the copy verbatim and did. Check each claim in fixed copy
