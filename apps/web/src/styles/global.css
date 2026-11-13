@@ -188,6 +188,8 @@ main:focus {
   text-align: center;
 }
 
+/* Uppercase, so never an Apple name (iPhone, iPad, CarPlay, Mac, iOS): Apple
+   asks that its product names are never set in all capitals. */
 .kicker {
   display: inline-flex;
   align-items: center;

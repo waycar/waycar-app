@@ -1,19 +1,22 @@
 #!/bin/sh
 # Render the 1200x630 share cards into ../public/: home.html -> og.png (the
-# default card, Layout.astro) and ipad.html -> og-ipad.png (/ipad), plus
+# default card, Layout.astro), ipad.html -> og-ipad.png (/ipad) and
+# carplay.html -> og-carplay.png (/carplay), plus
 # x-header.html -> x-header.png, the @waycardev X profile header, and the App
 # Store creative assets (appstore-header.html, appstore-search.html) into
 # output/app-store/creative/ (see the README there).
 # The cards pull fonts, screenshots, and the icon from the repo, so rerun this
 # after any of those change. Needs Google Chrome; the App Store assets also need
 # python3 with Pillow to drop the alpha channel App Store Connect rejects.
+# CHROME overrides the browser (e.g. CHROME=/usr/bin/chromium on Linux).
+# Pass card names (home, ipad, carplay) to render only those share cards.
 #
 # Chrome sometimes lingers after writing the screenshot, so each render runs in
 # the background with its own throwaway profile and is killed once the PNG
 # lands (or after 30 s).
 set -eu
 cd "$(dirname "$0")"
-chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+chrome="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 
 render() {
   in="$1"; out="$2"; size="${3:-1200,630}"; scale="${4:-1}"
@@ -34,8 +37,19 @@ render() {
   echo "$out"
 }
 
+if [ $# -gt 0 ]; then
+  for card in "$@"; do
+    case "$card" in
+      home) render home.html ../public/og.png ;;
+      *) render "$card.html" "../public/og-$card.png" ;;
+    esac
+  done
+  exit 0
+fi
+
 render home.html ../public/og.png
 render ipad.html ../public/og-ipad.png
+render carplay.html ../public/og-carplay.png
 # X profile header (not served by the site; upload it on x.com/waycardev).
 render x-header.html x-header.png 1500,500
 
