@@ -70,7 +70,9 @@ Each team prints its `teamID`, `teamName` and `teamType`.
 A free account's team reads `teamType = "Personal Team"` and
 `isFreeProvisioningTeam = 1`. When several teams show, ask the
 **Person** which one to use. Nothing printed means Xcode has no account yet:
-go back to the sign-in.
+go back to the sign-in. This list is Xcode's cache and can outlive a
+sign-out, so if the build later stops at `No Accounts`, the account is no
+longer signed in: sign in again.
 
 ## 4. Pair the iPhone
 
@@ -204,7 +206,7 @@ own team and entitlements, and only the `TEAM` path swaps in yours.
 | What you see | Fix |
 | --- | --- |
 | `No physical iPhone found; pass DEVICE=<device identifier>` | Pass `DEVICE=<UDID>` from `xcrun devicectl list devices`; if the phone isn't listed, pair it (step 4). |
-| `No Accounts`, `No Account for Team "…"`, or `Signing for "Waycar" requires a development team` | Xcode has no account for that team: sign in (step 3) and use a `teamID` it lists. |
+| `No Accounts: Add a new account in Accounts settings.` (with `No profiles for '…' were found`), `No Account for Team "…"`, or `Signing for "Waycar" requires a development team` | Xcode has no signed-in account for that team: sign in (step 3) and use a `teamID` it lists. |
 | `Personal development teams … do not support the Push Notifications capability`, or a profile missing `aps-environment` or CarPlay | The build ran without `TEAM`, or from Xcode's Run button: use `make install TEAM=…`. |
 | `… is not available` or `cannot be registered to your development team` (bundle ID or app group) | Another team has that ID: add `BUNDLE_ID=com.<something unique>.waycar`. |
 | `Your maximum App ID limit has been reached` | The free account made 10 App IDs this week: wait for the oldest to expire, or go back to the `BUNDLE_ID` you used before. |
