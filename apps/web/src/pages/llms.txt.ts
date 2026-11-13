@@ -30,6 +30,7 @@ export const GET: APIRoute = async () => {
 
 - Availability: ${availability}
 - Price: Waycar is free. Users pay for their own machines and AI providers.
+- Open source: Apache-2.0, https://github.com/waycar/waycar-app
 - Install on each machine: \`curl -fsSL https://waycar.dev/install.sh | sh\`, then scan the pairing QR in Waycar.
 - Requirements: iOS/iPadOS 18+; herdr 0.7.5+, tmux 3.2+ or Herdr Core 0.1.10+ on the Host (no Node needed); Zellij 0.46+, Codex 0.167+ and OpenCode 2.2+ in the next app update; OpenSSH on the Host (stream-local forwarding on, for herdr; on macOS, Remote Login on); mosh-server and open UDP for mosh.
 - Made by OTREVA, LLC. Not affiliated with or endorsed by herdr, CodexBar, Anthropic, OpenAI, or Google.

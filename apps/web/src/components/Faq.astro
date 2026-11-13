@@ -8,7 +8,7 @@ interface Props {
 
 const { extra = [] } = Astro.props;
 
-// The page keeps the questions people ask before downloading; all 16, with full
+// The page keeps the questions people ask before downloading; all 20, with full
 // answers, live in src/llms/index.md.
 const questions = [
   {
@@ -18,13 +18,17 @@ const questions = [
       : "It's coming soon to the App Store. Then run the install command on each machine, or add one by hand.",
   },
   {
+    q: 'Can I try it before I set up a machine?',
+    a: 'Yes. The app opens with a labelled Sample of Blocked, Done and Working agents that you can browse offline. It goes away when you add a Host.',
+  },
+  {
     q: 'Do I need herdr?',
     a: 'No. tmux 3.2 or later works too, and so does Herdr Core. Zellij, Codex and OpenCode 2 come in the next update.',
   },
   {
-    q: 'Which agents work in Chat Mode?',
-    a: 'Claude Code, Codex, omp, pi, opencode, GitHub Copilot CLI, Qwen Code, Gemini CLI, Grok Build, Antigravity, Hermes Agent, Kilo Code, Cline and Muse. Run the install command again first. On herdr, Antigravity also needs',
-    cmd: 'herdr integration install antigravity-cli',
+    q: 'What does the install command change on my machine?',
+    a: 'It unpacks the Waycar host tools to ~/.local/share/waycar/plugin after checking their SHA-256 checksum. With herdr it links a plugin. With tmux it adds status hooks to the agents it finds and keeps your own. Pairing adds one line to ~/.ssh/authorized_keys. No sudo, no system service, no open port.',
+    link: { href: '/help/install#what-does-it-install', label: 'What it installs' },
   },
   {
     q: 'Does anything go through the cloud?',
@@ -32,7 +36,18 @@ const questions = [
   },
   {
     q: "My machine isn't reachable from the internet. Can I still use it?",
-    a: 'Yes. Put an SSH Jump Host in front of it.',
+    a: 'Yes. Put your phone and your machine on the same VPN, such as Tailscale, or put an SSH Jump Host in front of it. Waycar only needs SSH to reach it.',
+    link: { href: '/help/away-from-home', label: 'Use Waycar away from home' },
+  },
+  {
+    q: 'Is Waycar open source?',
+    a: 'Yes. The app, the host tools and the push relay are on GitHub under the Apache-2.0 license.',
+    link: { href: 'https://github.com/waycar/waycar-app', label: 'waycar/waycar-app on GitHub' },
+  },
+  {
+    q: 'Which agents work in Chat Mode?',
+    a: 'Claude Code, Codex, omp, pi, opencode, GitHub Copilot CLI, Qwen Code, Gemini CLI, Grok Build, Antigravity, Hermes Agent, Kilo Code, Cline and Muse. Run the install command again first. On herdr, Antigravity also needs',
+    cmd: 'herdr integration install antigravity-cli',
   },
   {
     q: 'Is Waycar affiliated with herdr or the AI companies?',
