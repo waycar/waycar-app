@@ -4452,11 +4452,14 @@ stateDiagram-v2
     revoking --> revoked: revokeAnswered with a screen
     revoking --> [*]: revokeAnswered, no Enrollment / close
     select --> [*]: q, escape, Ctrl-C, signal / close
-    qr --> [*]: close
-    expired --> [*]: any other key / close
-    enrolled --> [*]: any other key / close
-    revoked --> [*]: any key / close
+    qr --> [*]: close, signal / close
+    expiring --> [*]: signal / close(0)
+    revoking --> [*]: signal / close(0)
+    expired --> [*]: any other key, signal / close
+    enrolled --> [*]: any other key, signal / close
+    revoked --> [*]: any key, signal / close
     fatal --> [*]: any key / close(1)
+    fatal --> [*]: signal / close(0)
 ```
 
 ### SummaryRecordMachine

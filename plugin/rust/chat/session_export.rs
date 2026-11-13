@@ -1217,13 +1217,16 @@ esac
     fn a_session_not_found_exit_is_absent_even_when_a_child_holds_the_pipes_past_the_timeout() {
         // The exporter itself exited 3 saying the session is gone; only the
         // child it left kept the read until the deadline killed the group.
+        // The verdict needs the exporter to exit before the deadline, so the
+        // deadline leaves a slow runner's shell start room; the child
+        // outlives it by far, so the read still ends at the deadline.
         let (dir, mut options) =
-            stage("#!/bin/sh\nsleep 6 &\necho 'Session not found: ses_x' >&2\nexit 3\n");
-        options.timeout = Duration::from_millis(300);
+            stage("#!/bin/sh\nsleep 30 &\necho 'Session not found: ses_x' >&2\nexit 3\n");
+        options.timeout = Duration::from_secs(2);
         let started = Instant::now();
         let error =
             session_export("opencode", &Value::String("ses_x".into()), &options).unwrap_err();
-        assert!(started.elapsed() < Duration::from_secs(3));
+        assert!(started.elapsed() < Duration::from_secs(15));
         assert_eq!(error.message, "opencode export Session not found: ses_x");
         assert_eq!(
             error.kind,
