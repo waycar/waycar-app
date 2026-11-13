@@ -193,11 +193,34 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install tmux pkg-config libevent ncurses utf8proc
 
-      - name: Cache the pinned tmux builds
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The builds link the image's Homebrew libraries, so the key names the
+      # image too. A plain actions/cache saves only when the whole job passes,
+      # so a red lane rebuilt every release on every run (5-11 minutes on the
+      # 3-core hosted runner, competing with the simulator's first boot).
+      # Build them in a step of their own and save the cache right after it.
+      - name: Key the pinned tmux builds
+        id: tmux-key
+        env:
+          SCRIPT_HASH: ${{ hashFiles('scripts/build-ci-tmux.sh') }}
+        run: echo "key=tmux-$ImageOS-$ImageVersion-$RUNNER_ARCH-$SCRIPT_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pinned tmux builds
+        id: tmux-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/waycar-ci/tmux
-          key: tmux-${{ runner.os }}-${{ hashFiles('scripts/build-ci-tmux.sh') }}
+          key: ${{ steps.tmux-key.outputs.key }}
+
+      - name: Build the pinned tmux releases
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        run: scripts/build-ci-tmux.sh
+
+      - name: Save the pinned tmux builds
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/waycar-ci/tmux
+          key: ${{ steps.tmux-key.outputs.key }}
 
       # The script selects its own Waycar CI simulator (an iPhone 17 Pro Max),
       # boots it, injects the fixture environment there, and targets that same

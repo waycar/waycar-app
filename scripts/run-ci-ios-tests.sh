@@ -466,8 +466,13 @@ sample_host_load() {
         printf "xcodebuild %d swift-frontend %d clang %d",
             n["xcodebuild"], n["swift-frontend"], n["clang"] }' || true)
     top=$(ps -Ao pcpu=,comm= -r 2>/dev/null | head -5 | sed -E 's|^ *([0-9.]+) .*/|\1% |' | paste -sd, - || true)
-    printf '%s load %s | booted sims %s | %s | top %s\n' "$(date -u +%H:%M:%S)" \
-        "$(sysctl -n vm.loadavg | tr -d '{}' | xargs)" "$sims" "$processes" "$top"
+    # Memory as well as CPU: a small hosted runner can be short of either.
+    # memorystatus_level is the share of memory the kernel counts as free.
+    memory=$(printf 'free %s%% swap %s' \
+        "$(sysctl -n kern.memorystatus_level 2>/dev/null || echo '?')" \
+        "$(sysctl -n vm.swapusage 2>/dev/null | sed -E 's/.*used = ([^ ]+).*/\1/' || echo '?')")
+    printf '%s load %s | %s | booted sims %s | %s | top %s\n' "$(date -u +%H:%M:%S)" \
+        "$(sysctl -n vm.loadavg | tr -d '{}' | xargs)" "$memory" "$sims" "$processes" "$top"
 }
 
 start_host_load_sampler() {
@@ -495,11 +500,13 @@ stop_host_load_sampler() {
 summarize_host_load() {
     local log="$fixture_dir/host-load.log"
     [[ -s "$log" ]] || return 0
-    awk -v cores="$(sysctl -n hw.ncpu)" '
+    awk -v cores="$(sysctl -n hw.ncpu)" -v memory="$(sysctl -n hw.memsize)" '
         { for (i = 1; i < NF; i += 1) if ($i == "load") {
-            n += 1; sum += $(i + 1); if ($(i + 1) > peak) peak = $(i + 1); break } }
-        END { if (n) printf "==> Host load over the run: %d samples, 1-minute load average %.1f, peak %.1f, %d cores\n",
-            n, sum / n, peak, cores }' "$log" >&2
+            n += 1; sum += $(i + 1); if ($(i + 1) > peak) peak = $(i + 1); break }
+          for (i = 1; i < NF; i += 1) if ($i == "free") {
+            level = $(i + 1) + 0; if (!m || level < low) low = level; m += 1; break } }
+        END { if (n) printf "==> Host load over the run: %d samples, 1-minute load average %.1f, peak %.1f, %d cores, %.0f GB, lowest free memory %d%%\n",
+            n, sum / n, peak, cores, memory / 1073741824, low }' "$log" >&2
 }
 
 # Copy lane logs, sshd logs, the weak-network proxy log, and xcresult
@@ -1141,8 +1148,13 @@ password_ssh_preflight() {
     local status
 
     export WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD="$password_secret"
+    # 5 s per step on an idle Mac, stretched like the suites' sshd budgets: a
+    # loaded 3-core hosted runner spent 3 s in PAM alone and missed a flat 5 s.
+    WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT=$(awk -v scale="${WAYCAR_SSH_E2E_TIMEOUT_SCALE:-1}" \
+        'BEGIN { seconds = int(5 * scale + 0.5); print (seconds < 5 ? 5 : seconds) }')
+    export WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT
     if /usr/bin/expect <<'EXPECT'
-set timeout 5
+set timeout $env(WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT)
 log_user 0
 
 set password $env(WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD)
@@ -1156,7 +1168,7 @@ spawn /usr/bin/ssh \
     -o KbdInteractiveAuthentication=no \
     -o PubkeyAuthentication=no \
     -o NumberOfPasswordPrompts=1 \
-    -o ConnectTimeout=5 \
+    -o ConnectTimeout=$env(WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT) \
     -o ConnectionAttempts=1 \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
@@ -1198,6 +1210,7 @@ EXPECT
         status=$?
     fi
     unset WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD
+    unset WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT
     return "$status"
 }
 
@@ -2398,7 +2411,8 @@ PY
     codex_model_pid=$!
     codex_model_ready=0
     for ((attempt = 0; attempt < 100; attempt += 1)); do
-        if /usr/bin/curl --noproxy '*' -fsS "http://127.0.0.1:$codex_model_port/_health" >/dev/null; then
+        # Quiet: refused connections before the server listens are expected.
+        if /usr/bin/curl --noproxy '*' -fs "http://127.0.0.1:$codex_model_port/_health" >/dev/null; then
             codex_model_ready=1
             break
         fi
@@ -2465,7 +2479,7 @@ PY
     opencode_model_pid=$!
     opencode_model_ready=0
     for ((attempt = 0; attempt < 100; attempt += 1)); do
-        if /usr/bin/curl --noproxy '*' -fsS "http://127.0.0.1:$opencode_model_port/_health" >/dev/null; then
+        if /usr/bin/curl --noproxy '*' -fs "http://127.0.0.1:$opencode_model_port/_health" >/dev/null; then
             opencode_model_ready=1
             break
         fi
