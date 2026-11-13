@@ -4228,6 +4228,37 @@ stateDiagram-v2
 
 **SSH and mosh**
 
+### NetworkPathSettleMachine
+
+- **File:** `Sources/Waycar/Transport/NetworkPathSettleMachine.swift`
+- **Owner:** `NetworkPathMonitor` feeds it under its lock, then outside it
+  starts and cancels the source, arms and cancels the debounce Task (which
+  sleeps, then sends its token back) and yields to or finishes the
+  `changes()` streams; `currentKey` and the baseline a new stream is handed
+  read the machine.
+- **States:** `isStarted`, with the readings `awaitingBaseline`,
+  `settled(key)`, `debouncing(settled, current, token)`.
+- **Events:** `start`, `read(key)`, `debounceElapsed(token)`, `stop`.
+- **Effects:** `startSource` (once), `reportBaseline(key)` (to the streams
+  that asked for it), `armDebounce(token)`, `reportChange(key)`,
+  `cancelDebounce`, `cancelSource`, `finishStreams`. Every reading takes a
+  fresh token, so only the latest reading's debounce settles (B-26); a
+  settle naming the path reported last is no change. Stop leaves the
+  readings as they were, as before.
+- **Tests:** `NetworkPathSettleMachineTests`, `NetworkPathMonitorTests`
+  (bursts, blips, baselines, buffering, stop, B-26).
+- **Catalogue:** SSH-02.
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaitingBaseline
+    awaitingBaseline --> settled: read / reportBaseline
+    settled --> debouncing: read / armDebounce(token)
+    debouncing --> debouncing: read / armDebounce(new token)
+    debouncing --> settled: debounceElapsed(current token) / reportChange if it moved
+    debouncing --> debouncing: debounceElapsed(replaced token) / ignored
+```
+
 **herdr events and transport**
 
 **Host Tools plugin**
@@ -4573,7 +4604,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
 | SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | convert | P3c |
-| SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | convert; bug B-26 | P3c |
+| SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
 | SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
 | SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
 | SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | convert | P3c |
@@ -4685,7 +4716,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-23 | CORE-08 | A herdr-core Agent can stay Idle in a cached snapshot after a new turn starts | fixed (P3a, `032c2da7`): a notification that moves a terminal past its seen Done is a status change of that terminal |
 | B-24 | TMUX-06 | An older tmux inventory refresh can publish after a newer one | fixed (P3b, `7c49b616`): a refresh publishes only when none started after it has |
 | B-25 | TMUX-13 | tmux worktree reconciliation says "the worktree herdr made" | fixed (P3b): the shared banner says "Checking for the worktree the Host made" on every backend (Mike, 1a) |
-| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | open |
+| B-26 | SSH-02 | An expired path-change timer can settle a newer network change early | fixed (P3c, `5bfcd234`): every reading takes a token, and only the latest reading's debounce settles |
 | B-27 | SSH-17 | Closing a Jump Host connection can wait past its timeout | open |
 | B-28 | MOSH-11 | A late callback from a stopped UDP connection can fail its restart | open |
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |

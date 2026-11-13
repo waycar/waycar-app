@@ -155,17 +155,25 @@ final class SystemNetworkPathSource: NetworkPathSource {
 /// Readiness only: nothing here reconnects anything. Consumers decide what
 /// a new path means for them (a mosh rebind, a hedged redial, a per-network
 /// cache key).
+///
+/// The readings and the debounce are `NetworkPathSettleMachine`'s; the
+/// monitor keeps the source, the debounce Task and the streams.
 final class NetworkPathMonitor: Sendable {
     private struct State {
-        var started = false
-        var currentKey: NetworkPathKey?
-        /// The last settled key; nil before the first reading, its baseline.
-        var settled: NetworkPathKey??
+        var machine = NetworkPathSettleMachine()
         var debounce: Task<Void, Never>?
-        /// The reading the armed debounce belongs to: a debounce that ran
-        /// out after a newer reading arrived settles nothing (B-26).
-        var debounceToken: UInt64 = 0
         var subscribers: [UUID: Subscriber] = [:]
+    }
+
+    /// One effect with the streams it reaches, taken under the lock that
+    /// produced it, and performed outside it.
+    private enum Work {
+        case startSource
+        case yield(NetworkPathKey?, to: [Subscriber])
+        case armDebounce(token: UInt64)
+        case cancelDebounce(Task<Void, Never>?)
+        case cancelSource
+        case finish([Subscriber])
     }
 
     private struct Subscriber {
@@ -203,7 +211,7 @@ final class NetworkPathMonitor: Sendable {
     /// The path the latest reading names; nil before the first reading and
     /// while no usable path exists.
     var currentKey: NetworkPathKey? {
-        state.withLock { $0.currentKey }
+        state.withLock { $0.machine.currentKey }
     }
 
     /// Settled path changes from now on: each one the new path's key, nil
@@ -221,58 +229,79 @@ final class NetworkPathMonitor: Sendable {
             self?.state.withLock { _ = $0.subscribers.removeValue(forKey: id) }
         }
         state.withLock { state in
-            if includingBaseline, case .some(let settled) = state.settled {
+            let settled = state.machine.settledKey
+            if includingBaseline, case .some(let settled) = settled {
                 continuation.yield(settled)
             }
             state.subscribers[id] = Subscriber(
                 continuation: continuation,
-                wantsBaseline: includingBaseline && state.settled == nil)
+                wantsBaseline: includingBaseline && settled == nil)
         }
         return stream
     }
 
     /// Starts reading the path. Idempotent.
     func start() {
-        let starts = state.withLock { state in
-            defer { state.started = true }
-            return !state.started
-        }
-        guard starts else { return }
-        source.start { [weak self] snapshot in
-            self?.receive(snapshot)
-        }
+        send(.start)
     }
 
     /// Stops reading the path and finishes every `changes()` stream.
     func stop() {
-        let (debounce, subscribers) = state.withLock { state in
-            defer {
-                state.debounce = nil
-                state.subscribers = [:]
-            }
-            return (state.debounce, Array(state.subscribers.values))
-        }
-        debounce?.cancel()
-        source.cancel()
-        for subscriber in subscribers { subscriber.continuation.finish() }
+        send(.stop)
     }
 
     /// The first reading is the baseline; every later one waits out the
     /// debounce, replacing the wait of the reading before it.
     private func receive(_ snapshot: NetworkPathSnapshot) {
-        let key = snapshot.key
-        let reading: (baseline: [Subscriber]?, token: UInt64) = state.withLock { state in
-            state.currentKey = key
-            state.debounceToken &+= 1
-            guard state.settled == nil else { return (nil, state.debounceToken) }
-            state.settled = .some(key)
-            return (state.subscribers.values.filter(\.wantsBaseline), state.debounceToken)
+        send(.read(snapshot.key))
+    }
+
+    /// Feeds the machine under the lock, then performs its effects outside
+    /// it, in order.
+    private func send(_ event: NetworkPathSettleMachine.Event) {
+        let work: [Work] = state.withLock { state in
+            state.machine.handle(event).map { effect in
+                switch effect {
+                case .startSource:
+                    return .startSource
+                case .reportBaseline(let key):
+                    return .yield(key, to: state.subscribers.values.filter(\.wantsBaseline))
+                case .armDebounce(let token):
+                    return .armDebounce(token: token)
+                case .reportChange(let key):
+                    return .yield(key, to: Array(state.subscribers.values))
+                case .cancelDebounce:
+                    defer { state.debounce = nil }
+                    return .cancelDebounce(state.debounce)
+                case .cancelSource:
+                    return .cancelSource
+                case .finishStreams:
+                    defer { state.subscribers = [:] }
+                    return .finish(Array(state.subscribers.values))
+                }
+            }
         }
-        if let baselineSubscribers = reading.baseline {
-            for subscriber in baselineSubscribers { subscriber.continuation.yield(key) }
-            return
+        for item in work {
+            switch item {
+            case .startSource:
+                source.start { [weak self] snapshot in
+                    self?.receive(snapshot)
+                }
+            case .yield(let key, let subscribers):
+                for subscriber in subscribers { subscriber.continuation.yield(key) }
+            case .armDebounce(let token):
+                armDebounce(token: token)
+            case .cancelDebounce(let debounce):
+                debounce?.cancel()
+            case .cancelSource:
+                source.cancel()
+            case .finish(let subscribers):
+                for subscriber in subscribers { subscriber.continuation.finish() }
+            }
         }
-        let token = reading.token
+    }
+
+    private func armDebounce(token: UInt64) {
         let delay = debounce
         let sleep = sleep
         let afterDebounce = afterDebounce
@@ -280,25 +309,12 @@ final class NetworkPathMonitor: Sendable {
             do { try await sleep(delay) } catch { return }
             guard !Task.isCancelled else { return }
             await afterDebounce()
-            self?.settle(key, token: token)
+            self?.send(.debounceElapsed(token: token))
         }
         let previous = state.withLock { state in
             defer { state.debounce = task }
             return state.debounce
         }
         previous?.cancel()
-    }
-
-    private func settle(_ key: NetworkPathKey?, token: UInt64) {
-        let subscribers: [Subscriber] = state.withLock { state in
-            // A newer reading arrived since this one, even one naming the
-            // same path again: its own debounce settles instead (B-26).
-            guard state.debounceToken == token, state.currentKey == key,
-                state.settled != .some(key)
-            else { return [] }
-            state.settled = .some(key)
-            return Array(state.subscribers.values)
-        }
-        for subscriber in subscribers { subscriber.continuation.yield(key) }
     }
 }
