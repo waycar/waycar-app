@@ -32,6 +32,7 @@ pub mod envelope;
 pub mod error;
 pub mod exec;
 pub mod herdr;
+pub mod hook_pane_machines;
 pub mod hook_runtime;
 pub mod hook_session;
 pub mod hook_status;

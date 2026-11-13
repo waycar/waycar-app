@@ -45,6 +45,11 @@ use serde_json::{Map, Value};
 
 use crate::env::Env;
 use crate::exec::run_program_with_timeout;
+use crate::hook_pane_machines::{
+    PaneStatusWriteMachine, ReleaseEffect, ReleaseEvent, SessionReleaseMachine, StatusWrite,
+    StatusWriteEffect, StatusWriteEvent,
+};
+use crate::state_machine::StateMachine;
 
 pub const AGENTS: [&str; 13] = [
     "claude", "codex", "copilot", "qwen", "gemini", "grok", "agy", "hermes", "cline", "cursor",
@@ -589,15 +594,6 @@ fn increment_decimal(digits: &str) -> String {
     }
     bytes.insert(0, b'1');
     String::from_utf8(bytes).unwrap_or_default()
-}
-
-/// Whether `value` reads as itself inside a tmux format's `#{==:…,value}`:
-/// no `#`, `,` or `}` (format syntax), no control character and no line
-/// terminator.
-fn format_literal(value: &str) -> bool {
-    !value.contains(['#', ',', '}'])
-        && !value.chars().any(char::is_control)
-        && no_line_terminator(value)
 }
 
 /// Whether `pane` can sit unquoted in a tmux command string: `%<digits>`.
@@ -1223,109 +1219,149 @@ fn apply_to_pane(
     host: &dyn HookHost,
 ) {
     if update.release {
-        if let (Some(wanted), Some(held)) = (
-            &update.session_id,
-            current.session.as_ref().filter(|held| !held.is_empty()),
-        ) && wanted != held
-        {
-            return;
-        }
-        // Unset only while the pane still records that session (or none):
-        // a session that replaced it after the read keeps the pane (B-34).
-        if let Some(wanted) = update
-            .session_id
-            .as_deref()
-            .filter(|wanted| format_literal(wanted) && command_target(pane))
-        {
-            let unset: Vec<String> = OPTIONS
-                .iter()
-                .map(|name| format!("set-option -p -u -t {pane} {name}"))
-                .collect();
-            let condition = format!(
-                "#{{||:#{{==:#{{@waycar_session}},}},#{{==:#{{@waycar_session}},{wanted}}}}}"
-            );
-            let unset = unset.join(" ; ");
-            let Some(after) = host.tmux(
-                &[
-                    "if-shell",
-                    "-F",
-                    "-t",
-                    pane,
-                    &condition,
-                    &unset,
-                    ";",
-                    "show-options",
-                    "-p",
-                    "-q",
-                    "-v",
-                    "-t",
-                    pane,
-                    "@waycar_session",
-                ],
-                child_env,
-            ) else {
-                return;
-            };
-            if !after.trim_end_matches('\n').is_empty() {
-                return;
-            }
-        } else {
-            let mut args: Vec<&str> = Vec::new();
-            for name in OPTIONS {
-                if !args.is_empty() {
-                    args.push(";");
-                }
-                args.extend(["set-option", "-p", "-u", "-t", pane, name]);
-            }
-            if host.tmux(&args, child_env).is_none() {
-                return;
-            }
-        }
-        if current
-            .status
-            .as_deref()
-            .is_some_and(|status| !status.is_empty())
-        {
-            host.notify(pane, "release", child_env);
-        }
+        release_pane(pane, update, current, child_env, host);
         return;
     }
+    let mut machine = PaneStatusWriteMachine::default();
+    let mut events = vec![StatusWriteEvent::Read {
+        want: update.status,
+        status: current.status.clone(),
+        seq: current.seq.clone(),
+        options: !update.options.is_empty(),
+        options_have_agent: update
+            .options
+            .iter()
+            .any(|(name, _)| *name == "@waycar_agent"),
+        pane_is_target: command_target(pane),
+        now_ns: now_ns(),
+    }];
+    while let Some(event) = events.pop() {
+        for effect in machine.handle(event) {
+            match effect {
+                StatusWriteEffect::Write { status } => {
+                    let out = write_pane(
+                        pane,
+                        agent,
+                        &update.options,
+                        status.as_ref(),
+                        child_env,
+                        host,
+                    );
+                    events.push(StatusWriteEvent::Answered(out));
+                }
+                StatusWriteEffect::Notify(next) => host.notify(pane, next, child_env),
+            }
+        }
+    }
+}
 
-    let mut writes: Vec<(&str, String)> = update
-        .options
+/// The release half of [`apply_to_pane`], through [`SessionReleaseMachine`].
+fn release_pane(
+    pane: &str,
+    update: &HookUpdate,
+    current: &PaneState,
+    child_env: &Env,
+    host: &dyn HookHost,
+) {
+    let mut machine = SessionReleaseMachine::default();
+    let mut events = vec![ReleaseEvent::Read {
+        held: current.session.clone(),
+        status: current.status.clone(),
+        wanted: update.session_id.clone(),
+        pane_is_target: command_target(pane),
+    }];
+    while let Some(event) = events.pop() {
+        for effect in machine.handle(event) {
+            match effect {
+                ReleaseEffect::Unset { only_for } => {
+                    events.push(ReleaseEvent::Answered(unset_pane(
+                        pane,
+                        only_for.as_deref(),
+                        child_env,
+                        host,
+                    )));
+                }
+                ReleaseEffect::NotifyRelease => host.notify(pane, "release", child_env),
+            }
+        }
+    }
+}
+
+/// Unset every `@waycar_*` option in one tmux call; with `only_for`, only
+/// while the pane records that session or none (B-34), then read the pane's
+/// `@waycar_session` back. tmux's output, or `None` when it failed.
+fn unset_pane(
+    pane: &str,
+    only_for: Option<&str>,
+    child_env: &Env,
+    host: &dyn HookHost,
+) -> Option<String> {
+    let Some(wanted) = only_for else {
+        let mut args: Vec<&str> = Vec::new();
+        for name in OPTIONS {
+            if !args.is_empty() {
+                args.push(";");
+            }
+            args.extend(["set-option", "-p", "-u", "-t", pane, name]);
+        }
+        return host.tmux(&args, child_env);
+    };
+    let unset: Vec<String> = OPTIONS
+        .iter()
+        .map(|name| format!("set-option -p -u -t {pane} {name}"))
+        .collect();
+    let condition =
+        format!("#{{||:#{{==:#{{@waycar_session}},}},#{{==:#{{@waycar_session}},{wanted}}}}}");
+    let unset = unset.join(" ; ");
+    host.tmux(
+        &[
+            "if-shell",
+            "-F",
+            "-t",
+            pane,
+            &condition,
+            &unset,
+            ";",
+            "show-options",
+            "-p",
+            "-q",
+            "-v",
+            "-t",
+            pane,
+            "@waycar_session",
+        ],
+        child_env,
+    )
+}
+
+/// The event's options, then `status` (with `@waycar_agent` first when it
+/// asks), in one tmux call. A guarded status runs inside `if-shell -F` on the
+/// seq it was decided from (B-35), and the call ends by reading
+/// `@waycar_seq` back. tmux's output, or `None` when it failed.
+fn write_pane(
+    pane: &str,
+    agent: &str,
+    options: &[(&'static str, String)],
+    status: Option<&StatusWrite>,
+    child_env: &Env,
+    host: &dyn HookHost,
+) -> Option<String> {
+    let mut writes: Vec<(&str, String)> = options
         .iter()
         .map(|(name, value)| (*name, value.clone()))
         .collect();
-    let next = update
-        .status
-        .and_then(|status| next_status(status, current.status.as_deref()))
-        .filter(|next| Some(*next) != current.status.as_deref());
-    // A conditional status is written only while the pane's seq is still
-    // the one it was decided from: a status written after the read (a turn's
-    // Done) is never overwritten by a late tool event (B-35).
-    let read_seq = current.seq.as_deref().unwrap_or("");
-    let guarded = update.status.is_some_and(is_conditional)
-        && command_target(pane)
-        && read_seq.bytes().all(|b| b.is_ascii_digit());
     let mut status_writes: Vec<(&str, String)> = Vec::new();
-    if let Some(next) = next {
-        let target = if guarded {
+    if let Some(status) = status {
+        let target = if status.only_if_seq.is_some() {
             &mut status_writes
         } else {
             &mut writes
         };
-        if !update
-            .options
-            .iter()
-            .any(|(name, _)| *name == "@waycar_agent")
-        {
+        if status.agent {
             target.push(("@waycar_agent", agent.to_string()));
         }
-        target.push(("@waycar_status", next.to_string()));
-        target.push(("@waycar_seq", next_seq(current.seq.as_deref(), now_ns())));
-    }
-    if writes.is_empty() && status_writes.is_empty() {
-        return;
+        target.push(("@waycar_status", status.status.to_string()));
+        target.push(("@waycar_seq", status.seq.clone()));
     }
     let values: Vec<Cow<str>> = writes.iter().map(|(_, value)| tmux_arg(value)).collect();
     let mut args: Vec<&str> = Vec::new();
@@ -1335,13 +1371,14 @@ fn apply_to_pane(
         }
         args.extend(["set-option", "-p", "-t", pane, name, value]);
     }
-    let condition = format!("#{{==:#{{@waycar_seq}},{read_seq}}}");
+    let read_seq = status.and_then(|status| status.only_if_seq.as_deref());
+    let condition = format!("#{{==:#{{@waycar_seq}},{}}}", read_seq.unwrap_or(""));
     let conditional = status_writes
         .iter()
         .map(|(name, value)| format!("set-option -p -t {pane} {name} {value}"))
         .collect::<Vec<_>>()
         .join(" ; ");
-    if !status_writes.is_empty() {
+    if read_seq.is_some() {
         if !args.is_empty() {
             args.push(";");
         }
@@ -1349,22 +1386,11 @@ fn apply_to_pane(
         args.extend([";", "show-options", "-p", "-q", "-v", "-t", pane]);
         args.push("@waycar_seq");
     }
-    let Some(out) = host.tmux(&args, child_env) else {
-        return;
-    };
-    if let Some(next) = next {
-        let written = match status_writes.last() {
-            Some((_, seq)) => out.trim_end_matches('\n') == seq,
-            None => true,
-        };
-        if written {
-            host.notify(pane, next, child_env);
-        }
-    }
+    host.tmux(&args, child_env)
 }
 
 /// The statuses that depend on the pane's (see [`next_status`]).
-fn is_conditional(want: &str) -> bool {
+pub(crate) fn is_conditional(want: &str) -> bool {
     matches!(
         want,
         "working-if-active" | "working-if-blocked" | "idle-if-working" | "done-if-active"

@@ -4262,6 +4262,63 @@ stateDiagram-v2
     draining --> finished: pipesClosed / killGroup
 ```
 
+### SessionReleaseMachine
+
+- **File:** `plugin/rust/hook_pane_machines.rs`
+- **Owner:** `hook_session::release_pane` (tmux): reads the pane once
+  (`read_pane`), builds the unset argv (`unset_pane`) and notifies through
+  `HookHost`. herdr-core (`hook_status::CoreTarget::apply`) and Zellij keep
+  their own read-then-write.
+- **States:** `reading`, `unsetting(guarded, notify)`, `released`, `kept`,
+  `failed`.
+- **Events:** `read(held, status, wanted, paneIsTarget)`, `answered(out?)`.
+- **Effects:** `unset(onlyFor?)` (guarded: inside `if-shell -F`, only while
+  the pane records the released session or none, B-34), `notifyRelease`
+  (only a pane that had a status, only once unset).
+- **Tests:** `hook_pane_machines::tests` (transitions), `hook_session::tests`
+  (own session, phantom SessionEnd, no id, empty session, gone pane, a
+  replacing session between read and write, on the fake and a real tmux).
+- **Catalogue:** HT-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> reading
+    reading --> kept: read, another session holds the pane
+    reading --> unsetting: read / unset
+    unsetting --> released: answered, nothing left / notifyRelease if it had a status
+    unsetting --> kept: answered, guarded and a session left
+    unsetting --> failed: tmux failed
+```
+
+### PaneStatusWriteMachine
+
+- **File:** `plugin/rust/hook_pane_machines.rs`
+- **Owner:** `hook_session::apply_to_pane` (tmux): builds the one write
+  call (`write_pane`: options, then `@waycar_agent`, status and seq) and
+  notifies through `HookHost`. `bin/waycar-hook` makes the same decision in
+  POSIX sh for the statuses an event name decides.
+- **States:** `reading`, `writing(status?, guarded)`, `written(status?)`,
+  `unchanged`, `superseded`, `failed`.
+- **Events:** `read(want, status, seq, options, optionsHaveAgent,
+  paneIsTarget, nowNs)`, `answered(out?)`.
+- **Effects:** `write(status?)` (a conditional status guarded by the seq it
+  read, B-35), `notify(status)` once written.
+- **Tests:** `hook_pane_machines::tests` (transitions), `hook_session::tests`
+  (payload statuses, conditional statuses from each state, equal status,
+  gone pane, a newer Done between read and write on the fake, a real tmux
+  and the shell hook).
+- **Catalogue:** HT-04.
+
+```mermaid
+stateDiagram-v2
+    [*] --> reading
+    reading --> unchanged: read, no move and no options
+    reading --> writing: read / write
+    writing --> written: answered / notify if a status moved
+    writing --> superseded: answered, guarded seq did not land
+    writing --> failed: tmux failed
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4668,8 +4725,8 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | HT-01 | Notification delivery and dedupe | `plugin/rust/notify_core.rs` | implicit | H/H | convert | P4 |
 | HT-02 | Activity progress tick | `plugin/rust/activity_tick.rs` | implicit | H/H | convert | P4 |
-| HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | convert; bug B-34 | P4 |
-| HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | convert; bug B-35 | P4 |
+| HT-03 | Session ownership and release | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `SessionReleaseMachine`; bug B-34 fixed (tmux) | P4 |
+| HT-04 | Hook status lifecycle | `plugin/rust/hook_session.rs` | implicit | H/H | converted → `PaneStatusWriteMachine` (the shell hook mirrors it); bug B-35 fixed (tmux) | P4 |
 | HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | convert | P4 |
 | HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | convert | P4 |
 | HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | convert | P4 |
@@ -4723,8 +4780,8 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |
 | B-32 | HERDR-08 | An Agent attach can open after its transport closed, while another holder keeps SSH up | open |
 | B-33 | HT-14 | A chat read can hang past its timeout when the exporter leaves a child behind | fixed (P4, `51159d3b`): the deadline and the abort signal bound the pipe wait after the exporter exits |
-| B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | open |
-| B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | open |
+| B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | fixed (P4, `cecc0d6b`): on tmux the unset runs inside `if-shell -F` only while the pane records that session or none; core and Zellij keep the read-then-write window |
+| B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | fixed (P4, `3259a4a6`): on tmux both hooks write a conditional status inside `if-shell -F` only while `@waycar_seq` is the one read; core and Zellij keep the read-then-write window |
 | B-36 | NOTIF-13 | An iCloud pass finishing after disable publishes Last Checked and retries connections | fixed (P1, `cbf8e38c`) |
 | B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | open |
 | B-38 | OPENCODE-04 | After Cancel on an OpenCode approval the card says Done, and can turn Idle after a reconnect | fixed (P3a, `a932d087`): confirmed live on 2.2.7 (a reject's `interrupted` has reason `shutdown` and writes no `time.idle`, now pinned in `opencode-contract.py`); such an end keeps the last result's times |
