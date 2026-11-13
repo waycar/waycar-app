@@ -1,0 +1,37 @@
+# Area labels for actions/labeler (labeler.yml workflow). Size labels are set
+# by the same workflow's script step.
+area/app:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Sources/**
+          - Tests/**
+          - Waycar.xcodeproj/**
+          - project.yml
+          - Makefile
+area/ssh:
+  - changed-files:
+      - any-glob-to-any-file: Packages/WaycarSSH/**
+area/terminal:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Packages/GhosttyTerminal/**
+          - Packages/SwiftMosh/**
+area/plugin:
+  - changed-files:
+      - any-glob-to-any-file: plugin/**
+area/relay:
+  - changed-files:
+      - any-glob-to-any-file: relay/**
+area/web:
+  - changed-files:
+      - any-glob-to-any-file: apps/web/**
+area/docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - "*.md"
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - scripts/ci/**

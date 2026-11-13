@@ -1,0 +1,5 @@
+# actionlint config (run by workflow-lint.yml).
+self-hosted-runner:
+  # GitHub's hosted Xcode 27 image, not yet in actionlint's built-in list.
+  labels:
+    - xcode-27

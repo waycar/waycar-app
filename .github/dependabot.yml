@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 3
+    groups:
+      npm-production:
+        dependency-type: production
+        update-types: [minor, patch]
+      npm-development:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  # Monthly: every merged update changes plugin/Cargo.lock, a file the plugin
+  # package ships, so it needs the plugin version bump (AGENTS.md,
+  # scripts/check-plugin-version.sh) and cuts a plugin release.
+  - package-ecosystem: cargo
+    directory: /plugin
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  # No swift entry on purpose. The app's SwiftPM pins are `exactVersion`s in
+  # project.yml (XcodeGen), which Dependabot cannot edit, and the vendored
+  # packages under Packages/ are pinned deliberately. relay/ has no
+  # dependencies.

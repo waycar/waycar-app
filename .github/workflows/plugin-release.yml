@@ -38,16 +38,17 @@ permissions:
 
 jobs:
   # Full history brings the plugin-v* tags and the baseline (the push's
-  # previous commit); the read-only token lets the script ask origin for a
-  # tag missing locally.
+  # previous commit); the script asks the public origin anonymously for a
+  # tag missing locally, so the checkout keeps no credentials.
   plugin-version:
     name: Plugin version guard
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Check plugin version and release guard
         run: sh scripts/check-plugin-version.sh
         env:
@@ -61,7 +62,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
@@ -77,7 +78,7 @@ jobs:
       - name: Test plugin
         working-directory: plugin
         run: |
-          if command -v tmux >/dev/null; then export WAYCAR_TEST_TMUX="$(command -v tmux)"; fi
+          if command -v tmux >/dev/null; then WAYCAR_TEST_TMUX=$(command -v tmux); export WAYCAR_TEST_TMUX; fi
           cargo test --locked
 
       - name: Package
