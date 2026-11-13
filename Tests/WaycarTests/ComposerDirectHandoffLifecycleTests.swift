@@ -73,14 +73,16 @@ struct ComposerDirectHandoffLifecycleTests {
             rootViewController: controller)
         defer { window.isHidden = true }
         controller.view.layoutIfNeeded()
-        try #require(await Self.eventually { probe.isConnected })
+        try await waitUntil { probe.isConnected }
+        try #require(probe.isConnected)
 
         // 💬 opens Message Agent and focuses its draft: the system keyboard.
         #expect(probe.tapMessageAgent())
-        let input = try #require(await Self.composerInputFirstResponder(in: controller))
+        let input = try #require(try await Self.composerInputFirstResponder(in: controller))
         try await waitUntil { inset.isConfirmingDismissal }
         let terminal = try #require(Self.terminals(in: controller.view).first)
-        try #require(await Self.eventually { !terminal.isLocalInputEnabled })
+        try await waitUntil { !terminal.isLocalInputEnabled }
+        try #require(!terminal.isLocalInputEnabled)
 
         // ⌨ begins the handoff; the screen leaves the stage before the
         // update-time claim reaches the terminal, which refuses it.
@@ -200,19 +202,21 @@ struct ComposerDirectHandoffLifecycleTests {
 
     private static func composerInputFirstResponder(
         in controller: UIViewController
-    ) async -> UITextView? {
+    ) async throws -> UITextView? {
         var input: UITextView?
-        guard await eventually({
+        try await waitUntil {
             controller.view.layoutIfNeeded()
             input = firstView(in: controller.view) {
                 $0 is UITextView && $0.accessibilityLabel == "Message the Agent"
             } as? UITextView
             return input != nil
-        }), let input else { return nil }
+        }
+        guard let input else { return nil }
         // The focus request usually lands on its own; asking again is what
         // a tap into the draft would do.
         if !input.isFirstResponder { input.becomeFirstResponder() }
-        return await eventually({ input.isFirstResponder }) ? input : nil
+        try await waitUntil { input.isFirstResponder }
+        return input.isFirstResponder ? input : nil
     }
 
     private static func terminals(in root: UIView) -> [WaycarTerminalView] {
@@ -231,17 +235,5 @@ struct ComposerDirectHandoffLifecycleTests {
             if let match = firstView(in: subview, matching: matching) { return match }
         }
         return nil
-    }
-
-    private static func eventually(
-        timeout: Duration = .waitCeiling,
-        _ condition: () -> Bool
-    ) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
     }
 }
