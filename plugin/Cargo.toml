@@ -33,9 +33,9 @@ ring = "0.17"
 # The Pairing Code QR (the `qrcode` package's counterpart).
 qrcode = { version = "0.14", default-features = false }
 # Reading TOML (agent config files); writing is hand-made text edits.
-toml = { version = "0.9", default-features = false, features = ["parse", "std", "serde"] }
+toml = { version = "1.2", default-features = false, features = ["parse", "std", "serde"] }
 # JS regex features (lookaround) that the `regex` crate lacks.
-fancy-regex = "0.16"
+fancy-regex = "0.20"
 # JS regexes the ports keep as regexes. No perf feature (size). Classes that
 # differ between the engines are written out: \s is JS space, \d \w are ASCII.
 regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
