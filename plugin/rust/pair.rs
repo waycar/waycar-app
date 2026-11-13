@@ -254,68 +254,90 @@ impl StateMachine for PairPopupMachine {
     }
 
     fn handle(&mut self, event: PopupEvent) -> Vec<Effect> {
-        let live_qr = !self.closing && self.phase == Phase::Qr;
-        match event {
-            PopupEvent::Key(key) => match self.on_key(key) {
+        use Phase::{Enrolled, Expired, Expiring, Fatal, Qr, Revoked, Revoking, Select};
+        match (self.phase, event) {
+            // Keys and closing signals reach every phase; `on_key` and
+            // `closing` sort them out.
+            (_, PopupEvent::Key(key)) => match self.on_key(key) {
                 Effect::None => Vec::new(),
                 effect => vec![effect],
             },
-            PopupEvent::CloseRequested => {
+            (_, PopupEvent::CloseRequested) => {
                 if self.begin_close() {
                     vec![Effect::Close(0)]
                 } else {
                     Vec::new()
                 }
             }
-            PopupEvent::StartupFailed => {
-                self.phase = Phase::Fatal;
+            (Select, PopupEvent::StartupFailed) => {
+                self.phase = Fatal;
                 Vec::new()
             }
-            PopupEvent::CeremonyFailed(message) => {
-                self.phase = Phase::Fatal;
+            (Qr, PopupEvent::CeremonyFailed(message)) => {
+                self.phase = Fatal;
                 vec![
                     Effect::StopCeremonyTimers,
                     Effect::ShowStartFailure(message),
                 ]
             }
-            PopupEvent::QrDrawn(layout) => {
+            (Qr, PopupEvent::QrDrawn(layout)) => {
                 self.qr_layout = Some(layout);
                 Vec::new()
             }
-            PopupEvent::PollDue if live_qr => vec![Effect::ReadEnrollment],
-            PopupEvent::PollDue => Vec::new(),
-            PopupEvent::EnrollmentFound(record) | PopupEvent::ExpireAnswered(Ok(Some(record))) => {
-                self.phase = Phase::Enrolled;
+            (Qr, PopupEvent::PollDue) if !self.closing => vec![Effect::ReadEnrollment],
+            (Qr, PopupEvent::EnrollmentFound(record))
+            | (Expiring, PopupEvent::ExpireAnswered(Ok(Some(record)))) => {
+                self.phase = Enrolled;
                 vec![Effect::StopCeremonyTimers, Effect::ShowEnrolled(record)]
             }
-            PopupEvent::ExpiryDue if live_qr => {
-                self.phase = Phase::Expiring;
+            (Qr, PopupEvent::ExpiryDue) if !self.closing => {
+                self.phase = Expiring;
                 vec![Effect::StopPoll, Effect::Expire]
             }
-            PopupEvent::ExpiryDue => Vec::new(),
-            PopupEvent::ExpireAnswered(Ok(None)) => {
+            (Expiring, PopupEvent::ExpireAnswered(Ok(None))) => {
                 // So a resize while the next ceremony starts cannot redraw
                 // this code.
                 self.qr_layout = None;
-                self.phase = Phase::Expired;
+                self.phase = Expired;
                 vec![Effect::ShowExpired]
             }
-            PopupEvent::ExpireAnswered(Err(message)) => {
+            (Expiring, PopupEvent::ExpireAnswered(Err(message))) => {
                 self.begin_close();
                 vec![Effect::Fail(message)]
             }
-            PopupEvent::RevokeAnswered(Some(screen)) => {
-                self.phase = Phase::Revoked;
+            (Revoking, PopupEvent::RevokeAnswered(Some(screen))) => {
+                self.phase = Revoked;
                 vec![Effect::Paint(screen)]
             }
-            PopupEvent::RevokeAnswered(None) => vec![self.close(0)],
-            PopupEvent::Resized { has_payload } if live_qr && has_payload => {
+            (Revoking, PopupEvent::RevokeAnswered(None)) => vec![self.close(0)],
+            (Qr, PopupEvent::Resized { has_payload: true }) if !self.closing => {
                 vec![Effect::RedrawQr]
             }
-            PopupEvent::CopiedNoticeElapsed { has_payload } if live_qr && has_payload => {
+            (Qr, PopupEvent::CopiedNoticeElapsed { has_payload: true }) if !self.closing => {
                 vec![Effect::ClearCopied]
             }
-            PopupEvent::Resized { .. } | PopupEvent::CopiedNoticeElapsed { .. } => Vec::new(),
+            // A guard that failed above (closing, no payload) ignores the event.
+            (
+                Qr,
+                PopupEvent::PollDue
+                | PopupEvent::ExpiryDue
+                | PopupEvent::Resized { .. }
+                | PopupEvent::CopiedNoticeElapsed { .. },
+            ) => Vec::new(),
+            // Every other event outside the phase that asks for it is ignored.
+            (
+                Select | Qr | Expiring | Expired | Enrolled | Revoking | Revoked | Fatal,
+                PopupEvent::StartupFailed
+                | PopupEvent::CeremonyFailed(_)
+                | PopupEvent::QrDrawn(_)
+                | PopupEvent::PollDue
+                | PopupEvent::EnrollmentFound(_)
+                | PopupEvent::ExpiryDue
+                | PopupEvent::ExpireAnswered(_)
+                | PopupEvent::RevokeAnswered(_)
+                | PopupEvent::Resized { .. }
+                | PopupEvent::CopiedNoticeElapsed { .. },
+            ) => Vec::new(),
         }
     }
 }
@@ -1196,17 +1218,64 @@ mod tests {
 
     #[test]
     fn an_enrollment_from_the_poll_or_the_expiry_shows_the_device() {
-        for event in [
-            PopupEvent::EnrollmentFound(record()),
-            PopupEvent::ExpireAnswered(Ok(Some(record()))),
+        for (phase, event) in [
+            (Phase::Qr, PopupEvent::EnrollmentFound(record())),
+            (
+                Phase::Expiring,
+                PopupEvent::ExpireAnswered(Ok(Some(record()))),
+            ),
         ] {
-            let mut state = in_phase(Phase::Expiring);
+            let mut state = in_phase(phase);
             assert_eq!(
                 state.handle(event),
                 [Effect::StopCeremonyTimers, Effect::ShowEnrolled(record())]
             );
             assert_eq!(state.state(), &Phase::Enrolled);
         }
+    }
+
+    const PHASES: [Phase; 8] = [
+        Phase::Select,
+        Phase::Qr,
+        Phase::Expiring,
+        Phase::Expired,
+        Phase::Enrolled,
+        Phase::Revoking,
+        Phase::Revoked,
+        Phase::Fatal,
+    ];
+
+    /// `event` changes nothing in every phase but `allowed`.
+    fn ignored_outside(allowed: Phase, event: impl Fn() -> PopupEvent) {
+        for phase in PHASES.into_iter().filter(|phase| *phase != allowed) {
+            let mut state = in_phase(phase);
+            state.qr_layout = Some(Layout::Sextant);
+            assert_eq!(state.handle(event()), [], "{phase:?}");
+            assert_eq!(state.state(), &phase, "{phase:?}");
+            assert_eq!(state.qr_layout, Some(Layout::Sextant), "{phase:?}");
+            assert!(!state.closing, "{phase:?}");
+        }
+    }
+
+    #[test]
+    fn each_answer_is_ignored_outside_the_phase_that_asks_for_it() {
+        ignored_outside(Phase::Qr, || PopupEvent::EnrollmentFound(record()));
+        ignored_outside(Phase::Revoking, || {
+            PopupEvent::RevokeAnswered(Some("done".into()))
+        });
+        ignored_outside(Phase::Revoking, || PopupEvent::RevokeAnswered(None));
+        ignored_outside(Phase::Qr, || PopupEvent::CeremonyFailed("boom".into()));
+        ignored_outside(Phase::Select, || PopupEvent::StartupFailed);
+        ignored_outside(Phase::Qr, || PopupEvent::QrDrawn(Layout::HalfBlock));
+        ignored_outside(Phase::Expiring, || {
+            PopupEvent::ExpireAnswered(Ok(Some(record())))
+        });
+        ignored_outside(Phase::Expiring, || PopupEvent::ExpireAnswered(Ok(None)));
+        ignored_outside(Phase::Expiring, || {
+            PopupEvent::ExpireAnswered(Err("locked".into()))
+        });
+        ignored_outside(Phase::Qr, || PopupEvent::PollDue);
+        ignored_outside(Phase::Qr, || PopupEvent::ExpiryDue);
     }
 
     #[test]
