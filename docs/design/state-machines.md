@@ -3330,6 +3330,52 @@ stateDiagram-v2
     held --> idle: finish / resume(token, cancelled)
 ```
 
+### MessageJumpSessionMachine
+
+- **File:** `Sources/Waycar/Console/MessageJumpSessionMachine.swift`
+- **Owner:** `AgentMessageJumpWiring` keeps the jump and read Tasks, the
+  transcript reader, the index, reach and scroll run; it mirrors the observed
+  `liveGeneration` and `runningJump`.
+- **States:** the session generation and jump epoch; the jump (`idle`,
+  `scheduled(epoch)`, `running(epoch, jump)`); the read (`idle`,
+  `reading(token, stale)`); a snapshot held for a walk.
+- **Events:** `jumpRequested`, `jumpEntered(epoch, generation,
+  taskCancelled)`, `jumpEnded(epoch)`, `refreshRequested`,
+  `readFinished(token, snapshot?)`, `reset`.
+- **Effects:** `startJump`, `runBody`, `clearJumpTask`, `cancelJumpTask`,
+  `publishRunning`, `publishGeneration`, `resetSessionState`, `startRead`,
+  `clearRead`, `cancelRead`, `indexTranscript`, `deliverTranscript`,
+  `resetIndex`. A reset fences everything minted before it; a jump body runs
+  only after its entry check and only the latest jump's end clears it and
+  applies a held snapshot; one read at a time, with one reread for refreshes
+  meanwhile; a read during a walk is delivered at once and indexed after.
+- **Tests:** `MessageJumpSessionMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `MessageJumpControlTests`, `MessageJumpTranscriptWalkTests`.
+- **Catalogue:** ATTACH-17.
+
+```mermaid
+stateDiagram-v2
+    state Jump {
+        [*] --> idle
+        idle --> scheduled: jumpRequested / startJump(epoch)
+        scheduled --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> running: entry check passes / runBody
+        running --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> idle: latest jumpEnded
+        running --> idle: latest jumpEnded / apply held snapshot
+        running --> idle: reset
+        scheduled --> idle: reset
+    }
+    state Read {
+        [*] --> noRead
+        noRead --> reading: refreshRequested / startRead(token)
+        reading --> reading: refreshRequested / stale
+        reading --> noRead: readFinished(token) / index or hold, deliver
+        reading --> reading: readFinished(token), stale / startRead(next)
+        reading --> noRead: reset / cancelRead
+    }
+```
+
 ### PaneHistoryScrollMachine
 
 - **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
@@ -5610,7 +5656,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | converted → `MessageJumpFrameWaitMachine` | P2c |
-| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
+| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | converted → `MessageJumpSessionMachine` | P2c |
 | ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
