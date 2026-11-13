@@ -581,13 +581,13 @@ pub mod fake {
         args
     }
 
-    fn truthy(value: &str) -> bool {
+    pub fn truthy(value: &str) -> bool {
         !value.is_empty() && value != "0"
     }
 
-    /// tmux's format expansion, for the forms the watch uses: `#{@option}`,
-    /// `#{==:a,b}`, `#{&&:a,b}`.
-    fn expand(text: &str, options: &BTreeMap<String, String>) -> String {
+    /// tmux's format expansion, for the forms the watch and the hooks use:
+    /// `#{@option}`, `#{==:a,b}`, `#{&&:a,b}`, `#{||:a,b}`.
+    pub fn expand(text: &str, options: &BTreeMap<String, String>) -> String {
         let mut out = String::new();
         let mut at = 0;
         while at < text.len() {
@@ -610,6 +610,7 @@ pub mod fake {
                 let result = match op {
                     "==" => args[0] == args[1],
                     "&&" => truthy(&args[0]) && truthy(&args[1]),
+                    "||" => truthy(&args[0]) || truthy(&args[1]),
                     _ => panic!("unexpected format {op}"),
                 };
                 out.push_str(if result { "1" } else { "0" });

@@ -326,7 +326,12 @@ of the markers of grok, cursor, devin and copilot, which run
 `~/.claude/settings.json` hooks too; cursor's need `CURSOR_VERSION` and no
 grok marker. Statuses `working-if-active`, `working-if-blocked`,
 `idle-if-working` and `done-if-active` are guarded; tool events never revive
-Idle or Done (herdr #198). Every hook exits 0 and prints nothing.
+Idle or Done (herdr #198). A SessionEnd release (`hook-session`) unsets the
+pane's options only while the pane still records that session or none,
+checked inside the tmux server in the same call as the unset (`if-shell -F`),
+so a session that replaced it after the hook's read keeps the pane; an id a
+tmux format cannot hold (`#`, `,`, `}`, control characters) is released
+unconditionally, as before. Every hook exits 0 and prints nothing.
 
 Shared-daemon Codex threads are the exception to pane routing: when the
 hook's parent has no tty, `waycar-hook` asks the native helper to identify a

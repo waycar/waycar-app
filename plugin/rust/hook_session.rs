@@ -591,6 +591,21 @@ fn increment_decimal(digits: &str) -> String {
     String::from_utf8(bytes).unwrap_or_default()
 }
 
+/// Whether `value` reads as itself inside a tmux format's `#{==:…,value}`:
+/// no `#`, `,` or `}` (format syntax), no control character and no line
+/// terminator.
+fn format_literal(value: &str) -> bool {
+    !value.contains(['#', ',', '}'])
+        && !value.chars().any(char::is_control)
+        && no_line_terminator(value)
+}
+
+/// Whether `pane` can sit unquoted in a tmux command string: `%<digits>`.
+fn command_target(pane: &str) -> bool {
+    pane.strip_prefix('%')
+        .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// tmux splits an argument that ends in an unescaped `;`; `\;` keeps it.
 fn tmux_arg(value: &str) -> Cow<'_, str> {
     match value.strip_suffix(';') {
@@ -1215,15 +1230,56 @@ fn apply_to_pane(
         {
             return;
         }
-        let mut args: Vec<&str> = Vec::new();
-        for name in OPTIONS {
-            if !args.is_empty() {
-                args.push(";");
+        // Unset only while the pane still records that session (or none):
+        // a session that replaced it after the read keeps the pane (B-34).
+        if let Some(wanted) = update
+            .session_id
+            .as_deref()
+            .filter(|wanted| format_literal(wanted) && command_target(pane))
+        {
+            let unset: Vec<String> = OPTIONS
+                .iter()
+                .map(|name| format!("set-option -p -u -t {pane} {name}"))
+                .collect();
+            let condition = format!(
+                "#{{||:#{{==:#{{@waycar_session}},}},#{{==:#{{@waycar_session}},{wanted}}}}}"
+            );
+            let unset = unset.join(" ; ");
+            let Some(after) = host.tmux(
+                &[
+                    "if-shell",
+                    "-F",
+                    "-t",
+                    pane,
+                    &condition,
+                    &unset,
+                    ";",
+                    "show-options",
+                    "-p",
+                    "-q",
+                    "-v",
+                    "-t",
+                    pane,
+                    "@waycar_session",
+                ],
+                child_env,
+            ) else {
+                return;
+            };
+            if !after.trim_end_matches('\n').is_empty() {
+                return;
             }
-            args.extend(["set-option", "-p", "-u", "-t", pane, name]);
-        }
-        if host.tmux(&args, child_env).is_none() {
-            return;
+        } else {
+            let mut args: Vec<&str> = Vec::new();
+            for name in OPTIONS {
+                if !args.is_empty() {
+                    args.push(";");
+                }
+                args.extend(["set-option", "-p", "-u", "-t", pane, name]);
+            }
+            if host.tmux(&args, child_env).is_none() {
+                return;
+            }
         }
         if current
             .status
@@ -1311,6 +1367,57 @@ pub mod fake {
     /// Another tmux client's commands, run on the panes just before the
     /// hook's next tmux call (after its read, before its write).
     pub type Interleave = Box<dyn FnOnce(&mut BTreeMap<String, FakePane>)>;
+
+    /// One tmux command on the fake's panes; `None` for a missing pane.
+    /// `if-shell -F` runs its command list in the same call, as tmux does.
+    fn apply(command: &[String], panes: &mut BTreeMap<String, FakePane>) -> Option<String> {
+        let (name, rest) = command.split_first().unwrap();
+        let (mut flags, mut target, mut positional) = (String::new(), None, Vec::new());
+        let mut at = 0;
+        while at < rest.len() {
+            if rest[at] == "-t" {
+                at += 1;
+                target = rest.get(at).cloned();
+            } else if positional.is_empty()
+                && rest[at].len() > 1
+                && rest[at].starts_with('-')
+                && rest[at][1..].bytes().all(|b| b.is_ascii_alphabetic())
+            {
+                flags.push_str(&rest[at][1..]);
+            } else {
+                positional.push(rest[at].clone());
+            }
+            at += 1;
+        }
+        let (tty, options) = panes.get_mut(target.as_deref().unwrap_or(""))?;
+        let mut out = String::new();
+        match name.as_str() {
+            "display-message" => out += &format!("{}\n", positional[0].replace("#{pane_tty}", tty)),
+            "show-options" => match options.get(&positional[0]) {
+                Some(value) if flags.contains('v') => out += &format!("{value}\n"),
+                Some(value) => out += &format!("{} {value}\n", positional[0]),
+                None => {}
+            },
+            "set-option" if flags.contains('u') => {
+                options.remove(&positional[0]);
+            }
+            "set-option" => {
+                options.insert(positional[0].clone(), positional[1].clone());
+            }
+            "if-shell" => {
+                assert!(flags.contains('F'));
+                let condition = crate::approval_watch::fake::expand(&positional[0], options);
+                if crate::approval_watch::fake::truthy(&condition) {
+                    for inner in positional[1].split(" ; ") {
+                        let inner: Vec<String> = inner.split(' ').map(str::to_string).collect();
+                        out += &apply(&inner, panes)?;
+                    }
+                }
+            }
+            _ => {}
+        }
+        Some(out)
+    }
 
     pub struct Fake {
         pub panes: RefCell<BTreeMap<String, FakePane>>,
@@ -1413,44 +1520,9 @@ pub mod fake {
                 }
             }
             let mut out = String::new();
+            let mut panes = self.panes.borrow_mut();
             for command in commands {
-                let (name, rest) = command.split_first().unwrap();
-                let (mut flags, mut target, mut positional) = (String::new(), None, Vec::new());
-                let mut at = 0;
-                while at < rest.len() {
-                    if rest[at] == "-t" {
-                        at += 1;
-                        target = rest.get(at).cloned();
-                    } else if positional.is_empty()
-                        && rest[at].len() > 1
-                        && rest[at].starts_with('-')
-                        && rest[at][1..].bytes().all(|b| b.is_ascii_lowercase())
-                    {
-                        flags.push_str(&rest[at][1..]);
-                    } else {
-                        positional.push(rest[at].clone());
-                    }
-                    at += 1;
-                }
-                let mut panes = self.panes.borrow_mut();
-                let (tty, options) = panes.get_mut(target.as_deref().unwrap_or(""))?;
-                match name.as_str() {
-                    "display-message" => {
-                        out += &format!("{}\n", positional[0].replace("#{pane_tty}", tty))
-                    }
-                    "show-options" => {
-                        if let Some(value) = options.get(&positional[0]) {
-                            out += &format!("{} {value}\n", positional[0]);
-                        }
-                    }
-                    "set-option" if flags.contains('u') => {
-                        options.remove(&positional[0]);
-                    }
-                    "set-option" => {
-                        options.insert(positional[0].clone(), positional[1].clone());
-                    }
-                    _ => {}
-                }
+                out += &apply(&command, &mut panes)?;
             }
             Some(out)
         }
@@ -1480,6 +1552,7 @@ mod tests {
     use super::fake::{Fake, PANE};
     use super::*;
     use serde_json::json;
+    use std::cell::RefCell;
     use std::collections::BTreeMap;
 
     /// The pid the tests run as the hook's parent.
@@ -2880,6 +2953,50 @@ mod tests {
         );
     }
 
+    /// Another hook's write, as another tmux client makes it.
+    fn set(panes: &mut BTreeMap<String, super::fake::FakePane>, name: &str, value: &str) {
+        panes
+            .get_mut(PANE)
+            .unwrap()
+            .1
+            .insert(name.to_string(), value.to_string());
+    }
+
+    #[test]
+    fn an_old_session_end_never_releases_the_session_that_replaced_it() {
+        // B-34: the old session's SessionEnd reads the pane, the new
+        // session's SessionStart records itself, then the old hook writes.
+        let fake = Fake::new();
+        fake.set_pane(&[
+            ("@waycar_status", "done"),
+            ("@waycar_agent", "copilot"),
+            ("@waycar_session", "s1"),
+            ("@waycar_seq", "5"),
+        ]);
+        *fake.interleave.borrow_mut() = Some(Box::new(|panes| {
+            set(panes, "@waycar_session", "s2");
+            set(panes, "@waycar_transcript", "/t/s2.jsonl");
+        }));
+        session_end(&fake, "copilot", &json!({"session_id": "s1"}));
+        let options = fake.pane_options();
+        assert_eq!(opt(&options, "@waycar_session").as_deref(), Some("s2"));
+        assert_eq!(
+            opt(&options, "@waycar_transcript").as_deref(),
+            Some("/t/s2.jsonl")
+        );
+        assert_eq!(opt(&options, "@waycar_status").as_deref(), Some("done"));
+        assert!(fake.notifications.borrow().is_empty());
+
+        // An id a tmux format cannot hold is released as before, in one
+        // unconditional call.
+        let fake = Fake::new();
+        fake.set_pane(&[("@waycar_status", "done"), ("@waycar_session", "a,b")]);
+        session_end(&fake, "copilot", &json!({"session_id": "a,b"}));
+        assert!(fake.pane_options().is_empty());
+        assert!(!fake.log.borrow()[1].iter().any(|arg| arg == "if-shell"));
+        assert_eq!(*fake.notifications.borrow(), [notification("release")]);
+    }
+
     #[test]
     fn a_payload_status_equal_to_the_panes_writes_only_the_options() {
         let fake = Fake::new();
@@ -3046,5 +3163,98 @@ mod tests {
             &host,
         );
         assert_eq!(tmux.ok(&["show-options", "-p", "-t", &pane]), "");
+    }
+
+    /// The real tmux, with another client's commands run just before the
+    /// hook's second tmux call (after its read, before its write).
+    struct Racing<'a> {
+        system: SystemHost<'a>,
+        tmux: &'a crate::real_tmux::RealTmux,
+        calls: std::cell::Cell<usize>,
+        between: Vec<Vec<&'a str>>,
+        notified: RefCell<Vec<String>>,
+    }
+
+    impl HookHost for Racing<'_> {
+        fn tmux(&self, args: &[&str], env: &Env) -> Option<String> {
+            self.calls.set(self.calls.get() + 1);
+            if self.calls.get() == 2 {
+                for command in &self.between {
+                    self.tmux.ok(command);
+                }
+            }
+            self.system.tmux(args, env)
+        }
+        fn tty(&self, pid: &str) -> String {
+            self.system.tty(pid)
+        }
+        fn ppid(&self, pid: &str) -> String {
+            self.system.ppid(pid)
+        }
+        fn notify(&self, _pane: &str, status: &str, _env: &Env) {
+            self.notified.borrow_mut().push(status.to_string());
+        }
+    }
+
+    #[test]
+    fn real_tmux_an_old_session_end_keeps_the_replacing_session() {
+        use crate::real_tmux::RealTmux;
+
+        let Some(tmux) = RealTmux::start() else {
+            return;
+        };
+        tmux.ok(&["new-session", "-d", "-s", "s", "sleep 60"]);
+        let pane = tmux.ok(&["list-panes", "-a", "-F", "#{pane_id}"]);
+        let pid: u32 = tmux
+            .ok(&["display-message", "-p", "-t", &pane, "#{pane_pid}"])
+            .parse()
+            .unwrap();
+        let mut env = tmux.env.clone();
+        env.set("TMUX_PANE", &pane);
+        for (name, value) in [("@waycar_status", "done"), ("@waycar_session", "s 1:old")] {
+            tmux.ok(&["set-option", "-p", "-t", &pane, name, value]);
+        }
+        let host = Racing {
+            system: SystemHost { env: &env },
+            tmux: &tmux,
+            calls: Default::default(),
+            between: vec![vec![
+                "set-option",
+                "-p",
+                "-t",
+                &pane,
+                "@waycar_session",
+                "s2",
+            ]],
+            notified: RefCell::default(),
+        };
+        run_hook_session(
+            "copilot",
+            "SessionEnd",
+            r#"{"session_id": "s 1:old"}"#,
+            &env,
+            pid,
+            &host,
+        );
+        let option = |name: &str| tmux.ok(&["show-options", "-p", "-v", "-t", &pane, name]);
+        assert_eq!(option("@waycar_session"), "s2");
+        assert_eq!(option("@waycar_status"), "done");
+        assert!(host.notified.borrow().is_empty());
+
+        // Without a race the same release still clears the pane.
+        let host = Racing {
+            between: Vec::new(),
+            ..host
+        };
+        run_hook_session(
+            "copilot",
+            "SessionEnd",
+            r#"{"session_id": "s2"}"#,
+            &env,
+            pid,
+            &host,
+        );
+        assert_eq!(tmux.ok(&["show-options", "-p", "-t", &pane]), "");
+        assert_eq!(*host.notified.borrow(), ["release"]);
     }
 }
