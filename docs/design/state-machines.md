@@ -4278,6 +4278,38 @@ stateDiagram-v2
     hedged --> live: releaseKept / hedge dropped
 ```
 
+### HostSessionLifetimeMachine
+
+- **File:** `Sources/Waycar/Transport/HostSessionLifetimeMachine.swift`
+- **Owner:** `HostSSHSession`: `retain()`, `release()` /
+  `releaseReportingTeardown()` and `noteConnectionInvalidated()` (from
+  `mapOperationError` and the notification-file paths) feed it; on
+  `tearDown` the session closes its staging, notification and ranged-file
+  SFTP channels, returns the ranged-file lease and closes the connection
+  (2 s each), surfacing the connection's failure. `connected` ("nothing
+  new starts") and `isConnected` read it.
+- **States:** `open(holds)`, `invalidated(holds)`, `closed`.
+- **Events:** `retain`, `release`, `connectionInvalidated`.
+- **Effects:** `retained`, `refused`, `tearDown`. A closed session refuses a
+  hold, so the pool dials afresh; the last release of an invalidated
+  session closes without touching the connection, as before.
+- **Tests:** `HostSessionLifetimeMachineTests`; the session itself needs a
+  real connection, so its owner coverage is the real-SSH lanes
+  (`WaycarSSHSessionE2ETests`, `SharedFixtureE2ETests`, the backend E2E
+  suites) and the pool's `HostSSHSessionPoolTests`.
+- **Catalogue:** SSH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+    open --> open: retain / release, holds left
+    open --> invalidated: connectionInvalidated
+    invalidated --> invalidated: retain / release, holds left
+    open --> closed: last release / tearDown
+    invalidated --> closed: last release
+    closed --> closed: retain / refused
+```
+
 ### NetworkPathSettleMachine
 
 - **File:** `Sources/Waycar/Transport/NetworkPathSettleMachine.swift`
@@ -4759,7 +4791,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | SSH-01 | SSH session pool (live, kept, hedging, retired) | `Sources/Waycar/Transport/HostSSHSessionPool.swift` | implicit | H/H | converted → `SessionPoolMachine` | P3c |
 | SSH-02 | Network path monitor | `Sources/Waycar/Transport/NetworkPathMonitor.swift` | implicit | H/M | converted → `NetworkPathSettleMachine`; bug B-26 fixed | P3c |
-| SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | convert | P3c |
+| SSH-03 | Host SSH session lifetime | `Sources/Waycar/Transport/HostSSHSession.swift` | implicit | H/H | converted → `HostSessionLifetimeMachine` | P3c |
 | SSH-04 | Ranged-file SFTP holder | `Sources/Waycar/Transport/HostSSHSession+Files.swift` | implicit | H/H | convert | P3c |
 | SSH-05 | Channel admission | `Sources/Waycar/Transport/SSHChannelAdmission.swift` | implicit | H/M | converted → `ChannelAdmissionMachine` | P3c |
 | SSH-06 | Attach output gate | `Sources/Waycar/Transport/HostSSHSession+Attach.swift` | partial | H/M | converted → `AttachOutputMachine` | P3c |

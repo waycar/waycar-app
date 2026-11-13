@@ -377,7 +377,7 @@ extension HostSSHSession {
             try await sftp.close(timeout: .seconds(2))
         } catch {
             try? await sftp.close(timeout: .seconds(2))
-            if !(await connection.isConnected) { connected = false }
+            if !(await connection.isConnected) { noteConnectionInvalidated() }
             try Self.notificationWriteError(error)
         }
     }
@@ -502,7 +502,7 @@ extension HostSSHSession {
             notificationTemporaryPaths[operationID] = nil
             try? await sftp.close(timeout: .seconds(2))
             notificationFileClients[operationID] = nil
-            if !(await connection.isConnected) { connected = false }
+            if !(await connection.isConnected) { noteConnectionInvalidated() }
             if compensationFailed {
                 throw NotificationRegistrationError.writeFailed(
                     detail: "The incomplete temporary file could not be removed safely.")
