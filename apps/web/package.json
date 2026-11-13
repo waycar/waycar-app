@@ -27,7 +27,7 @@
     "esbuild": "^0.28.2",
     "qrcode-generator": "^2.0.4",
     "typescript": "^5.9.3",
-    "wrangler": "^4.122.0"
+    "wrangler": "^4.161.0"
   },
   "dependencies": {
     "posthog-js": "^1.434.15"
