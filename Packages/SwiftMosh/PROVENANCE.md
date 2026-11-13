@@ -272,6 +272,18 @@ taken.
     engines, and the app its sessions, with the public inits only, so
     nothing changes outside tests. Re-vendoring must keep the seams and
     both hooks.
+18. **A stopped connection's late callbacks** (`NetworkDatagramEndpoint`,
+    B-28). `stop()` cancels its `NWConnection`, which reports `.cancelled`
+    (and completes a pending receive) later, on its queue. Upstream's
+    callbacks carried no identity, so arriving after a restart they acted on
+    the new connection: a `.cancelled` failed the new `start()`, a receive
+    error failed a receive waiting on the new connection and armed a second
+    receive there, and a datagram received late waited in the buffer for the
+    next start to deliver. Each start now numbers its connection and every
+    callback carries that number; one from a connection the endpoint no
+    longer holds is ignored. `MoshClientSession` builds a new endpoint for
+    every engine, so the app never restarts one; the fix is for any caller
+    that does.
 
 `Tests/SwiftMoshTests/WaycarPatchTests.swift` covers the shutdown state
 (final screen applied, maximum state acked, session ends `.stopped` without a
@@ -293,7 +305,10 @@ and ignoring pids 0 and 1. Not covered: the reply's step off `UInt16.max`,
 cancelling a transport restart, refusing `start()` during a stop, and the
 debug line. `TransportTests` covers the process-local clock (non-zero, starts
 small, never decreases); that it counts device sleep is not testable on the
-host.
+host. It also covers patch 18 with a fake connection per start: a late
+`.cancelled`, a late receive error and a late datagram from a stopped
+connection leave the restarted endpoint alone (each fails against the
+unpatched endpoint).
 
 `Tests/SwiftMoshTests/WaycarNetworkPatchTests.swift` covers patches 11 and
 13–15: connectivity stalling on silence, recovering on the next server

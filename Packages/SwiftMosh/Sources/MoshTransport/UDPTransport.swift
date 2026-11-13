@@ -103,6 +103,11 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
     private let queue = DispatchQueue(label: "swift.mosh.network.endpoint")
 
     private var connection: (any UDPConnection)?
+    /// Which connection `connection` is: every start opens a new one, and
+    /// its callbacks carry its number, so a late callback from a connection
+    /// `stop()` already let go of cannot fail the next start or its
+    /// receives. (Waycar patch.)
+    private var connectionNumber: UInt64 = 0
     private var startContinuation: CheckedContinuation<Void, Error>?
     private var receiveContinuations: [CheckedContinuation<TransportDatagram, Error>] = []
     private var receiveBuffer: [TransportDatagram] = []
@@ -139,10 +144,12 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
 
         let connection = connectionFactory(NWEndpoint.Host(remote.host), remotePort, parameters)
         self.connection = connection
+        connectionNumber += 1
+        let number = connectionNumber
 
         connection.setStateUpdateHandler { [weak self] state in
             guard let self else { return }
-            Task { await self.handleConnectionState(state) }
+            Task { await self.handleConnectionState(state, of: number) }
         }
 
         connection.start(queue: queue)
@@ -208,14 +215,17 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
 
     private func armReceiveLoop() {
         guard let connection else { return }
+        let number = connectionNumber
 
         connection.receiveMessage { [weak self] content, _, _, error in
             guard let self else { return }
-            Task { await self.handleReceive(content: content, error: error) }
+            Task { await self.handleReceive(content: content, error: error, of: number) }
         }
     }
 
-    private func handleReceive(content: Data?, error: NWError?) {
+    private func handleReceive(content: Data?, error: NWError?, of number: UInt64) {
+        // (Waycar patch) A stopped connection's receive is not this one's.
+        guard connection != nil, number == connectionNumber else { return }
         defer { armReceiveLoop() }
 
         if let error {
@@ -239,7 +249,10 @@ public actor NetworkDatagramEndpoint: DatagramEndpoint {
         }
     }
 
-    private func handleConnectionState(_ state: NWConnection.State) {
+    private func handleConnectionState(_ state: NWConnection.State, of number: UInt64) {
+        // (Waycar patch) A stopped connection's `.cancelled` (`stop()`
+        // cancels it) must not fail a restart.
+        guard connection != nil, number == connectionNumber else { return }
         switch state {
         case .ready:
             startContinuation?.resume()
