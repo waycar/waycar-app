@@ -3249,6 +3249,56 @@ stateDiagram-v2
     failed --> failed: close viewer or gallery
 ```
 
+### KeyboardInsetMachine
+
+- **File:** `Sources/Waycar/Terminal/KeyboardInsetMachine.swift`
+- **Owner:** `TerminalKeyboardInset` keeps the window, the measurement
+  overrides, the coalesce, confirmation and fallback Tasks keyed by token,
+  and the armed handoff's closures; its observed `height`,
+  `lastPresentedHeight`, `isSoftwareKeyboardDismissed` and
+  `activeResponderHandoffID` are assigned only by `publish…` effects, in
+  the order the inset always assigned them.
+- **States:** published heights and dismissal, capture on/off, the missed
+  presentation flag, presentation `none`/`coalescing(token, height)`,
+  dismissal `none`/`confirming(token)`, handoff
+  `none`/`holding(id, fallback, kind, owesDismissal)`.
+- **Events:** will-present and its measurement, coalesce elapsed,
+  will-dismiss, did-show and the window's measurement, expect keyboard,
+  confirmation elapsed, pause/resume capture, begin/end/cancel handoff,
+  fallback elapsed, exit measured.
+- **Effects:** measure, cancel/arm the three timers, forget the fired
+  fallback, publish. Measurements are separate events, so a presentation
+  is measured only while it can land and an exit measures only after its
+  freeze is released; stale timer tokens do nothing.
+- **Tests:** `KeyboardInsetMachineTests`, `TerminalKeyboardInsetLifecycleTests`,
+  the inset tests in `TerminalAttachTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-13.
+
+```mermaid
+stateDiagram-v2
+    state Presentation {
+        [*] --> none
+        none --> coalescing: measured frame covers the window / arm coalesce
+        coalescing --> coalescing: later frame / re-arm
+        coalescing --> none: matching elapsed / publish heights
+        coalescing --> none: hide, pause, handoff, did-show settle
+    }
+    state Dismissal {
+        [*] --> idle
+        idle --> confirming: hide, expect keyboard, zero settle / arm
+        confirming --> idle: matching elapsed at zero / publish dismissed
+        confirming --> idle: presentation, handoff, positive settle
+    }
+    state Handoff {
+        [*] --> free
+        free --> holding: begin / publish id, arm fallback
+        holding --> holding: hide or expiring confirmation / owe dismissal
+        holding --> holding: begin / carry debt
+        holding --> free: end, cancel, matching fallback / publish nil, measure, reconcile
+    }
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5480,7 +5530,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
 | ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
-| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | convert (deferred: window measurements, transient hide debt, coalescing and destination/owner watchdogs span responder callbacks; needs Mac keyboard suites) | P2c |
+| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
