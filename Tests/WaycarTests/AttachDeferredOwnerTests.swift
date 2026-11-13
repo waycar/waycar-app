@@ -40,6 +40,81 @@ struct AgentLastFrameDeferredOwnerTests {
         #expect(store.frame(for: first.id, host: host) != nil)
         await store.settle()
     }
+
+    /// The catalog asked for while the index is unreadable applies to the
+    /// disk's frames once it loads, and their files are swept.
+    @Test func aHostCatalogWhileLockedAppliesWhenTheIndexLoads() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let kept = Host.fixture()
+        let removed = Host.fixture()
+        let writer = AgentLastFrameStore(directory: directory)
+        for host in [kept, removed] {
+            writer.record(
+                AgentLastFrameStoreTests.image(), size: AgentLastFrameStoreTests.size,
+                for: AgentLastFrameStoreTests.agent("w1:p1", host: host), host: host)
+        }
+        await writer.settle()
+        let lock = DeviceLock()
+        let store = AgentLastFrameStore(directory: directory, readIndex: { url in
+            lock.isLocked ? .unreadable : ConsoleInventoryCache.FileAccess.live.read(url)
+        })
+        store.retainHosts([kept])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 2)
+        lock.isLocked = false
+        #expect(store.cachedEntries.map(\.hostID) == [kept.id])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 1)
+        #expect(AgentLastFrameStore(directory: directory).cachedEntries.map(\.hostID) == [kept.id])
+    }
+
+    /// The first load sweeps files no index entry names (a write the app
+    /// did not live to index).
+    @Test func theFirstLoadSweepsFilesNoEntryNames() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Host.fixture()
+        let agent = AgentLastFrameStoreTests.agent("w1:p1", host: host)
+        let writer = AgentLastFrameStore(directory: directory)
+        writer.record(AgentLastFrameStoreTests.image(), size: AgentLastFrameStoreTests.size, for: agent, host: host)
+        await writer.settle()
+        try Data("orphan".utf8).write(to: directory.appending(path: "orphan.jpg"))
+        let store = AgentLastFrameStore(directory: directory)
+        #expect(store.cachedEntries.map(\.agentID) == [agent.id])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 1)
+        #expect(store.frame(for: agent.id, host: host) != nil)
+    }
+
+    /// A capture's JPEG lands on the disk queue after the main actor moved
+    /// on: a frame discarded or recaptured meanwhile does not come back, and
+    /// only the newest capture's file stays.
+    @Test func aQueuedEncodingCannotBringBackADiscardedOrReplacedFrame() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Host.fixture()
+        let gone = AgentLastFrameStoreTests.agent("w1:p1", host: host)
+        let recaptured = AgentLastFrameStoreTests.agent("w1:p2", host: host)
+        let store = AgentLastFrameStore(directory: directory)
+        let image = AgentLastFrameStoreTests.image()
+        let size = AgentLastFrameStoreTests.size
+        store.record(image, size: size, for: gone, host: host)
+        store.discard(gone.id)
+        store.record(image, size: size, for: recaptured, host: host)
+        let replaced = try #require(store.cachedEntries.first?.file)
+        store.record(image, size: size, for: recaptured, host: host)
+        let newest = try #require(store.cachedEntries.first?.file)
+        #expect(newest != replaced)
+        await store.settle()
+        #expect(store.frame(for: gone.id, host: host) == nil)
+        #expect(store.cachedEntries.map(\.file) == [newest])
+        #expect(try AgentLastFrameStoreTests.images(in: directory) == [newest])
+        let reopened = AgentLastFrameStore(directory: directory)
+        #expect(reopened.cachedEntries.map(\.file) == [newest])
+        #expect(reopened.frame(for: recaptured.id, host: host) != nil)
+        await reopened.settle()
+    }
 }
 
 @MainActor
