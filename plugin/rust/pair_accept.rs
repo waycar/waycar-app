@@ -700,6 +700,110 @@ mod tests {
         }
     }
 
+    /// `accept` with stdin answering `line` only after `delay`.
+    fn accept_slowly(f: &Fixture, id: &str, line: &str, delay: Duration) -> (i32, String, String) {
+        struct Slow(Option<(Vec<u8>, Duration)>);
+        impl Read for Slow {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let Some((bytes, delay)) = self.0.take() else {
+                    return Ok(0);
+                };
+                thread::sleep(delay);
+                buffer[..bytes.len()].copy_from_slice(&bytes);
+                Ok(bytes.len())
+            }
+        }
+        let ctx = Ctx {
+            env: crate::env::Env::from_pairs([("HOME", f.home().to_string_lossy().into_owned())]),
+            home: f.home().to_path_buf(),
+            plugin_root: f.home().to_path_buf(),
+        };
+        let args = [
+            "--state-dir".to_string(),
+            f.state().to_string_lossy().into_owned(),
+            "--pairing-id".to_string(),
+            id.to_string(),
+        ];
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = accept(
+            &ctx,
+            &args,
+            Box::new(Slow(Some((line.as_bytes().to_vec(), delay)))),
+            INPUT_TIMEOUT,
+            &mut out,
+            &mut err,
+        );
+        (
+            code,
+            String::from_utf8_lossy(&out).into_owned(),
+            String::from_utf8_lossy(&err).into_owned(),
+        )
+    }
+
+    #[test]
+    fn a_pairing_that_expires_while_stdin_is_read_revokes_its_line_and_enrolls_nothing() {
+        let f = Fixture::new();
+        f.set_keys(&[USER_LINE]);
+        // Expires one second from now; the submission arrives two seconds later.
+        let now = crate::pairing_session::now_seconds();
+        let session = f.begin_at(now - crate::pairing_session::PAIRING_TTL_SECONDS + 1);
+        let result = accept_slowly(
+            &f,
+            &session.pairing_id,
+            &format!("{DEVICE_LINE}\n"),
+            Duration::from_millis(2100),
+        );
+        assert_eq!(result.0, 1);
+        assert_eq!(stdout_line(&result), "HERDR-ENROLL:ERR:expired");
+        assert_eq!(f.keys(), format!("{USER_LINE}\n"));
+        assert!(!f.pending_exists(&session.pairing_id));
+        assert_eq!(read_enrollment(&f.state(), &session.pairing_id), None);
+    }
+
+    #[test]
+    fn an_unknown_pairing_self_heals_its_leftover_line() {
+        let f = Fixture::new();
+        let session = f.begin();
+        fs::remove_file(pending_path(&f.state(), &session.pairing_id)).unwrap();
+        assert_eq!(f.bootstrap_lines(), 1);
+        let result = f.accept(&session.pairing_id, &format!("{DEVICE_LINE}\n"));
+        assert_eq!(stdout_line(&result), "HERDR-ENROLL:ERR:unknown_pairing");
+        assert_eq!(f.bootstrap_lines(), 0);
+        assert!(!f.keys().contains(DEVICE_LINE));
+    }
+
+    #[test]
+    fn a_null_pending_record_fails_like_the_js_did() {
+        let f = Fixture::new();
+        let session = f.begin();
+        fs::write(pending_path(&f.state(), &session.pairing_id), "null\n").unwrap();
+        let result = f.accept(&session.pairing_id, &format!("{DEVICE_LINE}\n"));
+        assert_eq!(result.0, 1);
+        assert_eq!(result.1, "");
+        assert_eq!(
+            result.2,
+            "TypeError: Cannot read properties of null (reading 'expiresAt')\n"
+        );
+        assert_eq!(f.bootstrap_lines(), 1);
+    }
+
+    #[test]
+    fn a_pending_record_without_an_expiry_never_expires() {
+        let f = Fixture::new();
+        let session = f.begin();
+        fs::write(
+            pending_path(&f.state(), &session.pairing_id),
+            format!("{{\"pairingId\":\"{}\"}}\n", session.pairing_id),
+        )
+        .unwrap();
+        let result = f.accept(&session.pairing_id, &format!("{DEVICE_LINE}\n"));
+        assert_eq!(result.0, 0, "{}", result.2);
+        assert_eq!(
+            read_enrollment(&f.state(), &session.pairing_id).map(|r| r.expires_at),
+            Some(None)
+        );
+    }
+
     #[test]
     fn the_first_line_only_is_the_submission() {
         let f = Fixture::new();
