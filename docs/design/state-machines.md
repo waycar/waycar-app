@@ -4467,6 +4467,39 @@ stateDiagram-v2
     rewriting --> finished: rewrote, landed and changed
 ```
 
+### ActivityEpisodeMachine
+
+- **File:** `plugin/rust/activity_start.rs`
+- **Owner:** the Live Activity hook (`activity_hook::send_updates` and
+  `start_activities`, under the send lock) reads it from
+  `activity/start-state.json`, plans each run's devices through
+  `plan_devices`, feeds it every push's answer and saves it only when its
+  serialization changed.
+- **State:** the persisted `StartState`: `ended_tokens` (update tokens this
+  plugin ended) and `started` (devices started, or dismissed, this episode).
+  Per device that reads as eligible, updating (a live update token), started
+  or dismissed this episode, or ended (its token).
+- **Events:** `plan(devices, empty)`, `updateAnswered(id, token, fcm,
+  ending, delivered, at)`, `startDelivered(id, at)`.
+- **Effects:** `update(index)`, `startCandidate(index)` (the plan).
+- **Tests:** `activity_start::tests` (plan rules, answers, file round trip),
+  `activity_hook_tests` (push-to-start once per episode, dismissal, end then
+  a new episode, a token registered during the grace, the start state).
+- **Catalogue:** HT-08.
+
+```mermaid
+stateDiagram-v2
+    [*] --> eligible
+    eligible --> started: startDelivered
+    eligible --> updating: plan, live update token
+    updating --> started: updateAnswered, gone mid-episode (dismissed)
+    updating --> ended: updateAnswered, end delivered
+    ended --> eligible: plan, no device registers the token
+    ended --> started: startDelivered
+    started --> updating: plan, live update token
+    started --> eligible: plan, inventory empty (episode ends)
+```
+
 ## Catalogue
 
 Every lifecycle the 2026-11 inventory found (17 read-only surveys, one per
@@ -4878,7 +4911,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HT-05 | Approval watcher | `plugin/rust/approval_watch.rs` | implicit | H/H | converted → `ApprovalWatchMachine` | P4 |
 | HT-06 | Pairing popup | `plugin/rust/pair.rs` | partial | H/M | converted → `PairPopupMachine`; `expiring` with no session still strands the popup, as before | P4 |
 | HT-07 | Pairing credential transaction | `plugin/rust/pairing_session.rs`, `plugin/rust/pair_accept.rs` | implicit | H/H | converted → `EnrollmentAcceptMachine` (the accept side; the popup side is HT-06) | P4 |
-| HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | convert | P4 |
+| HT-08 | Per-device Live Activity episode | `plugin/rust/activity_start.rs` | implicit | H/H | converted → `ActivityEpisodeMachine`; start-state file unchanged | P4 |
 | HT-09 | Host Live Activity push coordinator | `plugin/rust/activity_hook.rs` | implicit | H/H | convert | P4 |
 | HT-10 | Summary refresh run | `plugin/rust/summary/refresh.rs` | implicit | M/H | leave: cross-process lock with takeover | — |
 | HT-11 | Summary and progress record | `plugin/rust/summary/store.rs` | implicit | H/H | converted → `SummaryRecordMachine`; a summary write's read-then-write is still not atomic across writers, as before | P4 |

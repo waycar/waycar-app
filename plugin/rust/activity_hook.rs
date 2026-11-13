@@ -65,8 +65,8 @@ use crate::activity_envelope::{canonical_activity_plaintext, encrypt_activity_en
 use crate::activity_plan_steps::{clear_plan_steps, read_plan_steps};
 use crate::activity_rows::{RowLayout, parse_activity_row_layout};
 use crate::activity_start::{
-    ActivityDevice, StoredStartState, is_host_id, plan_devices, read_start_state, save_start_state,
-    start_fields,
+    ActivityDevice, EpisodeEvent, StoredStartState, is_host_id, plan_devices, read_start_state,
+    save_start_state, start_fields,
 };
 use crate::activity_state::{
     BuildInput, CoreRow, Counts, TmuxInventory, build_activity_state, core_activity_inventory,
@@ -90,6 +90,7 @@ use crate::notification_config::{NotificationConfig, read_notification_config};
 use crate::notify_core::Provider;
 use crate::paths::{home_dir, resolve_host_config};
 use crate::sidebar_config::refresh_sidebar_snapshot_for_event;
+use crate::state_machine::StateMachine;
 use crate::summary::store::{clear_progress, read_summary};
 use crate::tmux::{Runner, TmuxAgent, is_tmux_pane_id, list_agents_with};
 
@@ -1655,7 +1656,7 @@ fn send_updates(
         Map::new()
     };
     let mut start_state: StoredStartState = read_start_state(host.state_dir);
-    let planned = plan_devices(&devices, &mut start_state.state, empty);
+    let planned = plan_devices(&devices, &mut start_state.episodes, empty);
     let update_devices = planned.update_devices;
     let start_candidates = if progress_only {
         Vec::new()
@@ -1752,14 +1753,19 @@ fn send_updates(
                 timestamp,
                 counts,
             };
+            let answered = |delivered: bool| EpisodeEvent::UpdateAnswered {
+                id: device.id.clone(),
+                token: target.token.clone(),
+                fcm: target.provider == Provider::Fcm,
+                ending: empty,
+                delivered,
+                at_ms: deps.clock.now_ms() as i64,
+            };
             match deliver(config, deps, device, &plaintext, &request) {
                 Ok(Pushed::Ok) => {
                     delivered = true;
-                    // That activity is over: its token can never take an
-                    // update again. (An FCM entry has no activity token.)
-                    if empty && target.provider != Provider::Fcm {
-                        start_state.state.mark_ended(&target.token);
-                    }
+                    // An end's token can never take an update again.
+                    let _ = start_state.episodes.handle(answered(true));
                 }
                 Ok(_) if target.provider == Provider::Fcm => {
                     if !pruned_entries.contains(&target.token) {
@@ -1772,11 +1778,7 @@ fn send_updates(
                     }
                     // The user dismissed it (or it expired): no push-to-start
                     // brings it back before the episode ends.
-                    if !empty && let Some(id) = &device.id {
-                        start_state
-                            .state
-                            .mark_started(id, deps.clock.now_ms() as i64);
-                    }
+                    let _ = start_state.episodes.handle(answered(false));
                 }
                 Err(error) => failures.push(error.message().to_string()),
             }
@@ -1825,7 +1827,7 @@ fn start_activities(
         }
         let mut start_state = read_start_state(host.state_dir);
         let devices = read_activity_devices(host.config_dir);
-        let planned = plan_devices(&devices, &mut start_state.state, false);
+        let planned = plan_devices(&devices, &mut start_state.episodes, false);
         let mut pruned: Vec<String> = Vec::new();
         let mut started = false;
         let timestamp = deps.clock.now_ms() / 1000;
@@ -1846,11 +1848,10 @@ fn start_activities(
             match deliver(config, deps, device, &plaintext, &request) {
                 Ok(Pushed::Ok) => {
                     started = true;
-                    if let Some(id) = &device.id {
-                        start_state
-                            .state
-                            .mark_started(id, deps.clock.now_ms() as i64);
-                    }
+                    let _ = start_state.episodes.handle(EpisodeEvent::StartDelivered {
+                        id: device.id.clone(),
+                        at_ms: deps.clock.now_ms() as i64,
+                    });
                 }
                 Ok(_) => {
                     if !pruned.contains(&target.token) {
