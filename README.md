@@ -115,6 +115,15 @@ the addresses, the host key fingerprint, and SSH key enrollment. The same
 [plugin](plugin/README.md) delivers the encrypted notifications once you
 enable them for the Host in the app.
 
+## Are you an agent?
+
+Asked to put Waycar on someone's own iPhone from their own Mac? Follow
+[docs/agents/build-to-your-iphone.md](docs/agents/build-to-your-iphone.md):
+exact steps for Xcode and its tools, pairing the phone, signing with their own
+Apple Account (a free one works) and the one command that builds and installs
+it, plus what doesn't work in such a build and how to fix the usual errors.
+People can follow it too.
+
 ## Build from source
 
 You need a Mac with Xcode 27 (iOS 27 SDK; the app deploys to iOS 18 and
@@ -130,8 +139,9 @@ make help       # every target
 
 The plugin builds with `cargo` in `plugin/` (`cargo test --locked`), the
 relay and the site with Node 24 (`npm test` in `relay/`, `npm ci && npm test`
-in `apps/web/`). Building for a device needs your own signing team
-(`DEVELOPMENT_TEAM` in `project.yml`).
+in `apps/web/`). To install on your own iPhone, signed with your own Apple
+Account: `make install TEAM=<your Team ID>`, step by step in
+[docs/agents/build-to-your-iphone.md](docs/agents/build-to-your-iphone.md).
 
 ## Repository layout
 
