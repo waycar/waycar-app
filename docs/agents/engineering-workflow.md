@@ -146,6 +146,8 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   `--version`, turned `main` red. A new real-SSH or package test also updates
   its lane's pinned count and test names in `scripts/run-ci-ios-tests.sh`
   (`run_suite`, `tmux_suite_tests`); a parameterized `@Test` counts once.
+  Two branches that each add one test both write the same new count, git
+  merges that cleanly, and the lane is one short: recount after merging.
 - **Keyboard, terminal or iPad layout:** run `make test-ipad`. CI tests only
   the iPhone, so 23 iPad tests failed on `main` unseen; the weekly
   [iPad run](../../.github/workflows/ipad-weekly.yml) catches the rest, a

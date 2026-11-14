@@ -159,6 +159,13 @@ Entries reference the issue that motivated them.
 - **herdr Hosts**: if you used a Host while it was reconnecting, the next
   time its connection dropped could go unshown. That drop now shows
   Reconnecting like any other.
+- **Leaving an Agent while it falls back to SSH**: leaving the Agent while
+  its terminal switches from mosh to SSH no longer opens the terminal once
+  more on the Host afterwards.
+- **Use SSH Instead**: the terminal says Connecting as soon as you tap it,
+  and a second tap no longer reconnects it twice.
+- **Last screens saved while locked**: an Agent's last screen saved while
+  your iPhone was locked now still shows after Waycar restarts.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

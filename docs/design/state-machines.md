@@ -3579,12 +3579,12 @@ stateDiagram-v2
   `scheduleUpgradeRestart`, `restart`. A lost mosh link reattaches once per
   live stretch, the mosh→SSH fallback once per store (a retry or the upgrade
   gives it back), a transient channel death once per ended episode; a stop
-  silences every later run end and restart check; a scheduled upgrade owns
-  the status; the blank-frame grace goes live only for its own session.
-  Kept as before: a restart that passed its stop check before awaiting the
-  mosh invalidation still starts after a stop that lands meanwhile, and two
-  "Use SSH Instead" taps schedule two restarts (the run's end is not
-  checked against its token, as before).
+  silences every later run end, restart check and start, so a restart that
+  passed its stop check before awaiting the mosh invalidation starts
+  nothing once it returns (B-42); "Use SSH Instead" reads Connecting at
+  once, so a second tap or a Reattach schedules nothing more (B-43), and
+  no two runs overlap; a scheduled upgrade owns the status; the
+  blank-frame grace goes live only for its own session.
 - **Tests:** `TerminalRunMachineTests`, `AttachLifecycleCharacterizationTests`,
   `AttachTerminalStoreTests`, `MoshAttachTerminalTests`, `MoshFastPathEdgeTests`.
 - **Catalogue:** ATTACH-03.
@@ -3601,7 +3601,7 @@ stateDiagram-v2
     live --> ended: runFailed or runCompleted
     connecting --> ended: runFailed or runCompleted
     ended --> connecting: retry / startRun
-    ended --> ended: retryOverSSH / scheduleRestart(userChoseSSH)
+    ended --> connecting: retryOverSSH / scheduleRestart(userChoseSSH)
     connecting --> connecting: restartDue, not stopped / restart
     ended --> connecting: restartDue, not stopped / restart
     live --> stopped: stop, stopFinished
@@ -3622,13 +3622,14 @@ stateDiagram-v2
   `record(entry, now)`, `remove(agent/hostsOutside/unlisted)`,
   `deferDiscard`, `deferRetention`, `setRetainedTargets`, `encoded(file)`.
 - **Effects:** `dropPixels`, `persist(index, removedFiles, encode)`,
-  `sweep(keep, index, rewritesIndex)`, `storeEncoded`. Nothing is written
+  `sweep(keep, index, rewritesIndex, encode)`, `storeEncoded`. Nothing is written
   or deleted before the index loads; removals meanwhile are remembered for
   the disk's frames, and the first load merges (recorded frames win, the
   catalog applies, expired ones drop) and sweeps unnamed files. A queued
   JPEG is kept only while its file (new per capture, so the token) still
-  holds the raw capture. As before, a frame recorded while locked is never
-  written to disk (its persist was skipped) though the load indexes it.
+  holds the raw capture. A frame recorded while locked (its persist
+  skipped) is encoded and written by the first load's sweep, before the
+  merged index names it (B-45).
 - **Tests:** `AgentLastFrameIndexMachineTests`, `AgentLastFrameDeferredOwnerTests`,
   `AgentLastFrameStoreTests`, `AgentLastFrameEntryTests`.
 - **Catalogue:** ATTACH-08.
@@ -3639,7 +3640,7 @@ stateDiagram-v2
     pending --> pending: indexRead unreadable
     pending --> pending: record or remove / dropPixels (no disk)
     pending --> pending: deferDiscard or deferRetention
-    pending --> loaded: indexRead entries / merge, sweep
+    pending --> loaded: indexRead entries / merge, sweep, write the captures
     pending --> loaded: memoryOnly
     loaded --> loaded: record or remove / dropPixels, persist
     loaded --> loaded: encoded(raw file) / storeEncoded
@@ -3744,13 +3745,14 @@ stateDiagram-v2
   the leave (`none`, `leaving(token, onlyIfEntered)`), beside the position,
   this history's own copy-mode entry and the pending rows and read.
 - **Events:** `scroll`, `refresh`, `pumpNext`, `answered(token, answer?)`,
-  `leaveRequested(onlyIfEntered)`, `leaveStarted`, `pumpDrained`,
-  `copyModeLeft`, `leaveEnded`, `joinedLeaveEnded`.
+  `leaveRequested(onlyIfEntered)`, `pumpDrained`, `copyModeLeft`,
+  `leaveEnded`, `joinedLeaveEnded`.
 - **Effects:** `startPump`, `request(rows)`, `pumpEnded`, `startLeave`,
   `joinLeave`, `leaveCopyMode`, `leaveAgain`, `publishPosition`,
   `availabilityChanged`. One request at a time takes everything pending; a
-  failed one drops the rest. A leave refuses scrolls at once, drops pending
-  rows in its own first step, waits out the request in flight, then leaves
+  failed one drops the rest. A leave refuses scrolls and drops pending
+  rows the moment it is asked for, whenever the answer in flight lands
+  (B-44), waits out the request in flight, then leaves
   copy mode only from copy mode, and a departure only from copy mode its
   own scroll entered (AGENTS.md copy-mode facts); a failed leave still
   reads live. A joining departure never stands in for input's leave.
@@ -3770,9 +3772,8 @@ stateDiagram-v2
     }
     state Leave {
         [*] --> none
-        none --> leaving: leaveRequested / startLeave(token)
+        none --> leaving: leaveRequested / drop pending, startLeave(token)
         leaving --> leaving: leaveRequested / joinLeave
-        leaving --> leaving: leaveStarted / drop pending
         leaving --> leaving: pumpDrained, in copy mode it may leave / leaveCopyMode
         leaving --> leaving: copyModeLeft / position live
         leaving --> none: leaveEnded
@@ -6430,12 +6431,12 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | converted → `AttachLifecycleMachine` (the link-open and transcript-read ids stay as they are, ATTACH-22) | P2c |
 | ATTACH-02 | Terminal recovery generation latch | `Sources/Waycar/Console/AttachTerminalStore.swift` | explicit | H/M | converted → `TerminalRecoveryGenerationMachine` | P2c |
-| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; a stop during the mosh invalidation a restart awaits is still followed by one self-ending run, as before | P2c |
+| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; bugs B-42, B-43 fixed | P2c |
 | ATTACH-04 | Viewed-Done acknowledgement | `Sources/Waycar/Console/AgentFocusCoordinator.swift` | explicit | H/M | converted → `ViewedDoneMachine` | P2c |
 | ATTACH-05 | Terminal cache entry retention | `Sources/Waycar/Console/AgentTerminalCache.swift` | explicit | H/H | converted → `AgentTerminalRetentionMachine` | P2c |
 | ATTACH-06 | Byte feed and surface binding | `Sources/Waycar/Terminal/TerminalByteFeed.swift` | implicit | M/M | leave: one-way latch | — |
 | ATTACH-07 | Last frame | `Sources/Waycar/Terminal/TerminalLastFrame.swift` | explicit | H/M | converted → `TerminalLastFrameMachine` | P2c |
-| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | converted → `AgentLastFrameIndexMachine` | P2c |
+| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | converted → `AgentLastFrameIndexMachine`; bug B-45 fixed | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
 | ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | converted → `DirectKeyboardHandoffMachine` (the Composer-to-Direct handoff); the update-time claim, acceptance and inset release keep their callback order. The tools/system presentation flags stay view state resolved by `AgentDirectInputPresentation`. Pins: `ComposerDirectHandoffLifecycleTests` | P2c |
@@ -6445,7 +6446,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
 | ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | converted → `MessageJumpFrameWaitMachine` | P2c |
 | ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | converted → `MessageJumpSessionMachine` | P2c |
-| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
+| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine`; bug B-44 fixed | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
 | ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | converted → `ShellOpeningMachine`; one Task per attempt runs its steps and finishes it after the last effects. Hosted pins: `ShellOpeningLifecycleTests` | P2c |
@@ -6652,13 +6653,13 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-36 | NOTIF-13 | An iCloud pass finishing after disable publishes Last Checked and retries connections | fixed (P1, `cbf8e38c`) |
 | B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | fixed (P2c, `ee94df49`): the cancel names its question's token in `HostKeyTrustMachine`. The regression test holds the cancel's main-actor hop through a `cancellationHop` test seam, nil in production |
 | B-38 | OPENCODE-04 | After Cancel on an OpenCode approval the card says Done, and can turn Idle after a reconnect | fixed (P3a, `a932d087`): confirmed live on 2.2.7 (a reject's `interrupted` has reason `shutdown` and writes no `time.idle`, now pinned in `opencode-contract.py`); such an end keeps the last result's times |
-| B-39 | OPENCODE-09 | After a desk session is archived, a new `opencode` in the same pane stays hidden and its card has no Show Terminal (tmux, or herdr without the opencode integration; unconfirmed) | open (P3a: not in the transport; needs a live check of what session a reused pane reports on tmux and herdr without the integration) |
+| B-39 | OPENCODE-09 | After a desk session is archived, a new `opencode` in the same pane stays hidden and its card has no Show Terminal (tmux, or herdr without the opencode integration; unconfirmed) | open, confirmed live (OpenCode 2.2.7, tmux 3.6, herdr 0.9.5, 2026-11-14; research fact O27): a plain TUI reports no session on either Backend, keeps its pane and terminal ids across a relaunch whose shell gap lasts at most 30 ms, and starts or switches sessions in the same process with nothing identifying it, so the Archive pin keeps applying. Pinned as current behaviour (`OpenCodeFlowsTests.anArchivePinnedPaneStaysHiddenWhenItsTUIMovesOnUnseen`). No signal can say which session the TUI shows, so the fix is a product decision (the pin yielding to a newer desk session in its folder, or no pin), not taken here |
 | B-40 | OPENCODE-08 | A Chat Mode OpenCode launch whose Chat Prompt write fails reports failure but leaves the new session listed (endpoint unverified below 2.2.7) | fixed (P3a, `1a6a5d6d`, `9053e09d`): the form's Retry finishes that same session (`LaunchRetryIdentityMachine.retryingOpenCodeSession`); queued and uncertain replays already kept their pinned id |
 | B-41 | OPENCODE-10 | A closed OpenCode connection can get the server password back in memory from an in-flight re-read (not user-visible) | fixed (P3a, `8bcf3edc`): the re-read re-checks `OpenCodeConnectionMachine.keepsPassword` after its exec |
-| B-42 | ATTACH-03 | A stop that lands while a restart awaits its mosh invalidation is followed by one more run, which opens and ends its session at once, and the stopped terminal reads Connecting (automatic fallback and Use SSH Instead) | open: pinned as current behaviour (`aStopDuringTheFallbackInvalidationIsFollowedByOneSelfEndingRun`); the restart checks for a stop only before that await |
-| B-43 | ATTACH-03 | Two taps on Use SSH Instead schedule two restarts: a run's end clears the run handle without checking which run it belongs to | open |
-| B-44 | ATTACH-18 | Rows queued before a tmux history leave are sent or dropped depending on whether the in-flight answer reaches the main actor before the leave's first step | open |
-| B-45 | ATTACH-08 | A last frame captured while the device is locked is indexed on the next load although its JPEG was never written; after a relaunch it misses and is removed | open |
+| B-42 | ATTACH-03 | A stop that lands while a restart awaits its mosh invalidation is followed by one more run, which opens and ends its session at once, and the stopped terminal reads Connecting (automatic fallback and Use SSH Instead) | fixed (`2a7c0b4f`): the machine's `start` refuses after a stop, so the restart that passed its check before the invalidation starts nothing (`AttachLifecycleCharacterizationTests.aStopDuringTheFallbackInvalidationStartsNoOtherRun`) |
+| B-43 | ATTACH-03 | Two taps on Use SSH Instead schedule two restarts: a run's end clears the run handle without checking which run it belongs to | fixed (`2a7c0b4f`): Use SSH Instead reads Connecting at once, so a second tap or a Reattach finds no ended session and no two runs overlap (`AttachLifecycleCharacterizationTests.twoUseSSHInsteadTapsStartOneRun`) |
+| B-44 | ATTACH-18 | Rows queued before a tmux history leave are sent or dropped depending on whether the in-flight answer reaches the main actor before the leave's first step | fixed (`41220fae`): `leaveRequested` drops them itself; `leaveStarted` is gone (`TmuxPaneHistoryTests.rowsQueuedBeforeALeaveAreDroppedWhicheverStepRunsFirst`). No CHANGELOG line: the leave left copy mode either way, after at most one stray scroll |
+| B-45 | ATTACH-08 | A last frame captured while the device is locked is indexed on the next load although its JPEG was never written; after a relaunch it misses and is removed | fixed (`b992dd84`): the first load's sweep encodes and writes those captures before the merged index names them (`AgentLastFrameStoreTests.aFrameCapturedWhileLockedSurvivesARelaunch`) |
 | B-46 | HERDR-03 | A request that finds the herdr link dead during a backoff leaves a re-subscribe request with no live channel, so the next connection's first stream loss re-subscribes without showing Reconnecting | fixed (P3d, `c6673183`): a `replace` with no live channel requests nothing (`EventsSessionSubscriptionsTests.aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible`) |
 
 B-02 and B-03 are unused.

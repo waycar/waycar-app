@@ -43,7 +43,10 @@ crash reports, durations and the Mac's load before and after.
   arrived that one holds no shared Pro Max). Device builds sign in the GUI
   session; installs need notes.
 - It copies deliverables to the Mac's Desktop before it removes anything,
-  removes only what it made, then copies them to Google Drive.
+  removes only what it made, then copies them to Google Drive. Deliverables
+  also prove generated files: `deliverables: ["Waycar.xcodeproj/project.pbxproj"]`
+  on a `test-app` run, then `cmp` against the committed file, shows the
+  committed project is what xcodegen writes.
 
 `background: true` returns a run id at once, so you can keep working;
 `mac_run {run: <id>}` waits for the card later, and
