@@ -61,11 +61,7 @@ final class AgentAttachStore {
     /// A recovery may become invalid off stage before SwiftUI delivers the
     /// real leave callback. That transition requires a later full terminal
     /// replacement, while `leave()` still owns the interaction cleanup.
-    private enum LifecycleState {
-        case active
-        case rejoinRequired
-        case left
-    }
+    private typealias LifecycleState = AttachLifecycleMachine.Lifecycle
 
     /// What the Attach resolves: an Agent's pane (`agent attach`), or a
     /// plain shell's terminal (`terminal attach`, which `agent attach`
@@ -116,25 +112,27 @@ final class AgentAttachStore {
     var lastSessionFlavor: TerminalSessionFlavor {
         terminal.lastSessionFlavor
     }
+    /// The latest queued lifecycle transition (the machine's `transition`).
     private var lifecycleTask: Task<Void, Never>?
-    private var lifecycleID: UInt64 = 0
     private var attachLinkOpenTask: Task<Void, Never>?
     private var attachLinkOpenID: UInt64 = 0
+    /// The lifecycle, recovery ownership, the foreground return's choice and
+    /// the transition queue's tail.
+    @ObservationIgnored private var lifecycle = AttachLifecycleMachine()
+    /// The observed copy of the machine's lifecycle.
     private var lifecycleState = LifecycleState.active
     /// Owns recovery presentation for the latest scheduled replacement. Its
     /// predecessor may still be stopping, but an older queued transition cannot
     /// clear the token a newer transition installed. This is presentation
     /// state, not a transport claim: while it exists the screen must show
     /// recovery instead of the predecessor's stale `.live` state and its empty
-    /// overlay.
-    private var terminalRecoveryOwner: UUID?
-    /// A possible-suspension activation observed by the selected screen is also
-    /// a claim that this lifecycle is current. SwiftUI can still deliver a
+    /// overlay. The observed copy of the machine's recovery owner. A
+    /// possible-suspension activation observed by the selected screen is also
+    /// a claim that this lifecycle is current: SwiftUI can still deliver a
     /// delayed disappear from the foreground mount after that claim, without a
-    /// balancing appear. Only that recovery may survive such an on-stage leave;
-    /// ordinary replacement and rejoin transitions keep their existing teardown
-    /// semantics.
-    private var activationRecoveryOwnsOnStageLifecycle = false
+    /// balancing appear, and only that recovery may survive such an on-stage
+    /// leave (the machine's `activationOwnsOnStage`).
+    private var terminalRecoveryOwner: UInt64?
     /// Joins the independently scheduled readiness projection and terminal
     /// waiter for the exact foreground-recovery pipeline.
     private var activationRecovery = TerminalRecoveryGenerationLatch()
@@ -158,11 +156,8 @@ final class AgentAttachStore {
     /// The transcript being read for the indices, and which read it is.
     @ObservationIgnored private var transcriptReading: Task<Void, Never>?
     @ObservationIgnored private var transcriptReadingGeneration: UInt64 = 0
-    /// The pipeline `startAtIntent()` started and no activation has looked
-    /// at yet: it began after any absence it could be recovered from.
-    private var unseenIntentPipeline: TerminalSurfaceID?
     /// The mosh pipeline a possible-suspension return is checking before
-    /// replacing it (#105).
+    /// replacing it (#105), under the machine's contact-check token.
     private var moshContactCheck: Task<Void, Never>?
     private let recordsNetworkTelemetry: Bool
 
@@ -228,7 +223,7 @@ final class AgentAttachStore {
             terminal.status == .waitingForSize
         else { return }
         terminal.start(assumingCols: size.cols, rows: size.rows)
-        unseenIntentPipeline = terminal.surfaceID
+        perform(lifecycle.handle(.intentStarted(terminal.surfaceID)))
     }
 
     var terminalID: TerminalSurfaceID {
@@ -457,37 +452,56 @@ final class AgentAttachStore {
     /// `moshContactWindow`, replaced — without waiting on a shutdown
     /// acknowledgement — when it does not.
     func didBecomeActive(afterPossibleSuspension: Bool = false) {
-        guard lifecycleState == .active, isOnStage() else { return }
-        let intentPipeline = unseenIntentPipeline
-        unseenIntentPipeline = nil
-        guard !afterPossibleSuspension else {
-            #if DEBUG
-            if !activationRecovery.isActive {
+        guard lifecycleState == .active else { return }
+        perform(lifecycle.handle(.activated(
+            afterPossibleSuspension: afterPossibleSuspension, onStage: isOnStage(),
+            latchActive: activationRecovery.isActive, pipeline: terminal.surfaceID,
+            runsMosh: afterPossibleSuspension && terminal.isRunningMosh)))
+    }
+
+    private func perform(_ effects: [AttachLifecycleMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .repaint:
+                terminal.didBecomeActive()
+            case .beginTrace:
+                #if DEBUG
                 beginPendingForegroundRecoveryTrace()
-            }
-            #endif
-            if activationRecovery.isActive {
-                activationRecoveryOwnsOnStageLifecycle = true
-                return
-            }
-            if terminalRecoveryOwner != nil {
-                activationRecoveryOwnsOnStageLifecycle = true
-                activationRecovery.begin(
-                    projectedGeneration: transportGeneration)
-                return
-            }
-            if intentPipeline == terminal.surfaceID {
+                #endif
+            case .abortTrace:
+                #if DEBUG
+                abortPendingForegroundRecoveryTrace()
+                #endif
+            case .beginLatch:
+                activationRecovery.begin(projectedGeneration: transportGeneration)
+            case .clearLatch:
+                activationRecovery.clear()
+            case .followIntentPipeline:
                 followIntentPipeline()
-                return
+            case .checkMosh(let token):
+                checkMoshBeforeReplacing(token)
+            case .cancelContactCheck:
+                moshContactCheck?.cancel()
+                moshContactCheck = nil
+            case .clearContactCheck:
+                moshContactCheck = nil
+            case .recover:
+                recoverAfterPossibleSuspension()
+            case .publishLifecycle(let next):
+                lifecycleState = next
+            case .publishRecoveryOwner(let owner):
+                terminalRecoveryOwner = owner
+            case .ownRecovery(let token):
+                terminalRecoveryOwner = token
+            case .resumeTrayAfterRetention:
+                resumeTrayAfterRetention()
+            case .clearTransition:
+                lifecycleTask = nil
+            case .keepMoshSession, .enqueueRejoin, .proceed, .returnPendingTransition, .tearDown,
+                .transitionToken:
+                break // Their callers act on these in place.
             }
-            if terminal.isRunningMosh {
-                checkMoshBeforeReplacing()
-                return
-            }
-            recoverAfterPossibleSuspension()
-            return
         }
-        terminal.didBecomeActive()
     }
 
     /// How long a returning mosh session gets to hear from its server
@@ -524,28 +538,22 @@ final class AgentAttachStore {
         }
     }
 
-    private func checkMoshBeforeReplacing() {
+    private func checkMoshBeforeReplacing(_ token: UInt64) {
         let pipeline = terminal
         moshContactCheck?.cancel()
         moshContactCheck = Task { [weak self] in
             let heard = await pipeline.awaitServerContact(within: Self.moshContactWindow)
-            guard !Task.isCancelled, let self, self.terminal === pipeline,
-                self.lifecycleState == .active, self.isOnStage()
-            else { return }
-            self.moshContactCheck = nil
-            if heard, pipeline.isRunningMosh {
-                #if DEBUG
-                self.abortPendingForegroundRecoveryTrace()
-                #endif
-                pipeline.didBecomeActive()
-                return
-            }
-            // A session that failed meanwhile and is already reattaching
-            // on its own (a lost link) needs no second replacement.
-            guard self.terminalRecoveryOwner == nil, !self.activationRecovery.isActive,
-                pipeline.isRunningMosh || pipeline.status != .connecting
-            else { return }
-            self.recoverAfterPossibleSuspension()
+            let taskCancelled = Task.isCancelled
+            guard let self else { return }
+            let effects = self.lifecycle.handle(.contactAnswered(
+                token, taskCancelled: taskCancelled, samePipeline: self.terminal === pipeline,
+                onStage: !taskCancelled && self.terminal === pipeline && self.lifecycleState == .active
+                    && self.isOnStage(),
+                heard: heard, runsMosh: pipeline.isRunningMosh,
+                latchActive: self.activationRecovery.isActive,
+                connecting: pipeline.status == .connecting))
+            self.perform(effects)
+            if effects.contains(.keepMoshSession) { pipeline.didBecomeActive() }
         }
     }
 
@@ -628,10 +636,9 @@ final class AgentAttachStore {
         // Synchronous on purpose. `previous.stop()` can wait on the SSH channel
         // teardown, and the user must see recovery throughout that wait rather
         // than the predecessor's `.live` status and an EmptyView overlay.
-        let recoveryOwner = UUID()
-        terminalRecoveryOwner = recoveryOwner
-        activationRecoveryOwnsOnStageLifecycle =
-            activationRecoveryOwnsOnStageLifecycle || ownsOnStageLifecycle
+        let effects = lifecycle.handle(.replacementRequested(ownsOnStageLifecycle: ownsOnStageLifecycle))
+        guard case .ownRecovery(let recoveryOwner)? = effects.first else { return }
+        perform(effects)
         enqueueLifecycleTransition { [weak self] in
             guard let self else { return }
             guard isStillWanted() else {
@@ -658,7 +665,7 @@ final class AgentAttachStore {
                 return
             }
             #endif
-            guard self.terminalRecoveryOwner == recoveryOwner else { return }
+            guard self.lifecycle.ownsRecovery(recoveryOwner) else { return }
             let replacement = Self.makeTerminal(
                 target: self.target,
                 input: self.input,
@@ -688,10 +695,8 @@ final class AgentAttachStore {
         }
     }
 
-    private func finishTerminalRecovery(ownedBy owner: UUID) {
-        guard terminalRecoveryOwner == owner else { return }
-        terminalRecoveryOwner = nil
-        activationRecoveryOwnsOnStageLifecycle = false
+    private func finishTerminalRecovery(ownedBy owner: UInt64) {
+        perform(lifecycle.handle(.recoveryFinished(owner)))
     }
 
     #if DEBUG
@@ -787,44 +792,24 @@ final class AgentAttachStore {
     /// its interactions did (`leaveInteractionsForRetention()`). That rejoin
     /// only resumes the Composer Tray, after the retention teardown.
     func rejoin() {
-        guard lifecycleState != .active else {
-            resumeTrayAfterRetention()
-            return
-        }
-        guard isOnStage() else { return }
-        activationRecovery.clear()
-        let requiresFullReplacement = lifecycleState == .rejoinRequired
-        lifecycleState = .active
         // A rejoin is the latest terminal transition even when it is queued
         // behind an in-flight recovery and the teardown leave enqueued after
-        // it. Take presentation ownership synchronously so the recovery task
-        // cannot expose its intermediate pipeline before this one lands.
-        let recoveryOwner = UUID()
-        terminalRecoveryOwner = recoveryOwner
+        // it. It takes presentation ownership synchronously so the recovery
+        // task cannot expose its intermediate pipeline before this one lands.
+        let effects = lifecycle.handle(.rejoinRequested(onStage: lifecycleState != .active && isOnStage()))
+        perform(effects)
+        guard case .enqueueRejoin(let recoveryOwner, let requiresFullReplacement)? = effects.last
+        else { return }
         enqueueLifecycleTransition { [weak self] in
             guard let self else { return }
-            guard self.lifecycleState == .active else {
-                self.finishTerminalRecovery(ownedBy: recoveryOwner)
-                return
-            }
-            guard self.isOnStage() else {
-                self.abortTerminalRecoveryOffStage(ownedBy: recoveryOwner)
-                return
-            }
+            guard self.passesRejoinGate(recoveryOwner) else { return }
             // After the queued leave has finished. Resuming earlier would let
             // the Composer Tray start an upload while staging is still tearing down.
             self.composer.resumeTrayAfterRejoin(of: self.staging)
             if requiresFullReplacement, self.terminal.status != .stopped {
                 await self.terminal.stop(preservingPendingPaste: true)
-                guard self.terminalRecoveryOwner == recoveryOwner else { return }
-                guard self.lifecycleState == .active else {
-                    self.finishTerminalRecovery(ownedBy: recoveryOwner)
-                    return
-                }
-                guard self.isOnStage() else {
-                    self.abortTerminalRecoveryOffStage(ownedBy: recoveryOwner)
-                    return
-                }
+                guard self.lifecycle.ownsRecovery(recoveryOwner) else { return }
+                guard self.passesRejoinGate(recoveryOwner) else { return }
             }
             guard self.terminal.status == .stopped else {
                 #if DEBUG
@@ -833,7 +818,7 @@ final class AgentAttachStore {
                 self.finishTerminalRecovery(ownedBy: recoveryOwner)
                 return
             }
-            guard self.terminalRecoveryOwner == recoveryOwner else { return }
+            guard self.lifecycle.ownsRecovery(recoveryOwner) else { return }
             let replacement = Self.makeTerminal(
                 target: self.target,
                 input: self.input,
@@ -860,6 +845,15 @@ final class AgentAttachStore {
         }
     }
 
+    /// The rejoin transition's checks: a leave since finishes its recovery,
+    /// a route that moved off stage aborts it.
+    private func passesRejoinGate(_ recoveryOwner: UInt64) -> Bool {
+        let effects = lifecycle.handle(.rejoinGate(
+            recoveryOwner, onStage: lifecycleState == .active && isOnStage()))
+        perform(effects)
+        return effects == [.proceed]
+    }
+
     /// Queued behind any pending transition, so it lands after the retention
     /// teardown that suspended the tray. The tray ignores it unless this
     /// Attach's staging is the one bound, which is also why it needs no route
@@ -878,16 +872,9 @@ final class AgentAttachStore {
     /// `onDisappear` yet. Only the transition that still owns recovery may
     /// change this state; a stale operation must not turn a newer on-stage
     /// transition back into a leave.
-    private func abortTerminalRecoveryOffStage(ownedBy owner: UUID) {
-        guard terminalRecoveryOwner == owner, lifecycleState == .active,
-            !isOnStage()
-        else { return }
-        lifecycleState = .rejoinRequired
-        #if DEBUG
-        abortPendingForegroundRecoveryTrace()
-        #endif
-        activationRecovery.clear()
-        finishTerminalRecovery(ownedBy: owner)
+    private func abortTerminalRecoveryOffStage(ownedBy owner: UInt64) {
+        let onStage = lifecycle.ownsRecovery(owner) && lifecycleState == .active && isOnStage()
+        perform(lifecycle.handle(.abortOffStage(owner, onStage: onStage)))
     }
 
     /// Cancels view-owned interaction while a retained PTY continues receiving
@@ -931,27 +918,14 @@ final class AgentAttachStore {
     private func leave(
         preservingOnStageActivationRecovery: Bool
     ) -> Task<Void, Never> {
-        guard lifecycleState != .left else {
+        let effects = lifecycle.handle(.leaveRequested(
+            preservingActivationRecovery: preservingOnStageActivationRecovery,
+            onStage: preservingOnStageActivationRecovery && lifecycleState == .active
+                && terminalRecoveryOwner != nil && isOnStage()))
+        guard effects.contains(.tearDown) else {
             return lifecycleTask ?? Task {}
         }
-        if preservingOnStageActivationRecovery,
-            lifecycleState == .active,
-            activationRecoveryOwnsOnStageLifecycle,
-            terminalRecoveryOwner != nil,
-            isOnStage()
-        {
-            return lifecycleTask ?? Task {}
-        }
-        #if DEBUG
-        abortPendingForegroundRecoveryTrace()
-        #endif
-        lifecycleState = .left
-        terminalRecoveryOwner = nil
-        activationRecoveryOwnsOnStageLifecycle = false
-        activationRecovery.clear()
-        moshContactCheck?.cancel()
-        moshContactCheck = nil
-        unseenIntentPipeline = nil
+        perform(effects)
         invalidateAttachLinkOpen()
         attachLinkOpenFailure = nil
         linkIndex.clear()
@@ -991,8 +965,9 @@ final class AgentAttachStore {
         _ operation: @escaping @MainActor @Sendable () async -> Void
     ) -> Task<Void, Never> {
         let previous = lifecycleTask
-        lifecycleID &+= 1
-        let id = lifecycleID
+        guard case .transitionToken(let id)? = lifecycle.handle(.transitionEnqueued).first else {
+            return Task {} // Not emitted: every enqueue mints a token.
+        }
         let task = Task { @MainActor in
             await previous?.value
             await operation()
@@ -1000,8 +975,8 @@ final class AgentAttachStore {
         lifecycleTask = task
         Task { @MainActor [weak self] in
             await task.value
-            guard self?.lifecycleID == id else { return }
-            self?.lifecycleTask = nil
+            guard let self else { return }
+            self.perform(self.lifecycle.handle(.transitionEnded(id)))
         }
         return task
     }

@@ -161,25 +161,26 @@ final class TmuxPaneHistory {
     typealias Leave = @MainActor () async throws -> Void
 
     /// Where the pane's view was last seen; nil until the first answer.
+    /// The observed copy of ``PaneHistoryScrollMachine/position``.
     private(set) var position: PaneHistoryPosition?
     /// One of this history's scrolls took the view into copy mode
     /// (``PaneHistoryScroll/enteredHistory``), and no answer since has seen
     /// it leave: the departure's to undo. Copy mode a desk client or
     /// another device entered is not, even one entered since the last read.
-    @ObservationIgnored private(set) var enteredHistory = false
+    var enteredHistory: Bool { machine.enteredHistory }
 
     /// ``isAvailable`` changed.
     @ObservationIgnored var onAvailabilityChange: (() -> Void)?
 
     @ObservationIgnored private let scrollAction: Scroll
     @ObservationIgnored private let leaveAction: Leave
-    /// Rows asked for and not yet sent; positive toward older content.
-    @ObservationIgnored private var pendingRows = 0
-    /// A position read was asked for and not yet sent.
-    @ObservationIgnored private var wantsRefresh = false
+    /// Pending rows and reads, the request in flight and the leave.
+    @ObservationIgnored private var machine = PaneHistoryScrollMachine()
     /// The request in flight moves the view (rather than only reading it).
-    @ObservationIgnored private(set) var isMoving = false
+    var isMoving: Bool { machine.isMoving }
+    /// The loop of the machine's running pump token.
     @ObservationIgnored private var pump: Task<Void, Never>?
+    /// The machine's running leave.
     @ObservationIgnored private var leaving: Task<Void, Never>?
 
     init(scroll: @escaping Scroll, leave: @escaping Leave) {
@@ -194,23 +195,19 @@ final class TmuxPaneHistory {
     /// Whether input must wait for ``leave()``: the view is above live
     /// output, or a scroll that may take it there is in flight or queued.
     var holdsInput: Bool {
-        position == .inHistory || isMoving || pendingRows != 0 || leaving != nil
+        position == .inHistory || machine.holdsInput
     }
 
     /// Moves the view `rows` rows; coalesced with any request in flight.
     func scroll(towardOlderContent: Bool, rows: Int) {
-        guard rows > 0, leaving == nil else { return }
-        pendingRows += towardOlderContent ? rows : -rows
-        startPump()
+        perform(machine.handle(.scroll(towardOlderContent: towardOlderContent, rows: rows)))
     }
 
     /// Reads where the view is without moving it: the application may have
     /// changed (an alternate-screen TUI started or ended), or a desk client
     /// left copy mode.
     func refresh() {
-        guard leaving == nil else { return }
-        wantsRefresh = true
-        startPump()
+        perform(machine.handle(.refresh))
     }
 
     /// Leaves copy mode and returns once the pane takes input again. A
@@ -228,57 +225,63 @@ final class TmuxPaneHistory {
     }
 
     private func leave(onlyIfEntered: Bool) async {
-        if let leaving {
-            await leaving.value
-            // A departure that kept someone else's copy mode does not
-            // stand in for input's leave.
-            guard !onlyIfEntered, position == .inHistory else { return }
-            return await leave(onlyIfEntered: false)
-        }
-        let task = Task { [weak self] in
-            guard let self else { return }
-            self.pendingRows = 0
-            self.wantsRefresh = false
-            await self.pump?.value
-            if self.position == .inHistory, !onlyIfEntered || self.enteredHistory {
-                try? await self.leaveAction()
-                self.update(.live)
+        for effect in machine.handle(.leaveRequested(onlyIfEntered: onlyIfEntered)) {
+            switch effect {
+            case .joinLeave:
+                await leaving?.value
+                if machine.handle(.joinedLeaveEnded(onlyIfEntered: onlyIfEntered)) == [.leaveAgain] {
+                    await leave(onlyIfEntered: false)
+                }
+            case .startLeave(let token, _):
+                let task = Task { [weak self] in
+                    guard let self else { return }
+                    _ = self.machine.handle(.leaveStarted(token))
+                    await self.pump?.value
+                    if self.machine.handle(.pumpDrained(token)) == [.leaveCopyMode(token)] {
+                        try? await self.leaveAction()
+                        self.perform(self.machine.handle(.copyModeLeft(token)))
+                    }
+                    _ = self.machine.handle(.leaveEnded(token))
+                    self.leaving = nil
+                }
+                leaving = task
+                await task.value
+            case .startPump, .request, .pumpEnded, .leaveCopyMode, .leaveAgain,
+                .publishPosition, .availabilityChanged:
+                break // Only a scroll, a read, an answer or the leave's own steps emit these.
             }
-            self.leaving = nil
         }
-        leaving = task
-        await task.value
     }
 
     /// One request at a time: the rows piled up meanwhile, or a bare read.
     /// A failed request drops what is pending; the next scroll asks again.
-    private func startPump() {
-        guard pump == nil else { return }
-        pump = Task { [weak self] in
-            guard let self else { return }
-            while self.pendingRows != 0 || self.wantsRefresh {
-                let rows = self.pendingRows
-                self.pendingRows = 0
-                self.wantsRefresh = false
-                self.isMoving = rows != 0
-                let answer = try? await self.scrollAction(rows > 0, abs(rows))
-                self.isMoving = false
-                guard let answer else {
-                    self.pendingRows = 0
-                    self.wantsRefresh = false
-                    break
-                }
-                self.update(answer.position)
-                if answer.enteredHistory { self.enteredHistory = true }
+    private func perform(_ effects: [PaneHistoryScrollMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .startPump(let token):
+                startPump(token)
+            case .publishPosition(let next):
+                position = next
+            case .availabilityChanged:
+                onAvailabilityChange?()
+            case .request, .pumpEnded, .startLeave, .joinLeave, .leaveCopyMode, .leaveAgain:
+                break // The pump loop and the leave act on these themselves.
             }
-            self.pump = nil
         }
     }
 
-    private func update(_ next: PaneHistoryPosition) {
-        let wasAvailable = isAvailable
-        if next != .inHistory { enteredHistory = false }
-        if position != next { position = next }
-        if isAvailable != wasAvailable { onAvailabilityChange?() }
+    private func startPump(_ token: UInt64) {
+        pump = Task { [weak self] in
+            guard let self else { return }
+            while case .request(_, let towardOlderContent, let rows)? =
+                self.machine.handle(.pumpNext(token)).first
+            {
+                let answer = try? await self.scrollAction(towardOlderContent, rows)
+                let effects = self.machine.handle(.answered(token, answer))
+                self.perform(effects)
+                if effects.contains(.pumpEnded(token)) { break }
+            }
+            self.pump = nil
+        }
     }
 }

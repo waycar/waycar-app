@@ -151,6 +151,43 @@ struct HostOnboardingLifecycleTests {
         #expect(store.pendingFingerprint == nil)
     }
 
+    /// B-37: a cancelled run's decline reaches the main actor after the
+    /// question it was for is already answered and a new one is up. It
+    /// declines only its own question, never the new one.
+    @Test func aLateCancellationDeclineLeavesTheNextQuestionUp() async throws {
+        let connector = FakeTransportConnector(
+            outcome: .connects(pingResult: .success(Self.healthy)),
+            presentedKeyBlob: Data("untrusted".utf8))
+        let store = makeStore(connector: connector)
+        var hopHeld = false
+        var hopReleased: CheckedContinuation<Void, Never>?
+        var hopDone = false
+        store.cancellationHop = { decline in
+            hopHeld = true
+            await withCheckedContinuation { hopReleased = $0 }
+            decline()
+            hopDone = true
+        }
+        let first = Task { await store.runChecks() }
+        try await waitUntil("first question up") { store.pendingFingerprint != nil }
+        first.cancel()
+        try await waitUntil("cancellation hop held") { hopHeld }
+        store.confirmFingerprint(trusted: false)
+        await first.value
+        #expect(store.pendingFingerprint == nil)
+
+        let second = Task { await store.runChecks() }
+        try await waitUntil("second question up") { store.pendingFingerprint != nil }
+        let question = store.pendingFingerprint
+        hopReleased?.resume()
+        try await waitUntil("late decline delivered") { hopDone }
+        #expect(store.pendingFingerprint == question)
+        store.confirmFingerprint(trusted: true)
+        await second.value
+        #expect(store.pendingFingerprint == nil)
+        #expect(store.report?.isFullyPassed == true)
+    }
+
     /// HOST-02 safety net: checks are allowed while an explicitly approved
     /// replacement awaits persistence. That write is not a checks epoch.
     @Test func checksCanOverlapTheExplicitMismatchPinWrite() async throws {

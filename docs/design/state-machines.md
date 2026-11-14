@@ -3440,6 +3440,271 @@ stateDiagram-v2
     resolving --> idle: attempt finished
 ```
 
+### AttachLifecycleMachine
+
+- **File:** `Sources/Waycar/Console/AttachLifecycleMachine.swift`
+- **Owner:** `AgentAttachStore` keeps the pipeline, the recovery latch
+  (`TerminalRecoveryGenerationMachine`), the transition queue's Tasks, the
+  contact-check Task, staging, the indices and the DEBUG traces; it reads
+  the route (`isOnStage`) into the events at the old points and mirrors the
+  observed lifecycle and recovery owner.
+- **States:** the lifecycle (`active`, `rejoinRequired`, `left`), the
+  recovery owner token, whether a foreground return claimed the on-stage
+  lifecycle, the pipeline started at intent and not yet seen, the contact
+  check token, the latest queued transition.
+- **Events:** `intentStarted`, `activated`, `contactAnswered(token)`,
+  `replacementRequested`, `abortOffStage(token)`, `recoveryFinished(token)`,
+  `rejoinRequested`, `rejoinGate(token)`, `leaveRequested`,
+  `transitionEnqueued`, `transitionEnded(token)`.
+- **Effects:** `repaint`, `beginTrace`/`abortTrace`, `beginLatch`/`clearLatch`,
+  `followIntentPipeline`, `checkMosh(token)`, `cancelContactCheck`,
+  `clearContactCheck`, `keepMoshSession`, `recover`, the two `publish…`
+  mirrors, `ownRecovery`, `enqueueRejoin`, `resumeTrayAfterRetention`,
+  `proceed`, `returnPendingTransition`, `tearDown`, `transitionToken`,
+  `clearTransition`. End versus abandon is unchanged: only a recovery after
+  a possible suspension, a newer transport or an unheard mosh server
+  abandons its predecessor; leave and rejoin end it cleanly. The route
+  guards (`isStillWanted`, on stage) stay where they were; only the owning
+  transition publishes, finishes or aborts.
+- **Tests:** `AttachLifecycleMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AgentAttachStoreTests`, `AgentAttachStoreForegroundTests`,
+  `MoshStandbyAttachTests`, `MoshStandbySuspensionTests`.
+- **Catalogue:** ATTACH-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> active
+    active --> active: activated / repaint, followIntent, checkMosh(token) or recover
+    active --> active: contactAnswered(token) / keep or recover
+    active --> active: replacementRequested / ownRecovery(token)
+    active --> active: recoveryFinished(owner) / clear owner
+    active --> rejoinRequired: abortOffStage(owner), off stage
+    active --> left: leaveRequested / tearDown
+    active --> active: leaveRequested, activation owns the stage / returnPending
+    rejoinRequired --> active: rejoinRequested on stage / enqueueRejoin(full)
+    left --> active: rejoinRequested on stage / enqueueRejoin
+    rejoinRequired --> left: leaveRequested / tearDown
+```
+
+### TerminalRunMachine
+
+- **File:** `Sources/Waycar/Console/TerminalRunMachine.swift`
+- **Owner:** `AttachTerminalStore` keeps the run Task, the session and its
+  input generation, the connectivity and blank-frame Tasks, the geometry,
+  the transport generations and telemetry; it schedules each restart Task
+  the machine asks for and mirrors the observed status, flavor, live and
+  mosh-failure flags, the stop request and the scheduled upgrade.
+- **States:** the status (`waitingForSize`, `connecting`, `live`,
+  `ended(message)`, `stopped`), the run (`idle`, `running(token)`), the
+  session (`none`, `open(token)`), the flavor, the stop request, a scheduled
+  upgrade, and the restart budgets.
+- **Events:** `start`, `transportReady`, `sessionOpened`, `sessionFinished`,
+  `contentShown`, `graceElapsed(session)`, `runFailed(failure)`,
+  `runCompleted`, `runFinished`, `retry`, `retryOverSSH`, `upgrade`,
+  `restartDue`, `upgradeRestartDue`, `stop`, `stopFinished`.
+- **Effects:** the `publish…` mirrors, telemetry, `clearAcquired`,
+  `startRun`, `sessionToken`, `scheduleRestart(invalidating)`,
+  `scheduleUpgradeRestart`, `restart`. A lost mosh link reattaches once per
+  live stretch, the mosh→SSH fallback once per store (a retry or the upgrade
+  gives it back), a transient channel death once per ended episode; a stop
+  silences every later run end and restart check; a scheduled upgrade owns
+  the status; the blank-frame grace goes live only for its own session.
+  Kept as before: a restart that passed its stop check before awaiting the
+  mosh invalidation still starts after a stop that lands meanwhile, and two
+  "Use SSH Instead" taps schedule two restarts (the run's end is not
+  checked against its token, as before).
+- **Tests:** `TerminalRunMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AttachTerminalStoreTests`, `MoshAttachTerminalTests`, `MoshFastPathEdgeTests`.
+- **Catalogue:** ATTACH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> waitingForSize
+    waitingForSize --> connecting: start / startRun(token)
+    connecting --> live: contentShown or own graceElapsed
+    connecting --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: runFailed within budget / scheduleRestart
+    connecting --> connecting: runFailed within budget / scheduleRestart
+    live --> ended: runFailed or runCompleted
+    connecting --> ended: runFailed or runCompleted
+    ended --> connecting: retry / startRun
+    ended --> ended: retryOverSSH / scheduleRestart(userChoseSSH)
+    connecting --> connecting: restartDue, not stopped / restart
+    ended --> connecting: restartDue, not stopped / restart
+    live --> stopped: stop, stopFinished
+    connecting --> stopped: stop, stopFinished
+    ended --> stopped: stop, stopFinished
+```
+
+### AgentLastFrameIndexMachine
+
+- **File:** `Sources/Waycar/Terminal/AgentLastFrameIndexMachine.swift`
+- **Owner:** `AgentLastFrameStore` reads the protected index (`queue.sync`),
+  keeps the pixels (raw captures and JPEGs), and performs every disk effect
+  in order on its serial queue; it reads the clock and hands `now` in.
+- **States:** the load (`pending(discards, retentions)`, `loaded`), beside
+  the entries (most recent first), the last host catalog and the files whose
+  pixels are still raw captures.
+- **Events:** `memoryOnly`, `indexRead(unreadable/entries, now)`,
+  `record(entry, now)`, `remove(agent/hostsOutside/unlisted)`,
+  `deferDiscard`, `deferRetention`, `setRetainedTargets`, `encoded(file)`.
+- **Effects:** `dropPixels`, `persist(index, removedFiles, encode)`,
+  `sweep(keep, index, rewritesIndex)`, `storeEncoded`. Nothing is written
+  or deleted before the index loads; removals meanwhile are remembered for
+  the disk's frames, and the first load merges (recorded frames win, the
+  catalog applies, expired ones drop) and sweeps unnamed files. A queued
+  JPEG is kept only while its file (new per capture, so the token) still
+  holds the raw capture. As before, a frame recorded while locked is never
+  written to disk (its persist was skipped) though the load indexes it.
+- **Tests:** `AgentLastFrameIndexMachineTests`, `AgentLastFrameDeferredOwnerTests`,
+  `AgentLastFrameStoreTests`, `AgentLastFrameEntryTests`.
+- **Catalogue:** ATTACH-08.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> pending: indexRead unreadable
+    pending --> pending: record or remove / dropPixels (no disk)
+    pending --> pending: deferDiscard or deferRetention
+    pending --> loaded: indexRead entries / merge, sweep
+    pending --> loaded: memoryOnly
+    loaded --> loaded: record or remove / dropPixels, persist
+    loaded --> loaded: encoded(raw file) / storeEncoded
+```
+
+### MessageJumpFrameWaitMachine
+
+- **File:** `Sources/Waycar/Terminal/MessageJumpFrameWaitMachine.swift`
+- **Owner:** `TerminalMessageJumpController` keeps the walks (neighbour,
+  sticky prompt, to an end) and the step closure; it holds the one frame
+  continuation under the machine's token, the settle-timer Task and the
+  enclosing-task cancel handler's hop (with its two test seams), and reads
+  `Task.isCancelled` into the events.
+- **States:** whether a run is in progress and asked to stop, whether the
+  step awaits a frame and the frame buffered meanwhile, the latest frame, and
+  the wait (`none`, `active(token, held)`).
+- **Events:** `frameChanged`, `cancel`, `start`, `finish`, `beginAwaiting`,
+  `prepareWait`, `continuationArmed(token)`, `timerFired(token)`,
+  `enclosingCancelled(token)`, `waitReturned(token, result)`.
+- **Effects:** `started`/`refused`, `answer`, `armWait`, `hold`,
+  `cancelTimer`, `armTimer`, `resume(token, result)`. The token is the old
+  wait id: the settle timer and the cancel handler act only while theirs is
+  the active wait (the poison-window guard), a held continuation is resumed
+  at most once, a cancel wins over a frame, and the latest buffered paint
+  decides the step.
+- **Tests:** `MessageJumpFrameWaitMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `TerminalMessageJumpControllerTests`, `MessageJumpControlTests`.
+- **Catalogue:** ATTACH-16.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> running: start / started
+    running --> running: start / refused
+    running --> awaiting: beginAwaiting
+    awaiting --> running: prepareWait, cancel or buffered frame / answer
+    awaiting --> armed: prepareWait / armWait(token)
+    armed --> held: continuationArmed / hold, armTimer
+    armed --> armed: continuationArmed, cancel or frame / answer
+    held --> resumed: frame, cancel, matching timer or handler / resume(token)
+    resumed --> running: waitReturned / answer
+    armed --> running: waitReturned / answer
+    running --> idle: finish / resume a stranded waiter
+    held --> idle: finish / resume(token, cancelled)
+```
+
+### MessageJumpSessionMachine
+
+- **File:** `Sources/Waycar/Console/MessageJumpSessionMachine.swift`
+- **Owner:** `AgentMessageJumpWiring` keeps the jump and read Tasks, the
+  transcript reader, the index, reach and scroll run; it mirrors the observed
+  `liveGeneration` and `runningJump`.
+- **States:** the session generation and jump epoch; the jump (`idle`,
+  `scheduled(epoch)`, `running(epoch, jump)`); the read (`idle`,
+  `reading(token, stale)`); a snapshot held for a walk.
+- **Events:** `jumpRequested`, `jumpEntered(epoch, generation,
+  taskCancelled)`, `jumpEnded(epoch)`, `refreshRequested`,
+  `readFinished(token, snapshot?)`, `reset`.
+- **Effects:** `startJump`, `runBody`, `clearJumpTask`, `cancelJumpTask`,
+  `publishRunning`, `publishGeneration`, `resetSessionState`, `startRead`,
+  `clearRead`, `cancelRead`, `indexTranscript`, `deliverTranscript`,
+  `resetIndex`. A reset fences everything minted before it; a jump body runs
+  only after its entry check and only the latest jump's end clears it and
+  applies a held snapshot; one read at a time, with one reread for refreshes
+  meanwhile; a read during a walk is delivered at once and indexed after.
+- **Tests:** `MessageJumpSessionMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `MessageJumpControlTests`, `MessageJumpTranscriptWalkTests`.
+- **Catalogue:** ATTACH-17.
+
+```mermaid
+stateDiagram-v2
+    state Jump {
+        [*] --> idle
+        idle --> scheduled: jumpRequested / startJump(epoch)
+        scheduled --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> running: entry check passes / runBody
+        running --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> idle: latest jumpEnded
+        running --> idle: latest jumpEnded / apply held snapshot
+        running --> idle: reset
+        scheduled --> idle: reset
+    }
+    state Read {
+        [*] --> noRead
+        noRead --> reading: refreshRequested / startRead(token)
+        reading --> reading: refreshRequested / stale
+        reading --> noRead: readFinished(token) / index or hold, deliver
+        reading --> reading: readFinished(token), stale / startRead(next)
+        reading --> noRead: reset / cancelRead
+    }
+```
+
+### PaneHistoryScrollMachine
+
+- **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
+- **Owner:** `TmuxPaneHistory` runs the pump loop and the leave Task, keeps
+  their handles (a joining leave awaits the running one), calls the scroll
+  and copy-mode-leave actions, and mirrors the observed `position`.
+- **States:** the pump (`idle`, `running(token, none/reading/moving)`) and
+  the leave (`none`, `leaving(token, onlyIfEntered)`), beside the position,
+  this history's own copy-mode entry and the pending rows and read.
+- **Events:** `scroll`, `refresh`, `pumpNext`, `answered(token, answer?)`,
+  `leaveRequested(onlyIfEntered)`, `leaveStarted`, `pumpDrained`,
+  `copyModeLeft`, `leaveEnded`, `joinedLeaveEnded`.
+- **Effects:** `startPump`, `request(rows)`, `pumpEnded`, `startLeave`,
+  `joinLeave`, `leaveCopyMode`, `leaveAgain`, `publishPosition`,
+  `availabilityChanged`. One request at a time takes everything pending; a
+  failed one drops the rest. A leave refuses scrolls at once, drops pending
+  rows in its own first step, waits out the request in flight, then leaves
+  copy mode only from copy mode, and a departure only from copy mode its
+  own scroll entered (AGENTS.md copy-mode facts); a failed leave still
+  reads live. A joining departure never stands in for input's leave.
+- **Tests:** `PaneHistoryScrollMachineTests`, `PaneHistoryDeferredOwnerTests`,
+  `TmuxPaneHistoryTests`, `TerminalInputControllerTests`.
+- **Catalogue:** ATTACH-18.
+
+```mermaid
+stateDiagram-v2
+    state Pump {
+        [*] --> idle
+        idle --> running: scroll or refresh, no leave / startPump(token)
+        running --> requesting: pumpNext, something pending / request
+        requesting --> running: answered
+        requesting --> idle: answered failure / pumpEnded
+        running --> idle: pumpNext, nothing pending / pumpEnded
+    }
+    state Leave {
+        [*] --> none
+        none --> leaving: leaveRequested / startLeave(token)
+        leaving --> leaving: leaveRequested / joinLeave
+        leaving --> leaving: leaveStarted / drop pending
+        leaving --> leaving: pumpDrained, in copy mode it may leave / leaveCopyMode
+        leaving --> leaving: copyModeLeft / position live
+        leaving --> none: leaveEnded
+    }
+```
+
 **Ultimate, herdr-core, Codex and OpenCode transports**
 
 ### CoreLinkMachine
@@ -5659,14 +5924,14 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | convert (deferred: overlapping queued recovery, contact-check and leave/rejoin awaits own PTY/input teardown; preserve end versus abandon and route guards with Mac execution first). Safety net: `AttachLifecycleCharacterizationTests`, existing `AgentAttachStoreTests` | P2c |
+| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | converted → `AttachLifecycleMachine` (the link-open and transcript-read ids stay as they are, ATTACH-22) | P2c |
 | ATTACH-02 | Terminal recovery generation latch | `Sources/Waycar/Console/AttachTerminalStore.swift` | explicit | H/M | converted → `TerminalRecoveryGenerationMachine` | P2c |
-| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | convert (deferred: overlapping stop, upgrade and fallback awaits plus session/input identity and blank-frame grace need Mac execution before consolidation). Safety net: `AttachLifecycleCharacterizationTests`, existing `AttachTerminalStoreTests` | P2c |
+| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; a stop during the mosh invalidation a restart awaits is still followed by one self-ending run, as before | P2c |
 | ATTACH-04 | Viewed-Done acknowledgement | `Sources/Waycar/Console/AgentFocusCoordinator.swift` | explicit | H/M | converted → `ViewedDoneMachine` | P2c |
 | ATTACH-05 | Terminal cache entry retention | `Sources/Waycar/Console/AgentTerminalCache.swift` | explicit | H/H | converted → `AgentTerminalRetentionMachine` | P2c |
 | ATTACH-06 | Byte feed and surface binding | `Sources/Waycar/Terminal/TerminalByteFeed.swift` | implicit | M/M | leave: one-way latch | — |
 | ATTACH-07 | Last frame | `Sources/Waycar/Terminal/TerminalLastFrame.swift` | explicit | H/M | converted → `TerminalLastFrameMachine` | P2c |
-| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | convert (deferred: protected-disk load/merge/sweep and queued JPEG completion need Mac persistence verification); owner safety net `AgentLastFrameDeferredOwnerTests` | P2c |
+| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | converted → `AgentLastFrameIndexMachine` | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
 | ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | converted → `DirectKeyboardHandoffMachine` (the Composer-to-Direct handoff); the update-time claim, acceptance and inset release keep their callback order. The tools/system presentation flags stay view state resolved by `AgentDirectInputPresentation`. Pins: `ComposerDirectHandoffLifecycleTests` | P2c |
@@ -5674,9 +5939,9 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
 | ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | converted → `SurfaceKeyboardFreezeMachine`; the queued reload and leash carry the cycle token, effects keep the layout/thaw order. Pins: `TerminalSurfaceFreezeLifecycleTests` | P2c |
 | ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
-| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
-| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
-| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
+| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | converted → `MessageJumpFrameWaitMachine` | P2c |
+| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | converted → `MessageJumpSessionMachine` | P2c |
+| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
 | ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | converted → `ShellOpeningMachine`; one Task per attempt runs its steps and finishes it after the last effects. Hosted pins: `ShellOpeningLifecycleTests` | P2c |
@@ -5881,7 +6146,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | fixed (P4, `cecc0d6b`): on tmux the unset runs inside `if-shell -F` only while the pane records that session or none; core and Zellij keep the read-then-write window |
 | B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | fixed (P4, `3259a4a6`): on tmux both hooks write a conditional status inside `if-shell -F` only while `@waycar_seq` is the one read; core and Zellij keep the read-then-write window |
 | B-36 | NOTIF-13 | An iCloud pass finishing after disable publishes Last Checked and retries connections | fixed (P1, `cbf8e38c`) |
-| B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | open |
+| B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | fixed (P2c, `ee94df49`): the cancel names its question's token in `HostKeyTrustMachine`. The regression test holds the cancel's main-actor hop through a `cancellationHop` test seam, nil in production |
 | B-38 | OPENCODE-04 | After Cancel on an OpenCode approval the card says Done, and can turn Idle after a reconnect | fixed (P3a, `a932d087`): confirmed live on 2.2.7 (a reject's `interrupted` has reason `shutdown` and writes no `time.idle`, now pinned in `opencode-contract.py`); such an end keeps the last result's times |
 | B-39 | OPENCODE-09 | After a desk session is archived, a new `opencode` in the same pane stays hidden and its card has no Show Terminal (tmux, or herdr without the opencode integration; unconfirmed) | open (P3a: not in the transport; needs a live check of what session a reused pane reports on tmux and herdr without the integration) |
 | B-40 | OPENCODE-08 | A Chat Mode OpenCode launch whose Chat Prompt write fails reports failure but leaves the new session listed (endpoint unverified below 2.2.7) | fixed (P3a, `1a6a5d6d`, `9053e09d`): the form's Retry finishes that same session (`LaunchRetryIdentityMachine.retryingOpenCodeSession`); queued and uncertain replays already kept their pinned id |
