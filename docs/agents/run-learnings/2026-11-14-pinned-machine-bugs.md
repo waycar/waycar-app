@@ -12,6 +12,9 @@
   (`Task { gate.release(); await leave() }`): the released continuation is
   queued first. A gate whose `wait()` is nonisolated resumes off the main
   actor first, so the order is not fixed.
+- **Watch out:** a fix that adds the fact it decides on (B-39's session
+  creation time) leaves no test that compiles on the base: prove red with
+  the same flow test minus that one fact line.
 - **Watch out:** a restart Task that awaits a `@MainActor` closure resumes
   its caller without another hop, so a counter bumped at the closure's end
   proves the code right after the await has run: wait for that, not for a

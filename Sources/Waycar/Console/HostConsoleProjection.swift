@@ -1430,6 +1430,7 @@ final class HostConsoleProjection {
             if let server = backend.serverChat {
                 let sessionID = server.sessionID(paneID: agent.paneID)
                 nextAgents[agent.paneID]?.serverSessionOrigin = serverLinkFacts.sessionOrigins[sessionID]
+                nextAgents[agent.paneID]?.serverSessionCreatedAt = serverLinkFacts.sessionCreatedAt[sessionID]
             }
             if backend == .ultimate {
                 nextAgents[agent.paneID]?.isUltimateLeader = ultimateChildren[agent.paneID] != nil

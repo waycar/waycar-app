@@ -166,6 +166,9 @@ Entries reference the issue that motivated them.
   and a second tap no longer reconnects it twice.
 - **Last screens saved while locked**: an Agent's last screen saved while
   your iPhone was locked now still shows after Waycar restarts.
+- **Archived OpenCode chats**: when the desk terminal of an archived chat
+  starts a new session, that session's card now opens the terminal with Show
+  Terminal, instead of the terminal staying hidden with the archived chat.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

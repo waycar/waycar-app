@@ -67,6 +67,7 @@ struct ConsoleAgent: Identifiable, Sendable, Equatable {
     /// (`ServerSessionLinks`), never persisted.
     var paneCommandLine: String?
     var serverSessionOrigin: String?
+    var serverSessionCreatedAt: Date?
     /// The terminal pane hidden behind this server session's Show Terminal.
     var linkedTerminal: TerminalLink?
     var canShowTerminal: Bool { backend.hasTerminal || linkedTerminal != nil }

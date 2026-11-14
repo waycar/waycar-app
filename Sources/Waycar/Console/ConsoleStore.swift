@@ -5286,7 +5286,30 @@ final class ConsoleStore {
         serverLinkedPanes = Set(rows.map(\.id)).subtracting(links.rows.map(\.id))
         serverSessionTerminals = links.terminals
         serverFolderLinkedSessions = links.linkedByFolder
+        retireYieldedPins(links.yieldedPins)
         agents = sortedAgents(links.rows, sortAs: unread.displayed)
+    }
+
+    /// Archive pins that gave way to a newer desk session (B-39): the pane is
+    /// that session's now, by folder, so its pin goes, here and on the Host,
+    /// and Resume of the archived session opens a pane of its own. Deleting
+    /// the Host's copy is best effort: the marker refresh deletes it again
+    /// while the Host still lists it.
+    private func retireYieldedPins(_ panes: [ConsoleAgent.TerminalLink]) {
+        guard !panes.isEmpty else { return }
+        for pane in panes { chatMode.retire(pane.id) }
+        Task { [weak self] in
+            guard let self else { return }
+            for pane in panes {
+                do {
+                    try await withChatMarkers(on: pane.id.hostID, backend: pane.backend) { transport in
+                        try await transport.deleteChatModeMarker(paneID: pane.id.paneID)
+                    }
+                } catch {
+                    Self.log.error("Chat Marker delete failed: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func sortedAgents(

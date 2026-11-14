@@ -510,20 +510,44 @@ struct OpenCodeFlowsTests {
         }
     }
 
-    /// B-39 pin, open: a plain TUI that Archive pinned to its session can
-    /// move on to a new desk session unseen (its New session, or a relaunch
-    /// whose shell gap no inventory sees; O27). Its pane still matches the
-    /// pin, so it stays hidden behind the archived session and the new
-    /// session gets no terminal.
-    @Test func anArchivePinnedPaneStaysHiddenWhenItsTUIMovesOnUnseen() {
+    /// B-39: a plain TUI that Archive pinned to its session can move on to a
+    /// new desk session unseen (its New session, or a relaunch whose shell
+    /// gap no inventory sees; O27). The pin gives way to the one desk
+    /// session in its folder created after it; an older one, or two, prove
+    /// nothing and the pane stays hidden with the archived session.
+    @Test func anArchivePinGivesWayOnlyToANewerDeskSessionAloneInItsFolder() {
         let plain = pane(line: "opencode")
+        let pinnedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let pin = ChatModeMarker(paneID: plain.agent.paneID, terminalID: plain.agent.terminalID, kind: "opencode",
-            cwd: "/work/app", session: .init(kind: "id", value: "ses_a"), chatMode: false, launchedAt: .now)
+            cwd: "/work/app", session: .init(kind: "id", value: "ses_a"), chatMode: false, launchedAt: pinnedAt)
         let archived = [ConsoleScope(hostID: host.id, backend: .opencode): Set(["ses_a"])]
-        let resolved = ServerSessionLinks.resolve([plain, sessionRow("ses_b")], archived: archived) { _ in pin }
-        #expect(resolved.rows.map(\.agent.paneID) == ["opencode:ses_b"])
-        #expect(resolved.rows.first?.linkedTerminal == nil)
-        #expect(resolved.terminals[.init(hostID: host.id, paneID: "opencode:ses_a")]?.id == plain.id)
+        let archivedRow = ConsoleAgent.ID(hostID: host.id, paneID: "opencode:ses_a")
+        func session(_ id: String, createdAfterPin seconds: TimeInterval) -> ConsoleAgent {
+            var row = sessionRow(id)
+            row.serverSessionCreatedAt = pinnedAt.addingTimeInterval(seconds)
+            return row
+        }
+        let newer = session("ses_b", createdAfterPin: 60)
+        let moved = ServerSessionLinks.resolve([plain, newer], archived: archived) { _ in pin }
+        #expect(moved.rows.map(\.agent.paneID) == ["opencode:ses_b"])
+        #expect(moved.rows.first?.linkedTerminal?.id == plain.id)
+        #expect(moved.linkedByFolder == [newer.id])
+        #expect(moved.yieldedPins == [.init(id: plain.id, backend: .tmux)])
+        #expect(moved.terminals[archivedRow] == nil)
+        for sessions in [[session("ses_b", createdAfterPin: -60)], [newer, session("ses_c", createdAfterPin: 90)]] {
+            let kept = ServerSessionLinks.resolve([plain] + sessions, archived: archived) { _ in pin }
+            #expect(kept.yieldedPins.isEmpty)
+            #expect(kept.terminals[archivedRow]?.id == plain.id)
+            #expect(!kept.rows.contains { $0.id == plain.id })
+        }
+        // Another plain TUI in that folder keeps the folder match it had.
+        let other = pane("tmux:%2", line: "opencode")
+        let shared = ServerSessionLinks.resolve([plain, other, newer], archived: archived) {
+            $0 == plain.id ? pin : nil
+        }
+        #expect(shared.yieldedPins.isEmpty)
+        #expect(shared.rows.first { $0.id == newer.id }?.linkedTerminal?.id == other.id)
+        #expect(shared.terminals[archivedRow]?.id == plain.id)
     }
 
     @Test func aJoinedLaunchsChatMarkerLinksAHerdrPane() {
@@ -608,6 +632,46 @@ struct OpenCodeFlowsTests {
                     opencode: OpenCodeConsoleChatTests.running)
             })
         return (store, terminal, opencode)
+    }
+
+    /// B-39 end to end: after Archive pinned a plain desk TUI, that TUI
+    /// moves on unseen and its next prompt makes a newer desk session in
+    /// the same folder. The new session's card gets the pane, and the pin
+    /// is retired here and on the Host.
+    @Test func anArchivePinGivesWayToTheNewerDeskSessionItsTUIStarted() async throws {
+        let (store, terminal, opencode) = linkedPaneFixture()
+        defer { store.setHosts([]) }
+        let paneID = ConsoleAgent.ID(hostID: host.id, paneID: "tmux:%1")
+        await terminal.setServerSessionLinkFacts(.init(commandLines: ["tmux:%1": "opencode"]))
+        await opencode.setServerSessionLinkFacts(.init(sessionOrigins: ["ses_a": "user"]))
+        store.setHosts([host])
+        await store.resume()
+        try await waitUntil { store.agents.count == 1 && store.agents.first?.linkedTerminal?.id == paneID }
+        let row = try #require(store.agents.first)
+        store.scheduleTabClose(row)
+        try await waitUntil { await opencode.closedTabs == [TabTarget(tabID: "opencode:ses_a")] }
+        let pin = try #require(store.chatMode.marker(for: paneID))
+        try await waitUntil { await terminal.chatModeMarkerWrites.contains { $0.session == pin.session } }
+        await opencode.setSnapshot(.fixture(workspaces: [.fixture(workspaceID: "opencode:cwd:/work/app", label: "app")]))
+        await opencode.setArchivedServerSessions([ArchivedServerSession(
+            sessionID: "ses_a", title: "Task", directory: "/work/app",
+            workspaceID: "opencode:cwd:/work/app", archivedAt: Date())])
+        #expect(await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
+        try await waitUntil { !store.closedSessions.listedSessions.isEmpty }
+        #expect(!store.agents.contains { $0.id == paneID }, "the pinned pane hides with the archived session")
+
+        await opencode.setServerSessionLinkFacts(.init(
+            sessionOrigins: ["ses_b": "user"],
+            sessionCreatedAt: ["ses_b": pin.launchedAt.addingTimeInterval(60)]))
+        await opencode.setSnapshot(.fixture(
+            agents: [OpenCodeConsoleChatTests.session("ses_b", status: .idle)],
+            workspaces: [.fixture(workspaceID: "opencode:cwd:/work/app", label: "app")]))
+        #expect(await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
+        let newer = ConsoleAgent.ID(hostID: host.id, paneID: "opencode:ses_b")
+        try await waitUntil { store.agents.first { $0.id == newer }?.linkedTerminal?.id == paneID }
+        #expect(store.agents.count == 1)
+        #expect(store.chatMode.marker(for: paneID) == nil)
+        try await waitUntil { await terminal.chatModeMarkerDeletes.contains("tmux:%1") }
     }
 
     /// The pane names the session on its command line, or (`byFolder`) is

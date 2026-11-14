@@ -312,14 +312,19 @@ actor OpenCodeTransport: Transport {
 
     /// Where each session came from: a Waycar launch leaves
     /// `metadata.waycar`, a desk session has no `metadata` (O9, O11). Only
-    /// `user` sessions join the folder link (`ServerSessionLinks`).
+    /// `user` sessions join the folder link (`ServerSessionLinks`). And when
+    /// each was created, for the Archive pin's yield (B-39).
     func serverSessionLinkFacts() async -> ServerSessionLinkFacts {
-        ServerSessionLinkFacts(sessionOrigins: sessions.mapValues { session in
-            switch session.metadata?["waycar"] {
-            case nil, .null?: "user"
-            default: "waycar"
-            }
-        })
+        ServerSessionLinkFacts(
+            sessionOrigins: sessions.mapValues { session in
+                switch session.metadata?["waycar"] {
+                case nil, .null?: "user"
+                default: "waycar"
+                }
+            },
+            sessionCreatedAt: sessions.compactMapValues { session in
+                session.created > 0 ? Date(timeIntervalSince1970: session.created / 1000) : nil
+            })
     }
 
     /// Keeps `entry` among the archived sessions, at most `archivedCap`.

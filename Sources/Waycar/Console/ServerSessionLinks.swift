@@ -9,6 +9,10 @@ struct ServerSessionLinkFacts: Sendable {
     /// reports it (Codex: `Thread.threadSource`, not the legacy `source`,
     /// which both clients send as vscode).
     var sessionOrigins: [String: String] = [:]
+    /// When each server session was created, by session id, as its Backend
+    /// reports it (OpenCode: `time.created`); the Archive pin gives way only
+    /// to a session created after it.
+    var sessionCreatedAt: [String: Date] = [:]
 }
 
 /// One card per server chat session (`ServerChatBackend`). Resolve strong
@@ -26,6 +30,9 @@ enum ServerSessionLinks {
         /// session is never matched by folder, so Archive pins that pane
         /// first (`ConsoleStore.pinFolderLinkedTerminal(of:)`).
         var linkedByFolder: Set<ConsoleAgent.ID> = []
+        /// The panes whose Archive pin gave way to a newer desk session in
+        /// their folder (B-39): their markers are to be retired.
+        var yieldedPins: [ConsoleAgent.TerminalLink] = []
     }
 
     static func merge(
@@ -46,12 +53,14 @@ enum ServerSessionLinks {
         var links: [ConsoleAgent.ID: ConsoleAgent.TerminalLink] = [:]
         var hidden: Set<ConsoleAgent.ID> = []
         var linkedByFolder: Set<ConsoleAgent.ID> = []
+        var yieldedPins: [ConsoleAgent.TerminalLink] = []
         for (hostID, hostRows) in Dictionary(grouping: rows, by: \.hostID) {
             for server in ServerChatBackend.allCases {
                 linkSessions(
                     hostRows, on: server,
                     archived: archived[ConsoleScope(hostID: hostID, backend: server.backend)] ?? [],
-                    marker: marker, links: &links, hidden: &hidden, linkedByFolder: &linkedByFolder)
+                    marker: marker, links: &links, hidden: &hidden, linkedByFolder: &linkedByFolder,
+                    yieldedPins: &yieldedPins)
             }
         }
         let merged = rows.compactMap { row -> ConsoleAgent? in
@@ -60,19 +69,23 @@ enum ServerSessionLinks {
             row.linkedTerminal = links[row.id]
             return row
         }
-        return Resolution(rows: merged, terminals: links, linkedByFolder: linkedByFolder)
+        return Resolution(
+            rows: merged, terminals: links, linkedByFolder: linkedByFolder, yieldedPins: yieldedPins)
     }
 
     /// Links one Host's panes to `server`'s sessions: the pane's Chat
     /// Marker, else the session its command line names, else a one-to-one
     /// same-folder match between an unnamed, unpinned pane and a listed desk
-    /// session.
+    /// session. An Archive pin gives way to that match only for a session
+    /// created after it (B-39): nothing says which session a plain TUI
+    /// shows (O27), so a new desk session alone in its folder is the TUI's.
     private static func linkSessions(
         _ hostRows: [ConsoleAgent], on server: ServerChatBackend, archived: Set<String>,
         marker: (ConsoleAgent.ID) -> ChatModeMarker?,
         links: inout [ConsoleAgent.ID: ConsoleAgent.TerminalLink],
         hidden: inout Set<ConsoleAgent.ID>,
-        linkedByFolder: inout Set<ConsoleAgent.ID>
+        linkedByFolder: inout Set<ConsoleAgent.ID>,
+        yieldedPins: inout [ConsoleAgent.TerminalLink]
     ) {
         let kind = server.agentKind.rawValue
         let sessions = hostRows.filter { $0.backend == server.backend }
@@ -94,6 +107,9 @@ enum ServerSessionLinks {
         /// Panes whose marker names a session, listed or not: the folder
         /// rule never links them to another one.
         var pinned: Set<ConsoleAgent.ID> = []
+        /// Archive pins, by pane: a plain marker on a plain TUI naming an
+        /// archived session, and when it was made.
+        var yielding: [ConsoleAgent.ID: (session: ConsoleAgent.ID, since: Date)] = [:]
         for pane in orderedPanes {
             guard let pin = marker(pane.id), pin.kind == kind, pin.applies(to: pane.agent),
                 let reference = pin.session, reference.kind == "id", !reference.value.isEmpty
@@ -103,6 +119,12 @@ enum ServerSessionLinks {
             // OpenCode 2 pane always joins the shared server.
             guard !pin.chatMode || server == .opencode, let session = sessionNamed(reference.value)
             else { continue }
+            if server.archivesSessions, !pin.chatMode, archived.contains(reference.value),
+                paneLink(pane.paneCommandLine, on: server) == .unnamed
+            {
+                yielding[pane.id] = (session, pin.launchedAt)
+                continue
+            }
             link(pane, to: session)
         }
         for pane in orderedPanes where !hidden.contains(pane.id) {
@@ -125,6 +147,26 @@ enum ServerSessionLinks {
             else { continue }
             link(pane, to: session.id)
             linkedByFolder.insert(session.id)
+        }
+        // An Archive pin alone in a folder no other pane joins takes the one
+        // desk session there, if it is newer than the pin.
+        let yieldingByFolder = Dictionary(grouping: orderedPanes.filter {
+            yielding[$0.id] != nil && !$0.agent.cwd.isEmpty
+        }, by: { canonicalDirectory($0.agent.cwd) })
+        for (cwd, panes) in yieldingByFolder {
+            guard panes.count == 1, let pane = panes.first, let pin = yielding[pane.id], candidates[cwd] == nil,
+                let sessions = unmatchedSessions[cwd], sessions.count == 1, let session = sessions.first,
+                links[session.id] == nil, let created = session.serverSessionCreatedAt, created > pin.since
+            else { continue }
+            yielding[pane.id] = nil
+            yieldedPins.append(.init(id: pane.id, backend: pane.backend))
+            link(pane, to: session.id)
+            linkedByFolder.insert(session.id)
+        }
+        // A pin no newer session took keeps its pane hidden with its session.
+        for pane in orderedPanes {
+            guard let pin = yielding[pane.id] else { continue }
+            link(pane, to: pin.session)
         }
     }
 
