@@ -333,6 +333,100 @@ struct WaycarSSHTransportBehaviorE2ETests {
         await replacement.end()
     }
 
+    /// An Attach whose remote command exits at once may end before
+    /// `attachTerminal` has recorded it, or after: either way its target is
+    /// free again once its output has finished, since the session reports the
+    /// end before it finishes the output (HERDR-08).
+    @Test("an Attach that exits at once frees its target")
+    func attachExitingAtOnceFreesItsTarget() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(settings: environment.directSettings())
+        defer { Task { try? await transport.close() } }
+
+        for _ in 0..<5 {
+            let attach = try await transport.attachTerminal(
+                TerminalAttachRequest(target: "fixture:exitnow", cols: 80, rows: 24))
+            var iterator = attach.output.makeAsyncIterator()
+            while try await iterator.next() != nil {}
+        }
+        #expect(try await transport.ping().protocolVersion == 17)
+    }
+
+    /// A Transport whose session another holder keeps open ends its own
+    /// Attaches on close, and leaves their targets free for the next
+    /// Transport on that session (design §4.1, HERDR-08).
+    @Test("close ends a live Attach while another holder keeps the session")
+    func closeEndsLiveAttachesOnASharedSession() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let settings = environment.directSettings()
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
+
+        let attach = try await transport.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var iterator = attach.output.makeAsyncIterator()
+        var output = ""
+        try await expectAttachOutput(&iterator, accumulated: &output, contains: "TTY-OK")
+
+        try await transport.close()
+        #expect(try await iterator.next() == nil)
+        #expect(await session.isOpen)
+
+        #expect(await session.retain())
+        let next = WaycarSSHTransport(session: session, settings: settings)
+        defer { Task { try? await next.close() } }
+        let reattached = try await next.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var reattachedIterator = reattached.output.makeAsyncIterator()
+        var reattachedOutput = ""
+        try await expectAttachOutput(
+            &reattachedIterator, accumulated: &reattachedOutput, contains: "TTY-OK")
+        await reattached.end()
+    }
+
+    /// B-32: a closed Transport opens no Attach, even while another holder
+    /// keeps its session open. The Transport would never end one (its close
+    /// is done, and a repeated close returns at once), and while it runs it
+    /// holds herdr's resize lock on the pane. It is refused as every request
+    /// on a closed Transport is, before anything opens, so the target stays
+    /// free for the next holder.
+    @Test("a closed Transport refuses an Attach while another holder keeps the session")
+    func closedTransportRefusesAttachOnASharedSession() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let settings = environment.directSettings()
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
+        try await transport.close()
+        #expect(await session.isOpen)
+
+        let outcome: Result<TerminalAttachSession, any Error>
+        do {
+            outcome = .success(
+                try await transport.attachTerminal(
+                    TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24)))
+        } catch {
+            outcome = .failure(error)
+        }
+        if case .success(let opened) = outcome { await opened.end() }
+        #expect(throws: TransportError.sshUnreachable(detail: "the SSH connection is closed")) {
+            _ = try outcome.get()
+        }
+
+        #expect(await session.retain())
+        let next = WaycarSSHTransport(session: session, settings: settings)
+        defer { Task { try? await next.close() } }
+        let attach = try await next.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var iterator = attach.output.makeAsyncIterator()
+        var output = ""
+        try await expectAttachOutput(&iterator, accumulated: &output, contains: "TTY-OK")
+        await attach.end()
+    }
+
     @Test("nonzero Attach exit reports the primary channel failure and wakes input")
     func failedAttachExitFreesChannel() async throws {
         let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
@@ -2463,6 +2557,82 @@ struct WaycarSSHTransportBehaviorE2ETests {
         }
     }
 
+    /// A replay that finds its earlier try's launch still pending settles it
+    /// at once: the earlier dispatch time is gone, so the settle starts at
+    /// recovery and skips the delay (HERDR-10).
+    @Test("a recovered pending launch is settled at once, without the delay")
+    func recoveredPendingLaunchIsSettledAtOnce() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        var settings = Self.worktreeLaunchSettings(environment)
+        settings.launchSettleDelay = .seconds(600)
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("pendingagent")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let agent = try await transport.startAgent(AgentLaunchRequest(
+            kind: "codex", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true))
+        #expect(agent.paneID == "pane:\(token)")
+
+        let poll = #"agent.get {"target":"pane:\#(token)"}"#
+        try await waitUntil {
+            try await Self.recordedRequests(from: transport, token: token).contains(poll)
+        }
+    }
+
+    /// Closing the Transport cancels a settle in the middle of its poll
+    /// (HERDR-10). The fixture holds the settle's first `agent.get`
+    /// unanswered (`launchheld`), and another holder keeps the session open,
+    /// so only the close's cancellation can end that poll: its channel
+    /// closes at once, well inside a request budget longer than the wait,
+    /// the settle ends cancelled with its slot cleared, and no `agent.get`
+    /// follows.
+    @Test("closing the Transport ends its launch settle")
+    func closingTheTransportEndsItsLaunchSettle() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        var settings = environment.directSettings()
+        settings.requestTimeout = .seconds(120)
+        settings.launchSettleDelay = .zero
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
+        defer { Task { try? await transport.close() } }
+        let reader = try await WaycarSSHTransport.connect(
+            settings: Self.settingsWithoutLaunchSettle(environment))
+        defer { Task { try? await reader.close() } }
+
+        let token = Self.scriptToken("launchheld")
+        let agent = try await transport.startAgent(
+            AgentLaunchRequest(
+                kind: "codex",
+                name: "fixture",
+                workspaceID: "workspace-1",
+                cwd: "/fixture/\(token)"))
+        let recorded: @Sendable () async throws -> [String] = {
+            try await Self.recordedRequests(from: reader, token: token)
+        }
+        let poll = #"agent.get {"target":"pane:\#(token)"}"#
+        try await waitUntil { try await recorded().contains(poll) }
+        let polling = await transport.launchSettleForTesting(paneID: agent.paneID)
+        #expect(polling.settle?.phase == .polling)
+        #expect(polling.taskSlots == 1)
+
+        try await transport.close()
+        let closed = await transport.launchSettleForTesting(paneID: agent.paneID)
+        #expect(closed.settle?.phase == .cancelled)
+        #expect(closed.taskSlots == 0)
+        let heldClosed = "fixture.held_request_closed"
+        try await waitUntil { try await recorded().contains(heldClosed) }
+        #expect(await session.isOpen)
+
+        // A short window after the poll's end: a settle that outlived the
+        // close would ask again within it (every 1 s while pending).
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(try await recorded().filter { $0.hasPrefix("agent.get ") } == [poll])
+    }
+
     /// herdr 0.9.1 promotes an opencode launch about 3.5 s after
     /// `agent.start` and acks `agent.prompt` from then on, but opencode's TUI
     /// drops typed input until its input box draws (11–42 s on a 2-vCPU
@@ -2717,6 +2887,112 @@ struct WaycarSSHTransportBehaviorE2ETests {
             let recorded = try await Self.recordedRequests(from: transport, token: token)
             #expect(Self.methods(recorded) == ["tab.create", "agent.start", "agent.prompt"])
         }
+    }
+
+    /// Kept as it is (HCT-03): `closePane` drops the pane's input gate and
+    /// remembered kind before herdr answers, so after a refused close a fresh
+    /// opencode Agent has neither. Its next prompt asks `agent.get` for the
+    /// kind (the fixture names codex) and goes out with no screen read.
+    @Test("a refused pane close has already dropped its launch's input gate")
+    func refusedPaneCloseHasDroppedTheInputGate() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.settingsWithoutLaunchSettle(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("opencodegroup")
+        let agent = try await transport.startAgent(
+            AgentLaunchRequest(
+                kind: "opencode", name: "fixture", workspaceID: "workspace-1",
+                cwd: "/fixture/\(token)"))
+        let params = AgentPromptParams(target: agent.paneID, text: "fixture prompt")
+        await #expect(throws: AgentInputNotReadyError.self) {
+            _ = try await transport.promptAgent(params)
+        }
+        await #expect(
+            throws: HerdrAPIError(
+                code: "confirmation_required",
+                message: "closing this tab would close a worktree group")
+        ) {
+            try await transport.closePane(
+                PaneTarget(paneID: agent.paneID), closesWorktreeGroup: false)
+        }
+
+        _ = try await transport.promptAgent(params)
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(
+            Self.methods(recorded)
+                == ["tab.create", "agent.start", "pane.read", "pane.close", "agent.get",
+                    "agent.prompt"])
+    }
+
+    /// Kept as it is (HCT-04): a kind herdr lists for a pane replaces the
+    /// remembered kind but not the launch's input gate, so a prompt still
+    /// waits for the launched kind's marker. Here a replay finds the earlier
+    /// try's Agent and gates it as opencode, then `agent.list` names codex.
+    @Test("a kind herdr lists for a gated pane keeps the launch's input gate")
+    func listedKindKeepsTheInputGate() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.worktreeLaunchSettings(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("rootagent")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let agent = try await transport.startAgent(AgentLaunchRequest(
+            kind: "opencode", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true))
+        #expect(agent.paneID == "pane:\(token)")
+        let listed = try await transport.listAgents()
+        #expect(listed.first { $0.paneID == agent.paneID }?.kind == "codex")
+
+        do {
+            _ = try await transport.promptAgent(
+                AgentPromptParams(target: agent.paneID, text: "fixture prompt"))
+            Issue.record("a prompt went out past the launch's input gate")
+        } catch let held as AgentInputNotReadyError {
+            #expect(held.kind == "opencode")
+        }
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(Self.methods(recorded).last == "pane.read")
+        #expect(!Self.methods(recorded).contains("agent.prompt"))
+    }
+
+    /// A prompt's screen read authorizes only the gate it read for: a gate a
+    /// replay installs for the same pane while that read is out survives the
+    /// prompt, which goes out on the box it saw, and the next prompt reads
+    /// the screen again (HERDR-11). The fixture holds the first read until
+    /// the replay has returned, so the replacement lands inside it.
+    @Test("a gate replaced during a prompt's screen read survives that prompt")
+    func gateReplacedDuringAScreenReadSurvivesThatPrompt() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.worktreeLaunchSettings(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("rootheld")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let launch = AgentLaunchRequest(
+            kind: "opencode", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true)
+        let agent = try await transport.startAgent(launch)
+        let params = AgentPromptParams(target: agent.paneID, text: "fixture prompt")
+
+        async let first = transport.promptAgent(params)
+        let arrived = try await transport.readPane(
+            PaneReadParams(paneID: "fixture:await-read:\(token)", source: .recent))
+        #expect(arrived.text == "observed")
+        let replayed = try await transport.startAgent(launch)
+        #expect(replayed.paneID == agent.paneID)
+        _ = try await transport.readPane(
+            PaneReadParams(paneID: "fixture:release-read:\(token)", source: .recent))
+        _ = try await first
+        _ = try await transport.promptAgent(params)
+
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(
+            Self.methods(recorded).filter { $0 == "pane.read" || $0 == "agent.prompt" }
+                == ["pane.read", "agent.prompt", "pane.read", "agent.prompt"])
     }
 
     /// The new-Workspace half of the same compensation: a refused launch

@@ -150,6 +150,9 @@ Entries reference the issue that motivated them.
   past its time limit.
 - **Adding a Host**: a host-key question that appears just as an earlier
   check is cancelled is no longer declined on its own.
+- **Agent terminals on herdr**: an Agent's terminal no longer opens on a
+  connection Waycar has already let go of, where it could keep the Agent's
+  pane at your phone's size.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

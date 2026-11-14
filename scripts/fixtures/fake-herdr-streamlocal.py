@@ -44,6 +44,10 @@ LAUNCH_DEADLINE_SECONDS = 4.0
 AGENT_NOT_READY_CODE = "agent_not_ready"
 # Recorded under the token when a late `agent.get` clears the managed name.
 LAUNCH_NAME_CLEARED = "fixture.launch_name_cleared"
+# `launchheld` is a `launchworking` launch whose every `agent.get` is held
+# unanswered (recorded on arrival) until the client closes its channel, when
+# this is recorded under the token.
+HELD_REQUEST_CLOSED = "fixture.held_request_closed"
 # Worktree launch scripts (`_worktree_launch_state`). Each keeps its token's
 # worktree and Agents in every `worktree.list`, `agent.list` and
 # `session.snapshot` from the token's first request until its recorded
@@ -62,6 +66,10 @@ LAUNCH_NAME_CLEARED = "fixture.launch_name_cleared"
 #   existingkinds: the worktree was already open before the launch; with a
 #   codex Agent, with none, with none and a refused `agent.start`, for a
 #   shell launch, and with a claude then a codex Agent.
+#   rootheld: rootagent, whose pane shows opencode's input box, and whose
+#   first `pane.read` is answered only once the test releases it
+#   (`fixture:release-read:<token>`; `fixture:await-read:<token>` waits
+#   until that read has arrived).
 WORKTREE_LAUNCH_BEHAVIORS = frozenset(
     {
         "createhangs",
@@ -70,6 +78,7 @@ WORKTREE_LAUNCH_BEHAVIORS = frozenset(
         "slowcreate",
         "lostcreate",
         "rootagent",
+        "rootheld",
         "pendingagent",
         "envagent",
         "envorphan",
@@ -133,10 +142,14 @@ GROK_TRUST = "\n".join(
 )
 # A user's close of a main checkout's last tab or pane, which herdr 0.9.x
 # refuses because it would take the linked worktree Workspaces too.
-WORKTREE_GROUP_BEHAVIORS = frozenset({"worktreegroup", "worktreegroupraced"})
+# `opencodegroup` is a fresh opencode launch whose box never draws, in such
+# a pane.
+WORKTREE_GROUP_BEHAVIORS = frozenset({"worktreegroup", "worktreegroupraced", "opencodegroup"})
 SCREEN_BEHAVIORS = {
     "opencodebox": ("", OPENCODE_INPUT_BOX),
     "opencodeblank": ("", ""),
+    "opencodegroup": ("", ""),
+    "rootheld": (OPENCODE_INPUT_BOX, OPENCODE_INPUT_BOX),
     "clinerow": ("", CLINE_COMPOSER),
     "signin": (CURSOR_SIGN_IN, ""),
     "groktrust": (GROK_TRUST, ""),
@@ -187,6 +200,8 @@ class Server:
         self.hang_requests = _OneShotBarrier(self.hang_condition)
         self.pane_hangs = _OneShotBarrier(self.hang_condition)
         self.pane_delays = _OneShotBarrier(self.hang_condition)
+        self.held_reads = _OneShotBarrier(self.hang_condition)
+        self.read_releases = _OneShotBarrier(self.hang_condition)
         self.script_lock = threading.Lock()
         self.recorded_requests: dict[str, list[str]] = {}
         self.agent_start_attempts: dict[str, int] = {}
@@ -263,7 +278,26 @@ class Server:
                 "fixture:await-hang:",
             )
             record_query = self._fixture_token(pane_id, RECORD_QUERY_PREFIX)
-            if method == "pane.read" and pane_delay_token is not None:
+            await_read_token = self._fixture_token(pane_id, "fixture:await-read:")
+            release_read_token = self._fixture_token(pane_id, "fixture:release-read:")
+            if method == "pane.read" and (
+                await_read_token is not None or release_read_token is not None
+            ):
+                if await_read_token is not None:
+                    observed = self.held_reads.wait(await_read_token)
+                else:
+                    self.read_releases.record(release_read_token)
+                    observed = True
+                response = {
+                    "id": envelope.get("id"),
+                    "result": self._pane_read_result(
+                        pane_id,
+                        "observed" if observed else "not observed",
+                    ),
+                }
+                payload = json.dumps(response, separators=(",", ":")).encode() + b"\n"
+                chunk_size = 7
+            elif method == "pane.read" and pane_delay_token is not None:
                 self.pane_delays.record(pane_delay_token)
                 # Must outlast the 2s Attach-echo bound in the app's "RPC does
                 # not stall Attach" tests with room for the observer's reply,
@@ -346,6 +380,19 @@ class Server:
                         return
                     if method == "worktree.create" and behavior == "slowcreate":
                         time.sleep(SLOW_CREATE_SECONDS)
+                    if method == "agent.get" and behavior == "launchheld":
+                        if self._held_until_client_closes(connection):
+                            with self.script_lock:
+                                self.recorded_requests.setdefault(token, []).append(
+                                    HELD_REQUEST_CLOSED
+                                )
+                        return
+                    if method == "pane.read" and behavior == "rootheld":
+                        with self.script_lock:
+                            first_read = self.screen_reads.get(token, 0) == 0
+                        if first_read:
+                            self.held_reads.record(token)
+                            self.read_releases.wait(token)
                 launch = self._launch_race_response(method, params, token)
                 error = None if launch is not None else self._scripted_error(method, token)
                 if launch is not None:
@@ -413,9 +460,13 @@ class Server:
         launch clears the name and the gate instead, and records
         `LAUNCH_NAME_CLEARED`. `agent.list` and `agent.prompt` never reconcile.
         """
-        if token is None or token.split(":")[1] not in ("launchrace", "launchworking"):
+        if token is None or token.split(":")[1] not in (
+            "launchrace",
+            "launchworking",
+            "launchheld",
+        ):
             return None
-        working = token.split(":")[1] == "launchworking"
+        working = token.split(":")[1] in ("launchworking", "launchheld")
         pane_id = "pane:" + token
         request = params if isinstance(params, dict) else {}
         with self.script_lock:
@@ -803,7 +854,7 @@ class Server:
             if state is not None:
                 return state
         agents = []
-        if behavior == "rootagent":
+        if behavior in ("rootagent", "rootheld"):
             agents.append(
                 self._agent("pane:" + token, "workspace:" + token, tab_id="tab:" + token)
             )
@@ -834,7 +885,8 @@ class Server:
                 )
             )
         state = {
-            "made": behavior in ("lostcreate", "rootagent", "pendingagent", "envagent", "envorphan")
+            "made": behavior
+            in ("lostcreate", "rootagent", "rootheld", "pendingagent", "envagent", "envorphan")
             or behavior.startswith("existing"),
             "agents": agents,
             "env_tab": behavior in ("envagent", "envorphan"),
@@ -845,6 +897,20 @@ class Server:
     def _live_worktree_launches(self) -> list[tuple[str, dict]]:
         with self.script_lock:
             return [(token, dict(state)) for token, state in self.worktree_launches.items()]
+
+    @staticmethod
+    def _held_until_client_closes(connection: socket.socket) -> bool:
+        """Leaves a request unanswered; True once the client closed the
+        channel, False if it was still open after the cap."""
+        connection.settimeout(HUNG_CREATE_CAP_SECONDS)
+        try:
+            while connection.recv(1024):
+                pass
+        except socket.timeout:
+            return False
+        except OSError:
+            return True
+        return True
 
     @staticmethod
     def _hold_until_closed(connection: socket.socket) -> None:

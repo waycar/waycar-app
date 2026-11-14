@@ -38,10 +38,6 @@ actor WaycarSSHTransport: Transport {
     private let requestTimeout: Duration
     private let shellReadinessBudget: Duration
     private let shellReadinessRetryDelay: Duration
-    private let launchSettleDelay: Duration
-    private let launchSettleInterval: Duration
-    private let launchSettleWindow: Duration
-    private let inputReadyTimeout: Duration
     private let worktreeCreateTimeout: Duration
     private let worktreeReconcileBudget: Duration
     private let worktreeReconcileInterval: Duration
@@ -53,8 +49,9 @@ actor WaycarSSHTransport: Transport {
     private let codexHelpCommand: String
     private let notificationPlugin = SharedAsyncOperation<NotificationPlugin>(cachesSuccess: true)
     private let codexNoDaemon = SharedAsyncOperation<Bool>(cachesSuccess: true)
-    /// True once `close()` has released this Transport's hold on the session.
-    private var closed = false
+    /// True from the start of `close()`, which releases this Transport's
+    /// hold on the session.
+    private var closed: Bool { attachOwnership.isClosed }
 
     private enum EventsChannelState: Equatable {
         case idle
@@ -69,36 +66,20 @@ actor WaycarSSHTransport: Transport {
     /// outlives this Transport.
     private var eventsReaders: [UInt64: Task<Void, Never>] = [:]
 
-    private enum TerminalChannelState: Equatable {
-        case opening
-        case streaming(readerID: UInt64)
-    }
-
-    private var terminalChannelStates: [TerminalAttachTarget: TerminalChannelState] = [:]
-    private var nextTerminalReaderID: UInt64 = 0
-    /// Attach channels that ended before `attachTerminal` recorded them.
-    private var endedTerminalReaders: Set<UInt64> = []
-    /// Live Attaches, so `close()` can end them when the session outlives
-    /// this Transport.
+    /// Whether this Transport takes Attaches (and is open at all), and who
+    /// owns each Attach target.
+    private var attachOwnership = AttachOwnershipMachine()
+    /// Live Attaches by reader, so `close()` can end them when the session
+    /// outlives this Transport.
     private var liveAttaches: [UInt64: TerminalAttachSession] = [:]
     /// The post-start settle per launched pane (`scheduleLaunchSettle`).
+    private var launchSettle: LaunchSettleMachine
+    /// Its running Tasks, per pane.
     private var launchSettles: [String: Task<Void, Never>] = [:]
 
-    /// A launch this Transport started whose prompts wait until the Agent
-    /// takes input (`awaitAgentInput`), per its kind's
-    /// `AgentScreen.InputReadiness`.
-    private struct InputGate: Equatable {
-        let kind: String
-        let readiness: AgentScreen.InputReadiness
-        /// Until then nothing goes out (`InputReadiness.minimumDelay`).
-        let readyAt: ContinuousClock.Instant
-        /// The input hold ends here: with a marker, `inputReadyTimeout`
-        /// after the launch; without, at ``readyAt``.
-        let opensAt: ContinuousClock.Instant
-    }
-
-    /// Open input gates by pane id (`gateAgentInput`).
-    private var inputGates: [String: InputGate] = [:]
+    /// The input gates of launches this Transport started, whose prompts
+    /// wait until the Agent takes input (`awaitAgentInput`).
+    private var inputGate: AgentInputGateMachine
 
     /// Agent kinds by prompt target (pane id, or the name an `agent.get`
     /// was asked for), as launched here or as herdr last listed them
@@ -131,10 +112,13 @@ actor WaycarSSHTransport: Transport {
         self.requestTimeout = requestTimeout
         shellReadinessBudget = SSHTransportSettings.defaultShellReadinessBudget
         shellReadinessRetryDelay = SSHTransportSettings.defaultShellReadinessRetryDelay
-        launchSettleDelay = SSHTransportSettings.defaultLaunchSettleDelay
-        launchSettleInterval = SSHTransportSettings.defaultLaunchSettleInterval
-        launchSettleWindow = SSHTransportSettings.defaultLaunchSettleWindow
-        inputReadyTimeout = SSHTransportSettings.defaultInputReadyTimeout
+        launchSettle = LaunchSettleMachine(
+            timing: LaunchSettleMachine.Timing(
+                delay: SSHTransportSettings.defaultLaunchSettleDelay,
+                interval: SSHTransportSettings.defaultLaunchSettleInterval,
+                window: SSHTransportSettings.defaultLaunchSettleWindow))
+        inputGate = AgentInputGateMachine(
+            inputReadyTimeout: SSHTransportSettings.defaultInputReadyTimeout)
         worktreeCreateTimeout = SSHTransportSettings.defaultWorktreeCreateTimeout
         worktreeReconcileBudget = SSHTransportSettings.defaultWorktreeReconcileBudget
         worktreeReconcileInterval = SSHTransportSettings.defaultWorktreeReconcileInterval
@@ -155,10 +139,12 @@ actor WaycarSSHTransport: Transport {
         requestTimeout = settings.requestTimeout
         shellReadinessBudget = settings.shellReadinessBudget
         shellReadinessRetryDelay = settings.shellReadinessRetryDelay
-        launchSettleDelay = settings.launchSettleDelay
-        launchSettleInterval = settings.launchSettleInterval
-        launchSettleWindow = settings.launchSettleWindow
-        inputReadyTimeout = settings.inputReadyTimeout
+        launchSettle = LaunchSettleMachine(
+            timing: LaunchSettleMachine.Timing(
+                delay: settings.launchSettleDelay,
+                interval: settings.launchSettleInterval,
+                window: settings.launchSettleWindow))
+        inputGate = AgentInputGateMachine(inputReadyTimeout: settings.inputReadyTimeout)
         worktreeCreateTimeout = settings.worktreeCreateTimeout
         worktreeReconcileBudget = settings.worktreeReconcileBudget
         worktreeReconcileInterval = settings.worktreeReconcileInterval
@@ -173,7 +159,7 @@ actor WaycarSSHTransport: Transport {
     deinit {
         // A Transport dropped without `close()` still returns its hold, so a
         // shared connection is not kept open for it.
-        guard !closed else { return }
+        guard !attachOwnership.isClosed else { return }
         let session = session
         Task { await session.release() }
     }
@@ -363,35 +349,42 @@ actor WaycarSSHTransport: Transport {
     /// fails `AgentFolderTrustRequiredError`, since the prompt's text or
     /// Enter would answer it.
     private func awaitAgentInput(target: String) async throws {
-        let now = ContinuousClock.now
-        inputGates = inputGates.filter { now < $0.value.opensAt }
-        let gate = inputGates[target]
-        if let gate, now < gate.readyAt {
-            throw AgentInputNotReadyError(kind: gate.kind, target: target, opensAt: gate.readyAt)
-        }
-        // A gate past its `readyAt` that is still open waits for a marker.
-        let marker = gate?.readiness.marker
+        guard
+            case .resolveKind(let check)? = try performInputGate(
+                inputGate.handle(.promptArrived(target: target, now: .now)))
+        else { return }
         let kind = try await agentKind(of: target)
-        let readiness = kind.map(AgentScreen.readiness(kind:))
-        let readsScreen = readiness.map { $0.hasSignInScreen || $0.hasTrustDialog } ?? false
-        guard marker != nil || readsScreen else { return }
+        guard
+            case .readScreen? = try performInputGate(
+                inputGate.handle(.kindResolved(check, kind: kind)))
+        else { return }
         let screen: PaneReadResult
         do {
             screen = try await readPane(PaneReadParams(paneID: target, source: .visible))
         } catch let error as HerdrAPIError where error.code == "pane_not_found" {
             // The pane closed: nothing will take input there any more.
-            if let gate { forgetInputGate(gate, paneID: target) }
+            _ = inputGate.handle(.paneGone(check))
             agentKinds[target] = nil
             throw error
         }
-        if let kind { try Self.refuseInputScreen(kind: kind, target: target, screen: screen.text) }
-        if let gate, let marker {
-            guard AgentScreen.inputIsOnScreen(marker, screen: screen.text) else {
-                throw AgentInputNotReadyError(
-                    kind: gate.kind, target: target, opensAt: gate.opensAt)
+        _ = try performInputGate(
+            inputGate.handle(.screenRead(check, kind: kind, screen: screen.text)))
+    }
+
+    /// Throws the refusal `AgentInputGateMachine` answered, else returns
+    /// the step it asks for next (nil: none).
+    private func performInputGate(
+        _ effects: [AgentInputGateMachine.Effect]
+    ) throws -> AgentInputGateMachine.Effect? {
+        for effect in effects {
+            switch effect {
+            case .hold(let error): throw error
+            case .refuseSignIn(let error): throw error
+            case .refuseFolderTrust(let error): throw error
+            case .resolveKind, .readScreen, .admit: return effect
             }
-            forgetInputGate(gate, paneID: target)
         }
+        return nil
     }
 
     /// The screen check ``awaitAgentInput(target:)`` runs, for the kind of
@@ -409,12 +402,10 @@ actor WaycarSSHTransport: Transport {
     /// screen, `AgentFolderTrustRequiredError` while it shows its
     /// folder-trust dialog.
     private static func refuseInputScreen(kind: String, target: String, screen: String) throws {
-        let readiness = AgentScreen.readiness(kind: kind)
-        if readiness.hasSignInScreen, AgentScreen.signInRequired(kind: kind, screen: screen) {
-            throw AgentSignInRequiredError(kind: kind, target: target)
-        }
-        if readiness.hasTrustDialog, AgentScreen.trustDialogShown(kind: kind, screen: screen) {
-            throw AgentFolderTrustRequiredError(kind: kind, target: target)
+        switch AgentInputGateMachine.screenRefusal(kind: kind, target: target, screen: screen) {
+        case .refuseSignIn(let error)?: throw error
+        case .refuseFolderTrust(let error)?: throw error
+        case .hold, .resolveKind, .readScreen, .admit, nil: return
         }
     }
 
@@ -446,21 +437,8 @@ actor WaycarSSHTransport: Transport {
         kind: String, paneID: String, launchedAt: ContinuousClock.Instant
     ) {
         agentKinds[paneID] = kind
-        let readiness = AgentScreen.readiness(kind: kind)
-        guard readiness.gatesLaunch else {
-            inputGates[paneID] = nil
-            return
-        }
-        let readyAt = launchedAt + readiness.minimumDelay
-        inputGates[paneID] = InputGate(
-            kind: kind, readiness: readiness, readyAt: readyAt,
-            opensAt: readiness.marker == nil ? readyAt : launchedAt + inputReadyTimeout)
-    }
-
-    /// Drops `gate`, unless a later launch in `paneID` replaced it while
-    /// its screen was being read.
-    private func forgetInputGate(_ gate: InputGate, paneID: String) {
-        if inputGates[paneID] == gate { inputGates[paneID] = nil }
+        // A launch answers no effect: it only sets or clears the gate.
+        _ = inputGate.handle(.launched(pane: paneID, kind: kind, at: launchedAt))
     }
 
     func sendAgentKeys(_ params: AgentSendKeysParams) async throws {
@@ -1383,22 +1361,66 @@ actor WaycarSSHTransport: Transport {
         paneID: String, dispatchedAt startedAt: ContinuousClock.Instant = .now,
         immediately: Bool = false
     ) {
-        launchSettles[paneID]?.cancel()
-        let windowEnd = startedAt + launchSettleWindow
-        let firstPause = immediately
-            ? .zero : max(.zero, ContinuousClock.now.duration(to: startedAt + launchSettleDelay))
-        let interval = launchSettleInterval
-        launchSettles[paneID] = Task { [weak self] in
-            var pause = firstPause
-            while true {
-                try? await Task.sleep(for: pause)
-                guard !Task.isCancelled, ContinuousClock.now < windowEnd, let self,
-                    await self.launchStillPending(paneID: paneID, windowEnd: windowEnd)
-                else { break }
-                pause = interval
+        performLaunchSettle(
+            launchSettle.handle(
+                .scheduled(
+                    pane: paneID, startedAt: startedAt, now: .now, immediately: immediately)))
+    }
+
+    /// Performs `LaunchSettleMachine`'s effects; true when they ask the
+    /// settle to poll again.
+    @discardableResult
+    private func performLaunchSettle(_ effects: [LaunchSettleMachine.Effect]) -> Bool {
+        var pollsAgain = false
+        for effect in effects {
+            switch effect {
+            case .cancelTask(let paneID):
+                launchSettles[paneID]?.cancel()
+            case .startTask(let paneID, let token, let firstPause, let interval, let windowEnd):
+                launchSettles[paneID] = Task { [weak self] in
+                    var pause = firstPause
+                    var ending = LaunchSettleMachine.Ending.stopped
+                    while true {
+                        try? await Task.sleep(for: pause)
+                        guard !Task.isCancelled else {
+                            ending = .cancelled
+                            break
+                        }
+                        guard ContinuousClock.now < windowEnd else {
+                            ending = .expired
+                            break
+                        }
+                        guard let self,
+                            await self.pollLaunchSettle(
+                                paneID: paneID, token: token, windowEnd: windowEnd)
+                        else { break }
+                        pause = interval
+                    }
+                    await self?.endLaunchSettle(paneID: paneID, token: token, ending: ending)
+                }
+            case .pollAgain:
+                pollsAgain = true
+            case .releaseSlot(let paneID):
+                launchSettles[paneID] = nil
+            case .cancelAllTasks:
+                for settle in launchSettles.values { settle.cancel() }
+                launchSettles.removeAll()
             }
-            await self?.endLaunchSettle(paneID: paneID)
         }
+        return pollsAgain
+    }
+
+    /// One settle `agent.get` for `token`'s settle; true while it should
+    /// poll again. The request goes out whatever the machine's state, as it
+    /// always did: a replaced settle's Task is cancelled and stops at its
+    /// next pause.
+    private func pollLaunchSettle(
+        paneID: String, token: UInt64, windowEnd: ContinuousClock.Instant
+    ) async -> Bool {
+        performLaunchSettle(launchSettle.handle(.pollStarted(pane: paneID, token: token)))
+        let result = await launchStillPending(paneID: paneID, windowEnd: windowEnd)
+        return performLaunchSettle(
+            launchSettle.handle(.polled(pane: paneID, token: token, result)))
     }
 
     /// One settle `agent.get`. `agent_not_found` counts as pending, since
@@ -1406,7 +1428,7 @@ actor WaycarSSHTransport: Transport {
     private func launchStillPending(
         paneID: String,
         windowEnd: ContinuousClock.Instant
-    ) async -> Bool {
+    ) async -> LaunchSettleMachine.PollResult {
         do {
             let info = try await request(
                 method: "agent.get",
@@ -1415,18 +1437,21 @@ actor WaycarSSHTransport: Transport {
                 beforeDispatch: {
                     guard ContinuousClock.now < windowEnd else { throw CancellationError() }
                 })
-            return info.agent.launchPending == true
+            return info.agent.launchPending == true ? .pending : .notPending
         } catch let error as HerdrAPIError where error.code == "agent_not_found" {
-            return true
+            return .pending
         } catch {
-            return false
+            return .failed
         }
     }
 
-    private func endLaunchSettle(paneID: String) {
-        // A cancelled settle was replaced or closed; its slot is not its own.
-        guard !Task.isCancelled else { return }
-        launchSettles[paneID] = nil
+    /// A replaced or closed settle's slot is not its own
+    /// (`LaunchSettleMachine`).
+    private func endLaunchSettle(
+        paneID: String, token: UInt64, ending: LaunchSettleMachine.Ending
+    ) {
+        performLaunchSettle(
+            launchSettle.handle(.ended(pane: paneID, token: token, ending)))
     }
 
     /// Closes a Pane (`pane.close`). herdr 0.9.x refuses, with
@@ -1437,7 +1462,7 @@ actor WaycarSSHTransport: Transport {
     /// so the group closes (`closeWorktreeGroup`); any other close keeps
     /// the refusal.
     func closePane(_ params: PaneTarget, closesWorktreeGroup: Bool) async throws {
-        inputGates[params.paneID] = nil
+        _ = inputGate.handle(.paneClosed(pane: params.paneID))
         agentKinds[params.paneID] = nil
         do {
             _ = try await request(
@@ -1966,6 +1991,14 @@ actor WaycarSSHTransport: Transport {
         try await session.readRemoteFileForTesting(at: path)
     }
 
+    /// `paneID`'s launch settle as `LaunchSettleMachine` holds it, and how
+    /// many settle Tasks still hold a slot.
+    func launchSettleForTesting(
+        paneID: String
+    ) -> (settle: LaunchSettleMachine.PaneSettle?, taskSlots: Int) {
+        (launchSettle[paneID], launchSettles.count)
+    }
+
     func replacePluginConfigFileForTesting(named name: String, contents: Data) async throws {
         try await replacePluginConfigFile(named: name, contents: contents)
     }
@@ -2125,14 +2158,14 @@ actor WaycarSSHTransport: Transport {
     /// on for another backend keeps its connection, so this Transport ends
     /// its own events and Attach channels itself (design §4.1).
     func close() async throws {
-        guard !closed else { return }
-        closed = true
-        for settle in launchSettles.values { settle.cancel() }
-        launchSettles.removeAll()
-        inputGates.removeAll()
+        guard attachOwnership.handle(.closeRequested) == [.takeLiveAttaches] else { return }
+        defer { _ = attachOwnership.handle(.closeFinished) }
+        performLaunchSettle(launchSettle.handle(.closed))
+        _ = inputGate.handle(.closed)
         agentKinds.removeAll()
         let readers = Array(eventsReaders.values)
         eventsReaders.removeAll()
+        // `takeLiveAttaches`, where close always took them.
         let attaches = Array(liveAttaches.values)
         liveAttaches.removeAll()
         try await session.releaseReportingTeardown()
@@ -2681,16 +2714,21 @@ actor WaycarSSHTransport: Transport {
         }
     }
 
+    /// A closed Transport opens no Attach, before anything opens (B-32):
+    /// its session may live on for another holder, and its close, already
+    /// done, would never end an Attach recorded after it.
     func attachTerminal(
         _ request: TerminalAttachRequest
     ) async throws -> TerminalAttachSession {
-        guard terminalChannelStates[request.target] == nil else {
+        let target = request.target
+        let readerID: UInt64
+        switch performAttachOwnership(attachOwnership.handle(.attachRequested(target))) {
+        case .open(let reader)?: readerID = reader
+        case .refuse(let error)?: throw error
+        // `attachRequested` always opens or refuses.
+        case .keep?, .forget?, .takeLiveAttaches?, nil:
             throw TransportError.terminalChannelAlreadyOpen
         }
-        let target = request.target
-        terminalChannelStates[target] = .opening
-        nextTerminalReaderID &+= 1
-        let readerID = nextTerminalReaderID
 
         do {
             let socketPath = try await resolvedSocketPath()
@@ -2710,17 +2748,38 @@ actor WaycarSSHTransport: Transport {
                 onChannelEnded: { [weak self] in
                     await self?.attachChannelDidEnd(target: target, readerID: readerID)
                 })
-            if endedTerminalReaders.remove(readerID) != nil {
-                terminalChannelStates.removeValue(forKey: target)
-            } else {
-                terminalChannelStates[target] = .streaming(readerID: readerID)
-                liveAttaches[readerID] = attach
-            }
+            performAttachOwnership(
+                attachOwnership.handle(.opened(target, reader: readerID)), attach: attach)
             return attach
         } catch {
-            terminalChannelStates.removeValue(forKey: target)
+            performAttachOwnership(attachOwnership.handle(.openFailed(target, reader: readerID)))
             throw error
         }
+    }
+
+    /// Performs `AttachOwnershipMachine`'s effects on the recorded
+    /// Attaches (`attach` is the one an `opened` event names), and returns
+    /// the admission effect, `open` or `refuse`, for `attachTerminal`.
+    @discardableResult
+    private func performAttachOwnership(
+        _ effects: [AttachOwnershipMachine.Effect],
+        attach: TerminalAttachSession? = nil
+    ) -> AttachOwnershipMachine.Effect? {
+        var admission: AttachOwnershipMachine.Effect?
+        for effect in effects {
+            switch effect {
+            case .open, .refuse:
+                admission = effect
+            case .keep(let reader):
+                liveAttaches[reader] = attach
+            case .forget(let reader):
+                liveAttaches[reader] = nil
+            case .takeLiveAttaches:
+                // `close()` takes them at the point it always did.
+                break
+            }
+        }
+        return admission
     }
 
     /// Builds the PTY-less exec that bootstraps one mosh session. Mirrors
@@ -2881,11 +2940,7 @@ actor WaycarSSHTransport: Transport {
     /// again. A channel that ends before `attachTerminal` has recorded it is
     /// remembered, so that call does not record a dead channel.
     private func attachChannelDidEnd(target: TerminalAttachTarget, readerID: UInt64) {
-        liveAttaches[readerID] = nil
-        if terminalChannelStates[target] == .streaming(readerID: readerID) {
-            terminalChannelStates.removeValue(forKey: target)
-        } else {
-            endedTerminalReaders.insert(readerID)
-        }
+        performAttachOwnership(
+            attachOwnership.handle(.channelEnded(target, reader: readerID)))
     }
 }
