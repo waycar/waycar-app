@@ -496,6 +496,49 @@ struct EventsSessionResilienceTests {
         await session.end()
     }
 
+    // MARK: Liveness (HERDR-04)
+
+    /// A revalidation's round trip is kept before the stale-channel check
+    /// refuses to publish it: one answered after its channel was replaced
+    /// still times the next revalidation (2 s from a zero round trip, not
+    /// the 5 s an unmeasured one gets).
+    @Test func aRevalidationAnsweredOnAReplacedChannelStillTimesTheNextOne() async throws {
+        let transport = ScriptedTransport()
+        let connector = SequencedTransportConnector([transport])
+        let clock = ScriptedLivenessClock()
+        let session = EventsSession(
+            subscriptions: subscriptions,
+            connect: { try await connector.connect() },
+            reconnectPolicy: Self.fastReconnect,
+            keepalive: nil,
+            clock: clock.clock)
+        let log = UpdateLog(following: session)
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 1)
+
+        let first = ScriptedTransportCallGate()
+        await transport.gateNextPing(using: first)
+        let stale = Task { await session.revalidate() }
+        await first.waitForEntry()
+        #expect(await clock.waitForSleep(Self.revalidateDeadline))
+        await session.updateSubscriptions(
+            subscriptions + [.pane(.agentStatusChanged, paneID: "w1:p1")])
+        try await log.waitForStatus(.connected, count: 2)
+        await first.open()
+        await stale.value
+
+        let second = ScriptedTransportCallGate()
+        await transport.gateNextPing(using: second)
+        let next = Task { await session.revalidate() }
+        await second.waitForEntry()
+        #expect(await clock.waitForSleep(Self.deadline))
+        await second.open()
+        await next.value
+        #expect(await transport.revalidateCount == 2)
+        #expect(await !log.sawReconnecting)
+        await session.end()
+    }
+
     // MARK: Connection selection (HERDR-02)
 
     /// The kept connection's probe reserves a generation of its own: one

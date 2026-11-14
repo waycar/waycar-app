@@ -89,6 +89,47 @@ struct EventsSessionSampleLatencyTests {
         await session.end()
     }
 
+    /// A sample whose channel was replaced while its ping was out fails on a
+    /// channel the session no longer listens on: the failure takes no
+    /// keepalive path, and the Host stays connected (HERDR-04).
+    @Test func aSampleFailingAfterItsChannelWasReplacedIsIgnored() async throws {
+        let transport = ScriptedTransport()
+        // Ping 1 is the connect path; ping 2 is the sample.
+        await transport.failPing(atCall: 2, with: .timedOut)
+        let connector = SequencedTransportConnector([transport])
+        let clock = ScriptedLivenessClock()
+        let session = EventsSession(
+            subscriptions: subscriptions,
+            connect: { try await connector.connect() },
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            keepalive: nil,
+            clock: clock.clock)
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let pingGate = ScriptedTransportCallGate()
+        await transport.gateNextPing(using: pingGate)
+        let sample = Task { await session.sampleLatency() }
+        await pingGate.waitForEntry()
+        await session.updateSubscriptions(
+            subscriptions + [.pane(.agentStatusChanged, paneID: "w1:p1")])
+        #expect(await updates.next() == .status(.connected))
+        await pingGate.open()
+        #expect(await sample.value == false)
+
+        // The replacement channel is still the live one: its next event is
+        // the next update, with no `.reconnecting` before it.
+        #expect(await transport.emit(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(
+            await updates.next()
+                == .event(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(await connector.connectCount == 1)
+        await session.end()
+    }
+
     @Test func aFailedSampleTakesTheKeepaliveFailurePath() async throws {
         let first = ScriptedTransport()
         let second = ScriptedTransport()
