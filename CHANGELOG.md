@@ -52,6 +52,9 @@ Entries reference the issue that motivated them.
 - **Commands that finished but looked stuck**: a short command Waycar runs
   on a Host (checks, tmux and Codex actions) no longer waits out its whole
   timeout when its output and its end arrive at the same moment.
+- **Showing a runtime again**: turning Herdr Core, tmux or Zellij back on for
+  a Host turns its notifications back on too, also when the change restarts
+  the Host's connection.
 - **Hosts with a program that never answers**: checking a Host no longer
   stalls when one of its programs never answers, such as a Codex that macOS
   hasn't approved yet on a Mac you reach over SSH. Waycar gives it a few
