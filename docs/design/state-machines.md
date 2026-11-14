@@ -5371,6 +5371,57 @@ stateDiagram-v2
     windingDown --> ended: endWoundDown / announce
 ```
 
+### EventsConnectionMachine
+
+- **File:** `Sources/Waycar/Transport/EventsConnectionMachine.swift`
+- **Owner:** `EventsSession` keeps the objects under the generations the
+  machine names (`currentTransport`, `provisional` with its rejection, the
+  kept probe's handout), makes the provisional Transport in
+  `offerToTerminals`, and performs the pool hops (probe, retire, release)
+  and every Transport identity check (`isSameTransport`), as before.
+- **States:** `stage` is `absent`, `kept`, `provisional`, `proven` or
+  `distrusted`, derived from the installed connection (generation and
+  pooled connection), the generation offered ahead of its `ping`, the
+  connection kept across a suspension (and since when), the kept probe's
+  generation, trust, the published generation and the last reserved one.
+  The survey's `preparing` and `retiring` hold no state of their own: a
+  dial or setup in flight is the lifecycle's dial, and a retirement is a
+  pool call the owner awaits with nothing to observe in between.
+- **Events:** `offer`, `reserve`, `install(generation, connection)`,
+  `provisionalFailed(generation)`, `distrust`, `suspect`, `drop`,
+  `keep(id, since)`, `takeKept(now)`, `probeOffered(generation)`,
+  `probeSettled`, `probeAbandoned`, `end`, `windDownStarted`, `woundDown`.
+- **Effects:** `offer(generation)`, `reserved(generation)`,
+  `publish(generation)`, `uninstall`, `forgetProvisional`, `probeKept(id)`,
+  `retireKept(id)`, `releaseKept(id)`, `holdProbe`, `forgetProbe`. Every
+  new connection reserves the next generation, and one whose `ping` fails
+  burns it; a distrusted connection is never kept, never handed to
+  terminals, and replaced by the next connect; one kept past
+  `keptConnectionMaxAge` is retired unprobed.
+- **Tests:** `EventsConnectionMachineTests`, `EventsSessionResilienceTests`,
+  `EventsSessionConnectFlowTests`, `EventsSessionSubscriptionsTests`
+  (distrust and silent replacement).
+- **Catalogue:** HERDR-02.
+
+```mermaid
+stateDiagram-v2
+    [*] --> absent
+    absent --> provisional: offer / reserve generation
+    provisional --> proven: install / publish
+    provisional --> absent: provisionalFailed (generation burned)
+    absent --> proven: reserve, install (hedge replacement)
+    proven --> distrusted: suspect
+    proven --> distrusted: distrust / uninstall
+    distrusted --> provisional: offer
+    distrusted --> proven: install
+    proven --> absent: drop / uninstall
+    proven --> kept: keep, windDown
+    kept --> provisional: takeKept / probeKept, offer, holdProbe
+    kept --> absent: takeKept, too old / retireKept
+    kept --> absent: end / releaseKept
+    distrusted --> absent: woundDown
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6176,7 +6227,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
 | HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | converted → `EventsLifecycleMachine` | P3d |
-| HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | convert | P3d |
+| HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | converted → `EventsConnectionMachine` | P3d |
 | HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
 | HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
 | HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |

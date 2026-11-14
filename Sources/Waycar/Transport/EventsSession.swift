@@ -199,21 +199,23 @@ actor EventsSession {
     /// cannot install itself after a later resume has already started.
     var activationGeneration: UInt64 { lifecycle.activation }
     private var isWindingDown: Bool { lifecycle.isWindingDown }
-    /// The Host's live Transport. It never escapes this module; consumers
-    /// use `withTransport` or `withTerminalTransport` so replacement and
-    /// terminal admission remain local.
-    var currentTransport: (any Transport)?
+    /// Which connection the session rides, the one offered ahead of its
+    /// `ping`, the one kept across a suspension, trust and generations
+    /// (HERDR-02). The objects stay here, set and dropped by its effects.
+    private(set) var selection = EventsConnectionMachine()
+    /// The Host's live Transport (`selection.state.installed`). It never
+    /// escapes this module; consumers use `withTransport` or
+    /// `withTerminalTransport` so replacement and terminal admission remain
+    /// local.
+    private(set) var currentTransport: (any Transport)?
     /// The pooled connection `currentTransport` rides; nil when unpooled.
-    var currentConnection: SharedConnection.ID?
+    var currentConnection: SharedConnection.ID? { selection.state.installed?.connection }
     /// The connection held open across the last suspension, and since when
     /// (#105). The next activation probes it instead of dialing.
-    var keptConnection: KeptConnection?
+    var keptConnection: KeptConnection? { selection.state.kept }
     /// What the kept connection's probe in flight has handed out
-    /// (`resumeKept`).
-    var keptProbe: KeptProbeHandout?
-    /// The generation the kept connection's probe offered terminals (#105):
-    /// attaches on it rode the connection kept across the suspension.
-    var keptTransportGeneration: UInt64?
+    /// (`resumeKept`; `selection.state.probe`).
+    private(set) var keptProbe: KeptProbeHandout?
     /// What set the next connect off, for its report (#105).
     private var connectTrigger: NetworkAnalytics.ConnectTrigger { lifecycle.state.trigger }
     /// The live events channel's loss, and when, until it is back or given
@@ -234,22 +236,16 @@ actor EventsSession {
     /// A new connection's Transport between its dial and its `ping`: already
     /// offered to terminals (attach first), not yet to RPCs, the events
     /// channel or `terminalTransportGenerations`. Closed with the activation
-    /// like `currentTransport`.
+    /// like `currentTransport` (`selection.state.provisional`).
     var provisional: ProvisionalTransport?
     /// Monotonic identity for the installed, ping-proven Transport.
     /// Subscription-only reconnects reuse the same Transport and therefore do
     /// not advance it.
-    private(set) var transportGeneration: UInt64 = 0
-    /// The generation most recently reserved for a new connection
-    /// (`reserveTransportGeneration`). A connection whose `ping` fails
-    /// burns its reservation, so terminals that rode it never share a
-    /// generation with the next one.
-    var reservedTransportGeneration: UInt64 = 0
-    var hasReservedTransportGeneration = false
+    var transportGeneration: UInt64 { selection.state.published }
     /// Set when the connection can no longer be trusted even though it may
     /// still look alive (a timed-out request or keepalive ping): the next
     /// reconnect replaces the transport instead of reusing it.
-    var transportSuspect = false
+    var transportSuspect: Bool { selection.isDistrusted }
     /// The keepalive failure that forced the current teardown, surfaced in
     /// the following `.reconnecting` status.
     private var pendingKeepaliveFailure: TransportError?
@@ -590,9 +586,7 @@ actor EventsSession {
             // wait, and a failing redial releases the waiter through the
             // run loop's announce with its real cause.
             if isSameTransport(currentTransport, transport) {
-                transportSuspect = true
-                currentTransport = nil
-                currentConnection = nil
+                connectionStep(.distrust)
                 // Dropped without `close()`, since Terminals may still use
                 // it; it gives up what its replacement on the same
                 // connection waits for (tmux's control slot). Detached, so
@@ -766,22 +760,19 @@ actor EventsSession {
     /// closes the Transport on it (#105), so the next activation can probe
     /// it instead of dialing. A pool hop: no network.
     private func keepConnectionAcrossSuspension() async {
-        guard currentTransport != nil, !transportSuspect, let connection = currentConnection,
-            await sharing.keep(connection)
-        else { return }
+        guard let connection = selection.keepable, await sharing.keep(connection) else { return }
         if let previous = keptConnection, previous.id != connection {
             await sharing.release(previous.id)
         }
-        keptConnection = KeptConnection(id: connection, since: clock.now())
+        connectionStep(.keep(id: connection, since: clock.now()))
     }
 
     private func finish() async {
         guard lifecycleStep(.end).contains(.windDown) else { return }
         settleLoss(recovered: false)
         await windDown()
-        if let kept = keptConnection {
-            keptConnection = nil
-            await sharing.release(kept.id)
+        for case .releaseKept(let kept) in connectionStep(.end) {
+            await sharing.release(kept)
         }
         lifecycleStep(.endWoundDown)
         updatesContinuation.finish()
@@ -919,7 +910,7 @@ actor EventsSession {
                 if failure == .timedOut {
                     // The connection swallowed a request whole; do not trust
                     // it for the retry even if it still looks alive.
-                    transportSuspect = true
+                    connectionStep(.suspect)
                 }
                 // A pane that exited between the snapshot behind this
                 // subscription set and this subscribe is an ordinary race,
@@ -1081,8 +1072,7 @@ actor EventsSession {
                 throw TransportError.cancelled
             }
             if isSameTransport(currentTransport, transport) {
-                currentTransport = nil
-                currentConnection = nil
+                connectionStep(.drop)
             }
             try? await transport.close()
         }
@@ -1129,15 +1119,42 @@ actor EventsSession {
             connectionMemory?.rememberProtocolVersion(info.protocolVersion)
         }
         publishLatency(latency)
-        provisional = nil
-        transportSuspect = false
+        connectionStep(.install(generation: generation, connection: connection), transport: transport)
         terminalTransportFailure = nil
         noteConnectionActivity()
-        currentTransport = transport
-        currentConnection = connection
-        transportGeneration = generation
         terminalTransportContinuation.yield(transportGeneration)
         resumeTransportWaiters(with: transport)
+    }
+
+    /// Feeds the connection machine and keeps the objects it names in step:
+    /// `transport` is the Transport an `.install` is about, `handout` what a
+    /// kept probe handed out. Returns the effects for the
+    /// caller, which performs the pool hops.
+    @discardableResult
+    func connectionStep(
+        _ event: EventsConnectionMachine.Event,
+        transport: (any Transport)? = nil,
+        handout: KeptProbeHandout? = nil
+    ) -> [EventsConnectionMachine.Effect] {
+        let effects = selection.handle(event)
+        for effect in effects {
+            switch effect {
+            case .publish:
+                currentTransport = transport
+            case .uninstall:
+                currentTransport = nil
+            case .forgetProvisional:
+                provisional = nil
+            case .holdProbe:
+                keptProbe = handout
+            case .forgetProbe:
+                keptProbe = nil
+            case .offer, .reserved, .probeKept, .retireKept, .releaseKept:
+                // `offerToTerminals` makes the provisional Transport.
+                break
+            }
+        }
+        return effects
     }
 
     /// A server that speaks another protocol voids the remembered one, so
@@ -1205,13 +1222,11 @@ actor EventsSession {
         }
         let stream = taken
         let transport = currentTransport
-        currentTransport = nil
-        currentConnection = nil
         // A connection still awaiting its ping may carry terminals already
         // (attach first): closing it ends them, so the wait below cannot
         // hang on a ping that ignores cancellation.
         let provisionalTransport = provisional?.transport
-        provisional = nil
+        connectionStep(.windDownStarted)
         // End the events channel before closing the transport it rides on.
         // Otherwise close can queue behind the still-running reader on the
         // same SSH session and turn a bounded teardown into an unbounded one.
@@ -1226,7 +1241,7 @@ actor EventsSession {
             await closeAll()
             await waitForTerminalIdle()
         }
-        transportSuspect = false
+        connectionStep(.woundDown)
         pendingKeepaliveFailure = nil
         lastConnectionActivity = nil
         terminalTransportFailure = nil
@@ -1351,7 +1366,7 @@ actor EventsSession {
     /// Whether a terminal on `generation` rides the connection kept across
     /// the last suspension.
     func ridesKeptConnection(generation: UInt64) -> Bool {
-        keptTransportGeneration == generation
+        selection.ridesKept(generation: generation)
     }
 
     /// `events.subscribe`, timed.
@@ -1428,7 +1443,7 @@ actor EventsSession {
     /// must not ride it again.
     private func keepaliveDidFail(_ failure: TransportError, on channel: EventsChannel) async {
         guard phase == .active, subscription.isLive(channel.id) else { return }
-        transportSuspect = true
+        connectionStep(.suspect)
         pendingKeepaliveFailure = failure
         if Self.isTransportLinkFailure(failure), let connection = currentConnection {
             await sharing.retire(connection)
@@ -1621,7 +1636,7 @@ actor EventsSession {
     }
 
     private func recordTerminalTransportFailure(_ failure: TransportError) {
-        guard currentTransport == nil || transportSuspect else { return }
+        guard selection.hasNoTrustedConnection else { return }
         terminalTransportFailure = failure
     }
 

@@ -50,6 +50,7 @@
 		0764A7CEEE671E3058FE80D3 /* TmuxLinkMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6497476EEE05C12541BE10A /* TmuxLinkMachine.swift */; };
 		0793DAE292DBD680EA218A25 /* ViewedDoneMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C97F2587744D71084464BDB /* ViewedDoneMachine.swift */; };
 		07A00E7CF9D188E06989DC3C /* TmuxChatMarkerRecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857EDCB74E5D219B7B66DA4D /* TmuxChatMarkerRecycleTests.swift */; };
+		07DAFEE669FC9521802E00CA /* EventsConnectionMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0773E28EED60BD71DDCF6467 /* EventsConnectionMachine.swift */; };
 		07E0E484482E7E4F5C6FAFCD /* UltimateSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83ED81213C7B88AF52377731 /* UltimateSnapshotBuilder.swift */; };
 		085FEE2D94C1CD2FE34E3CE8 /* ChatMarkerReadMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABACB77705E0C878AB785428 /* ChatMarkerReadMachineTests.swift */; };
 		08AB9B651595BE7FBB53BA88 /* PairingCeremonyMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B83225CDAEF9463FF36F19 /* PairingCeremonyMachineTests.swift */; };
@@ -253,6 +254,7 @@
 		2D80E7219B2DE2B61D1BB49E /* ChatPollingMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854781740F69F4491FCA769 /* ChatPollingMachineTests.swift */; };
 		2DDD77C8A9C8D32C83C29ED4 /* ToolbarEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C1E60A255FED32DE69E51 /* ToolbarEditorView.swift */; };
 		2E857355A319C92CCDCE345E /* TmuxInventoryPublicationMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64C7FD59FC64609C1035BCC /* TmuxInventoryPublicationMachine.swift */; };
+		2E9786EB7D04B7CC6409F53C /* EventsConnectionMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572FFDC9A251857C5CF4AEBF /* EventsConnectionMachineTests.swift */; };
 		2EBCD0EBCD92D0419D8CF595 /* TmuxAgentDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83BD3530CED909F91967DD3 /* TmuxAgentDetectionTests.swift */; };
 		2F21319ACD91B14C7A133184 /* AgentListFieldsAddFieldSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF388730FCE65ACA2C72C181 /* AgentListFieldsAddFieldSheet.swift */; };
 		2F712F9A6B0CA75C0B0A856C /* NotificationAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE455F574BEC5C6D55CF76E1 /* NotificationAsk.swift */; };
@@ -1541,6 +1543,7 @@
 		0651E20593ECA1A47FC92FF6 /* HostSSHSessionPoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSSHSessionPoolTests.swift; sourceTree = "<group>"; };
 		06DC70FD43D3A0A3925D48BF /* HostSSHSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSSHSession.swift; sourceTree = "<group>"; };
 		072D04C91F1E648F262B2CEF /* UltimateChatContextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltimateChatContextTests.swift; sourceTree = "<group>"; };
+		0773E28EED60BD71DDCF6467 /* EventsConnectionMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsConnectionMachine.swift; sourceTree = "<group>"; };
 		082A1C1CD6332206E6773EB1 /* AppIconCabooseSignal.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIconCabooseSignal.icon; sourceTree = "<group>"; };
 		082A2D3F96EC83D9156A2811 /* TerminalAttachTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalAttachTelemetry.swift; sourceTree = "<group>"; };
 		0832797234F0B2F833F3333A /* HerdrSocketLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrSocketLocationTests.swift; sourceTree = "<group>"; };
@@ -1987,6 +1990,7 @@
 		569A291CA48C6BF7ECDEBE2F /* CodexServerCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexServerCommandTests.swift; sourceTree = "<group>"; };
 		569E9F99887C75D6F21428E5 /* ZellijPresence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZellijPresence.swift; sourceTree = "<group>"; };
 		570148C5EFFEE711520F3F38 /* ClosePaneStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosePaneStore.swift; sourceTree = "<group>"; };
+		572FFDC9A251857C5CF4AEBF /* EventsConnectionMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsConnectionMachineTests.swift; sourceTree = "<group>"; };
 		578BE515ECBD699E72663C94 /* HostListViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostListViewTests.swift; sourceTree = "<group>"; };
 		57F1CC2EFC4228E55A82CF87 /* TmuxEventsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxEventsTests.swift; sourceTree = "<group>"; };
 		5818697BC5146B9129615379 /* ConsoleRuntimeStartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleRuntimeStartTests.swift; sourceTree = "<group>"; };
@@ -3157,6 +3161,7 @@
 				3AF3D719DC24194C34A93A8B /* DictationStoreTests.swift */,
 				36749F764B5B0CCED6E17A7E /* DirectKeyboardHandoffMachineTests.swift */,
 				3ACD1FA5F3169DDDA31877B5 /* EdgeDockSettingsTests.swift */,
+				572FFDC9A251857C5CF4AEBF /* EventsConnectionMachineTests.swift */,
 				974993DFF9C6346165753F3F /* EventsLifecycleMachineTests.swift */,
 				2A7BE75D0795BC1A8F6E9AFC /* EventsSessionBufferingTests.swift */,
 				5FA18370C1B21A42C26E153E /* EventsSessionConnectFlowTests.swift */,
@@ -4538,6 +4543,7 @@
 				4D9924E01DDDA82597051C2B /* ConnectionLiveness.swift */,
 				AE956D35B67C0CCE4C947AEC /* DeviceKey.swift */,
 				D69EFF1747B3E1D982331EFE /* DeviceKeyStore.swift */,
+				0773E28EED60BD71DDCF6467 /* EventsConnectionMachine.swift */,
 				98F31816B5817437EA0F8CAF /* EventsLifecycleMachine.swift */,
 				34FED785422BBFE035EC877D /* EventsSession.swift */,
 				6AC47A91F92D0CFC7A8E151A /* EventsSession+KeptConnection.swift */,
@@ -5435,6 +5441,7 @@
 				04376BC9031AF06A9A85C968 /* DirectKeyboardHandoffMachine.swift in Sources */,
 				E9826F22A6DA8182088DC36B /* EdgeDockLift.swift in Sources */,
 				9177EC7D760C872F1C697766 /* EdgeDockSettings.swift in Sources */,
+				07DAFEE669FC9521802E00CA /* EventsConnectionMachine.swift in Sources */,
 				FC1BA7F8273DDB9580B7B0C3 /* EventsLifecycleMachine.swift in Sources */,
 				D74EBEA5E4B20FFD68D266D9 /* EventsSession+KeptConnection.swift in Sources */,
 				6F244E5462ED50100085FF3B /* EventsSession.swift in Sources */,
@@ -6187,6 +6194,7 @@
 				97C06BB76CC7E911AD77F2B2 /* DictationStoreTests.swift in Sources */,
 				E5FD0C457581A3BF0C711A8C /* DirectKeyboardHandoffMachineTests.swift in Sources */,
 				1C926C6D99D46DC1E83FB985 /* EdgeDockSettingsTests.swift in Sources */,
+				2E9786EB7D04B7CC6409F53C /* EventsConnectionMachineTests.swift in Sources */,
 				6A8F5B765C802B7C119636B9 /* EventsLifecycleMachineTests.swift in Sources */,
 				E1FC3B9C680B7180C5D2FAA9 /* EventsSessionBufferingTests.swift in Sources */,
 				34001BFD640C24508DC88D9F /* EventsSessionConnectFlowTests.swift in Sources */,
