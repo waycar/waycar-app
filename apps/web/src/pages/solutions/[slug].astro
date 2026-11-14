@@ -6,6 +6,7 @@
 import { render } from 'astro:content';
 import AppStoreCta from '../../components/AppStoreCta.astro';
 import Prose from '../../components/Prose.astro';
+import SourceLink from '../../components/SourceLink.astro';
 import Layout from '../../layouts/Layout.astro';
 import { formatReleaseDate } from '../../lib/changelog.mjs';
 import { comparePath, getComparisons } from '../../lib/compare';
@@ -63,6 +64,7 @@ const schema = landingSchema({
       <div class="actions">
         <AppStoreCta kind="button">Get Waycar</AppStoreCta>
         <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
+        <SourceLink />
       </div>
     </header>
 
@@ -101,6 +103,7 @@ const schema = landingSchema({
       <div class="actions">
         <AppStoreCta kind="button">Get Waycar</AppStoreCta>
         <a class="btn btn-ghost btn-lg" href="/solutions">More solutions</a>
+        <SourceLink />
       </div>
     </section>
 

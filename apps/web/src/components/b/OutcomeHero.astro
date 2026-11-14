@@ -9,6 +9,7 @@ import { dictationHero, iphone } from '../../data/screens';
 import { SOURCE_URL } from '../../data/supported';
 import AppStoreCta from '../AppStoreCta.astro';
 import CodeBlock from '../CodeBlock.astro';
+import SourceLink from '../SourceLink.astro';
 
 const proof = [
   'no account, no cloud between you and your sessions',
@@ -52,6 +53,7 @@ const clipSizes = '(min-width: 1280px) 330px, (min-width: 1024px) 242px, (min-wi
       <div class="get">
         <AppStoreCta kind="hero" ct="site-hero-b" />
         {ON_APP_STORE && <span class="cta-note">Free on the App Store · iOS 18 or later</span>}
+        <SourceLink />
       </div>
       {
         ON_APP_STORE && (

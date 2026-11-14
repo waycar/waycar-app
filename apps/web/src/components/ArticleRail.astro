@@ -4,9 +4,11 @@
 // for a short article, once more below it with the modules that did not fit.
 // Each module is a `data-ph-module` wrapper: Layout's click and copy listeners
 // add that id as `module` to the event of any control inside it. A store link
-// keeps `app_store_clicked`; every other link sends `article_rail_clicked`.
+// keeps `app_store_clicked` and the GitHub link `github_clicked`; every other
+// link sends `article_rail_clicked`.
 import AppStoreCta from './AppStoreCta.astro';
 import CodeBlock from './CodeBlock.astro';
+import SourceLink from './SourceLink.astro';
 import {
   FIRST_LAUNCH,
   GET_APP,
@@ -32,6 +34,7 @@ const show = (id: RailModuleId) => ids.includes(id);
       <h2 id="rail-get-app">{GET_APP.heading}</h2>
       <p>{GET_APP.body}</p>
       <AppStoreCta kind="button" ct="article" class="module-cta">Get Waycar</AppStoreCta>
+      <p class="source"><SourceLink /></p>
       <p class="note">{GET_APP.note}</p>
     </section>
   )
@@ -148,6 +151,11 @@ const show = (id: RailModuleId) => ids.includes(id);
     text-align: center;
     white-space: normal;
     text-decoration: none;
+  }
+
+  .module .source {
+    margin-top: 6px;
+    text-align: center;
   }
 
   .guides,

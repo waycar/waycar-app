@@ -119,6 +119,9 @@ codex_pid=""
 host_load_pid=""
 simulator_udid=""
 simulator_destination=""
+# Set once this run has booted (or begun booting) its simulator; until then
+# destination recovery leaves the boot to wait_for_simulator_boot.
+simulator_boot_started=0
 simulator_environment_variables=()
 simulator_listing=""
 
@@ -466,8 +469,13 @@ sample_host_load() {
         printf "xcodebuild %d swift-frontend %d clang %d",
             n["xcodebuild"], n["swift-frontend"], n["clang"] }' || true)
     top=$(ps -Ao pcpu=,comm= -r 2>/dev/null | head -5 | sed -E 's|^ *([0-9.]+) .*/|\1% |' | paste -sd, - || true)
-    printf '%s load %s | booted sims %s | %s | top %s\n' "$(date -u +%H:%M:%S)" \
-        "$(sysctl -n vm.loadavg | tr -d '{}' | xargs)" "$sims" "$processes" "$top"
+    # Memory as well as CPU: a small hosted runner can be short of either.
+    # memorystatus_level is the share of memory the kernel counts as free.
+    memory=$(printf 'free %s%% swap %s' \
+        "$(sysctl -n kern.memorystatus_level 2>/dev/null || echo '?')" \
+        "$(sysctl -n vm.swapusage 2>/dev/null | sed -E 's/.*used = ([^ ]+).*/\1/' || echo '?')")
+    printf '%s load %s | %s | booted sims %s | %s | top %s\n' "$(date -u +%H:%M:%S)" \
+        "$(sysctl -n vm.loadavg | tr -d '{}' | xargs)" "$memory" "$sims" "$processes" "$top"
 }
 
 start_host_load_sampler() {
@@ -495,11 +503,13 @@ stop_host_load_sampler() {
 summarize_host_load() {
     local log="$fixture_dir/host-load.log"
     [[ -s "$log" ]] || return 0
-    awk -v cores="$(sysctl -n hw.ncpu)" '
+    awk -v cores="$(sysctl -n hw.ncpu)" -v memory="$(sysctl -n hw.memsize)" '
         { for (i = 1; i < NF; i += 1) if ($i == "load") {
-            n += 1; sum += $(i + 1); if ($(i + 1) > peak) peak = $(i + 1); break } }
-        END { if (n) printf "==> Host load over the run: %d samples, 1-minute load average %.1f, peak %.1f, %d cores\n",
-            n, sum / n, peak, cores }' "$log" >&2
+            n += 1; sum += $(i + 1); if ($(i + 1) > peak) peak = $(i + 1); break }
+          for (i = 1; i < NF; i += 1) if ($i == "free") {
+            level = $(i + 1) + 0; if (!m || level < low) low = level; m += 1; break } }
+        END { if (n) printf "==> Host load over the run: %d samples, 1-minute load average %.1f, peak %.1f, %d cores, %.0f GB, lowest free memory %d%%\n",
+            n, sum / n, peak, cores, memory / 1073741824, low }' "$log" >&2
 }
 
 # Copy lane logs, sshd logs, the weak-network proxy log, and xcresult
@@ -1141,8 +1151,13 @@ password_ssh_preflight() {
     local status
 
     export WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD="$password_secret"
+    # 5 s per step on an idle Mac, stretched like the suites' sshd budgets: a
+    # loaded 3-core hosted runner spent 3 s in PAM alone and missed a flat 5 s.
+    WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT=$(awk -v scale="${WAYCAR_SSH_E2E_TIMEOUT_SCALE:-1}" \
+        'BEGIN { seconds = int(5 * scale + 0.5); print (seconds < 5 ? 5 : seconds) }')
+    export WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT
     if /usr/bin/expect <<'EXPECT'
-set timeout 5
+set timeout $env(WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT)
 log_user 0
 
 set password $env(WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD)
@@ -1156,7 +1171,7 @@ spawn /usr/bin/ssh \
     -o KbdInteractiveAuthentication=no \
     -o PubkeyAuthentication=no \
     -o NumberOfPasswordPrompts=1 \
-    -o ConnectTimeout=5 \
+    -o ConnectTimeout=$env(WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT) \
     -o ConnectionAttempts=1 \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
@@ -1198,6 +1213,7 @@ EXPECT
         status=$?
     fi
     unset WAYCAR_PASSWORD_SSH_PREFLIGHT_PASSWORD
+    unset WAYCAR_PASSWORD_SSH_PREFLIGHT_TIMEOUT
     return "$status"
 }
 
@@ -1676,8 +1692,12 @@ recover_simulator_destination() {
         fi
     fi
     printf 'Recovering simulator %s\n' "$simulator_udid" >&2
-    xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
-    xcrun simctl bootstatus "$simulator_udid" -b || return 1
+    # A deferred boot (WAYCAR_CI_BOOT_AFTER_BUILD) stays deferred: compilation
+    # needs the destination to exist, and wait_for_simulator_boot boots it.
+    if [[ "$simulator_boot_started" == "1" ]]; then
+        xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+        xcrun simctl bootstatus "$simulator_udid" -b || return 1
+    fi
     if [[ "${#simulator_environment_variables[@]}" -gt 0 ]]; then
         push_simulator_environment "${simulator_environment_variables[@]}" || return 1
     fi
@@ -1788,7 +1808,63 @@ simulator_destination="platform=iOS Simulator,id=$simulator_udid"
 # Kick the boot off now and wait for it only after build-for-testing below:
 # compilation needs the destination to exist, not to be booted, so boot
 # happens under fixture provisioning and build instead of in front of them.
-xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+#
+# WAYCAR_CI_BOOT_AFTER_BUILD=1 (the hosted runners) defers the boot to after
+# the build and then waits for the device's first-boot work to finish. On a
+# 3-core hosted runner a new iOS 27 device's first boot keeps the 1-minute
+# load above 300 for about 15 minutes (simulator boot probe, 2026-11-13: 234 s
+# to bootstatus, load under 30 only 1,030 s after the boot began). Overlapped,
+# it stretched the build past its 30-minute watchdog and failed the password
+# preflight; still running when the suites started, it starves their tests.
+boot_after_build=0
+if [[ "${WAYCAR_CI_BOOT_AFTER_BUILD:-0}" == "1" ]]; then
+    boot_after_build=1
+else
+    simulator_boot_started=1
+    xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+fi
+
+# Waits for the claimed simulator before the first test action: whatever is
+# left of the boot kicked off above, or, deferred, the whole boot and then its
+# first-boot work. That work has no completion signal, so the wait polls the
+# 1-minute load average until it is under ten per core (a booted, settled
+# device on the hosted runner idles at 15 to 25 on 3 cores), and gives up,
+# loudly, after settle_limit_seconds.
+settle_limit_seconds=1200
+wait_for_simulator_boot() {
+    local started=$SECONDS
+    local limit
+    local load
+    local cores
+
+    if [[ "$boot_after_build" == "1" ]]; then
+        simulator_boot_started=1
+        xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+    fi
+    xcrun simctl bootstatus "$simulator_udid" -b
+    if [[ "$boot_after_build" != "1" ]]; then
+        echo "==> Simulator boot wait after the build overlap: $((SECONDS - started))s"
+        return 0
+    fi
+    echo "==> Simulator boot after the build: $((SECONDS - started))s"
+    cores=$(sysctl -n hw.ncpu)
+    limit=$((SECONDS + settle_limit_seconds))
+    while :; do
+        load=$(sysctl -n vm.loadavg | awk '{ print $2 }')
+        if awk -v load="$load" -v cores="$cores" 'BEGIN { exit !(load < 10 * cores) }'; then
+            echo "==> Simulator first-boot work settled: 1-minute load $load" \
+                "on $cores cores, $((SECONDS - started))s after the boot began"
+            return 0
+        fi
+        if ((SECONDS >= limit)); then
+            echo "WARNING: the simulator's first-boot work has not settled after" \
+                "${settle_limit_seconds}s (1-minute load $load on $cores cores);" \
+                "the suites start on a loaded machine." >&2
+            return 0
+        fi
+        sleep 15
+    done
+}
 
 sftp_server=""
 for candidate in /usr/libexec/sftp-server /usr/lib/openssh/sftp-server; do
@@ -2398,7 +2474,8 @@ PY
     codex_model_pid=$!
     codex_model_ready=0
     for ((attempt = 0; attempt < 100; attempt += 1)); do
-        if /usr/bin/curl --noproxy '*' -fsS "http://127.0.0.1:$codex_model_port/_health" >/dev/null; then
+        # Quiet: refused connections before the server listens are expected.
+        if /usr/bin/curl --noproxy '*' -fs "http://127.0.0.1:$codex_model_port/_health" >/dev/null; then
             codex_model_ready=1
             break
         fi
@@ -2465,7 +2542,7 @@ PY
     opencode_model_pid=$!
     opencode_model_ready=0
     for ((attempt = 0; attempt < 100; attempt += 1)); do
-        if /usr/bin/curl --noproxy '*' -fsS "http://127.0.0.1:$opencode_model_port/_health" >/dev/null; then
+        if /usr/bin/curl --noproxy '*' -fs "http://127.0.0.1:$opencode_model_port/_health" >/dev/null; then
             opencode_model_ready=1
             break
         fi
@@ -3094,11 +3171,7 @@ elif [[ $gate_status -ne 0 ]]; then
     echo "actor-isolation gate could not read the build logs (status $gate_status)" >&2
     exit 1
 fi
-# The simulator has been booting since before the build started; whatever
-# remains of its boot is all this wait costs.
-boot_wait_started=$SECONDS
-xcrun simctl bootstatus "$simulator_udid" -b
-echo "==> Simulator boot wait after the build overlap: $((SECONDS - boot_wait_started))s"
+wait_for_simulator_boot
 # Read through variable indirection by push_simulator_environment, which
 # static analysis cannot follow; unset again by clear_simulator_environment.
 # shellcheck disable=SC2034
@@ -3489,9 +3562,7 @@ run_xcodebuild "WaycarSSH package build" "$xcodebuild_build_timeout_seconds" \
     -derivedDataPath "$package_derived_data_path" \
     -destination "$simulator_destination" \
     -collect-test-diagnostics never
-boot_wait_started=$SECONDS
-xcrun simctl bootstatus "$simulator_udid" -b
-echo "==> Simulator boot wait after the build overlap: $((SECONDS - boot_wait_started))s"
+wait_for_simulator_boot
 
 push_simulator_environment \
     WAYCAR_SSH_E2E_REQUIRED \
@@ -3553,6 +3624,7 @@ package_e2e_tests=(
     '"SFTP operations and close wait out an in-flight handle use"'
     '"a serialized channel-open wait honors deadline and cancellation"'
     '"an invalidation generation rejects a watch armed before it"'
+    '"exec output and EOF that the stderr read queued finish the exec at once"'
     '"a transport-send owner error with outbound pending invalidates"'
     '"a bridge write to a closed peer reports peerClosed"'
     '"an IPv4 loopback connection reads its numeric peer"'
@@ -3569,7 +3641,7 @@ for package_e2e_test in "${package_e2e_tests[@]}"; do
     fi
 done
 
-package_e2e_count=136
+package_e2e_count=137
 if grep -q 'Suite "Session driver resource e2e" skipped' "$package_e2e_log" \
     || grep -q 'skipped:' "$package_e2e_log" \
     || ! grep -q "Test run with $package_e2e_count tests in 10 suites passed" "$package_e2e_log" \

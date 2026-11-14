@@ -167,7 +167,7 @@ awk '
     /if \[\[ "\$ci_lane" == "package" \]\]; then/ { in_pkg = 1 }
     in_pkg && /WaycarSSH package build/ { saw_build_label = 1 }
     in_pkg && /build-for-testing/ { build = NR }
-    in_pkg && /simctl bootstatus/ { boot = NR }
+    in_pkg && /^wait_for_simulator_boot$/ { boot = NR }
     in_pkg && /test-without-building/ { test_action = NR }
     in_pkg && /^exit 0$/ {
         ok = (saw_build_label && build && boot && test_action \

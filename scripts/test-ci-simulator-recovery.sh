@@ -182,7 +182,11 @@ run_case() (
         ci_simulator_name='iPhone 17'
         xcodebuild_test_timeout_seconds=$never_seconds
         pinned_lane_logs=()
+        simulator_boot_started=1
     }
+    # WAYCAR_CI_BOOT_AFTER_BUILD: the build runs before the simulator boots.
+    # shellcheck disable=SC2034
+    [[ "$SCENARIO" != deferred-boot ]] || simulator_boot_started=0
     simulator_udid=$ORIGINAL
     simulator_destination="platform=iOS Simulator,id=$ORIGINAL"
     claim_simulator "$ORIGINAL"
@@ -229,7 +233,10 @@ run_case() (
     # restore too, and the case runs again with twice the deadline.
     [[ "$SCENARIO" != forwarded-signal ]] || timeout=2
     local status=0
-    if [[ "$SCENARIO" == suite ]]; then
+    if [[ "$SCENARIO" == deferred-boot ]]; then
+        run_xcodebuild first "$timeout" "$CASE_DIR/lane.log" build-for-testing \
+            -destination "$simulator_destination" > "$CASE_DIR/output" 2>&1 || status=$?
+    elif [[ "$SCENARIO" == suite ]]; then
         run_suite first 1 1 0 ExampleSuite > "$CASE_DIR/output" 2>&1 || status=$?
         cp "$fixture_dir/first.log" "$CASE_DIR/lane.log"
         [[ "${#pinned_lane_logs[@]}" == 1 ]] || fail 'suite log was not registered'
@@ -286,6 +293,12 @@ PY
                 grep -qF "$repo_root/Packages/WaycarSSH test-without-building" "$CASE_DIR/arguments" || fail 'wrong package working directory'
             fi
             ;;
+        deferred-boot)
+            [[ "$status" == 0 && "$(cat "$CASE_DIR/calls")" == 2 ]] || fail 'expected one retry and success'
+            grep -qF 'Recovering simulator' "$CASE_DIR/output" || fail 'the destination was not recovered'
+            ! grep -qE '^simctl (boot|bootstatus) ' "$CASE_DIR/simctl" \
+                || fail 'recovery booted a simulator whose boot is deferred'
+            ;;
         test-failure | other-70 | watchdog-status | forwarded-signal)
             local expected=65
             [[ "$SCENARIO" != other-70 ]] || expected=70
@@ -315,7 +328,7 @@ PY
 
 for scenario in same pinned-other-name replacement occupied package suite no-devices persistent \
     test-failure other-70 watchdog-status forwarded-signal explicit-pin boot-failure env-failure \
-    list-failure; do
+    list-failure deferred-boot; do
     run_case "$scenario"
 done
-echo 'Passed 16 simulator recovery scenarios.'
+echo 'Passed 17 simulator recovery scenarios.'

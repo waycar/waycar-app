@@ -7,6 +7,7 @@
 // argument, for the visitor it just convinced.
 import { ON_APP_STORE } from '../../data/links';
 import AppStoreCta from '../AppStoreCta.astro';
+import SourceLink from '../SourceLink.astro';
 
 const rows = [
   {
@@ -67,6 +68,7 @@ const rows = [
       <div class="get">
         <AppStoreCta kind="button">Get Waycar</AppStoreCta>
         {ON_APP_STORE && <span class="cta-note">Free on the App Store · iOS 18 or later</span>}
+        <SourceLink />
       </div>
       <a class="more" href="/compare">See Waycar next to Termius, Blink Shell and Claude Code Remote Control →</a>
     </div>

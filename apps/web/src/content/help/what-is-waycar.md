@@ -19,8 +19,6 @@ Waycar is a native iPhone and iPad app for checking on your coding agents in her
 
 Waycar watches claude, codex, omp, gemini, opencode, pi and more. See [Supported agents](/help/supported-agents).
 
-An Android app is coming next. Waycar is on iPhone and iPad today.
-
 ## How does it connect?
 
 Waycar talks to herdr or tmux over a plain SSH connection to your computer. There is no cloud service in between, and SSH needs no extra port. Agent terminals run over mosh when your Host has `mosh-server` and UDP can reach it, and Waycar falls back to SSH when mosh can't get through. A [Jump Host](/help/jump-host) gets you to machines that aren't on the open internet.

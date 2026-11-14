@@ -54,8 +54,6 @@ What it does:
 
 Waycar looks in `~/.local/bin` when it checks for herdr-core, so you don't need to change your PATH for Waycar.
 
-Waycar's **Install Herdr Core** button is on iPhone and iPad for now. On Android, run the command above on the Host.
-
 Read the installer first at [releases.herdr.dev/core/install.sh](https://releases.herdr.dev/core/install.sh) if you like. Waycar isn't affiliated with herdr, and its installer is Herdr's own script.
 
 ## Install tmux

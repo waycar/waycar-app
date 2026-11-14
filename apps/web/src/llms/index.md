@@ -12,7 +12,6 @@ Open source under the Apache-2.0 license: https://github.com/waycar/waycar-app
 - Catches up after dead zones
 - Falls back to SSH on its own
 - No account
-- Android: coming soon
 
 Watches claude, codex, omp, gemini, opencode, pi and more.
 
@@ -201,7 +200,6 @@ The app has no accounts, ads, or cross-app tracking. The waycar.dev website runs
 Requirements:
 
 - iOS / iPadOS 18+
-- Android: coming soon
 - herdr ≥ 0.7.5
 - or tmux ≥ 3.2
 - or Herdr Core ≥ 0.1.10
@@ -224,7 +222,7 @@ curl -fsSL https://waycar.dev/install.sh | sh
 
 ### How do I get Waycar?
 
-{{app_store}}, then run the install command on each machine that runs herdr, tmux 3.2 or later, or Herdr Core, or add the machine by hand in the app. An Android app is coming next.
+{{app_store}}, then run the install command on each machine that runs herdr, tmux 3.2 or later, or Herdr Core, or add the machine by hand in the app.
 
 ### Can I try it before I set up a machine?
 
@@ -297,10 +295,6 @@ Your Host encrypts each notification and sends it through Waycar's push relay to
 ### Is Waycar affiliated with herdr or the AI companies?
 
 No. Waycar is an independent app from OTREVA, LLC. It is not affiliated with or endorsed by herdr, CodexBar, Anthropic, OpenAI, or Google. It works with the tools you already run on your own machine.
-
-### Is there an Android app?
-
-Not yet: Android is coming next. Waycar is on iPhone and iPad today.
 
 ## Ride at the back. See the whole train.
 

@@ -6,6 +6,7 @@ import AppStoreCta from '../../components/AppStoreCta.astro';
 import CompareLegend from '../../components/CompareLegend.astro';
 import CompareMatrix from '../../components/CompareMatrix.astro';
 import ComparisonLinks from '../../components/ComparisonLinks.astro';
+import SourceLink from '../../components/SourceLink.astro';
 import Layout from '../../layouts/Layout.astro';
 import { formatReleaseDate } from '../../lib/changelog.mjs';
 import { comparePath, getComparisons } from '../../lib/compare';
@@ -20,12 +21,11 @@ const oldestCheck = comparisons.map((entry) => entry.data.checked).sort()[0];
 const rated = (id: CapabilityId, ...levels: Level[]) => comparisons.filter((entry) => levels.includes(entry.data.rows[id].level));
 const generalSsh = rated('general-ssh', 'yes');
 const desktopOrWeb = rated('desktop', 'yes');
-const android = rated('android', 'yes', 'partial');
 // The one hand-written pick: it must name a page that exists.
 const remoteControl = comparisons.find((entry) => entry.id === 'claude-code-remote-control');
 if (!remoteControl) throw new Error('src/pages/compare/index.astro names the claude-code-remote-control comparison, which is missing');
 // A pick built from the rows must not print an empty list if the rows change.
-for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })) {
+for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb })) {
   if (list.length === 0) throw new Error(`src/pages/compare/index.astro: no comparison qualifies for the "${pick}" pick`);
 }
 ---
@@ -72,7 +72,7 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })
         <h2 id="fit-title">When Waycar is not the right pick</h2>
         <ul>
           <li>You want a general SSH client with SFTP and port forwarding, for any server. Waycar needs herdr, tmux or Herdr Core on the machine (Zellij, Codex and OpenCode 2 from the next update). Try <ComparisonLinks entries={generalSsh} join="or" />.</li>
-          <li>You want a desktop or web client beside the phone app, or an Android app today. Waycar is an iPhone and iPad app with no native desktop or web client, and an Android app is coming soon. With a desktop or web client: <ComparisonLinks entries={desktopOrWeb} join="and" />. With an Android app: <ComparisonLinks entries={android} join="and" />.</li>
+          <li>You want a desktop or web client beside the phone app. Waycar is an iPhone and iPad app with no native desktop or web client. Try <ComparisonLinks entries={desktopOrWeb} join="or" />.</li>
           <li>You only use Claude Code and already pay for a Claude plan. <a href={comparePath(remoteControl.id)}>Remote Control</a> is built in and needs no SSH setup.</li>
           <li>You need agents to keep working with your computer off. Waycar reaches your own machine, so that machine has to be on and awake.</li>
         </ul>
@@ -83,6 +83,7 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb, android })
         <div class="actions">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           <a class="btn btn-ghost btn-lg" href="/solutions">See how people use it</a>
+          <SourceLink />
         </div>
       </section>
     </div>
