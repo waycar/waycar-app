@@ -44,6 +44,10 @@ LAUNCH_DEADLINE_SECONDS = 4.0
 AGENT_NOT_READY_CODE = "agent_not_ready"
 # Recorded under the token when a late `agent.get` clears the managed name.
 LAUNCH_NAME_CLEARED = "fixture.launch_name_cleared"
+# `launchheld` is a `launchworking` launch whose every `agent.get` is held
+# unanswered (recorded on arrival) until the client closes its channel, when
+# this is recorded under the token.
+HELD_REQUEST_CLOSED = "fixture.held_request_closed"
 # Worktree launch scripts (`_worktree_launch_state`). Each keeps its token's
 # worktree and Agents in every `worktree.list`, `agent.list` and
 # `session.snapshot` from the token's first request until its recorded
@@ -376,6 +380,13 @@ class Server:
                         return
                     if method == "worktree.create" and behavior == "slowcreate":
                         time.sleep(SLOW_CREATE_SECONDS)
+                    if method == "agent.get" and behavior == "launchheld":
+                        if self._held_until_client_closes(connection):
+                            with self.script_lock:
+                                self.recorded_requests.setdefault(token, []).append(
+                                    HELD_REQUEST_CLOSED
+                                )
+                        return
                     if method == "pane.read" and behavior == "rootheld":
                         with self.script_lock:
                             first_read = self.screen_reads.get(token, 0) == 0
@@ -449,9 +460,13 @@ class Server:
         launch clears the name and the gate instead, and records
         `LAUNCH_NAME_CLEARED`. `agent.list` and `agent.prompt` never reconcile.
         """
-        if token is None or token.split(":")[1] not in ("launchrace", "launchworking"):
+        if token is None or token.split(":")[1] not in (
+            "launchrace",
+            "launchworking",
+            "launchheld",
+        ):
             return None
-        working = token.split(":")[1] == "launchworking"
+        working = token.split(":")[1] in ("launchworking", "launchheld")
         pane_id = "pane:" + token
         request = params if isinstance(params, dict) else {}
         with self.script_lock:
@@ -882,6 +897,20 @@ class Server:
     def _live_worktree_launches(self) -> list[tuple[str, dict]]:
         with self.script_lock:
             return [(token, dict(state)) for token, state in self.worktree_launches.items()]
+
+    @staticmethod
+    def _held_until_client_closes(connection: socket.socket) -> bool:
+        """Leaves a request unanswered; True once the client closed the
+        channel, False if it was still open after the cap."""
+        connection.settimeout(HUNG_CREATE_CAP_SECONDS)
+        try:
+            while connection.recv(1024):
+                pass
+        except socket.timeout:
+            return False
+        except OSError:
+            return True
+        return True
 
     @staticmethod
     def _hold_until_closed(connection: socket.socket) -> None:

@@ -2581,43 +2581,56 @@ struct WaycarSSHTransportBehaviorE2ETests {
         }
     }
 
-    /// Closing the Transport ends its launch settles: once it is closed, no
-    /// settle `agent.get` starts, though the launch is still pending and
-    /// inside its window (HERDR-10). A poll already on the wire at the close
-    /// may still land.
+    /// Closing the Transport cancels a settle in the middle of its poll
+    /// (HERDR-10). The fixture holds the settle's first `agent.get`
+    /// unanswered (`launchheld`), and another holder keeps the session open,
+    /// so only the close's cancellation can end that poll: its channel
+    /// closes at once, well inside a request budget longer than the wait,
+    /// the settle ends cancelled with its slot cleared, and no `agent.get`
+    /// follows.
     @Test("closing the Transport ends its launch settle")
     func closingTheTransportEndsItsLaunchSettle() async throws {
         let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
-        let window: Duration = .seconds(3)
         var settings = environment.directSettings()
-        settings.launchSettleDelay = .milliseconds(200)
-        settings.launchSettleInterval = .milliseconds(100)
-        settings.launchSettleWindow = window
-        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        settings.requestTimeout = .seconds(120)
+        settings.launchSettleDelay = .zero
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
         defer { Task { try? await transport.close() } }
         let reader = try await WaycarSSHTransport.connect(
             settings: Self.settingsWithoutLaunchSettle(environment))
         defer { Task { try? await reader.close() } }
 
-        let token = Self.scriptToken("launchworking")
-        _ = try await transport.startAgent(
+        let token = Self.scriptToken("launchheld")
+        let agent = try await transport.startAgent(
             AgentLaunchRequest(
                 kind: "codex",
                 name: "fixture",
                 workspaceID: "workspace-1",
                 cwd: "/fixture/\(token)"))
-        let acknowledged = ContinuousClock.now
-        let polls: @Sendable () async throws -> Int = {
+        let recorded: @Sendable () async throws -> [String] = {
             try await Self.recordedRequests(from: reader, token: token)
-                .filter { $0.hasPrefix("agent.get ") }
-                .count
         }
-        try await waitUntil { try await polls() >= 1 }
+        let poll = #"agent.get {"target":"pane:\#(token)"}"#
+        try await waitUntil { try await recorded().contains(poll) }
+        let polling = await transport.launchSettleForTesting(paneID: agent.paneID)
+        #expect(polling.settle?.phase == .polling)
+        #expect(polling.taskSlots == 1)
 
         try await transport.close()
-        let atClose = try await polls()
-        try await Task.sleep(until: acknowledged + window + .milliseconds(500), clock: .continuous)
-        #expect(try await polls() <= atClose + 1)
+        let closed = await transport.launchSettleForTesting(paneID: agent.paneID)
+        #expect(closed.settle?.phase == .cancelled)
+        #expect(closed.taskSlots == 0)
+        let heldClosed = "fixture.held_request_closed"
+        try await waitUntil { try await recorded().contains(heldClosed) }
+        #expect(await session.isOpen)
+
+        // A short window after the poll's end: a settle that outlived the
+        // close would ask again within it (every 1 s while pending).
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(try await recorded().filter { $0.hasPrefix("agent.get ") } == [poll])
     }
 
     /// herdr 0.9.1 promotes an opencode launch about 3.5 s after

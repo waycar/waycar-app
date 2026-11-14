@@ -1991,6 +1991,14 @@ actor WaycarSSHTransport: Transport {
         try await session.readRemoteFileForTesting(at: path)
     }
 
+    /// `paneID`'s launch settle as `LaunchSettleMachine` holds it, and how
+    /// many settle Tasks still hold a slot.
+    func launchSettleForTesting(
+        paneID: String
+    ) -> (settle: LaunchSettleMachine.PaneSettle?, taskSlots: Int) {
+        (launchSettle[paneID], launchSettles.count)
+    }
+
     func replacePluginConfigFileForTesting(named name: String, contents: Data) async throws {
         try await replacePluginConfigFile(named: name, contents: contents)
     }

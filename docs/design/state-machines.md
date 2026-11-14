@@ -5288,7 +5288,8 @@ stateDiagram-v2
   (`WaycarSSHTransportBehaviorE2ETests` in `SharedFixtureE2ETests`: the
   start returns at once, a pending launch is promoted with no composer, an
   unsettled one is polled only inside the window, a recovered one is
-  settled at once, a close ends the settle).
+  settled at once, a close cancels a settle whose poll the fixture holds,
+  on a session another holder keeps open).
 - **Catalogue:** HERDR-10.
 
 ```mermaid
