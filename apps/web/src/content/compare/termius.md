@@ -28,7 +28,6 @@ rows:
   usage: { level: unknown, text: "Not documented" }
   resume: { level: unknown, text: "Not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17 or later" }
-  android: { level: yes, text: "Yes, on Google Play" }
   desktop: { level: yes, text: "Yes: macOS, Windows and Linux apps" }
   source: { level: info, text: "Closed source. No public app repo found" }
   price: { level: info, text: "Free Starter. Pro from $10/mo billed yearly" }
@@ -103,7 +102,7 @@ Termius wins on these:
 
 - **Any server.** Termius connects to any SSH server. Waycar's agent terminals need herdr, tmux or herdr-core; it cannot open an arbitrary SSH server.
 - **Files and tunnels.** Termius has a full SFTP browser and local, remote and dynamic port forwarding. Waycar has no SFTP file browser and no port forwarding. It uses SFTP to upload the files you attach and to preview files an agent mentions.
-- **Every platform.** Termius runs on Android and on desktop, and it syncs hosts across them. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+- **Every platform.** Termius runs on Android and on desktop, and it syncs hosts across them. Waycar is an iPhone and iPad app with no native desktop or web client.
 - **Teams.** Termius sells Team and Business plans with shared vaults.
 
 ## What each costs

@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import logo from '../assets/logo.png';
+import { SOURCE_URL } from '../data/supported';
 import AppStoreCta from './AppStoreCta.astro';
 import HelpSearch from './HelpSearch.astro';
 
@@ -21,6 +22,7 @@ const links = [
   { href: section('faq'), label: 'FAQ' },
   { href: '/help', label: 'Help' },
   { href: '/articles', label: 'Articles' },
+  { href: SOURCE_URL, label: 'GitHub', wide: true },
 ];
 ---
 
@@ -34,7 +36,7 @@ const links = [
       <ul>
         {
           links.map((link) => (
-            <li>
+            <li class:list={{ wide: link.wide }}>
               <a href={link.href}>{link.label}</a>
             </li>
           ))
@@ -118,6 +120,13 @@ const links = [
     align-items: center;
     gap: 12px;
     margin-left: auto;
+  }
+
+  /* The last link drops first, where the row would push the button off. */
+  @media (max-width: 999px) {
+    .wide {
+      display: none;
+    }
   }
 
   /* Where the link row stops fitting beside the brand and button. */

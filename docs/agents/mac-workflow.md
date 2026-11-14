@@ -15,8 +15,8 @@ repository.
 
 If your agent host has the `mac_run` tool (the personal Ultimate extension
 `mac-run`), use it for any one make target at one commit: `test-app`,
-`test`, `test-ipad`, `test-ci-app`, `build-sim`, device builds and installs,
-screenshots. It does sections 1, 2, 3 and 5 below with the ground rules built
+`test`, `test-ipad`, `test-ci-app`, `test-ci-package`, `build-sim`, device
+builds and installs, screenshots. It does sections 1, 2, 3 and 5 below with the ground rules built
 in, and returns one result card: pass or fail, test counts, failing tests,
 crash reports, durations and the Mac's load before and after.
 
@@ -29,7 +29,8 @@ crash reports, durations and the Mac's load before and after.
   checks HEAD.
 - One run at a time on the whole Mac, first come first served; a waiting run
   says who is ahead.
-- It waits while a CI job runs (except for `test-ci-app`) or while the Mac is
+- It waits while a CI job runs (except for `test-ci-app` and
+  `test-ci-package`) or while the Mac is
   already overloaded. It runs make at `nice -n 19`, and caps the app-test
   build of `test-app`, `test` and `test-ipad`, and `build-sim`, at half the
   cores.
@@ -40,7 +41,8 @@ crash reports, durations and the Mac's load before and after.
 
 `background: true` returns a run id at once, so you can keep working;
 `mac_run {run: <id>}` waits for the card later, and
-`mac_run {run: <id>, cancel: true}` stops a run.
+`mac_run {run: <id>, cancel: true}` stops a run. A session step takes
+`background: true` too and returns `<session>/<step>` for `run`.
 
 `mac_run {status: true}` shows the queue with ages, who holds the Mac and
 what it runs, with its test count and last log line, plus the load and any
@@ -213,18 +215,23 @@ the clone.
      and pass the UDIDs it prints; otherwise the test wrapper boots the
      second one without a lease.
    - **Test ids with `()`:** write them as `\(\)` in `TEST_FLAGS`.
-   - **`make test-ci-app`:** it uses `Waycar CI` and manages its own claim, so
-     never acquire or release that simulator. If another run holds it, the
-     target waits, naming the holder's pid once a minute, for up to
-     `WAYCAR_CI_SIM_WAIT_SECONDS` (45 min), then stops with "Every available
-     Waycar CI Simulator is claimed by a live run". By hand it also needs
-     Node 24 on `PATH` and `WAYCAR_PAIR_ACCEPT_BIN` from
-     `scripts/ci/build-native-waycar.sh` (`mac_run` sets both). It always runs
-     the app lane; the package lane is
-     `WAYCAR_CI_LANE=package scripts/run-ci-ios-tests.sh`. To run a few
-     suites inside a lane's real fixture, use a throwaway copy of
-     `scripts/run-ci-ios-tests.sh` that drops the other `run_suite` calls,
-     and read its log, since its count gate then fails.
+   - **`make test-ci-app` and `make test-ci-package`:** they use `Waycar CI`
+     and manage their own claim, so never acquire or release that simulator.
+     If another run holds it, the target waits, naming the holder's pid once
+     a minute, for up to `WAYCAR_CI_SIM_WAIT_SECONDS` (45 min), then stops
+     with "Every available Waycar CI Simulator is claimed by a live run".
+     `test-ci-app` is CI's app lane; by hand it also needs Node 24 on `PATH`
+     and `WAYCAR_PAIR_ACCEPT_BIN` from `scripts/ci/build-native-waycar.sh`
+     (`mac_run` sets both). `test-ci-package` is CI's WaycarSSH package E2E
+     lane: the fixture-backed `Packages/WaycarSSH` suites
+     (`SessionDriver*E2ETests` among them) with the lane's pinned count, a
+     few minutes after its build. Run it instead of a hosted draft-PR round
+     trip when you change `Packages/WaycarSSH`. `mac_run` gives both the
+     ci.yml step's environment (`WAYCAR_CI_MANDATORY=1`,
+     `WAYCAR_SSH_E2E_TIMEOUT_SCALE=4`). To run a few suites inside a lane's
+     real fixture, use a throwaway copy of `scripts/run-ci-ios-tests.sh` that
+     drops the other `run_suite` calls, and read its log, since its count
+     gate then fails.
 
 3. **Check on the run instead of sleeping for minutes.** Every 30 s or so:
 

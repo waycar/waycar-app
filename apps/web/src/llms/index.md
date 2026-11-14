@@ -4,13 +4,14 @@
 
 Native for iPhone & iPad · works with herdr, tmux, Herdr Core, Zellij, Codex and OpenCode.
 
+Open source under the Apache-2.0 license: https://github.com/waycar/waycar-app
+
 **Your agents stay attached. Over mosh, and SSH.**
 
 - Survives network changes
 - Catches up after dead zones
 - Falls back to SSH on its own
 - No account
-- Android: coming soon
 
 Watches claude, codex, omp, gemini, opencode, pi and more.
 
@@ -199,7 +200,6 @@ The app has no accounts, ads, or cross-app tracking. The waycar.dev website runs
 Requirements:
 
 - iOS / iPadOS 18+
-- Android: coming soon
 - herdr ≥ 0.7.5
 - or tmux ≥ 3.2
 - or Herdr Core ≥ 0.1.10
@@ -222,7 +222,11 @@ curl -fsSL https://waycar.dev/install.sh | sh
 
 ### How do I get Waycar?
 
-{{app_store}}, then run the install command on each machine that runs herdr, tmux 3.2 or later, or Herdr Core, or add the machine by hand in the app. An Android app is coming next.
+{{app_store}}, then run the install command on each machine that runs herdr, tmux 3.2 or later, or Herdr Core, or add the machine by hand in the app.
+
+### Can I try it before I set up a machine?
+
+Yes. Before you add a machine, the first screen offers a Sample: example Blocked, Done and Working agents you can browse offline. It is read-only, and it goes away when you add a Host.
 
 ### Which agents work in Chat Mode?
 
@@ -231,6 +235,10 @@ Claude Code, Codex, omp, pi, opencode, GitHub Copilot CLI, Qwen Code, Gemini CLI
 ### Do I need herdr?
 
 No. Waycar also works with tmux 3.2 or later and Herdr Core, and the same install command sets them up. Zellij 0.46 or later, Codex 0.167 or later and OpenCode 2.2 or later come in the next update: Codex and OpenCode run as chats, with approvals in the app. herdr still gets you the most: it knows the status of more agents, and for now only herdr puts Chat Mode replies in your notifications.
+
+### What does the install command change on my machine?
+
+It unpacks the Waycar host tools to ~/.local/share/waycar/plugin after checking their SHA-256 checksum. With herdr it links a plugin. With tmux it adds status hooks to the agents it finds and keeps your own. Pairing adds one line to ~/.ssh/authorized_keys. No sudo, no system service, no open port. [What it installs](https://waycar.dev/help/install#what-does-it-install)
 
 ### How does Waycar know a tmux agent is blocked?
 
@@ -254,7 +262,11 @@ Then nothing changes. You won't see the AI Usage row, and the Host's page says C
 
 ### My machine isn't reachable from the internet. Can I still use it?
 
-Yes. Put an SSH Jump Host in front of it, like a small server that can reach your machine. Waycar checks host keys at both hops.
+Yes. Put your phone and your machine on the same VPN, such as Tailscale, or put an SSH Jump Host in front of it. Waycar only needs SSH to reach it. Waycar checks host keys at both hops. [Use Waycar away from home](https://waycar.dev/help/away-from-home)
+
+### Is Waycar open source?
+
+Yes. The app, the host tools and the push relay are on GitHub under the Apache-2.0 license. [waycar/waycar-app on GitHub](https://github.com/waycar/waycar-app)
 
 ### What happens to the terminal I already have open at my desk?
 
@@ -283,10 +295,6 @@ Your Host encrypts each notification and sends it through Waycar's push relay to
 ### Is Waycar affiliated with herdr or the AI companies?
 
 No. Waycar is an independent app from OTREVA, LLC. It is not affiliated with or endorsed by herdr, CodexBar, Anthropic, OpenAI, or Google. It works with the tools you already run on your own machine.
-
-### Is there an Android app?
-
-Not yet: Android is coming next. Waycar is on iPhone and iPad today.
 
 ## Ride at the back. See the whole train.
 

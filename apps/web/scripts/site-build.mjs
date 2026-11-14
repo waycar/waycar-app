@@ -3,10 +3,9 @@
 //
 // The output goes inside the project: Astro renames build assets across the
 // output dir, which fails across devices (EXDEV) for /tmp on CI. With
-// `switches`, the build runs from a copy of the site whose store switches
-// (`APP_STORE_LISTING_URL`, `PLAY_STORE_LISTING_URL` in src/data/links.ts) have
-// those values, so a test can build the "listing taken down" or "Play listing
-// set" state without editing the real source. The
+// `switches`, the build runs from a copy of the site whose store switch
+// (`APP_STORE_LISTING_URL` in src/data/links.ts) has that value, so a test can
+// build the "listing taken down" state without editing the real source. The
 // copy sits beside `apps/web` because two files read the repo root by relative
 // path (`CHANGELOG.md`, `PRIVACY.md`). It shares `node_modules` and `public`
 // by symlink, so builds must not run at the same time (`npm test` runs files
@@ -20,7 +19,7 @@ const web = fileURLToPath(new URL('..', import.meta.url));
 const apps = join(web, '..');
 
 /**
- * @param {{ switches?: Partial<Record<'APP_STORE_LISTING_URL' | 'PLAY_STORE_LISTING_URL', string>> }} [options]
+ * @param {{ switches?: Partial<Record<'APP_STORE_LISTING_URL', string>> }} [options]
  * @returns {{ outDir: string, cleanup: () => void }}
  */
 export function buildSite({ switches } = {}) {

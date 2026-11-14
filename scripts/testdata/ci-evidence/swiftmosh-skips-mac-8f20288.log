@@ -1,0 +1,25 @@
+Test Suite 'All tests' started at 2026-11-13 20:46:23.865.
+Test Suite 'SwiftMoshTests.xctest' started at 2026-11-13 20:46:23.866.
+Test Suite 'MoshProtocolE2ETests' started at 2026-11-13 20:46:29.339.
+Test Case '-[SwiftMoshTests.MoshProtocolE2ETests testRealServerKeystrokeLatency]' skipped (0.003 seconds).
+Test Suite 'MoshProtocolE2ETests' passed at 2026-11-13 20:46:29.704.
+	 Executed 6 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.363 (0.365) seconds
+Test Case '-[SwiftMoshTests.MoshScreenTests testWideTableMatchesItsRecordedSourceWcwidth]' skipped (0.000 seconds).
+Test Suite 'RealMoshServerE2ETests' started at 2026-11-13 20:46:30.324.
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerAndItsCommandExitAfterGracefulShutdown]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerAnswersAnElicitedStatePromptly]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerKeepsAnIdleSessionPastItsNetworkTimeout]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerOlderBasesWithFullWidthSymbolRows]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerRepeatedColdRelaunchRecovery]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerRoundTrip]' skipped (0.000 seconds).
+Test Case '-[SwiftMoshTests.RealMoshServerE2ETests testRealMoshServerStatesOnOlderBasesLeaveTheTerminalRight]' skipped (0.000 seconds).
+Test Suite 'RealMoshServerE2ETests' passed at 2026-11-13 20:46:30.326.
+	 Executed 7 tests, with 7 tests skipped and 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'SwiftMoshTests.xctest' passed at 2026-11-13 20:46:35.544.
+	 Executed 189 tests, with 9 tests skipped and 0 failures (0 unexpected) in 11.629 (11.678) seconds
+Test Suite 'All tests' passed at 2026-11-13 20:46:35.544.
+	 Executed 189 tests, with 9 tests skipped and 0 failures (0 unexpected) in 11.629 (11.680) seconds
+◇ Test run started.
+↳ Testing Library Version: 2403
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

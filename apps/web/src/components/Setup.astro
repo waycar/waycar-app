@@ -1,16 +1,20 @@
 ---
+import { ON_APP_STORE } from '../data/links';
+import { runtimes } from '../data/supported';
 import AppStoreCta from './AppStoreCta.astro';
 import CodeBlock from './CodeBlock.astro';
+import SourceLink from './SourceLink.astro';
 
 const installCmd = 'curl -fsSL https://waycar.dev/install.sh | sh';
 
+const atLeast = ({ name, min }: { name: string; min: string }) => `${name} ≥ ${min}`;
+const live = runtimes.filter((runtime) => !runtime.next);
+const next = runtimes.filter((runtime) => runtime.next);
+
 const requirements = [
   'iOS / iPadOS 18+',
-  'Android: coming soon',
-  'herdr ≥ 0.7.5',
-  'or tmux ≥ 3.2',
-  'or Herdr Core ≥ 0.1.10',
-  'Next update: Zellij ≥ 0.46, Codex ≥ 0.167, OpenCode ≥ 2.2',
+  ...live.map((runtime, index) => (index ? `or ${atLeast(runtime)}` : atLeast(runtime))),
+  ...(next.length ? [`Next update: ${next.map(atLeast).join(', ')}`] : []),
   'No Node needed on the Host',
   'OpenSSH · streamlocal on, for herdr',
   'macOS: Remote Login on',
@@ -28,7 +32,9 @@ const requirements = [
           <div>
             <h3>Get Waycar</h3>
             <div class="line">
-              <AppStoreCta kind="text" ct="site-closing">Get Waycar</AppStoreCta>
+              <AppStoreCta kind="button" ct="site-closing">Get Waycar</AppStoreCta>
+              {ON_APP_STORE && <span class="cta-note">Free on the App Store</span>}
+              <SourceLink />
             </div>
           </div>
         </li>
@@ -60,6 +66,21 @@ const requirements = [
           { kind: 'comment', text: '# answer Y to show a pairing QR' },
         ]}
       />
+      <div class="command-facts">
+        <h3>What the command does</h3>
+        <ul>
+          <li>Downloads the Waycar host tools, checks their SHA-256 checksum, and unpacks them to <code>~/.local/share/waycar/plugin</code>.</li>
+          <li>With herdr, links the Waycar plugin. With tmux 3.2 or later, adds status hooks to the agents it finds and keeps your own hooks.</li>
+          <li>Pairing adds one line for your phone's key to <code>~/.ssh/authorized_keys</code>.</li>
+          <li>No sudo, no system service, no open port.</li>
+          <li>Not allowed to install software there? Add <code>--pair-only</code>: it pairs and installs nothing.</li>
+        </ul>
+        <div class="command-links">
+          <a href="https://github.com/waycar/waycar-app/blob/main/plugin/install.sh">Read the script</a>
+          <a href="/help/install#what-does-it-install">What it installs</a>
+          <a href="/help/remove-host-tools">Remove it</a>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -113,7 +134,45 @@ const requirements = [
     color: var(--text-2);
   }
 
-  .steps a {
+  .steps .line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .command-facts {
+    margin-top: 32px;
+    font-size: var(--fs-button);
+    line-height: var(--lh-body);
+    color: var(--text-2);
+  }
+
+  .command-facts h3 {
+    color: var(--text);
+  }
+
+  .command-facts ul {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+    padding-left: 20px;
+    list-style: disc;
+  }
+
+  .command-facts code {
+    font-size: var(--fs-code);
+    white-space: nowrap;
+  }
+
+  .command-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .command-links a {
     color: var(--cyan);
     text-decoration: underline;
     text-underline-offset: 3px;

@@ -13,7 +13,6 @@ Waycar needs an iPhone or iPad on iOS or iPadOS 18 or later, and a Host you can 
 
 - iOS or iPadOS 18 or later.
 - Dictation needs iOS 26 or later. [CarPlay](/help/carplay) needs an iPhone on iOS 26.4 or later.
-- An Android app is coming soon; this page covers the iOS app.
 
 ## On your Host
 

@@ -49,7 +49,7 @@ BUNDLE_ID ?= com.$(shell printf '%s' '$(TEAM)' | tr '[:upper:]' '[:lower:]').way
 SIGNING_FLAGS = $(if $(TEAM),DEVELOPMENT_TEAM='$(TEAM)' WAYCAR_BUNDLE_ID='$(BUNDLE_ID)' \
 	WAYCAR_APP_ENTITLEMENTS=Sources/Waycar/WaycarSelfBuild.entitlements)
 
-.PHONY: help generate resolve build test test-app test-swiftmosh test-ipad test-ci-app build-device install install-device install-ipad watch-ios-device sim sim-ipad build-sim sim-id sim-status sim-release sim-pool sim-doctor archive check-deployed-installer upload distribute testflight bump publish review-smoke clean check-device check-device-ipad ssh-artifacts verify-ssh-artifacts test-libssh2-patches screenshots
+.PHONY: help generate resolve build test test-app test-swiftmosh test-ipad test-ci-app test-ci-package build-device install install-device install-ipad watch-ios-device sim sim-ipad build-sim sim-id sim-status sim-release sim-pool sim-doctor archive check-deployed-installer upload distribute testflight bump publish review-smoke clean check-device check-device-ipad ssh-artifacts verify-ssh-artifacts test-libssh2-patches screenshots
 
 help: ## Show available targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## / { printf "  make %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -128,6 +128,12 @@ test-ipad: ## Run the app, WaycarSSH, and SwiftMosh unit test suites on the iPad
 
 test-ci-app: ## Run the committed-project CI app lane (no generate)
 	WAYCAR_CI_LANE=app WAYCAR_CI_SIMULATOR_UDID='$(or $(SIMULATOR_UDID),$(WAYCAR_CI_SIMULATOR_UDID))' \
+		scripts/run-ci-ios-tests.sh
+
+# The WaycarSSH package lane of ci.yml (waycarssh-package-e2e): the same
+# fixtures, Waycar CI claim and wait, and pinned executed count.
+test-ci-package: ## Run the CI WaycarSSH package E2E lane (no generate)
+	WAYCAR_CI_LANE=package WAYCAR_CI_SIMULATOR_UDID='$(or $(SIMULATOR_UDID),$(WAYCAR_CI_SIMULATOR_UDID))' \
 		scripts/run-ci-ios-tests.sh
 
 # TmuxTransportE2ETests against a Linux test box (scripts/testboxes) instead of

@@ -3,6 +3,7 @@ import { Image } from 'astro:assets';
 import logo from '../assets/logo.png';
 import { ON_APP_STORE } from '../data/links';
 import AppStoreCta from './AppStoreCta.astro';
+import SourceLink from './SourceLink.astro';
 import { comparePath, getComparisons } from '../lib/compare';
 import { getSolutions, solutionPath } from '../lib/solutions';
 
@@ -57,7 +58,7 @@ const solutions = [
           <Image class="mark" src={logo} alt="" width={24} height={24} densities={[1, 2, 3]} />
           Waycar
         </p>
-        <p class="blurb">Your agents in herdr, tmux, Herdr Core and Zellij, plus Codex and OpenCode chats, on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions. Android app coming soon.</p>
+        <p class="blurb">Your agents in herdr, tmux, Herdr Core and Zellij, plus Codex and OpenCode chats, on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions.</p>
       </div>
       <nav aria-labelledby="foot-product">
         <h2 id="foot-product">Product</h2>
@@ -81,16 +82,19 @@ const solutions = [
       </nav>
     </div>
     <div class="foot-bottom">
-      {
-        ON_APP_STORE ? (
-          <span><AppStoreCta kind="text" ct="site-nav" class="store">Get Waycar</AppStoreCta></span>
-        ) : (
-          <span>Coming soon to the App Store for iPhone &amp; iPad</span>
-        )
-      }
-      <span>
-        Android app coming soon. Apple, the Apple logo, iPhone, iPad, Mac, Apple Watch, CarPlay, iCloud and App Store are
-        trademarks of Apple Inc., registered in the U.S. and other countries and regions. Android is a trademark of Google LLC.
+      <span class="get">
+        {
+          ON_APP_STORE ? (
+            <AppStoreCta kind="text" ct="site-nav" class="store">Get Waycar</AppStoreCta>
+          ) : (
+            <span>Coming soon to the App Store for iPhone &amp; iPad</span>
+          )
+        }
+        <SourceLink />
+      </span>
+      <span class="legal">
+        Apple, the Apple logo, iPhone, iPad, Mac, Apple Watch, CarPlay, iCloud and App Store are trademarks of Apple Inc.,
+        registered in the U.S. and other countries and regions.
       </span>
     </div>
   </div>
@@ -181,7 +185,14 @@ const solutions = [
     border-top: 1px solid var(--line);
   }
 
-  .foot-bottom span:last-child {
+  .foot-bottom .get {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 16px;
+  }
+
+  .foot-bottom .legal {
     max-width: 62ch;
   }
 

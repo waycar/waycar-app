@@ -1,7 +1,8 @@
 // @ts-check
 // The Get Waycar picker, checked on the built HTML. Every store button on the
-// site is a button that opens a picker (src/components/AppStoreCta.astro,
-// GetPicker.astro); the picker alone names a store or a device.
+// site starts as a link that opens a picker (src/components/AppStoreCta.astro,
+// GetPicker.astro); JavaScript makes it a direct App Store link on Apple
+// handhelds. The picker alone names a store or a device in the built HTML.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import { ORGANIC_CT } from '../src/lib/ad-links.mjs';
 import { buildSite } from './site-build.mjs';
 
 const LISTING = 'https://apps.apple.com/app/id6815881853';
+const SOURCE = 'https://github.com/waycar/waycar-app';
 const BUTTON_LABELS = new Set(['Get Waycar', 'Download']);
 const NAMES_A_DEVICE_OR_STORE = /iPhone|iPad|iOS|App Store|Google Play/i;
 
@@ -66,6 +68,12 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
       if (label !== undefined && (!BUTTON_LABELS.has(label) || NAMES_A_DEVICE_OR_STORE.test(label))) problems.push(`${file}: aria-label "${label}"`);
     }
 
+    // Every store button but the header's has the "Open source on GitHub" link beside it (SourceLink).
+    const rest = found.reduce((page, picker) => page.replace(picker.html, ''), html);
+    const sourceLinks = rest.match(/<a\b[^>]*\bdata-ph-event="github_clicked"/g)?.length ?? 0;
+    const besideButtons = triggers.filter((trigger) => !/\bcta-header\b/.test(trigger.attributes)).length;
+    if (sourceLinks !== besideButtons) problems.push(`${file}: ${besideButtons} store buttons but ${sourceLinks} GitHub links`);
+
     // M2: the App Store listing is linked from a picker and from nowhere else. The ad hop page (/go)
     // keeps its own fallback link to the listing; the article's setup prompt is text, not a link.
     if (file !== 'go.html') {
@@ -74,27 +82,20 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
     }
 
     for (const picker of found) {
-      // M3: a tab inside the picker reaches the App Store link and Close, nothing else.
+      // M3: a tab inside the picker reaches the App Store link, the GitHub link and Close, nothing else.
       const anchors = [...picker.html.matchAll(/<a\b([^>]*)>/g)].map((match) => match[1] ?? '');
       const focusable = anchors.filter((attributes) => !/\btabindex="-1"/.test(attributes));
       const hrefs = focusable.map((attributes) => /\bhref="([^"]*)"/.exec(attributes)?.[1] ?? '');
-      if (hrefs.length !== 2 || !hrefs[0]?.startsWith(LISTING) || hrefs[1] !== '#_') problems.push(`${file}: ${picker.id} focusable links ${hrefs}`);
+      if (hrefs.length !== 3 || !hrefs[0]?.startsWith(LISTING) || hrefs[1] !== SOURCE || hrefs[2] !== '#_') problems.push(`${file}: ${picker.id} focusable links ${hrefs}`);
+      if (!/<a\b[^>]*\bdata-ph-event="github_clicked"/.test(picker.html)) problems.push(`${file}: ${picker.id} GitHub link sends no github_clicked`);
       if (/<button\b|<input\b|<select\b|<textarea\b|\btabindex="(?!-1)/.test(picker.html)) problems.push(`${file}: ${picker.id} has another control`);
 
       // The App Store link carries a campaign token from the closed organic list.
       const ct = /(?:\?|&amp;|&)ct=([^&"]+)/.exec(hrefs[0] ?? '')?.[1];
       if (!ct || !ORGANIC_CT.test(ct)) problems.push(`${file}: ${picker.id} ct "${ct}"`);
 
-      // The Android tile is text: no link, no control, no image, no Play name, robot, price or date.
-      const tile = /<li class="tile soon"[^>]*>[\s\S]*?<\/li>/.exec(picker.html)?.[0];
-      if (!tile) problems.push(`${file}: ${picker.id} has no Android tile`);
-      else {
-        if (/<a\b|<button\b|<img\b|<svg\b|\bhref=|\btabindex=/.test(tile)) problems.push(`${file}: ${picker.id} Android tile is not plain text`);
-        const text = tile.replace(/<[^>]*>/g, ' ').replace(/&trade;/g, '™').replace(/\s+/g, ' ').trim();
-        if (text !== 'Android™ , Coming soon') problems.push(`${file}: ${picker.id} Android tile reads "${text}"`);
-      }
-      const withoutTrademarkLine = picker.html.replace(/<p class="legal"[\s\S]*?<\/p>/, '');
-      if (/\bPlay\b|google|robot|\$\d/i.test(withoutTrademarkLine)) problems.push(`${file}: ${picker.id} names Google Play, a robot or a price`);
+      // The picker offers the App Store alone: no other platform, store or price.
+      if (/android|\bPlay\b|google|robot|\$\d/i.test(picker.html)) problems.push(`${file}: ${picker.id} names another platform, a store or a price`);
     }
   }
   assert.deepEqual(problems, []);
@@ -103,7 +104,12 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
   const qr = readFileSync(join(outDir, 'qr/site-qr.svg'), 'utf8');
   assert.ok(qr.startsWith('<svg ') && qr.includes('<path d="M'), 'the QR file is an SVG with modules');
   const home = readFileSync(join(outDir, 'index.html'), 'utf8');
-  assert.ok(pickers(home).every((picker) => picker.html.includes('<img src="/qr/site-qr.svg"')), 'every picker shows the QR');
+  const homePickers = pickers(home);
+  assert.ok(homePickers.length > 0, 'the home page has pickers');
+  for (const picker of homePickers) {
+    assert.ok(picker.html.includes('<img src="/qr/site-qr.svg"'), `${picker.id}: the QR image is present`);
+    assert.doesNotMatch(picker.html, /<details\b|<summary\b/i, `${picker.id}: the QR needs no disclosure click`);
+  }
 });
 
 test('with APP_STORE_LISTING_URL emptied, buttons are plain "Coming soon" labels (M8)', { timeout: 300_000 }, (t) => {
@@ -122,18 +128,4 @@ test('with APP_STORE_LISTING_URL emptied, buttons are plain "Coming soon" labels
   assert.ok(home.includes('Coming soon to the App Store'), 'the home page says it is coming soon');
   assert.ok(existsSync(join(outDir, 'compare.html')));
   assert.ok(!existsSync(join(outDir, 'qr')), 'no QR file for a listing that is not live');
-});
-
-test('with PLAY_STORE_LISTING_URL set, the Android tile links to it and the App Store badge turns black (S2)', { timeout: 300_000 }, (t) => {
-  const play = 'https://play.google.com/store/apps/details?id=dev.waycar.dummy';
-  const { outDir, cleanup } = buildSite({ switches: { PLAY_STORE_LISTING_URL: play } });
-  t.after(cleanup);
-  const home = readFileSync(join(outDir, 'index.html'), 'utf8');
-  const found = pickers(home);
-  assert.ok(found.length > 0, 'the home page has pickers');
-  for (const picker of found) {
-    assert.ok(picker.html.includes('/app-store-badge-black.svg') && !picker.html.includes('/app-store-badge.svg'), `${picker.id}: black badge`);
-    assert.equal(picker.html.match(new RegExp(`href="${play.replaceAll('?', '\\?')}"`, 'g'))?.length, 1, `${picker.id}: one link to Play`);
-    assert.ok(!picker.html.includes('class="tile soon"'), `${picker.id}: no "Coming soon" tile`);
-  }
 });

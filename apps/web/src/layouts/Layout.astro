@@ -3,7 +3,7 @@ import ConsentBanner from '../components/ConsentBanner.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import '../styles/global.css';
-import { APP_SCHEMA_ID } from '../data/links';
+import { APP_SCHEMA_ID, APP_STORE_LISTING_URL, ON_APP_STORE } from '../data/links';
 import { color } from '../styles/tokens';
 
 interface Props {
@@ -50,7 +50,7 @@ const {
   homePage = false,
   ogType = 'website',
   schema = [],
-  imageAlt = "The Waycar logo beside the headline 'Your agents stay attached. Over mosh, and SSH.' and an iPhone showing Waycar's Agent list",
+  imageAlt = "The Waycar logo beside the headline 'Every agent. One list. Just talk.' and an iPhone showing Waycar's Agent list",
 } = Astro.props;
 // `build.format: 'file'` makes pathnames end in `.html`; the public URLs don't.
 const canonical = new URL(canonicalPath ?? Astro.url.pathname.replace(/(index)?\.html$/, ''), Astro.site);
@@ -66,9 +66,12 @@ const jsonLd = [
     url: new URL('/', Astro.site).href,
     image: new URL('/icon-512.png', Astro.site).href,
     description:
-      'Check on your coding agents in herdr, tmux and more from iPhone or iPad. Agent terminals run over mosh and fall back to SSH. No account, no cloud relay for your sessions. Android app coming soon.',
+      'Check on your coding agents in herdr, tmux and more from iPhone or iPad. Agent terminals run over mosh and fall back to SSH. No account, no cloud relay for your sessions.',
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'iOS, iPadOS',
+    sameAs: ['https://github.com/waycar/waycar-app'],
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    ...(ON_APP_STORE ? { downloadUrl: APP_STORE_LISTING_URL } : {}),
   },
   ...schema,
 ].map((data) => JSON.stringify(data).replace(/</g, '\\u003c'));

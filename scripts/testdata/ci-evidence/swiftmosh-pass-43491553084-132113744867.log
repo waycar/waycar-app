@@ -1,0 +1,31 @@
+﻿2026-11-13T19:22:17.8684500Z Current runner version: '2.338.2'
+2026-11-13T19:22:41.1630880Z ##[group]Run log="$RUNNER_TEMP/swiftmosh-test.log"
+2026-11-13T19:22:41.1631420Z [36;1mlog="$RUNNER_TEMP/swiftmosh-test.log"[0m
+2026-11-13T19:22:41.1631980Z [36;1mswift test --package-path Packages/SwiftMosh 2>&1 | tee "$log"[0m
+2026-11-13T19:23:49.9801270Z [248 / 252] SwiftMoshTests-product
+2026-11-13T19:23:50.0875670Z [249 / 252] SwiftMoshTests-product
+2026-11-13T19:23:50.4034440Z Build complete! (45.38 sec)
+2026-11-13T19:24:02.9449290Z Test Suite 'All tests' started at 2026-11-13 19:23:51.459.
+2026-11-13T19:24:02.9491380Z Test Suite 'SwiftMoshTests.xctest' started at 2026-11-13 19:23:51.466.
+2026-11-13T19:24:02.9495220Z Test Suite 'AES128Tests' started at 2026-11-13 19:23:51.466.
+2026-11-13T19:24:02.9497070Z Test Case '-[SwiftMoshTests.AES128Tests testAES128InvalidLengths]' started.
+2026-11-13T19:24:02.9497930Z Test Case '-[SwiftMoshTests.AES128Tests testAES128InvalidLengths]' passed (0.004 seconds).
+2026-11-13T19:24:02.9726360Z Test Case '-[SwiftMoshTests.AES128Tests testAES128KnownVectorEncryptDecryptAndInternalBlockAPIs]' started.
+2026-11-13T19:24:02.9727630Z Test Case '-[SwiftMoshTests.AES128Tests testAES128KnownVectorEncryptDecryptAndInternalBlockAPIs]' passed (0.001 seconds).
+2026-11-13T19:24:02.9729440Z Test Suite 'AES128Tests' passed at 2026-11-13 19:23:51.472.
+2026-11-13T19:24:02.9732000Z 	 Executed 2 tests, with 0 failures (0 unexpected) in 0.005 (0.007) seconds
+2026-11-13T19:25:16.6492040Z Test Case '-[SwiftMoshTests.WirePrimitivesTests testTimestampDirectionalSequenceAndPacketRoundTrip]' passed (0.000 seconds).
+2026-11-13T19:25:16.6493740Z Test Suite 'WirePrimitivesTests' passed at 2026-11-13 19:25:16.319.
+2026-11-13T19:25:16.6496030Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+2026-11-13T19:25:16.6497440Z Test Suite 'SwiftMoshTests.xctest' passed at 2026-11-13 19:25:16.319.
+2026-11-13T19:25:16.6512950Z 	 Executed 189 tests, with 0 failures (0 unexpected) in 84.795 (84.854) seconds
+2026-11-13T19:25:16.6514500Z Test Suite 'All tests' passed at 2026-11-13 19:25:16.319.
+2026-11-13T19:25:16.6516270Z 	 Executed 189 tests, with 0 failures (0 unexpected) in 84.795 (84.860) seconds
+2026-11-13T19:25:16.6518400Z [E2E] Keystroke round-trip: avg=32ms p95=40ms max=40ms
+2026-11-13T19:25:16.6519730Z [status-row E2E] older-base states: 1, rows wrong: 0 of 24
+2026-11-13T19:25:16.6521210Z [older-base E2E] older-base states: 138, rows wrong: 0 of 24
+2026-11-13T19:25:16.6525680Z ◇ Test run started.
+2026-11-13T19:25:16.6527080Z ↳ Testing Library Version: 2403
+2026-11-13T19:25:16.6528180Z ↳ Target Platform: arm64e-apple-macos14.0
+2026-11-13T19:25:16.6529940Z ✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+2026-11-13T19:25:16.7039790Z RealMoshServerE2ETests: 	 Executed 7 tests, with 0 failures (0 unexpected) in 59.870 (59.874) seconds

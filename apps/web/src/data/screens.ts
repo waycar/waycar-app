@@ -10,6 +10,9 @@ import iphoneConsole from '../assets/screens/iphone-console.png';
 import iphoneHosts from '../assets/screens/iphone-hosts.png';
 import iphoneNewAgent from '../assets/screens/iphone-new-agent.png';
 import iphoneChat from '../assets/screens/iphone-chat.png';
+// Copied from docs/images/screenshots/watch/ (2-agents-status, 6-allow-deny).
+import watchAgents from '../assets/screens/watch-agents.png';
+import watchAllowDeny from '../assets/screens/watch-allow-deny.png';
 import dictationHeroStill from '../assets/hero/dictation-hero-still.png';
 // `?url` emits the file as-is: going through astro:assets (sharp) would flatten the animation to one frame.
 import dictationHeroAnim from '../assets/hero/dictation-hero.webp?url';
@@ -71,6 +74,17 @@ export const chat = {
   iphone: {
     image: iphoneChat,
     alt: 'An agent in Chat Mode on iPhone: you ask why a reconnect test fails, it shows a Reconnect timeline chart and explains the fix, then asks your OK to run the tests with Allow, Cancel, and Show Terminal buttons. At the bottom is the Message field with a mic button',
+  },
+};
+
+export const watch = {
+  agents: {
+    image: watchAgents,
+    alt: 'Waycar on Apple Watch listing three agents: claude Blocked at step 3 of 6, codex Done, and omp Working at step 6 of 7',
+  },
+  allowDeny: {
+    image: watchAllowDeny,
+    alt: 'Waycar on Apple Watch under a Blocked command, with a violet Allow button and a Deny button',
   },
 };
 

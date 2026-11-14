@@ -28,7 +28,6 @@ rows:
   usage: { level: partial, text: "Partial: /usage and /context text output only" }
   resume: { level: partial, text: "Partial: from the machine only, about 4 hours" }
   ios: { level: yes, text: "Yes, the Claude app on iPhone and iPad, iOS 18 or later" }
-  android: { level: yes, text: "Yes, the Claude app on Google Play" }
   desktop: { level: yes, text: "Yes, claude.ai/code in any browser" }
   source: { level: info, text: "Closed source, proprietary license" }
   price: { level: info, text: "Included in paid Claude plans. Pro is $20 a month" }
@@ -41,7 +40,7 @@ pickWaycar:
 pickThem:
   - You only use Claude Code and already pay for a Claude plan.
   - You want no SSH setup and no extra price.
-  - You want an Android app or a browser view of the session today.
+  - You want an Android app or a browser view of the session.
   - You want to reach a machine that you cannot reach over SSH.
   - Your agent machine runs Windows. Claude Code supports it, and Waycar's host tools do not.
 faq:
@@ -90,7 +89,7 @@ Waycar works the other way. Your phone connects straight to your machine over mo
 - **Little to set up.** It is built into Claude Code. You sign in to claude.ai, run `/remote-control` and scan a code with the Claude app. No SSH, no UDP, no install on the machine beyond Claude Code.
 - **No extra price.** It comes with the paid Claude plan you already use for Claude Code.
 - **Reach without SSH.** Because it uses outbound HTTPS only, it can reach a machine that you cannot reach over SSH.
-- **Android and the web.** The Claude app runs on Android, and claude.ai/code works in any browser. Waycar is an iPhone and iPad app with no native desktop or web client, and an Android app is coming soon.
+- **Android and the web.** The Claude app runs on Android, and claude.ai/code works in any browser. Waycar is an iPhone and iPad app with no native desktop or web client.
 - **Push and approvals.** You can turn on push in `/config`. Claude can push when it finishes or needs a decision, and a second setting pushes for permission prompts and questions. You answer prompts in the app.
 - **Photos and files.** You can attach a photo or file from the phone, with or without a caption.
 - **Session controls.** From the phone you can switch model, effort and permission mode, read a diff of your changes, and run commands such as `/compact` and `/context`.

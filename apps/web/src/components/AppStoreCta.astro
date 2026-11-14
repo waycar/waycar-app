@@ -1,14 +1,17 @@
 ---
 // Every store call to action on the site. The listing is live and
-// `APP_STORE_URL` is set (`ON_APP_STORE`), so each one is a "Get Waycar" (or
-// "Download") button that opens the Get Waycar picker (`GetPicker`), the one
-// place that names a store or a device: iPhone and iPad link to the App Store
-// and send `app_store_clicked`; Android is "Coming soon" and cannot be
-// clicked. The button and its picker travel together, so the App Store link
-// inside keeps this button's `ct`, and an event from the button or the link
-// keeps the `module` of the wrapper around them. The button sends
-// `get_picker_opened`. With `APP_STORE_LISTING_URL` emptied (the listing taken
-// down) each is a plain text label, "Coming soon to the App Store": no link,
+// `APP_STORE_LISTING_URL` is set (`ON_APP_STORE`), so each is a "Get Waycar" (or
+// "Download") button. With JavaScript on iPhone, iPad (including desktop mode)
+// or iPod touch it links straight to the App Store and sends `app_store_clicked`.
+// Everyone else opens the Get Waycar picker (`GetPicker`), sending
+// `get_picker_opened`; without JavaScript it opens via a fragment link, with no
+// event. The picker names the store and devices: its App Store badge sends
+// `app_store_clicked`, and the QR is always shown on wide screens with a
+// mouse. The caller puts a `SourceLink` beside the button. Button and picker travel together
+// so either App Store link keeps this button's `ct` (or a paid campaign's), and
+// either event keeps the wrapper's `module`. With `APP_STORE_LISTING_URL`
+// emptied (the listing taken down) each is a plain text label,
+// "Coming soon to the App Store": no link,
 // no picker, no event, not focusable, no Apple logo or badge (Apple's
 // marketing guidelines allow neither without a live listing), the same size as
 // the button so layouts do not move.

@@ -1,0 +1,25 @@
+﻿2026-11-13T23:46:35.6735650Z Current runner version: '2.338.2'
+2026-11-13T23:50:59.3136050Z ##[group]Run scripts/run-ci-ios-tests.sh
+2026-11-13T23:50:59.3136430Z [36;1mscripts/run-ci-ios-tests.sh[0m
+2026-11-13T23:50:59.3194050Z ##[endgroup]
+2026-11-13T23:51:01.4915920Z Claimed fixture port block 55222-55241
+2026-11-13T23:51:24.8097130Z ##[group]Build for testing
+2026-11-13T23:51:26.5396370Z Command line invocation:
+2026-11-14T00:08:18.6855580Z PruneExplicitPrecompiledModules /tmp/waycar-ci.wAOkWN/AppDerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+2026-11-14T00:08:18.6876630Z 
+2026-11-14T00:08:18.6912340Z PruneExplicitPrecompiledModules /tmp/waycar-ci.wAOkWN/AppDerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+2026-11-14T00:08:18.6995580Z 
+2026-11-14T00:08:19.0815080Z note: Run script build phase 'Remove unused LuxTTS resources' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Waycar' from project 'Waycar')
+2026-11-14T00:08:19.3344490Z ** TEST BUILD SUCCEEDED **
+2026-11-14T00:08:19.3345730Z 
+2026-11-14T00:08:19.9139180Z ##[endgroup]
+2026-11-14T00:08:19.9140700Z ==> Build for testing: 1015s (status 0)
+2026-11-14T00:11:36.8079830Z Monitoring boot status for Waycar CI (44B43A8F-884E-431E-8F08-F192573D8664).
+2026-11-14T00:11:36.8083640Z Device already booted, nothing to do.
+2026-11-14T00:11:37.4027320Z 
+2026-11-14T00:11:37.9994100Z ==> Simulator boot after the build: 197s
+2026-11-14T00:15:51.4953340Z Terminated: 15
+2026-11-14T00:15:56.5030640Z ##[error]The operation was canceled.
+2026-11-14T00:15:57.4932860Z Post job cleanup.
+2026-11-14T00:16:02.3415600Z [command]/opt/homebrew/bin/git version
+2026-11-14T00:16:02.5556000Z git version 2.56.0

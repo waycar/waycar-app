@@ -2,12 +2,12 @@
 // per-article guide picks. Copy and claim limits are WAY-302's rail-content
 // document. Rules that hold for every module:
 //   - Never "popular", "most read" or ranked: the picks are editorial.
-//   - No price, no open source or herdr affiliation claim, and never "no
-//     servers" or "nothing leaves your device" (the push relay carries
-//     encrypted notifications).
+//   - No price, no herdr affiliation claim, and never "no servers" or
+//     "nothing leaves your device" (the push relay carries encrypted
+//     notifications). The one open source mention is the "Open source on
+//     GitHub" link under the store button (SourceLink.astro).
 //   - Setup and Launch steps are labeled "For iPhone and iPad"; there is no
-//     platform detection. The Get Waycar picker (GetPicker.astro) is where
-//     Android readers see "Coming soon".
+//     platform detection beyond the Get Waycar picker's (GetPicker.astro).
 // Module ids go out as the `module` property of the analytics events (see
 // README "Events"); they come from here, never from element text.
 
@@ -154,11 +154,12 @@ export function startHereSlugs(slug: string, live: ReadonlySet<string>): string[
  * plain prose takes on the 640 px column, plus 150 px a heading, with nothing
  * for tables and code. Measured at 1440 px (2026-10-26) the 8 live articles run
  * 4,600 to 8,200 px, the estimate puts the shortest at 3,200, and the four
- * modules with their gaps stack 1,584: all four sit beside every live article.
- * (The "Get Waycar" module lost its Android notice and got a shorter button
- * label when the picker landed: 377 px became 288 at 1440 px.)
+ * modules with their gaps stack 1,614: all four sit beside every live article.
+ * (The "Get Waycar" module lost its platform notice and got a shorter button
+ * label when the picker landed: 377 px became 288 at 1440 px. The "Open source
+ * on GitHub" line under its button made it 318, 2026-11-14.)
  */
-export const MODULE_HEIGHTS = [290, 360, 500, 290];
+export const MODULE_HEIGHTS = [320, 360, 500, 290];
 export const MODULE_GAP = 48;
 export const PX_PER_WORD = 2;
 export const PX_PER_HEADING = 150;

@@ -1,28 +1,27 @@
 ---
-// The "Get Waycar" picker: where every store button on the site leads. One per
-// button (`AppStoreCta` renders the pair), so the App Store link inside carries
-// the `ct` of the button that opens it, with or without JavaScript. Copy and
-// claim limits: the `picker-copy` document on WAY-312.
+// The "Get Waycar" picker: every store button starts here. With JavaScript,
+// iPhone, iPad (including desktop mode) and iPod touch visitors instead get a
+// direct App Store link, sending `app_store_clicked`. Everyone else opens the
+// picker and sends `get_picker_opened`; its App Store badge sends
+// `app_store_clicked`. Without JavaScript the picker still opens, with no events.
+// One picker per button (`AppStoreCta` renders the pair) keeps that button's
+// `ct` (or a paid campaign's) and wrapper's `module`.
+// Copy and claim limits: the `picker-copy` document on WAY-312.
 //
-// iPhone and iPad first, with Apple's badge. Android second, as plain text: no
-// link, not focusable, no Play name, badge or logo, because there is no
-// Android app to link to. Only `PLAY_STORE_LISTING_URL` (src/data/links.ts),
-// empty today, turns the tile into a link. "Android is a trademark of Google
-// LLC." follows Google's brand rules for using the name.
+// One tile, "iPhone and iPad", with Apple's badge, then the quiet "Open
+// source on GitHub" link (`SourceLink`) and Close.
 //
-// Wide screens with a mouse also show a "Show QR code" link under the badge. It
-// is a native `<details>` (works without JavaScript) that reveals the QR code
-// (`/qr/site-qr.svg`, made at build time) for a visitor who is at a computer
-// and wants the app on a phone. The QR carries its own `ct`, `site-qr`. The
-// two tiles sit side by side from 560 px up; below that they stack.
+// Wide screens with a mouse always show the QR code under the badge, no second
+// click (`/qr/site-qr.svg`, made at build time); elsewhere it stays hidden.
+// The QR carries its own `ct`, `site-qr`, for getting the app onto a phone.
 //
-// With JavaScript the button's click opens this as a modal `<dialog>` (script
-// below): Esc, focus trap, inert page and focus return come from the browser.
+// With JavaScript outside Apple handhelds, the button opens a modal `<dialog>`:
+// Esc, focus trap, inert page and focus return come from the browser.
 // Without it the button is a link to this element's id, and `:target` shows
 // the same box as a fixed overlay. Close and the backdrop are links to `#_`,
 // a fragment nothing matches, so the page does not jump. A `<form
 // method="dialog">` would not work here: the CSP has `form-action 'none'`.
-import { ON_PLAY_STORE, PLAY_STORE_LISTING_URL } from '../data/links';
+import SourceLink from './SourceLink.astro';
 
 interface Props {
   /** Unique on the page; the button links to `#<id>`. */
@@ -32,56 +31,29 @@ interface Props {
 }
 
 const { id, href } = Astro.props;
-// Apple's badge is white while Android has no store badge beside it, and black
-// once another platform's badge appears (Apple's marketing guidelines).
-const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.svg';
 ---
 
 <dialog class="picker" id={id} aria-labelledby={`${id}-title`}>
   <a class="backdrop" href="#_" tabindex="-1" aria-hidden="true" data-picker-close></a>
   <div class="card">
     <h2 id={`${id}-title`} class="title">Get Waycar</h2>
-    <ul class="tiles">
-      <li class="tile">
-        <p class="platform">iPhone and iPad</p>
-        <a
-          class="store"
-          href={href}
-          aria-label="Download on the App Store for iPhone and iPad"
-          data-ph-event="app_store_clicked"
-          autofocus
-        >
-          <img src={badge} alt="" width="150" height="50" loading="lazy" decoding="async" />
-        </a>
-        <details class="qr">
-          <summary>
-            <span class="qr-show">Show QR code</span><span class="qr-hide">Hide QR code</span>
-          </summary>
-          <figure>
-            <img src="/qr/site-qr.svg" alt="" width="148" height="148" loading="lazy" decoding="async" />
-            <figcaption>Scan with your iPhone or iPad</figcaption>
-          </figure>
-        </details>
-      </li>
-      {
-        ON_PLAY_STORE ? (
-          <li class="tile">
-            <p class="platform">Android&trade;</p>
-            <a class="btn btn-ghost play" href={PLAY_STORE_LISTING_URL}>
-              Get it on Google Play
-            </a>
-          </li>
-        ) : (
-          <li class="tile soon">
-            <p class="platform">
-              Android&trade;<span class="visually-hidden">,</span>
-            </p>
-            <p class="status">Coming soon</p>
-          </li>
-        )
-      }
-    </ul>
-    <p class="legal">Android is a trademark of Google LLC.</p>
+    <div class="tile">
+      <p class="platform">iPhone and iPad</p>
+      <a
+        class="store"
+        href={href}
+        aria-label="Download on the App Store for iPhone and iPad"
+        data-ph-event="app_store_clicked"
+        autofocus
+      >
+        <img src="/app-store-badge.svg" alt="" width="150" height="50" loading="lazy" decoding="async" />
+      </a>
+      <figure class="qr">
+        <img src="/qr/site-qr.svg" alt="" width="148" height="148" loading="lazy" decoding="async" />
+        <figcaption>Scan with your iPhone or iPad</figcaption>
+      </figure>
+    </div>
+    <p class="source"><SourceLink /></p>
     <a class="btn btn-ghost close" href="#_" data-picker-close>Close</a>
   </div>
 </dialog>
@@ -147,7 +119,7 @@ const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.s
   .card {
     position: relative;
     box-sizing: border-box;
-    width: min(640px, calc(100% - 32px));
+    width: min(400px, calc(100% - 32px));
     max-height: calc(100% - 32px);
     padding: 24px;
     overflow-y: auto;
@@ -181,22 +153,14 @@ const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.s
     color: var(--text);
   }
 
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
-    gap: 12px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
+  /* The one tile, centered under the centered title. */
   .tile {
     display: grid;
     align-content: start;
     gap: 10px;
-    justify-items: start;
+    justify-items: center;
     padding: 16px;
+    text-align: center;
     border: 1px solid var(--line-2);
     border-radius: var(--radius-card);
   }
@@ -222,52 +186,20 @@ const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.s
     height: 50px;
   }
 
-  /* A computer visitor scans this with a phone, so the link shows only with a
+  /* A computer visitor scans this with a phone, so the QR shows only with a
      mouse on a wide screen, never on a phone or tablet held in the hand. The
      SVG carries its own white ground and quiet zone. */
   .qr {
     display: none;
+    gap: 8px;
+    justify-items: center;
     margin: 0;
   }
 
   @media (hover: hover) and (pointer: fine) and (min-width: 820px) {
     .qr {
-      display: block;
+      display: grid;
     }
-  }
-
-  .qr summary {
-    padding: 11px 0;
-    font-size: 14px;
-    color: var(--text-2);
-    text-decoration: underline;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .qr summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .qr summary:hover,
-  .qr summary:focus-visible {
-    color: var(--text);
-  }
-
-  .qr-hide,
-  .qr[open] .qr-show {
-    display: none;
-  }
-
-  .qr[open] .qr-hide {
-    display: inline;
-  }
-
-  .qr figure {
-    display: grid;
-    gap: 8px;
-    justify-items: start;
-    margin: 0;
   }
 
   .qr img {
@@ -283,48 +215,36 @@ const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.s
     color: var(--text-2);
   }
 
-  @media (max-width: 559px) {
-    .tiles {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  /* Plain text: no border emphasis, hover, press or pointer, so it never
-     reads as a control. Not focusable, since it holds no link or button. */
-  .soon {
-    border-style: dashed;
-    border-color: var(--line);
-    cursor: default;
-  }
-
-  .soon .platform {
-    color: var(--text-2);
-  }
-
-  .status {
-    margin: 0;
-    font: var(--fw-caption) 13px / 1.3 var(--font-mono);
-    color: var(--text-3);
-  }
-
-  .legal {
-    margin: 14px 0 0;
+  .source {
+    margin: 12px 0 0;
     text-align: center;
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--text-3);
   }
 
   .close {
     display: flex;
-    margin-top: 18px;
+    margin-top: 12px;
     cursor: pointer;
   }
 </style>
 
 <script>
-  // Opens a button's picker as a modal dialog and closes it again. Bundled by
-  // Astro into an external module (no inline script under the Worker's CSP).
+  import { isAppleHandheld } from '../lib/ad-links.mjs';
+
+  // Copy the button's own picker link, keeping its organic or paid `ct`.
+  // If Layout's campaign rewrite runs later, it also finds these direct links.
+  if (isAppleHandheld(navigator)) {
+    document.querySelectorAll<HTMLAnchorElement>('a[data-picker-open]').forEach((button) => {
+      const storeLink = document.getElementById(button.hash.slice(1))?.querySelector<HTMLAnchorElement>('a.store');
+      if (!storeLink) return;
+      button.href = storeLink.href;
+      button.dataset.phEvent = 'app_store_clicked';
+      button.removeAttribute('data-picker-open');
+      button.removeAttribute('aria-haspopup');
+    });
+  }
+
+  // Opens a remaining button's picker as a modal dialog and closes it again.
+  // Bundled by Astro as an external module (no inline script under the CSP).
   // Without this script the buttons are plain links to `#<id>` and the CSS
   // above shows the target. The browser handles Esc and the focus trap; the
   // backdrop and Close links are handled here so they do not leave a `#_` in
@@ -367,7 +287,6 @@ const badge = ON_PLAY_STORE ? '/app-store-badge-black.svg' : '/app-store-badge.s
     'close',
     (event) => {
       if (event.target instanceof HTMLDialogElement && event.target.classList.contains('picker')) {
-        event.target.querySelector('.qr')?.removeAttribute('open');
         window.scrollTo({ top: scrollTop, behavior: 'instant' });
         opener?.focus({ preventScroll: true });
         opener = null;

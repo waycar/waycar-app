@@ -112,6 +112,15 @@ export function isAppleDevice(userAgent) {
 }
 
 /**
+ * Apple handhelds can open the App Store directly; real Macs keep the picker.
+ * iPadOS desktop mode identifies as MacIntel but has more than one touch point.
+ * @param {{ userAgent?: string, platform?: string, maxTouchPoints?: number }} [device]
+ */
+export function isAppleHandheld({ userAgent = '', platform = '', maxTouchPoints = 0 } = {}) {
+  return /iPhone|iPad|iPod/.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1);
+}
+
+/**
  * The token of a `/go/<token>` path, or null when the path is not an ad link
  * (the request then gets the site's own answer, a 404 for an unknown path).
  * @param {string} pathname

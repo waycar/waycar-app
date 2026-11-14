@@ -22,8 +22,8 @@ it shows everywhere, and "Decline" outside required regions stops PostHog too.
 Elsewhere the cookie is set from the first visit. Cookieless events need the PostHog
 project's cookieless tracking setting on, or PostHog drops them. The script
 sends `$pageview`, `$opt_in`, `get_picker_opened`, `app_store_clicked`,
-`install_command_copied`, `article_toc_clicked`, and `article_rail_clicked` to
-`us.i.posthog.com`. Controls opt in with `data-ph-event` (click) or
+`github_clicked`, `install_command_copied`, `article_toc_clicked`, and
+`article_rail_clicked` to `us.i.posthog.com`. Controls opt in with `data-ph-event` (click) or
 `data-ph-copy-event` (copy) attributes; see the script in
 `src/layouts/Layout.astro`. `install_command_copied` comes from the install
 command in the hero, in Setup, and in the article rail. An event sent from
@@ -31,12 +31,18 @@ inside a `data-ph-module="<id>"` wrapper also carries `module: <id>` (the
 article page's `get-app`, `start-here`, `host-setup`, `first-launch` and
 `toc-card`; see [Articles](#articles)), so a store tap in the rail's picker reads
 `app_store_clicked` with `module=get-app` and `ct=article`. The id is written
-at build time, never read from element text. Every store button opens a Get
-Waycar picker (see [App Store switch](#app-store-switch)): the button sends
-`get_picker_opened` with the `ct` of the App Store link inside its picker (a
-paid ad's `ct` after the rewrite) and its `module`; the picker's App Store link
-sends `app_store_clicked` with that same `ct` and `module`. The Android tile,
-Close and the backdrop send nothing. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
+at build time, never read from element text. On an iPhone or iPad a store
+button is a direct App Store link and sends `app_store_clicked`; everywhere
+else it opens a Get Waycar picker (see [App Store switch](#app-store-switch)):
+the button sends `get_picker_opened` with the `ct` of the App Store link inside
+its picker (a paid ad's `ct` after the rewrite) and its `module`; the picker's
+App Store link sends `app_store_clicked` with that same `ct` and `module`. So
+`get_picker_opened` counts visitors on anything but an iPhone or iPad, and
+`app_store_clicked` without one before it is an iPhone or iPad. Close and the
+backdrop send nothing. `github_clicked` comes from the "Open source on GitHub"
+link (`src/components/SourceLink.astro`) beside every store button but the
+header's, and inside each picker; in an article's rail or TOC card it carries
+that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
 The Worker (`src/worker.ts`) also sends anonymous server-side events:
 `plugin_install_requested` per `GET /install.sh`, `plugin_package_downloaded`
 per plugin package download (see [Plugin install events](#plugin-install-events)),
@@ -363,8 +369,7 @@ marked. From 1280 px the rail sits beside the article and scrolls with the page;
 under 1280 px it follows the article. Its four modules (`get-app`,
 `start-here`, `host-setup`, `first-launch`), their copy and each article's four
 hand-picked guides live in `src/data/article-rail.ts`, which also records the
-claim limits (no "popular", no price, no Android link: Android stays "coming
-soon"). A short article keeps only the modules that fit beside it; the rest
+claim limits (no "popular", no price). A short article keeps only the modules that fit beside it; the rest
 follow below it. A thin reading progress bar draws only where the browser
 supports scroll-driven animations. All of it is same-origin: no new third-party
 request, cookie or CSP change.
@@ -519,23 +524,44 @@ surface's own campaign (`?pt=…&ct=<token>&mt=8`, see
 [Campaign tokens](#campaign-tokens)); the picker's App Store link is the tagged one.
 Every store button (header, hero, Setup step 1, Closing, the article's TOC card,
 rail and footer, the site footer, compare and solutions pages)
-is one component, `src/components/AppStoreCta.astro`, which follows
+is one component, `src/components/AppStoreCta.astro`. Every one but the
+header's has the quiet "Open source on GitHub" link
+(`src/components/SourceLink.astro`) placed beside it by its caller, in both
+states below; `scripts/picker.test.mjs` checks the count. The button follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
-- **Live** (the shipped state): each button opens the **Get Waycar picker**
-  (`src/components/GetPicker.astro`). No button names a device or a store: the
-  labels are "Get Waycar" and "Download" (header).
-  The picker is the one place that does. Tile one, "iPhone and iPad", holds
+- **Live** (the shipped state): with JavaScript on an iPhone, iPad or iPod
+  touch, each button links **directly to the App Store**, one tap away, sending
+  `app_store_clicked`. Detection uses `isAppleHandheld` in `src/lib/ad-links.mjs`:
+  an `iPhone|iPad|iPod` user agent, or iPadOS desktop mode (`MacIntel` with more
+  than one touch point), not a real Mac. The bundled picker script copies the
+  App Store link from that button's own picker and removes `data-picker-open`
+  and `aria-haspopup`, keeping its text and `ct`. Layout's paid-campaign rewrite
+  works in either script order: it updates the picker link before the copy, or
+  both links after it. Layout's existing click listener reads the rewritten
+  button's own `href` for `ct`; no `get_picker_opened` event is sent on this path.
+  Everyone else (computers and other phones) opens the **Get Waycar picker**
+  (`src/components/GetPicker.astro`), sending `get_picker_opened` with the
+  picker's App Store `ct`. No button names a device or a store: the labels stay
+  "Get Waycar" and "Download" (header). The picker is the one place that does.
+  Its one tile, "iPhone and iPad", holds
   Apple's official "Download on the App Store" badge
   (`public/app-store-badge.svg`) as the link to the listing, with
-  `data-ph-event="app_store_clicked"`. Tile two, "Android™", is plain text,
-  "Coming soon": not a link, not focusable, no Play name, badge or logo. A line
-  below says "Android is a trademark of Google LLC." Each button owns its
+  `data-ph-event="app_store_clicked"`. Under it sit the "Open source on GitHub"
+  link (`github_clicked`) and Close; nothing else in it is focusable. Each
+  button owns its
   picker (a `<dialog>` right after it), so the App Store link inside keeps that
-  button's `ct`, and the `module` of the wrapper around both. With JavaScript
-  the click opens it as a modal (Esc, Close and the backdrop close it; focus
-  moves in and returns; the page behind does not scroll). Without JavaScript the
-  button is a link to the picker's id and, under `@media (scripting: none)`,
+  button's `ct` (or the paid campaign's) and the `module` of the wrapper around
+  both; the direct link keeps them too. Inside the picker, the QR figure is
+  always shown under the badge on wide screens with a mouse
+  (`@media (hover: hover) and (pointer: fine) and (min-width: 820px)`), with no
+  disclosure click; elsewhere it stays hidden. It uses `/qr/site-qr.svg`,
+  148 × 148 px, and the caption "Scan with your iPhone or iPad". The QR itself
+  keeps `ct=site-qr`. With JavaScript outside Apple handhelds the button opens
+  the picker as a modal (Esc, Close and the backdrop close it; focus moves in
+  and returns; the page behind does not scroll). Without JavaScript on any
+  device there are no click events; the button links to the picker's id and,
+  under `@media (scripting: none)`,
   CSS shows `:target` as a fixed overlay, so the App Store link is two taps away;
   Esc and the focus trap need JavaScript, and Close is a link to `#_`. The
   header's blur is a `::before` so the header does not become the overlay's
@@ -548,10 +574,6 @@ is one component, `src/components/AppStoreCta.astro`, which follows
   Apple's marketing guidelines allow them only with a live listing. On phones
   (600px and narrower) the header pill shows "Coming soon" and keeps the full
   phrase for screen readers.
-- **Google Play** (`PLAY_STORE_LISTING_URL`, empty today): set, the Android tile
-  links to it and the App Store badge turns black (`public/app-store-badge-black.svg`;
-  Apple's rule once another platform's badge appears). Never set it before a Play
-  listing exists. `scripts/picker.test.mjs` builds it once with a dummy URL.
 
 Availability statements (FAQ, footer, `/llms.txt`, the `{{app_store}}` token in
 `src/llms/index.md`) follow `ON_APP_STORE` too: "available now" while live,
@@ -740,6 +762,25 @@ wherever a 1.3.0 user would otherwise be misled (a requirement, a setup step, a
 comparison cell); drop those words once the next release ships. Also
 `/privacy` (the policy describes the app as built from `main`).
 
+## Home page
+
+`src/pages/index.astro` orders the sections for a visitor who decides in the
+first screen. The hero (`b/OutcomeHero.astro`) sells two ideas together: every
+agent in one list (the Console screenshot) and answering by voice (the
+dictation clip). Its lede starts with the problem, an agent waiting on a
+question while you are away, and it holds the download: the button above the
+fold on a phone, and on a wide screen with a mouse also the QR that gets the
+app onto the visitor's phone. The works-with strip (`WorksWith.astro`) lists
+runtimes and agents. Then come Step away, Just talk and Why not SSH
+(`b/WhyNotSsh.astro`, four rows against plain SSH and tmux attach, with its
+own download button, the page's only one with the default `site` token, and a
+link to `/compare`), then the architecture, Security
+and Setup, then CarPlay and the rest. `/x` is the same page without the CarPlay
+section.
+"Free on the App Store" (`.cta-note` in `global.css`) sits beside a download
+button and nowhere else, and only while `ON_APP_STORE`. Setup's "What the
+command does" list repeats `/help/install`: change both together.
+
 ## Home page A/B test (ended)
 
 The 2026-10 hero A/B test ended by shipping variant B (the outcome-led hero),
@@ -787,7 +828,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 
 | Path | What it holds |
 | --- | --- |
-| `src/pages/` | `index` (landing, home page A), `b` (home page B, served at `/`), `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
+| `src/pages/` | `index` (the home page), `x` (its `noindex` twin for X ad clicks, see [Ad links](#ad-links)), `carplay`, `support`, `privacy`, `ipad` (screenshot gallery), `404`, `help/` (`/help`, `/help/<slug>`, `/help/<slug>.md`, `/help/search.json`), `changelog/` (`/changelog`, `/changelog/<n>`), `articles/`, `compare/` (`/compare`, `/compare/<slug>`, `/compare/<slug>.md`), `solutions/` (`/solutions`, `/solutions/<slug>`, `/solutions/<slug>.md`), plus the `llms.txt` (reviewed fallback), `index.md`, `help.md`, `articles.md`, `compare.md`, and `solutions.md` endpoints |
 | `src/content/help/` | Help pages, one Markdown file per feature (see [Help docs](#help-docs)); schema in `src/content.config.ts` |
 | `src/content/changelog/` | Released versions, one Markdown file per version (see [Changelog](#changelog)); schema in `src/content.config.ts` |
 | `src/content/compare/`, `src/content/solutions/` | Comparisons and solution pages, one Markdown file each (see [Compare and solutions](#compare-and-solutions)); schemas in `src/content.config.ts` |
@@ -800,16 +841,22 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 | `src/components/` | One component per landing section, plus `TermWindow`, `CodeBlock`, `SiteHeader`, `SiteFooter`, `AppStoreCta`, `HelpSearch`, `Prose` (rendered Markdown on help and changelog pages), and `CompareTable`, `CompareMatrix`, `CompareCell`, `CompareLegend`, `LevelMark` and `ComparisonLinks` (the comparison tables and their parts) |
 | `src/styles/global.css` | Design tokens and shared building blocks |
 | `src/data/screens.ts` | Screenshot imports, alt text, captions |
+| `src/data/supported.ts` | The runtimes with their minimum versions (and which ones wait for the next App Store update), the agents, and the repository URL: read by the works-with strip under the hero, the Setup requirements and the Features agent list |
 | `src/assets/` | Logo and screenshots, resized to WebP at build time |
 | `src/worker.ts` | The Worker: host redirect, retired page redirects, then static assets, with security headers on all of them |
 | `integrations/sitemap.mjs` | Astro integration that writes `dist/sitemap.xml` from the built pages' canonical URLs |
 | `scripts/` | `site-pages.mjs` (indexable pages and their text, read back from `dist/`), `generate-llms-txt.mjs` (the deploy-time llms.txt generator and its validator), their tests, `help-search.test.mjs` (search ranking), `changelog.test.mjs` (changelog rules), and `compare.test.mjs` (the comparison and solution checks) |
 
 Screenshots are copies of `docs/images/screenshots/{iphone,ipad}/` at the repo
-root (generated by `make screenshots`); refresh them here when those change.
-`src/assets/hero/` holds the dictation hero animation (`dictation-hero.webp`,
+root (generated by `make screenshots`, which copies them here). The two Apple
+Watch screens (`watch-agents.png`, `watch-allow-deny.png`) are copies of
+`docs/images/screenshots/watch/2-agents-status.png` and `6-allow-deny.png`;
+nothing copies those, so `cp` them again when the watch screenshots change.
+`src/assets/hero/` holds the dictation animation (`dictation-hero.webp`,
 `dictation-hero-660.webp`) and its still (`dictation-hero-still.png`), also
-generated by `make screenshots` (`scripts/record-dictation-hero.sh`).
+generated by `make screenshots` (`scripts/record-dictation-hero.sh`). The
+home page's hero shows it beside the Console screenshot, loaded lazily, with
+the still for visitors who ask for reduced motion.
 The logo is `src/assets/logo.png`; `public/` holds the favicon and touch icon.
 All of them, and `docs/images/logo.png`, are generated by
 `scripts/generate-app-icons.py` at the repo root; rerun it rather than editing them.
@@ -819,7 +866,9 @@ The share cards are `public/og.png` (every page's default) and
 `og/`, which use the site's fonts, the screenshots in `src/assets/screens/`,
 and `docs/images/waycar-icon.svg`. After changing any of those, run
 `og/render.sh` (needs Google Chrome) and commit the PNGs. A page picks its card
-with `Layout`'s `image` and `imageAlt` props.
+with `Layout`'s `image` and `imageAlt` props. The default card repeats the home
+page's headline: change `og/home.html` and `Layout`'s default `imageAlt` with
+it.
 
 ## Domains and deployment
 

@@ -1,0 +1,79 @@
+﻿2026-11-13T19:22:18.9729370Z Current runner version: '2.338.2'
+2026-11-13T19:40:36.4961270Z ##[group]Build for testing
+2026-11-13T19:40:42.5800770Z Command line invocation:
+2026-11-13T20:06:34.6158680Z note: Run script build phase 'Remove unused LuxTTS resources' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Waycar' from project 'Waycar')
+2026-11-13T20:06:34.9595180Z ** TEST BUILD SUCCEEDED **
+2026-11-13T20:06:34.9595880Z 
+2026-11-13T20:06:35.9465050Z ##[endgroup]
+2026-11-13T20:06:35.9465800Z ==> Build for testing: 1559s (status 0)
+2026-11-13T20:06:37.0547000Z Monitoring boot status for Waycar CI (8F684A2B-B74B-477F-BE8C-A7B97A033FEA).
+2026-11-13T20:06:37.0571980Z Device already booted, nothing to do.
+2026-11-13T20:06:37.0572570Z 
+2026-11-13T20:06:37.0573020Z ==> Simulator boot wait after the build overlap: 1s
+2026-11-13T20:06:38.9767530Z ##[group]WaycarSSHSessionE2ETests
+2026-11-13T20:06:38.9769670Z ==> WaycarSSHSessionE2ETests: skipping automatic package resolution
+2026-11-13T20:06:39.8903510Z Monitoring boot status for Waycar CI (8F684A2B-B74B-477F-BE8C-A7B97A033FEA).
+2026-11-13T20:06:39.8914330Z Device already booted, nothing to do.
+2026-11-13T20:06:39.8914910Z 
+2026-11-13T20:06:55.8920440Z ==> Simulator 8F684A2B-B74B-477F-BE8C-A7B97A033FEA: accessibility and software keyboard prepared for app tests
+2026-11-13T20:08:33.6752160Z ✔ Test "allocated exec timeout completes promptly and invalidates uncertain cleanup" passed after 2.543 seconds.
+2026-11-13T20:08:33.6797680Z ◇ Test "handshake deadline completes promptly" started.
+2026-11-13T20:08:33.8399020Z [WaycarSSH] 2026-11-13T20:08:33.825Z handshake with 127.0.0.1:55225 timed out [elapsed=0.152s; last_result=-37; waits=1; last_wait=socket read]
+2026-11-13T20:08:33.8413330Z ✔ Test "handshake deadline completes promptly" passed after 0.153 seconds.
+2026-11-13T20:08:33.8414520Z ◇ Test "handshake cancellation completes promptly" started.
+2026-11-13T20:08:33.9361870Z ✔ Test "handshake cancellation completes promptly" passed after 0.101 seconds.
+2026-11-13T20:08:33.9370160Z ✔ Suite "WaycarSSH session e2e" passed after 16.313 seconds.
+2026-11-13T20:08:33.9374050Z ✔ Test run with 13 tests in 1 suite passed after 16.326 seconds.
+2026-11-13T20:08:37.4332370Z 2026-11-13 20:08:37.425 xcodebuild[36970:333440] [MT] IDETestOperationsObserverDebug: 88.257 elapsed -- Testing started completed.
+2026-11-13T20:08:37.4515440Z 2026-11-13 20:08:37.425 xcodebuild[36970:333440] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-13T20:08:37.4656020Z 2026-11-13 20:08:37.425 xcodebuild[36970:333440] [MT] IDETestOperationsObserverDebug: 88.257 sec, +88.257 sec -- end
+2026-11-13T20:08:37.9415580Z 
+2026-11-13T20:08:37.9417330Z Test session results, code coverage, and logs:
+2026-11-13T20:08:37.9422970Z 	/tmp/waycar-ci.9QuIp2/AppDerivedData/Logs/Test/Test-Waycar-2026.11.13_20-07-08-+0000.xcresult
+2026-11-13T20:08:37.9426330Z 
+2026-11-13T20:08:37.9426790Z ** TEST EXECUTE SUCCEEDED **
+2026-11-13T20:08:37.9427050Z 
+2026-11-13T20:08:37.9761120Z Testing started
+2026-11-13T20:08:46.4107800Z No Waycar crash reports from this run.
+2026-11-13T20:08:46.5062650Z ##[endgroup]
+2026-11-13T20:08:46.5063430Z ==> WaycarSSHSessionE2ETests: 128s (status 0)
+2026-11-13T20:18:31.1982050Z ##[group]TmuxTransportE2ETests-tmux-3.2a
+2026-11-13T20:18:31.1983090Z ==> TmuxTransportE2ETests-tmux-3.2a: skipping automatic package resolution
+2026-11-13T20:18:31.7097490Z Monitoring boot status for Waycar CI (8F684A2B-B74B-477F-BE8C-A7B97A033FEA).
+2026-11-13T20:18:31.7102340Z Device already booted, nothing to do.
+2026-11-13T20:18:31.7102630Z 
+2026-11-13T20:20:27.5782530Z 2026-11-13 20:20:27.569431+0000 Waycar[81745:438783] [network] ssh handshake: done in 54 ms
+2026-11-13T20:20:27.5886000Z 2026-11-13 20:20:27.569819+0000 Waycar[81745:438783] [network] ssh tcp connect 0 ms, key exchange 53 ms
+2026-11-13T20:20:27.6093900Z 2026-11-13 20:20:27.603023+0000 Waycar[81745:438412] [network] ssh handshake: done in 32 ms
+2026-11-13T20:20:27.6197060Z 2026-11-13 20:20:27.603168+0000 Waycar[81745:438412] [network] ssh tcp connect 0 ms, key exchange 32 ms
+2026-11-13T20:20:27.7124360Z 2026-11-13 20:20:27.710465+0000 Waycar[81745:438412] [network] ssh auth: done in 107 ms
+2026-11-13T20:20:27.7162680Z 2026-11-13 20:20:27.710752+0000 Waycar[81745:438412] [network] ssh dial: connected in 195 ms
+2026-11-13T20:21:09.8534760Z [WaycarSSH] 2026-11-13T20:21:09.823Z exec, exchange timed out [elapsed=40.001s; channel open=0.001s; exec request=0.001s; exchange=39.999s; last_result=0; waits=4; last_wait=socket read]
+2026-11-13T20:21:10.4595590Z ✘ Test "without no-detach-on-destroy the control channel reattaches after %exit" recorded an issue at TmuxTransportE2ETests.swift:711:6: Caught error: .timedOut
+2026-11-13T20:21:10.4874610Z ✘ Test "without no-detach-on-destroy the control channel reattaches after %exit" failed after 43.396 seconds with 1 issue.
+2026-11-13T20:21:16.5591470Z 2026-11-13 20:21:16.539961+0000 Waycar[81745:438783] [network] ssh tcp connect 0 ms, key exchange 99 ms
+2026-11-13T20:21:16.7118920Z 2026-11-13 20:21:16.707164+0000 Waycar[81745:457015] [network] ssh auth: done in 167 ms
+2026-11-13T20:21:16.7222520Z 2026-11-13 20:21:16.707403+0000 Waycar[81745:457015] [network] ssh dial: connected in 334 ms
+2026-11-13T20:21:18.8502860Z ✔ Test "close leaves no waycar sessions or control clients behind" passed after 3.488 seconds.
+2026-11-13T20:21:18.8682600Z ✘ Suite "tmux Transport e2e" failed after 116.704 seconds with 1 issue.
+2026-11-13T20:21:18.9010690Z ✘ Test run with 21 tests in 1 suite failed after 116.727 seconds with 1 issue.
+2026-11-13T20:21:22.2069340Z 2026-11-13 20:21:22.203 xcodebuild[80708:434446] [MT] IDETestOperationsObserverDebug: 155.002 elapsed -- Testing started completed.
+2026-11-13T20:21:22.2086940Z 2026-11-13 20:21:22.204 xcodebuild[80708:434446] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-13T20:21:22.2094030Z 2026-11-13 20:21:22.204 xcodebuild[80708:434446] [MT] IDETestOperationsObserverDebug: 155.002 sec, +155.002 sec -- end
+2026-11-13T20:21:22.8074650Z 
+2026-11-13T20:21:22.8078010Z Test session results, code coverage, and logs:
+2026-11-13T20:21:22.8082030Z 	/tmp/waycar-ci.9QuIp2/AppDerivedData/Logs/Test/Test-Waycar-2026.11.13_20-18-46-+0000.xcresult
+2026-11-13T20:21:22.8083250Z 
+2026-11-13T20:21:22.8085350Z Failing tests:
+2026-11-13T20:21:22.8090860Z 	TmuxTransportE2ETests.controlChannelReattachesAfterTmuxExits()
+2026-11-13T20:21:22.8092190Z 
+2026-11-13T20:21:22.8092320Z ** TEST EXECUTE FAILED **
+2026-11-13T20:21:22.8092710Z 
+2026-11-13T20:21:22.9914490Z Testing started
+2026-11-13T20:21:29.3775950Z No Waycar crash reports from this run.
+2026-11-13T20:21:30.0785660Z TmuxTransportE2ETests-tmux-3.2a exited 65; diagnostics: /Users/runner/work/_temp/waycar-ci-diagnostics-43491553084-1/TmuxTransportE2ETests-tmux-3.2a/attempt-1
+2026-11-13T20:21:30.0966220Z ##[endgroup]
+2026-11-13T20:21:30.1007550Z ==> TmuxTransportE2ETests-tmux-3.2a: 179s (status 65)
+2026-11-13T20:21:44.4221250Z 2026-11-13T20:06:38Z debug1: Bind to port 55231 on 127.0.0.1.
+2026-11-13T20:22:01.9261600Z ##[error]Process completed with exit code 65.
+2026-11-13T20:22:02.0171870Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

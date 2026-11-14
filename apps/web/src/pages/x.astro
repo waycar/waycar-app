@@ -16,20 +16,25 @@ import OutcomeHero from '../components/b/OutcomeHero.astro';
 import PickUp from '../components/b/PickUp.astro';
 import StartAnywhere from '../components/b/StartAnywhere.astro';
 import StepAway from '../components/b/StepAway.astro';
+import WhyNotSsh from '../components/b/WhyNotSsh.astro';
 import YourSetup from '../components/b/YourSetup.astro';
+import WorksWith from '../components/WorksWith.astro';
 import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Waycar for iPhone and iPad" description="" noindex cardless homePage>
+  {/* The home page's order (src/pages/index.astro), without the CarPlay section. */}
   <OutcomeHero />
-  <JustTalk />
-  <YourSetup />
+  <WorksWith />
   <StepAway />
+  <JustTalk />
+  <WhyNotSsh />
+  <YourSetup />
+  <Security />
+  <Setup />
   <StartAnywhere />
   <PickUp />
   <Features compact />
-  <Security />
-  <Setup />
   <Faq />
   <OutcomeClosing />
 </Layout>

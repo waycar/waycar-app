@@ -66,7 +66,7 @@ Waycar has an optional push relay. Your machine encrypts each notification first
 - Claude Code runs on your machine, not in the app, and Waycar keeps no cloud copy. Your machine must be on and awake.
 - Its agent terminals need tmux, herdr or Herdr Core, or Zellij from the next update. It cannot open an arbitrary SSH server.
 - Waycar supports Mac and Linux machines. Claude Code also runs on Windows, which Waycar does not support.
-- It is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+- It is an iPhone and iPad app with no native desktop or web client.
 - Chat Mode covers 14 agents; see [Chat Mode](/help/chat-mode).
 - The terminal session ends about 20 seconds after you leave the app and re-attaches on its own when you come back. Claude Code keeps running on your machine the whole time.
 

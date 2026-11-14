@@ -1,21 +1,17 @@
 import { appStoreCampaignUrl, organicCampaign } from '../lib/ad-links.mjs';
 
 // The one App Store switch. Waycar is live (2026-10-14), so this is the listing
-// URL and every store button (`AppStoreCta`) opens the Get Waycar picker, whose
-// App Store link carries `app_store_clicked`, and availability statements (FAQ,
-// footer, /llms.txt, /index.md) say it is available now. Emptying it reverts
-// them all to a plain "Coming soon to the App Store" label with no picker, no
-// link and no event.
+// URL. With JavaScript, store buttons (`AppStoreCta`) on iPhone, iPad and iPod
+// touch link directly to it, sending `app_store_clicked`. Everyone else gets
+// the Get Waycar picker (`get_picker_opened`), whose App Store badge sends
+// `app_store_clicked` and whose QR is always shown on wide screens with a mouse.
+// Without JavaScript the picker opens via a fragment link and sends no events.
+// Each App Store link keeps the button's `ct`, or a paid campaign's. Availability
+// statements (FAQ, footer, /llms.txt, /index.md) say it is available now.
+// Emptying it reverts them all to a plain "Coming soon to the App Store" label
+// with no picker, no link and no event.
 export const APP_STORE_LISTING_URL = 'https://apps.apple.com/app/id6815881853';
 export const ON_APP_STORE = APP_STORE_LISTING_URL.startsWith('https://');
-
-// The Google Play switch, empty until an Android app is listed. While empty the
-// picker's Android tile is plain "Coming soon" text and the App Store badge is
-// Apple's white one. Set, the tile links here and the App Store badge turns
-// black (Apple's rule once another platform's badge appears). Never set it
-// before a Play listing exists: the site says nothing about Play until then.
-export const PLAY_STORE_LISTING_URL = '';
-export const ON_PLAY_STORE = PLAY_STORE_LISTING_URL.startsWith('https://');
 
 // What the site links to: the listing tagged with Apple's campaign (`ct`), so
 // App Analytics counts installs that started on the site, per surface. `section`
