@@ -872,7 +872,7 @@ struct ConsoleView: View {
 
     private var sampleHostRow: some View {
         HostSetupOptionRow(
-            title: "Sample", subtitle: "Fictional offline agents",
+            title: "Try the Sample", subtitle: "Fictional offline agents",
             symbol: "play.rectangle", action: presentSample)
         .accessibilityIdentifier("setup.sample")
     }

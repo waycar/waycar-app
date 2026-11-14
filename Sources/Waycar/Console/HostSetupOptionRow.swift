@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The quiet, full-width choices above the first-Host setup steps.
+/// A quiet second choice under the scan, such as the Sample: tinted text with
+/// a short line under it, no card, so the scan stays the one primary action.
 struct HostSetupOptionRow: View {
     let title: String
     let subtitle: String
@@ -9,51 +10,42 @@ struct HostSetupOptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.title2)
+            VStack(spacing: 2) {
+                Label(title, systemImage: symbol)
+                    .fontWeight(.semibold)
                     .foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
+                Text(subtitle)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
-                in: .rect(cornerRadius: Brand.Radius.control))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// The first thing a new user sees: an offer to look for their computers.
-/// Scan opens Find Computers, whose browse brings up the Local Network
-/// prompt. It is a feature card among the other paths on the screen, not a
-/// pre-permission alert, and it stays until a Host exists, so a user who
-/// declined iOS's prompt can come back to it.
+/// The first thing a new user sees: an offer to look for their computers,
+/// in the middle of the screen. Scan opens Find Computers, whose browse
+/// brings up the Local Network prompt. It is the screen's primary action,
+/// not a pre-permission alert, and it stays until a Host exists, so a user
+/// who declined iOS's prompt can come back to it.
 struct FindComputersSetupCard: View {
     let scan: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: "wifi")
-                    .foregroundStyle(Color.accentColor)
-                    .accessibilityHidden(true)
-                Text("Waycar looks on this Wi-Fi for computers with SSH on.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "wifi")
+                .font(.largeTitle.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text("Waycar looks on this Wi-Fi for computers with SSH on.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             Button(action: scan) {
                 Text("Scan Computers on My Network")
                     .frame(maxWidth: .infinity)
@@ -62,10 +54,6 @@ struct FindComputersSetupCard: View {
             .controlSize(.large)
             .accessibilityIdentifier("setup.find-computers")
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: .rect(cornerRadius: Brand.Radius.control))
+        .frame(maxWidth: .infinity)
     }
 }
