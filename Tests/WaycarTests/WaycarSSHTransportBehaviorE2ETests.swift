@@ -2835,6 +2835,112 @@ struct WaycarSSHTransportBehaviorE2ETests {
         }
     }
 
+    /// Kept as it is (HCT-03): `closePane` drops the pane's input gate and
+    /// remembered kind before herdr answers, so after a refused close a fresh
+    /// opencode Agent has neither. Its next prompt asks `agent.get` for the
+    /// kind (the fixture names codex) and goes out with no screen read.
+    @Test("a refused pane close has already dropped its launch's input gate")
+    func refusedPaneCloseHasDroppedTheInputGate() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.settingsWithoutLaunchSettle(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("opencodegroup")
+        let agent = try await transport.startAgent(
+            AgentLaunchRequest(
+                kind: "opencode", name: "fixture", workspaceID: "workspace-1",
+                cwd: "/fixture/\(token)"))
+        let params = AgentPromptParams(target: agent.paneID, text: "fixture prompt")
+        await #expect(throws: AgentInputNotReadyError.self) {
+            _ = try await transport.promptAgent(params)
+        }
+        await #expect(
+            throws: HerdrAPIError(
+                code: "confirmation_required",
+                message: "closing this tab would close a worktree group")
+        ) {
+            try await transport.closePane(
+                PaneTarget(paneID: agent.paneID), closesWorktreeGroup: false)
+        }
+
+        _ = try await transport.promptAgent(params)
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(
+            Self.methods(recorded)
+                == ["tab.create", "agent.start", "pane.read", "pane.close", "agent.get",
+                    "agent.prompt"])
+    }
+
+    /// Kept as it is (HCT-04): a kind herdr lists for a pane replaces the
+    /// remembered kind but not the launch's input gate, so a prompt still
+    /// waits for the launched kind's marker. Here a replay finds the earlier
+    /// try's Agent and gates it as opencode, then `agent.list` names codex.
+    @Test("a kind herdr lists for a gated pane keeps the launch's input gate")
+    func listedKindKeepsTheInputGate() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.worktreeLaunchSettings(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("rootagent")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let agent = try await transport.startAgent(AgentLaunchRequest(
+            kind: "opencode", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true))
+        #expect(agent.paneID == "pane:\(token)")
+        let listed = try await transport.listAgents()
+        #expect(listed.first { $0.paneID == agent.paneID }?.kind == "codex")
+
+        do {
+            _ = try await transport.promptAgent(
+                AgentPromptParams(target: agent.paneID, text: "fixture prompt"))
+            Issue.record("a prompt went out past the launch's input gate")
+        } catch let held as AgentInputNotReadyError {
+            #expect(held.kind == "opencode")
+        }
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(Self.methods(recorded).last == "pane.read")
+        #expect(!Self.methods(recorded).contains("agent.prompt"))
+    }
+
+    /// A prompt's screen read authorizes only the gate it read for: a gate a
+    /// replay installs for the same pane while that read is out survives the
+    /// prompt, which goes out on the box it saw, and the next prompt reads
+    /// the screen again (HERDR-11). The fixture holds the first read until
+    /// the replay has returned, so the replacement lands inside it.
+    @Test("a gate replaced during a prompt's screen read survives that prompt")
+    func gateReplacedDuringAScreenReadSurvivesThatPrompt() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(
+            settings: Self.worktreeLaunchSettings(environment))
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("rootheld")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let launch = AgentLaunchRequest(
+            kind: "opencode", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true)
+        let agent = try await transport.startAgent(launch)
+        let params = AgentPromptParams(target: agent.paneID, text: "fixture prompt")
+
+        async let first = transport.promptAgent(params)
+        let arrived = try await transport.readPane(
+            PaneReadParams(paneID: "fixture:await-read:\(token)", source: .recent))
+        #expect(arrived.text == "observed")
+        let replayed = try await transport.startAgent(launch)
+        #expect(replayed.paneID == agent.paneID)
+        _ = try await transport.readPane(
+            PaneReadParams(paneID: "fixture:release-read:\(token)", source: .recent))
+        _ = try await first
+        _ = try await transport.promptAgent(params)
+
+        let recorded = try await Self.recordedRequests(from: transport, token: token)
+        #expect(
+            Self.methods(recorded).filter { $0 == "pane.read" || $0 == "agent.prompt" }
+                == ["pane.read", "agent.prompt", "pane.read", "agent.prompt"])
+    }
+
     /// The new-Workspace half of the same compensation: a refused launch
     /// would otherwise leave an empty Workspace behind.
     @Test("a refused new-workspace agent start closes the workspace it created")
