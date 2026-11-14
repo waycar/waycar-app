@@ -10,7 +10,8 @@ import Foundation
 ///   frames in memory and are remembered for the disk's (`pending`). The
 ///   first load merges: frames recorded meanwhile win, remembered removals
 ///   and the last host catalog apply to the disk's, expired ones drop, then
-///   files no entry names are swept.
+///   files no entry names are swept, and the frames recorded meanwhile are
+///   written before the index names them (B-45).
 /// - A capture's JPEG is encoded on the disk queue after the main actor has
 ///   moved on; its completion is kept only while that file still holds the
 ///   raw capture (`unencoded`), so a discarded or replaced frame never comes
@@ -75,9 +76,11 @@ struct AgentLastFrameIndexMachine: StateMachine {
         /// Queue on the disk queue, in order: encode and write `encode`'s
         /// capture, remove `removedFiles`, write `index`.
         case persist(index: [Entry], removedFiles: [String], encode: String?)
-        /// Queue the first load's sweep of files outside `keep`, and the
-        /// merged index when it differs from the disk's.
-        case sweep(keep: Set<String>, index: [Entry], rewritesIndex: Bool)
+        /// Queue the first load's sweep of files outside `keep`, the
+        /// encoding and write of `encode`'s captures (recorded before the
+        /// load, so never written), and the merged index when it differs
+        /// from the disk's.
+        case sweep(keep: Set<String>, index: [Entry], rewritesIndex: Bool, encode: [String])
         /// Keep the encoded JPEG for `file` in place of its raw capture.
         case storeEncoded(String)
     }
@@ -114,7 +117,11 @@ struct AgentLastFrameIndexMachine: StateMachine {
                 .sorted { $0.capturedAt > $1.capturedAt }
                 .prefix(AgentLastFrameStore.capacity))
             let keep = Set(state.entries.map(\.file))
-            return [.sweep(keep: keep, index: state.entries, rewritesIndex: state.entries != loaded)]
+            // Nothing is persisted while pending: every raw capture left is
+            // a frame recorded meanwhile.
+            let encode = state.entries.map(\.file).filter(state.unencoded.contains)
+            return [.sweep(
+                keep: keep, index: state.entries, rewritesIndex: state.entries != loaded, encode: encode)]
         case (.loaded, .indexRead):
             return []
         case (_, .record(let entry, let now)):

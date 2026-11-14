@@ -58,7 +58,8 @@ struct AgentLastFrameIndexMachineTests {
         ])
         let loaded = [diskCopy, discarded, unlisted, listed, expired]
         #expect(machine.handle(.indexRead(.entries(loaded), now: now)) == [
-            .sweep(keep: ["new.jpg", "p4.jpg"], index: [recorded, listed], rewritesIndex: true),
+            // B-45: the frame recorded while locked was never written.
+            .sweep(keep: ["new.jpg", "p4.jpg"], index: [recorded, listed], rewritesIndex: true, encode: ["new.jpg"]),
         ])
         #expect(machine.entries == [recorded, listed])
         #expect(machine.handle(.indexRead(.entries(loaded), now: now)).isEmpty)
@@ -87,7 +88,7 @@ struct AgentLastFrameIndexMachineTests {
             .setRetainedTargets([host.id: ConsoleInventoryCache.Target(host)]),
         ])
         #expect(machine.handle(.indexRead(.entries([kept, gone]), now: now)) == [
-            .sweep(keep: ["p1.jpg"], index: [kept], rewritesIndex: true),
+            .sweep(keep: ["p1.jpg"], index: [kept], rewritesIndex: true, encode: []),
         ])
         #expect(machine.handle(.remove(.hostsOutside([host.id: ConsoleInventoryCache.Target(host)]))).isEmpty)
     }
@@ -96,7 +97,7 @@ struct AgentLastFrameIndexMachineTests {
         let a = entry("a")
         var machine = Machine()
         #expect(machine.handle(.indexRead(.entries([a]), now: now)) == [
-            .sweep(keep: ["a.jpg"], index: [a], rewritesIndex: false),
+            .sweep(keep: ["a.jpg"], index: [a], rewritesIndex: false, encode: []),
         ])
     }
 

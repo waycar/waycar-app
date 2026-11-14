@@ -203,8 +203,8 @@ final class AgentLastFrameStore {
                 for file in files { pixels[file] = nil }
             case .persist(let entries, let files, let encode):
                 persist(entries, removing: files, encode: encode)
-            case .sweep(let keep, let entries, let rewritesIndex):
-                sweep(keeping: keep, index: entries, rewritesIndex: rewritesIndex)
+            case .sweep(let keep, let entries, let rewritesIndex, let encode):
+                sweep(keeping: keep, index: entries, rewritesIndex: rewritesIndex, encode: encode)
             case .storeEncoded:
                 break // Only an encoding's completion emits it; it stores its own JPEG.
             }
@@ -217,24 +217,11 @@ final class AgentLastFrameStore {
     private func persist(_ entries: [Entry], removing files: [String], encode file: String?) {
         guard let directory else { return }
         let index = Index(version: Self.formatVersion, entries: entries)
-        let captured: CapturedImage?
-        if let file, case .captured(let image) = pixels[file] {
-            captured = image
-        } else {
-            captured = nil
-        }
+        let captures = rawCaptures(file.map { [$0] } ?? [])
         queue.async {
-            var written: Data?
+            var written: [String: Data] = [:]
             do {
-                if let file, let captured {
-                    if let data = Self.jpeg(captured.image) {
-                        try Self.prepare(directory)
-                        try data.write(
-                            to: directory.appending(path: file),
-                            options: [.atomic, .completeFileProtection])
-                        written = data
-                    }
-                }
+                written = try Self.write(captures, in: directory)
                 for file in files {
                     try? FileManager.default.removeItem(at: directory.appending(path: file))
                 }
@@ -245,12 +232,41 @@ final class AgentLastFrameStore {
             } catch {
                 Self.log.debug("Last frame write skipped: \(error.localizedDescription)")
             }
-            let result = written
-            Task { @MainActor [weak self] in
-                guard let file, let self, let result,
-                    self.frameIndex.handle(.encoded(file: file)) == [.storeEncoded(file)]
-                else { return }
-                self.pixels[file] = .encoded(result)
+            self.storeEncoded(written)
+        }
+    }
+
+    /// The raw captures of `files` still waiting for their JPEG.
+    private func rawCaptures(_ files: [String]) -> [(file: String, image: CapturedImage)] {
+        files.compactMap { file in
+            guard case .captured(let image) = pixels[file] else { return nil }
+            return (file, image)
+        }
+    }
+
+    /// Encodes and writes each capture, on the disk queue; the JPEGs written.
+    nonisolated private static func write(
+        _ captures: [(file: String, image: CapturedImage)], in directory: URL
+    ) throws -> [String: Data] {
+        var written: [String: Data] = [:]
+        for (file, captured) in captures {
+            guard let data = jpeg(captured.image) else { continue }
+            try prepare(directory)
+            try data.write(to: directory.appending(path: file), options: [.atomic, .completeFileProtection])
+            written[file] = data
+        }
+        return written
+    }
+
+    /// Hands JPEGs written on the disk queue back on the main actor, each
+    /// kept only while its file still holds that raw capture.
+    nonisolated private func storeEncoded(_ written: [String: Data]) {
+        guard !written.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for (file, data) in written {
+                guard self.frameIndex.handle(.encoded(file: file)) == [.storeEncoded(file)] else { continue }
+                self.pixels[file] = .encoded(data)
             }
         }
     }
@@ -285,18 +301,29 @@ final class AgentLastFrameStore {
         perform(frameIndex.handle(.indexRead(loaded, now: now())))
     }
 
-    /// The first load's sweep of files no entry names, and its index when
-    /// the merge changed it.
-    private func sweep(keeping keep: Set<String>, index entries: [Entry], rewritesIndex: Bool) {
+    /// The first load's sweep of files no entry names, the JPEGs of frames
+    /// recorded before it, and its index when the merge changed it.
+    private func sweep(
+        keeping keep: Set<String>, index entries: [Entry], rewritesIndex: Bool, encode: [String]
+    ) {
         guard let directory else { return }
         let indexURL = directory.appending(path: Self.indexName)
         let kept = keep.union([Self.indexName])
         let index = Index(version: Self.formatVersion, entries: entries)
+        let captures = rawCaptures(encode)
         queue.async {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
             for name in names where !kept.contains(name) {
                 try? FileManager.default.removeItem(at: directory.appending(path: name))
             }
+            let written: [String: Data]
+            do {
+                written = try Self.write(captures, in: directory)
+            } catch {
+                Self.log.debug("Last frame write skipped: \(error.localizedDescription)")
+                written = [:]
+            }
+            self.storeEncoded(written)
             guard rewritesIndex, let data = try? JSONEncoder().encode(index) else { return }
             try? data.write(to: indexURL, options: [.atomic, .completeFileProtection])
         }

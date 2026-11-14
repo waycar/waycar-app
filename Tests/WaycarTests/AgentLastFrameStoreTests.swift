@@ -177,6 +177,37 @@ struct AgentLastFrameStoreTests {
         #expect(try Self.images(in: directory).count == 1)
     }
 
+    /// B-45: a frame captured while the device is locked is written once the
+    /// index loads, before the index names it, so it survives a relaunch.
+    @Test func aFrameCapturedWhileLockedSurvivesARelaunch() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Host.fixture()
+        let old = Self.agent("w1:p1", host: host)
+        let fresh = Self.agent("w1:p2", host: host)
+        let writer = AgentLastFrameStore(directory: directory)
+        writer.record(Self.image(), size: Self.size, for: old, host: host)
+        await writer.settle()
+        let lock = DeviceLock()
+        let store = AgentLastFrameStore(
+            directory: directory,
+            readIndex: { url in
+                lock.isLocked ? .unreadable : ConsoleInventoryCache.FileAccess.live.read(url)
+            })
+        store.record(Self.image(), size: Self.size, for: fresh, host: host)
+        await store.settle()
+        #expect(try Self.images(in: directory).count == 1, "nothing is written while locked")
+
+        lock.isLocked = false
+        #expect(Set(store.cachedEntries.map(\.agentID)) == [old.id, fresh.id])
+        await store.settle()
+        #expect(try Self.images(in: directory).count == 2)
+        let relaunched = AgentLastFrameStore(directory: directory)
+        #expect(relaunched.frame(for: fresh.id, host: host) != nil)
+        #expect(relaunched.frame(for: old.id, host: host) != nil)
+        await relaunched.settle()
+    }
+
     /// A removed Host takes its frames along; so does one whose connection
     /// target changed, which may now reach another herdr.
     @Test func aRemovedOrRetargetedHostLosesItsFrames() async throws {
