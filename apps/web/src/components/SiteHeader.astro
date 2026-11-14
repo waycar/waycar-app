@@ -5,24 +5,12 @@ import { SOURCE_URL } from '../data/supported';
 import AppStoreCta from './AppStoreCta.astro';
 import HelpSearch from './HelpSearch.astro';
 
-interface Props {
-  /** The page is served at `/`, so section links are in-page anchors. */
-  homePage?: boolean;
-}
-
-const { homePage = false } = Astro.props;
-/** Link to a home page section: `#id` on a home page, `/#id` elsewhere. */
-const section = (id: string) => (homePage ? `#${id}` : `/#${id}`);
-
+// Pages only: no link that just scrolls to a home page section.
 const links = [
-  { href: section('features'), label: 'Features' },
-  { href: section('security'), label: 'Security' },
-  { href: section('setup'), label: 'Setup' },
+  { href: '/', label: 'Product' },
   { href: '/carplay', label: 'CarPlay' },
-  { href: section('faq'), label: 'FAQ' },
   { href: '/help', label: 'Help' },
   { href: '/articles', label: 'Articles' },
-  { href: SOURCE_URL, label: 'GitHub', wide: true },
 ];
 ---
 
@@ -36,8 +24,10 @@ const links = [
       <ul>
         {
           links.map((link) => (
-            <li class:list={{ wide: link.wide }}>
-              <a href={link.href}>{link.label}</a>
+            <li>
+              <a class="link" href={link.href}>
+                {link.label}
+              </a>
             </li>
           ))
         }
@@ -45,6 +35,8 @@ const links = [
     </nav>
     <div class="right">
       <HelpSearch />
+      {/* Plain text beside the button, so Download stays the one thing to press. */}
+      <a class="link" href={SOURCE_URL} data-ph-event="github_clicked">GitHub</a>
       <AppStoreCta kind="header" ct="site-nav" />
     </div>
   </div>
@@ -100,18 +92,18 @@ const links = [
     gap: 4px;
   }
 
-  .links a {
+  .link {
     display: inline-flex;
     align-items: center;
     min-height: 40px;
     padding: 0 10px;
-    font-size: 14px;
+    font-size: var(--fs-button);
     color: var(--text-2);
     white-space: nowrap;
-    border-radius: 8px;
+    border-radius: var(--radius-keycap);
   }
 
-  .links a:hover {
+  .link:hover {
     color: var(--text);
   }
 
@@ -122,15 +114,8 @@ const links = [
     margin-left: auto;
   }
 
-  /* The last link drops first, where the row would push the button off. */
-  @media (max-width: 999px) {
-    .wide {
-      display: none;
-    }
-  }
-
-  /* Where the link row stops fitting beside the brand and button. */
-  @media (max-width: 860px) {
+  /* Where the link row stops fitting beside the brand and the right side. */
+  @media (max-width: 799px) {
     .links {
       display: none;
     }
@@ -139,6 +124,23 @@ const links = [
   @media (max-width: 600px) {
     .bar {
       gap: 12px;
+    }
+
+    .right .link {
+      padding: 0 6px;
+    }
+  }
+
+  /* Narrower than any iPhone Waycar runs on: the mark alone names the brand,
+     so GitHub still fits beside Download. Screen readers keep the name. */
+  @media (max-width: 359px) {
+    .brand span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
   }
 </style>

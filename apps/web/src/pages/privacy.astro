@@ -1,6 +1,9 @@
 ---
 // Renders the repo-root PRIVACY.md at build time, so the policy on the site
-// and the one in the repository can never drift apart.
+// and the one in the repository can never drift apart. Below it, outside the
+// policy, the site's legal notices: Apple's trademark credit (its marketing
+// guidelines ask for one where the App Store badge appears) and the
+// third-party software notices, both linked from no other page.
 import { Content } from '../../../../PRIVACY.md';
 import Layout from '../layouts/Layout.astro';
 ---
@@ -14,6 +17,13 @@ import Layout from '../layouts/Layout.astro';
       <div class="glass prose">
         <Content />
       </div>
+      <aside class="notices" aria-label="Legal notices">
+        <p>
+          Apple, the Apple logo, iPhone, iPad, Mac, Apple Watch, CarPlay, iCloud and App Store are trademarks of Apple
+          Inc., registered in the U.S. and other countries and regions.
+        </p>
+        <p><a href="/third-party-notices.txt">Third-party software notices</a></p>
+      </aside>
     </div>
   </article>
 </Layout>
@@ -98,5 +108,32 @@ import Layout from '../layouts/Layout.astro';
     color: var(--text);
     background: rgb(var(--white-rgb) / 0.06);
     border-radius: var(--radius-code);
+  }
+
+  /* The card's width and inset, so the notes line up with the policy text. */
+  .notices {
+    display: grid;
+    gap: 8px;
+    max-width: 80ch;
+    margin: 24px auto 0;
+    padding-inline: clamp(24px, 5vw, 56px);
+    font-size: var(--fs-body);
+  }
+
+  .notices p {
+    font: var(--fs-caption) / 1.6 var(--font-mono);
+    color: var(--text-3);
+  }
+
+  .notices a {
+    color: var(--text-2);
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 3px;
+  }
+
+  .notices a:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
   }
 </style>

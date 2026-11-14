@@ -4,8 +4,6 @@
 // shows no image only if this page gives the crawler nothing to unfurl, so the
 // Layout is `cardless` (no og:*, twitter:* or meta description) and `noindex`.
 // Apple devices never see it: they go to the App Store through `/go`.
-// `homePage` makes the header and footer section links in-page anchors, so
-// every section they name (features, security, setup, faq, mosh, how) is here.
 import Faq from '../components/Faq.astro';
 import Features from '../components/Features.astro';
 import Security from '../components/Security.astro';
@@ -22,7 +20,7 @@ import WorksWith from '../components/WorksWith.astro';
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Waycar for iPhone and iPad" description="" noindex cardless homePage>
+<Layout title="Waycar for iPhone and iPad" description="" noindex cardless>
   {/* The home page's order (src/pages/index.astro), without the CarPlay section. */}
   <OutcomeHero />
   <WorksWith />

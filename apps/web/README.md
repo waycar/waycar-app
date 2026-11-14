@@ -41,8 +41,8 @@ App Store link sends `app_store_clicked` with that same `ct` and `module`. So
 `app_store_clicked` without one before it is an iPhone or iPad. Close and the
 backdrop send nothing. `github_clicked` comes from the "Open source on GitHub"
 link (`src/components/SourceLink.astro`) beside every store button but the
-header's, and inside each picker; in an article's rail or TOC card it carries
-that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
+header's, from the header's "GitHub" link beside its Download button, and from
+inside each picker; in an article's rail or TOC card it carries that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
 The Worker (`src/worker.ts`) also sends anonymous server-side events:
 `plugin_install_requested` per `GET /install.sh`, `plugin_package_downloaded`
 per plugin package download (see [Plugin install events](#plugin-install-events)),
@@ -425,8 +425,8 @@ the lightbox shows `tailscale-subnet-router.svg`.
 `/compare` holds one honest comparison per product people use to reach a coding
 agent from a phone, and `/solutions` one landing page per thing they search
 for ("mosh client ios", "tmux on iphone"). Both are content collections: a new
-page is one Markdown file, and it joins its index, the footer's Compare and
-Solutions columns, the sitemap, `/llms.txt` and the Markdown twins on its own.
+page is one Markdown file, and it joins its index, the sitemap, `/llms.txt`
+and the Markdown twins on its own.
 Like Articles they are not bundled into the iOS app, so a change under
 `src/content/compare/` or `src/content/solutions/` redeploys the site through
 `web.yml` and never starts the iOS CI.
@@ -441,7 +441,7 @@ Like Articles they are not bundled into the iOS app, so a change under
   `description` (70 to 165), `name`, `kind` (`ssh-client`, `agent-environment`,
   `agent-client` or `first-party`), `summary` (the index card and the page's
   lead), `checked` (`YYYY-MM-DD`, the day the facts were last checked), `order`
-  (unique; the index and footer order), `keywords` (3 to 10 lowercase terms,
+  (unique; the index order), `keywords` (3 to 10 lowercase terms,
   emitted in the page's JSON-LD).
 - `rows`: every row id below, each `{ level, text }`.
 - `pickWaycar` and `pickThem`: 3 to 5 bullets each.
@@ -512,7 +512,8 @@ and a matrix of all of them against Waycar), `src/pages/compare/[slug].astro`
 twin and the link list), and the same four under `src/pages/solutions/` and
 `src/pages/solutions.md.ts`. `src/lib/compare.ts`, `src/lib/solutions.ts` and
 `src/lib/landing.ts` read the collections and build the twins and JSON-LD.
-`SiteFooter` lists every page in its Compare and Solutions columns.
+`SiteFooter`'s Compare and Solutions columns list a few picked pages by id (a
+missing id fails the build), then the index.
 
 
 ## App Store switch
@@ -527,7 +528,8 @@ rail and footer, the site footer, compare and solutions pages)
 is one component, `src/components/AppStoreCta.astro`. Every one but the
 header's has the quiet "Open source on GitHub" link
 (`src/components/SourceLink.astro`) placed beside it by its caller, in both
-states below; `scripts/picker.test.mjs` checks the count. The button follows
+states below; the header's has a plain "GitHub" link
+(`src/components/SiteHeader.astro`). `scripts/picker.test.mjs` checks the count. The button follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
 - **Live** (the shipped state): with JavaScript on an iPhone, iPad or iPod

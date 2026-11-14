@@ -27,8 +27,6 @@ interface Props {
    * (`src/pages/b.astro`) at `/`. Sets the canonical URL and `og:url`.
    */
   canonicalPath?: string;
-  /** The page is served at `/`, so section links are in-page anchors (`#features`, not `/#features`). */
-  homePage?: boolean;
   /** `og:type`: `article` for help pages. */
   ogType?: 'website' | 'article';
   /**
@@ -47,7 +45,6 @@ const {
   image = '/og.png',
   markdown,
   canonicalPath,
-  homePage = false,
   ogType = 'website',
   schema = [],
   imageAlt = "The Waycar logo beside the headline 'Every agent. One list. Just talk.' and an iPhone showing Waycar's Agent list",
@@ -129,11 +126,11 @@ const jsonLd = [
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <SiteHeader homePage={homePage} />
+    <SiteHeader />
     <main id="main" tabindex="-1">
       <slot />
     </main>
-    <SiteFooter homePage={homePage} />
+    <SiteFooter />
     <ConsentBanner />
     <script>
       // Anonymous usage analytics (see PRIVACY.md). Astro bundles this into
