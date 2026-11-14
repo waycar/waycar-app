@@ -2932,6 +2932,10 @@ run_suite() {
         echo "$lane did not execute all $expected_tests tests" >&2
         exit 1
     fi
+    # The pinned counts, for scripts/ci/ci-evidence.py: a passing run otherwise
+    # never prints what it was held to.
+    echo "==> $lane: ran all $expected_tests pinned tests, $skips skipped" \
+        "($expected_skips allowed)"
     pinned_lane_logs+=("$log")
 }
 
@@ -3565,13 +3569,15 @@ for package_e2e_test in "${package_e2e_tests[@]}"; do
     fi
 done
 
+package_e2e_count=136
 if grep -q 'Suite "Session driver resource e2e" skipped' "$package_e2e_log" \
     || grep -q 'skipped:' "$package_e2e_log" \
-    || ! grep -q 'Test run with 136 tests in 10 suites passed' "$package_e2e_log" \
+    || ! grep -q "Test run with $package_e2e_count tests in 10 suites passed" "$package_e2e_log" \
     || [[ "$package_e2e_proven" != "1" ]]; then
-    echo "The mandatory WaycarSSH package suites did not execute all one hundred thirty-six tests" >&2
+    echo "The mandatory WaycarSSH package suites did not execute all $package_e2e_count tests" >&2
     exit 1
 fi
+echo "==> WaycarSSH package E2E: ran all $package_e2e_count pinned tests, 0 skipped (0 allowed)"
 exit 0
 fi
 
