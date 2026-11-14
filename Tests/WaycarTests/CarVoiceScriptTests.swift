@@ -39,12 +39,44 @@ struct CarVoiceScriptTests {
             CarVoiceScript.signInKeptDraft(identity: "a"),
             CarVoiceScript.trustKeptDraft(identity: "a"),
             AgentVoiceService.voiceUnavailable, AgentVoiceService.voiceNotReady,
-        ]
+        ] + CarVoiceScript.askLines
         for line in lines {
             let lowered = line.lowercased()
             #expect(!lowered.contains("open your"), "\(line)")
             #expect(!lowered.contains("pick up"), "\(line)")
         }
+    }
+
+    @Test func introductionEndsOnItsAskLine() {
+        #expect(
+            CarVoiceScript.introduction(
+                identity: "web Codex", statusWord: "Done", summary: "Tests pass",
+                askLine: "What's your question?")
+                == "web Codex is done: Tests pass. What's your question?")
+        #expect(
+            CarVoiceScript.introduction(
+                identity: "api Claude", statusWord: "Working", summary: nil,
+                askLine: "What do you need?")
+                == "api Claude is working. What do you need?")
+    }
+
+    /// Every ask line comes up, and none twice in a row.
+    @Test func askLinesVaryAndNeverRepeatBackToBack() {
+        let lines = CarVoiceScript.askLines
+        #expect((5...8).contains(lines.count))
+        #expect(Set(lines).count == lines.count)
+        var generator = SeededRandomNumberGenerator(seed: 2026)
+        var previous: String?
+        var heard: Set<String> = []
+        for _ in 0..<200 {
+            let line = CarVoiceScript.askLine(after: previous) {
+                Int.random(in: $0, using: &generator)
+            }
+            #expect(line != previous)
+            heard.insert(line)
+            previous = line
+        }
+        #expect(heard == Set(lines))
     }
 
     @Test func spokenCommandSpellsShellOperators() {

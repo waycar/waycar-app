@@ -54,12 +54,35 @@ enum CarVoiceScript {
     }
 
     /// What a row tap says before listening: the Agent's status, and its
-    /// summary when one still describes that status.
-    static func introduction(identity: String, statusWord: String, summary: String?) -> String {
+    /// summary when one still describes that status, then `askLine`.
+    static func introduction(
+        identity: String, statusWord: String, summary: String?, askLine: String
+    ) -> String {
         if let summary, !summary.isEmpty {
-            return "\(identity) is \(statusWord.lowercased()): \(sentence(summary)) What should I ask?"
+            return "\(identity) is \(statusWord.lowercased()): \(sentence(summary)) \(askLine)"
         }
-        return "\(identity) is \(statusWord.lowercased()). What should I ask?"
+        return "\(identity) is \(statusWord.lowercased()). \(askLine)"
+    }
+
+    /// The line an introduction ends on, inviting the question. One fixed
+    /// line every time sounded robotic, so each introduction draws one
+    /// (`askLine(after:randomIndex:)`). None is a yes/no question: "yes"
+    /// would go to the Agent as the question, and "no" ends the conversation.
+    static let askLines = [
+        "What should I ask?",
+        "What's your question?",
+        "What do you want to ask?",
+        "What would you like to know?",
+        "What should I tell it?",
+        "Go ahead, I'm listening.",
+        "What do you need?",
+    ]
+
+    /// One of `askLines`, never `previous`, so the same line is never heard
+    /// twice in a row. `randomIndex` draws an index in the range it is given.
+    static func askLine(after previous: String?, randomIndex: (Range<Int>) -> Int) -> String {
+        let choices = askLines.filter { $0 != previous }
+        return choices[randomIndex(choices.indices)]
     }
 
     static let notSent = "Not sent. I'll keep it as a draft."

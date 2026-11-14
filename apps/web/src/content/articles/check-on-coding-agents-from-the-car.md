@@ -36,7 +36,7 @@ Waycar never says "Nothing needs you" about a machine it can't vouch for. A Host
 
 ## Ask an agent and hear two sentences back
 
-Tap an agent and Waycar introduces it, then asks "What should I ask?" Say your question. When you pause, Waycar sends it to the agent with one added instruction:
+Tap an agent and Waycar introduces it, then asks what you want to know, such as "What should I ask?" Say your question. When you pause, Waycar sends it to the agent with one added instruction:
 
 ```text
 [Spoken reply via CarPlay: ≤2 short sentences, no code or markdown]
