@@ -5260,6 +5260,52 @@ stateDiagram-v2
 
 **herdr events and transport**
 
+### LaunchSettleMachine
+
+- **File:** `Sources/Waycar/Transport/LaunchSettleMachine.swift`
+- **Owner:** `WaycarSSHTransport` (`scheduleLaunchSettle`, after every
+  `agent.start` ack and every recovery that finds a pending launch) keeps
+  each pane's settle Task in `launchSettles`. The Task loop is the one it
+  always ran (sleep, cancelled?, past the window?, one `agent.get` on the
+  actor); the poll reports to the machine on the actor hop it already
+  made, and asks it whether to poll again. `close()` sends `closed`.
+- **States:** per pane id, the token of the settle that last ran there and
+  its phase: `delayed`, `polling`, `settled`, `failed`, `expired`,
+  `cancelled`; whether the Transport closed.
+- **Events:** `scheduled(pane, startedAt, now, immediately)`,
+  `pollStarted(token)`, `polled(token, pending | notPending | failed)`,
+  `ended(token, stopped | expired | cancelled)`, `closed`.
+- **Effects:** `cancelTask`, `startTask(token, firstPause, interval,
+  windowEnd)`, `pollAgain`, `releaseSlot`, `cancelAllTasks`. The first
+  `agent.get` waits until `startedAt + delay` (3.5 s; a recovery skips
+  it), the next ones `interval` (1 s) apart while pending, and none is
+  dispatched once `startedAt + window` (20 s) has passed, queue wait
+  included (`beforeDispatch`). A new settle cancels whatever Task holds
+  the pane's slot; a replaced or closed settle's poll or end changes
+  nothing, so it never clears its replacement's slot. A settle scheduled
+  after the close still starts, as before. The launch never waits for it.
+- **Tests:** `LaunchSettleMachineTests`; owner coverage is real-SSH
+  (`WaycarSSHTransportBehaviorE2ETests` in `SharedFixtureE2ETests`: the
+  start returns at once, a pending launch is promoted with no composer, an
+  unsettled one is polled only inside the window, a recovered one is
+  settled at once, a close ends the settle).
+- **Catalogue:** HERDR-10.
+
+```mermaid
+stateDiagram-v2
+    [*] --> delayed: scheduled / cancelTask, startTask(token)
+    delayed --> polling: pollStarted(token)
+    polling --> delayed: polled pending / pollAgain
+    polling --> settled: polled notPending
+    polling --> failed: polled failed
+    delayed --> expired: ended expired / releaseSlot
+    settled --> [*]: ended / releaseSlot
+    failed --> [*]: ended / releaseSlot
+    delayed --> cancelled: closed / cancelAllTasks
+    polling --> cancelled: closed / cancelAllTasks
+    delayed --> delayed: scheduled again / cancelTask, startTask(new token)
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6073,7 +6119,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-07 | herdr events channel | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | M/H | leave: reader identity guarded | — |
 | HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | convert; bug B-32 | P3d |
 | HERDR-09 | Shell readiness retry | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | M/M | leave: operation-local loop | — |
-| HERDR-10 | Launch settle (`scheduleLaunchSettle`) | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | convert | P3d |
+| HERDR-10 | Launch settle (`scheduleLaunchSettle`) | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `LaunchSettleMachine` | P3d |
 | HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | convert | P3d |
 | HERDR-12 | Shared async operation | `Sources/Waycar/Transport/SharedAsyncOperation.swift` | implicit | M/M | leave: actor-serialized single flight | — |
 | HERDR-13 | Async deadline | `Sources/Waycar/Transport/AsyncDeadline.swift` | implicit | M/M | leave: single-winner primitive | — |

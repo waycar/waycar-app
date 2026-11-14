@@ -38,9 +38,6 @@ actor WaycarSSHTransport: Transport {
     private let requestTimeout: Duration
     private let shellReadinessBudget: Duration
     private let shellReadinessRetryDelay: Duration
-    private let launchSettleDelay: Duration
-    private let launchSettleInterval: Duration
-    private let launchSettleWindow: Duration
     private let inputReadyTimeout: Duration
     private let worktreeCreateTimeout: Duration
     private let worktreeReconcileBudget: Duration
@@ -82,6 +79,8 @@ actor WaycarSSHTransport: Transport {
     /// this Transport.
     private var liveAttaches: [UInt64: TerminalAttachSession] = [:]
     /// The post-start settle per launched pane (`scheduleLaunchSettle`).
+    private var launchSettle: LaunchSettleMachine
+    /// Its running Tasks, per pane.
     private var launchSettles: [String: Task<Void, Never>] = [:]
 
     /// A launch this Transport started whose prompts wait until the Agent
@@ -131,9 +130,11 @@ actor WaycarSSHTransport: Transport {
         self.requestTimeout = requestTimeout
         shellReadinessBudget = SSHTransportSettings.defaultShellReadinessBudget
         shellReadinessRetryDelay = SSHTransportSettings.defaultShellReadinessRetryDelay
-        launchSettleDelay = SSHTransportSettings.defaultLaunchSettleDelay
-        launchSettleInterval = SSHTransportSettings.defaultLaunchSettleInterval
-        launchSettleWindow = SSHTransportSettings.defaultLaunchSettleWindow
+        launchSettle = LaunchSettleMachine(
+            timing: LaunchSettleMachine.Timing(
+                delay: SSHTransportSettings.defaultLaunchSettleDelay,
+                interval: SSHTransportSettings.defaultLaunchSettleInterval,
+                window: SSHTransportSettings.defaultLaunchSettleWindow))
         inputReadyTimeout = SSHTransportSettings.defaultInputReadyTimeout
         worktreeCreateTimeout = SSHTransportSettings.defaultWorktreeCreateTimeout
         worktreeReconcileBudget = SSHTransportSettings.defaultWorktreeReconcileBudget
@@ -155,9 +156,11 @@ actor WaycarSSHTransport: Transport {
         requestTimeout = settings.requestTimeout
         shellReadinessBudget = settings.shellReadinessBudget
         shellReadinessRetryDelay = settings.shellReadinessRetryDelay
-        launchSettleDelay = settings.launchSettleDelay
-        launchSettleInterval = settings.launchSettleInterval
-        launchSettleWindow = settings.launchSettleWindow
+        launchSettle = LaunchSettleMachine(
+            timing: LaunchSettleMachine.Timing(
+                delay: settings.launchSettleDelay,
+                interval: settings.launchSettleInterval,
+                window: settings.launchSettleWindow))
         inputReadyTimeout = settings.inputReadyTimeout
         worktreeCreateTimeout = settings.worktreeCreateTimeout
         worktreeReconcileBudget = settings.worktreeReconcileBudget
@@ -1383,22 +1386,66 @@ actor WaycarSSHTransport: Transport {
         paneID: String, dispatchedAt startedAt: ContinuousClock.Instant = .now,
         immediately: Bool = false
     ) {
-        launchSettles[paneID]?.cancel()
-        let windowEnd = startedAt + launchSettleWindow
-        let firstPause = immediately
-            ? .zero : max(.zero, ContinuousClock.now.duration(to: startedAt + launchSettleDelay))
-        let interval = launchSettleInterval
-        launchSettles[paneID] = Task { [weak self] in
-            var pause = firstPause
-            while true {
-                try? await Task.sleep(for: pause)
-                guard !Task.isCancelled, ContinuousClock.now < windowEnd, let self,
-                    await self.launchStillPending(paneID: paneID, windowEnd: windowEnd)
-                else { break }
-                pause = interval
+        performLaunchSettle(
+            launchSettle.handle(
+                .scheduled(
+                    pane: paneID, startedAt: startedAt, now: .now, immediately: immediately)))
+    }
+
+    /// Performs `LaunchSettleMachine`'s effects; true when they ask the
+    /// settle to poll again.
+    @discardableResult
+    private func performLaunchSettle(_ effects: [LaunchSettleMachine.Effect]) -> Bool {
+        var pollsAgain = false
+        for effect in effects {
+            switch effect {
+            case .cancelTask(let paneID):
+                launchSettles[paneID]?.cancel()
+            case .startTask(let paneID, let token, let firstPause, let interval, let windowEnd):
+                launchSettles[paneID] = Task { [weak self] in
+                    var pause = firstPause
+                    var ending = LaunchSettleMachine.Ending.stopped
+                    while true {
+                        try? await Task.sleep(for: pause)
+                        guard !Task.isCancelled else {
+                            ending = .cancelled
+                            break
+                        }
+                        guard ContinuousClock.now < windowEnd else {
+                            ending = .expired
+                            break
+                        }
+                        guard let self,
+                            await self.pollLaunchSettle(
+                                paneID: paneID, token: token, windowEnd: windowEnd)
+                        else { break }
+                        pause = interval
+                    }
+                    await self?.endLaunchSettle(paneID: paneID, token: token, ending: ending)
+                }
+            case .pollAgain:
+                pollsAgain = true
+            case .releaseSlot(let paneID):
+                launchSettles[paneID] = nil
+            case .cancelAllTasks:
+                for settle in launchSettles.values { settle.cancel() }
+                launchSettles.removeAll()
             }
-            await self?.endLaunchSettle(paneID: paneID)
         }
+        return pollsAgain
+    }
+
+    /// One settle `agent.get` for `token`'s settle; true while it should
+    /// poll again. The request goes out whatever the machine's state, as it
+    /// always did: a replaced settle's Task is cancelled and stops at its
+    /// next pause.
+    private func pollLaunchSettle(
+        paneID: String, token: UInt64, windowEnd: ContinuousClock.Instant
+    ) async -> Bool {
+        performLaunchSettle(launchSettle.handle(.pollStarted(pane: paneID, token: token)))
+        let result = await launchStillPending(paneID: paneID, windowEnd: windowEnd)
+        return performLaunchSettle(
+            launchSettle.handle(.polled(pane: paneID, token: token, result)))
     }
 
     /// One settle `agent.get`. `agent_not_found` counts as pending, since
@@ -1406,7 +1453,7 @@ actor WaycarSSHTransport: Transport {
     private func launchStillPending(
         paneID: String,
         windowEnd: ContinuousClock.Instant
-    ) async -> Bool {
+    ) async -> LaunchSettleMachine.PollResult {
         do {
             let info = try await request(
                 method: "agent.get",
@@ -1415,18 +1462,21 @@ actor WaycarSSHTransport: Transport {
                 beforeDispatch: {
                     guard ContinuousClock.now < windowEnd else { throw CancellationError() }
                 })
-            return info.agent.launchPending == true
+            return info.agent.launchPending == true ? .pending : .notPending
         } catch let error as HerdrAPIError where error.code == "agent_not_found" {
-            return true
+            return .pending
         } catch {
-            return false
+            return .failed
         }
     }
 
-    private func endLaunchSettle(paneID: String) {
-        // A cancelled settle was replaced or closed; its slot is not its own.
-        guard !Task.isCancelled else { return }
-        launchSettles[paneID] = nil
+    /// A replaced or closed settle's slot is not its own
+    /// (`LaunchSettleMachine`).
+    private func endLaunchSettle(
+        paneID: String, token: UInt64, ending: LaunchSettleMachine.Ending
+    ) {
+        performLaunchSettle(
+            launchSettle.handle(.ended(pane: paneID, token: token, ending)))
     }
 
     /// Closes a Pane (`pane.close`). herdr 0.9.x refuses, with
@@ -2127,8 +2177,7 @@ actor WaycarSSHTransport: Transport {
     func close() async throws {
         guard !closed else { return }
         closed = true
-        for settle in launchSettles.values { settle.cancel() }
-        launchSettles.removeAll()
+        performLaunchSettle(launchSettle.handle(.closed))
         inputGates.removeAll()
         agentKinds.removeAll()
         let readers = Array(eventsReaders.values)
