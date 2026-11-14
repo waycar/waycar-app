@@ -140,9 +140,12 @@ struct AgentVoiceServiceTests {
     /// introductions in a row on the same one.
     @Test func introductionsNeverEndOnTheSameAskLineTwiceInARow() {
         let row = agent(.idle)
+        // 1, not 0: `next(upperBound:)` rejects a 0 draw whenever the count
+        // doesn't divide 2^64, so a constant 0 would loop forever; 1 always
+        // draws index 0.
         let voice = AgentVoiceService(
             dependencies: FakeConsole([row]).dependencies, dictation: nil, speaker: FakeSpeaker(),
-            random: ConstantRandomNumberGenerator(value: 0))
+            random: ConstantRandomNumberGenerator(value: 1))
         let lines = CarVoiceScript.askLines
         let endings = (0..<4).map { _ in
             voice.introduction(for: row.id).flatMap { line in
