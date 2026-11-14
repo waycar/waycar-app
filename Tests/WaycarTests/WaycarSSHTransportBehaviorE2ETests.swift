@@ -2516,6 +2516,69 @@ struct WaycarSSHTransportBehaviorE2ETests {
         }
     }
 
+    /// A replay that finds its earlier try's launch still pending settles it
+    /// at once: the earlier dispatch time is gone, so the settle starts at
+    /// recovery and skips the delay (HERDR-10).
+    @Test("a recovered pending launch is settled at once, without the delay")
+    func recoveredPendingLaunchIsSettledAtOnce() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        var settings = Self.worktreeLaunchSettings(environment)
+        settings.launchSettleDelay = .seconds(600)
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        defer { Task { try? await transport.close() } }
+
+        let token = Self.scriptToken("pendingagent")
+        _ = try await transport.listWorktrees(forWorkspaceID: "source:\(token)")
+        let agent = try await transport.startAgent(AgentLaunchRequest(
+            kind: "codex", name: "Fixture", workspaceID: "workspace:\(token)",
+            launchID: UUID(), mayHaveStarted: true))
+        #expect(agent.paneID == "pane:\(token)")
+
+        let poll = #"agent.get {"target":"pane:\#(token)"}"#
+        try await waitUntil {
+            try await Self.recordedRequests(from: transport, token: token).contains(poll)
+        }
+    }
+
+    /// Closing the Transport ends its launch settles: once it is closed, no
+    /// settle `agent.get` starts, though the launch is still pending and
+    /// inside its window (HERDR-10). A poll already on the wire at the close
+    /// may still land.
+    @Test("closing the Transport ends its launch settle")
+    func closingTheTransportEndsItsLaunchSettle() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let window: Duration = .seconds(3)
+        var settings = environment.directSettings()
+        settings.launchSettleDelay = .milliseconds(200)
+        settings.launchSettleInterval = .milliseconds(100)
+        settings.launchSettleWindow = window
+        let transport = try await WaycarSSHTransport.connect(settings: settings)
+        defer { Task { try? await transport.close() } }
+        let reader = try await WaycarSSHTransport.connect(
+            settings: Self.settingsWithoutLaunchSettle(environment))
+        defer { Task { try? await reader.close() } }
+
+        let token = Self.scriptToken("launchworking")
+        _ = try await transport.startAgent(
+            AgentLaunchRequest(
+                kind: "codex",
+                name: "fixture",
+                workspaceID: "workspace-1",
+                cwd: "/fixture/\(token)"))
+        let acknowledged = ContinuousClock.now
+        let polls: @Sendable () async throws -> Int = {
+            try await Self.recordedRequests(from: reader, token: token)
+                .filter { $0.hasPrefix("agent.get ") }
+                .count
+        }
+        try await waitUntil { try await polls() >= 1 }
+
+        try await transport.close()
+        let atClose = try await polls()
+        try await Task.sleep(until: acknowledged + window + .milliseconds(500), clock: .continuous)
+        #expect(try await polls() <= atClose + 1)
+    }
+
     /// herdr 0.9.1 promotes an opencode launch about 3.5 s after
     /// `agent.start` and acks `agent.prompt` from then on, but opencode's TUI
     /// drops typed input until its input box draws (11–42 s on a 2-vCPU

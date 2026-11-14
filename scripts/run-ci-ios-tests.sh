@@ -3200,7 +3200,7 @@ if [[ "$password_fixture_available" == "1" ]]; then
 fi
 run_suite WaycarSSHDirectStreamLocalE2ETests 9 1 0 \
     WaycarSSHDirectStreamLocalE2ETests
-run_suite SharedFixtureE2ETests 157 6 0 \
+run_suite SharedFixtureE2ETests 159 6 0 \
     WaycarSSHPTYE2ETests \
     WaycarSSHJumpHostGateE2ETests \
     WaycarSSHTransportBehaviorE2ETests \
