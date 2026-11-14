@@ -69,7 +69,9 @@ struct CarVoiceScriptTests {
         var previous: String?
         var heard: Set<String> = []
         for _ in 0..<200 {
-            let line = CarVoiceScript.askLine(after: previous, using: &generator)
+            let line = CarVoiceScript.askLine(after: previous) {
+                Int.random(in: $0, using: &generator)
+            }
             #expect(line != previous)
             heard.insert(line)
             previous = line

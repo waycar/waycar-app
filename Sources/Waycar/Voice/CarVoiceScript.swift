@@ -66,8 +66,8 @@ enum CarVoiceScript {
 
     /// The line an introduction ends on, inviting the question. One fixed
     /// line every time sounded robotic, so each introduction draws one
-    /// (`askLine(after:using:)`). None is a yes/no question: "yes" would go
-    /// to the Agent as the question, and "no" ends the conversation.
+    /// (`askLine(after:randomIndex:)`). None is a yes/no question: "yes"
+    /// would go to the Agent as the question, and "no" ends the conversation.
     static let askLines = [
         "What should I ask?",
         "What's your question?",
@@ -78,13 +78,11 @@ enum CarVoiceScript {
         "What do you need?",
     ]
 
-    /// One of `askLines` drawn from `generator`, never `previous`: the same
-    /// line is never heard twice in a row.
-    static func askLine<Generator: RandomNumberGenerator>(
-        after previous: String?, using generator: inout Generator
-    ) -> String {
+    /// One of `askLines`, never `previous`, so the same line is never heard
+    /// twice in a row. `randomIndex` draws an index in the range it is given.
+    static func askLine(after previous: String?, randomIndex: (Range<Int>) -> Int) -> String {
         let choices = askLines.filter { $0 != previous }
-        return choices[Int.random(in: choices.indices, using: &generator)]
+        return choices[randomIndex(choices.indices)]
     }
 
     static let notSent = "Not sent. I'll keep it as a draft."

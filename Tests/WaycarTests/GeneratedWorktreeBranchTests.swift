@@ -21,7 +21,7 @@ struct SeededRandomNumberGenerator: RandomNumberGenerator {
 }
 
 /// Always answers the same word, to reach both ends of every range.
-struct ConstantRandomNumberGenerator: RandomNumberGenerator {
+private struct ConstantRandomNumberGenerator: RandomNumberGenerator {
     let value: UInt64
 
     mutating func next() -> UInt64 { value }

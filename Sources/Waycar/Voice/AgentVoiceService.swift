@@ -182,8 +182,9 @@ final class AgentVoiceService {
     /// The Blocked question each Agent's driver last heard in full; Allow
     /// acts only on that one: never before the read-back.
     private var heardApprovals: [ConsoleAgent.ID: HeardApprovalMachine] = [:]
-    /// What `introduction` draws its ask line from; tests pass a fixed one.
-    private var random: any RandomNumberGenerator
+    /// Draws an index in a range: how `introduction` picks its ask line.
+    /// Tests pass a fixed draw.
+    private let randomIndex: (Range<Int>) -> Int
     /// The ask line the last introduction ended on, never drawn next.
     private var lastAskLine: String?
 
@@ -226,7 +227,7 @@ final class AgentVoiceService {
         locale: @escaping @MainActor () -> Locale = {
             Locale.preferredLanguages.first.map(Locale.init(identifier:)) ?? .current
         },
-        random: any RandomNumberGenerator = SystemRandomNumberGenerator()
+        randomIndex: @escaping (Range<Int>) -> Int = { Int.random(in: $0) }
     ) {
         self.dependencies = dependencies
         self.actions =
@@ -242,7 +243,7 @@ final class AgentVoiceService {
         self.speaker = speaker
         self.timing = timing
         self.locale = locale
-        self.random = random
+        self.randomIndex = randomIndex
     }
 
     // MARK: Speech
@@ -286,7 +287,7 @@ final class AgentVoiceService {
         if case .summary(let text, _, let isStale) = agent.summaryLine(at: now), !isStale {
             summary = text
         }
-        let askLine = CarVoiceScript.askLine(after: lastAskLine, using: &random)
+        let askLine = CarVoiceScript.askLine(after: lastAskLine, randomIndex: randomIndex)
         lastAskLine = askLine
         return CarVoiceScript.introduction(
             identity: Self.spokenIdentity(of: agent), statusWord: word, summary: summary,
