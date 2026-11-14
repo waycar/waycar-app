@@ -4,6 +4,7 @@ import { render } from 'astro:content';
 import AppStoreCta from '../../components/AppStoreCta.astro';
 import ArticleRail from '../../components/ArticleRail.astro';
 import Prose from '../../components/Prose.astro';
+import SourceLink from '../../components/SourceLink.astro';
 import Layout from '../../layouts/Layout.astro';
 import { APP_SCHEMA_ID, APP_STORE_LISTING_URL, ON_APP_STORE } from '../../data/links';
 import { appStoreCampaignUrl } from '../../lib/ad-links.mjs';
@@ -181,6 +182,7 @@ const schema = [
             <h2 id="toc-card-title">{TOC_CARD.heading}</h2>
             <p>{TOC_CARD.body}</p>
             <AppStoreCta kind="button" ct="article" class="toc-card-cta">Get Waycar</AppStoreCta>
+            <p class="source"><SourceLink /></p>
           </section>
         </div>
       </aside>
@@ -214,6 +216,7 @@ const schema = [
         </p>
         <div class="get">
           <AppStoreCta kind="text">Get Waycar</AppStoreCta>
+          <SourceLink />
         </div>
       </footer>
       </div>
@@ -701,6 +704,11 @@ const schema = [
     white-space: normal;
   }
 
+  .toc-card .source {
+    margin-top: 6px;
+    text-align: center;
+  }
+
   /* From 1024 px: sticky list beside the article, the rail under the article. */
   @media (min-width: 1024px) {
     .grid {
@@ -817,6 +825,13 @@ const schema = [
     color: var(--cyan);
     text-decoration: underline;
     text-underline-offset: 3px;
+  }
+
+  .after .get {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 16px;
   }
 
   /* ---------- Image lightbox ---------- */

@@ -356,10 +356,11 @@ test('every built article page: TOC equals the H2 ids, rail modules are known, h
         if (/<img[^>]+\/articles\//.test(html)) problems.push(`${slug}: requests an article image`);
         if (md.includes('![')) problems.push(`${slug}: the twin gained an image`);
       }
-      // Nothing in the page's rail or TOC points off the site except the App Store.
+      // Nothing in the page's rail or TOC points off the site except the App Store and the
+      // "Open source on GitHub" link beside each store button.
       const chrome = html.slice(html.indexOf('<div class="grid"'), html.indexOf('<div class="article"')) + html.slice(bodyEnd, html.indexOf('<dialog class="lightbox"'));
       for (const href of chrome.matchAll(/href="(https?:[^"]+)"/g)) {
-        if (!/^https:\/\/apps\.apple\.com\//.test(href[1])) problems.push(`${slug}: external link ${href[1]}`);
+        if (!/^https:\/\/apps\.apple\.com\//.test(href[1]) && href[1] !== 'https://github.com/waycar/waycar-app') problems.push(`${slug}: external link ${href[1]}`);
       }
     }
     assert.deepEqual(problems, []);

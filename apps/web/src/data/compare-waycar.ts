@@ -29,7 +29,6 @@ export const WAYCAR_ROWS: Record<CapabilityId, Cell> = {
   usage: { level: 'partial', text: 'Partial: plan limits via CodexBar on your Host' },
   resume: { level: 'yes', text: 'Yes, Closed Sessions are kept for 30 days' },
   ios: { level: 'yes', text: 'Yes, iPhone and iPad, iOS 18 or later' },
-  android: { level: 'no', text: 'No. An Android app is coming soon' },
   desktop: { level: 'no', text: 'No native desktop app or web client' },
   source: { level: 'info', text: 'Open source app + Host Tools, Apache-2.0, on GitHub' },
   price: { level: 'info', text: 'Free' },

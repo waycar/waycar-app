@@ -28,7 +28,6 @@ rows:
   usage: { level: yes, text: "Yes, usage, rate limits and reset countdowns" }
   resume: { level: partial, text: "Partial: phone can resume a chat in a new terminal tab" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later (App Store)" }
-  android: { level: partial, text: "Partial: app file download, marked Pre-release" }
   desktop: { level: yes, text: "Yes: macOS, Windows and Linux desktop app" }
   source: { level: info, text: "Open source, MIT License" }
   price: { level: info, text: "Free and open source. Enterprise: email the maker" }
@@ -41,7 +40,7 @@ pickWaycar:
 pickThem:
   - You want a desktop app that gives each task its own git worktree, agent terminal and browser tab.
   - You want diff review and usage and rate-limit countdowns next to the agents.
-  - You want an Android app today, even as a downloaded app file, or a phone app for the same desktop host.
+  - You want an Android app, even as a downloaded app file, or a phone app for the same desktop host.
   - You want open source under the MIT License, including the relay server code.
 faq:
   - q: Does Orca have a mobile app?
@@ -102,7 +101,6 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 - **Any CLI agent.** The maker says Orca works with any CLI agent.
 - **Usage at a glance.** Orca shows usage, rate limits and reset countdowns, and can switch agent accounts, on desktop and on the phone.
 - **Always-on hosts.** A background daemon keeps agents running when the Orca window closes. `orca serve` runs without the desktop window, and the desktop app can open SSH worktrees.
-- **Android.** Orca has an Android app you download today. Waycar's Android app is coming soon.
 
 ## What each costs
 

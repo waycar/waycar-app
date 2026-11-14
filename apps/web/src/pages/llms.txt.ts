@@ -22,11 +22,11 @@ export const GET: APIRoute = async () => {
   const compare = (await getComparisons()).map(comparisonLinkLine).join('\n');
   const solutions = (await getSolutions()).map(solutionLinkLine).join('\n');
   const availability = ON_APP_STORE
-    ? `On the App Store for iPhone and iPad: ${APP_STORE_LISTING_URL}. Android app coming soon.`
-    : 'Coming soon to the App Store for iPhone and iPad. Android app coming soon.';
+    ? `On the App Store for iPhone and iPad: ${APP_STORE_LISTING_URL}.`
+    : 'Coming soon to the App Store for iPhone and iPad.';
   const body = `# Waycar
 
-> Waycar is a native iPhone and iPad app for checking on your coding agents (Claude Code, Codex, omp, Gemini, opencode, pi and more) running in herdr, tmux, Herdr Core or Zellij, or as Codex and OpenCode 2 server chats, on your own Mac or Linux machine. Agent terminals run over mosh and fall back to SSH. No account, no cloud between you and your sessions. An Android app is coming next.
+> Waycar is a native iPhone and iPad app for checking on your coding agents (Claude Code, Codex, omp, Gemini, opencode, pi and more) running in herdr, tmux, Herdr Core or Zellij, or as Codex and OpenCode 2 server chats, on your own Mac or Linux machine. Agent terminals run over mosh and fall back to SSH. No account, no cloud between you and your sessions.
 
 - Availability: ${availability}
 - Price: Waycar is free. Users pay for their own machines and AI providers.

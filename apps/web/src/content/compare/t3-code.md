@@ -28,7 +28,6 @@ rows:
   usage: { level: yes, text: "Yes: phone has limits. Tokens and cost on desktop, web" }
   resume: { level: partial, text: "Partial: resumes after a restart. Quit agent: not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 18 or later" }
-  android: { level: yes, text: "Yes, on Google Play" }
   desktop: { level: yes, text: "Yes: macOS, Windows, Linux apps and a web app" }
   source: { level: info, text: "Open source, MIT license" }
   price: { level: info, text: "Free. T3 Connect caps linked environments" }
@@ -51,7 +50,7 @@ faq:
   - q: Does T3 Code support mosh?
     a: We did not find mosh in the T3 Code docs. It lists LAN, Tailscale, another VPN, a public URL, SSH and T3 Connect as routes to a machine. Waycar runs agent terminals over mosh and falls back to SSH on its own.
   - q: Can I use T3 Code on Android?
-    a: Yes. T3 Code Mobile is on Google Play as well as the App Store. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+    a: Yes. T3 Code Mobile is on Google Play as well as the App Store. Waycar is an iPhone and iPad app with no native desktop or web client.
   - q: Is T3 Code free, and is Waycar?
     a: T3 Code is free and MIT licensed, and you pay your own agent providers. Waycar is free.
 sources:
@@ -99,7 +98,7 @@ Waycar works differently. Nothing of ours runs as a server on your machine, othe
 ## Where T3 Code is better
 
 - **Many agents in one place.** T3 Code lists Codex, Claude, Cursor, Grok Build, OpenCode, Antigravity and Pi, plus agents from its Agent Client Protocol (ACP) registry.
-- **Every platform.** It has desktop, web, iOS and Android. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+- **Every platform.** It has desktop, web, iOS and Android. Waycar is an iPhone and iPad app with no native desktop or web client.
 - **More in the phone app.** It has push, Live Activities, on-device voice (iOS 26 or later), attachments, a terminal, subscription limits and home screen widgets, plus file browsing and diff review.
 - **Usage in full.** Its Usage page on desktop and web covers tokens, cost and limits across several agents. Waycar shows plan limits through CodexBar. For Claude on a Mac, its Fix AI Usage flow sets up a helper on your Mac so those limits can be read too.
 

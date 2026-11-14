@@ -28,7 +28,6 @@ rows:
   usage: { level: unknown, text: "Not documented" }
   resume: { level: unknown, text: "Not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17.6 or later" }
-  android: { level: no, text: "No. Apple devices only" }
   desktop: { level: no, text: "No. Blink's FAQ says a macOS version is planned" }
   source: { level: info, text: "Open source, GPL v3 with extra terms" }
   price: { level: info, text: "14-day trial, then $19.99 a year (US)" }

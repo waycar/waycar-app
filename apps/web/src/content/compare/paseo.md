@@ -28,7 +28,6 @@ rows:
   usage: { level: yes, text: "Yes, subscription quota windows and a context meter" }
   resume: { level: yes, text: "Yes, History, restore and Import session" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later" }
-  android: { level: yes, text: "Yes, on Google Play" }
   desktop: { level: yes, text: "Yes: macOS, Windows, Linux apps, web and CLI" }
   source: { level: info, text: "Open source, Apache License 2.0" }
   price: { level: info, text: "Free. Optional hosted Hub: $0 or $15/seat/mo" }
@@ -96,7 +95,7 @@ In Waycar the agent runs on your machine in herdr or tmux, not in the app. Wayca
 
 ## Where Paseo is better
 
-- **Every platform.** Paseo has desktop apps, a web app, a CLI and an Android app. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+- **Every platform.** Paseo has desktop apps, a web app, a CLI and an Android app. Waycar is an iPhone and iPad app with no native desktop or web client.
 - **More agents.** Paseo has native adapters for several agents and a catalog of agents that use the Agent Client Protocol. Waycar launches 23 agents, and Chat Mode covers 14.
 - **Managed workspaces.** Paseo runs many agents at once and can give each its own git worktree. It also shows subscription quota windows. Waycar can start an agent in a Workspace or on a fresh git worktree. Its usage view is partial.
 - **Older phones.** The Paseo iOS app needs iOS 15.1 or later. Waycar needs iOS 18 or later.

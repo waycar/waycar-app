@@ -28,7 +28,6 @@ rows:
   usage: { level: partial, text: "Partial: Codex rate limits and context % (its code)" }
   resume: { level: yes, text: "Yes, resume threads" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 18.0 or later" }
-  android: { level: yes, text: "Yes, on Google Play (README labels it Beta)" }
   desktop: { level: no, text: "No native app or web client found. iPad app on Macs" }
   source: { level: info, text: "Open source: GPL-3.0 plus a store permission" }
   price: { level: info, text: "Free. Optional tips $9.99 to $99.99" }
@@ -102,7 +101,7 @@ Waycar's agent terminals need herdr (0.7.5 or newer), tmux (3.2 or newer) or her
 
 - **Codex on the phone.** Its architecture notes say Codex can run on the device itself, with no machine. Waycar cannot.
 - **No VPN needed.** Pairing by QR code works through home routers and firewalls with no VPN, public IP or port forwarding, according to its site.
-- **More platforms.** It is on Android (labelled Beta in the README), and its daemon runs on Windows. Waycar is an iPhone and iPad app with no native desktop or web client, and an Android app is coming soon. Both iPad apps can be installed on Apple silicon Macs.
+- **More platforms.** It is on Android (labelled Beta in the README), and its daemon runs on Windows. Waycar is an iPhone and iPad app with no native desktop or web client. Both iPad apps can be installed on Apple silicon Macs.
 - **Voice.** It has real-time voice with the agent. Its App Store listing says it uses OpenAI voice processing. Waycar has on-device dictation, which needs iOS 26 or later.
 - **No herdr or tmux needed.** You do not need either on the machine.
 
