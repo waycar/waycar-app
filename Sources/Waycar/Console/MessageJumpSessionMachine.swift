@@ -7,8 +7,10 @@
 ///   minted before it (a jump not yet entered, a jump's end, a read in
 ///   flight, a snapshot held for a walk) is dropped.
 /// - A jump body runs only when its Task passes the entry check: not
-///   cancelled, same session, latest epoch. Only the latest jump's end clears
-///   the running jump and applies a held snapshot.
+///   cancelled, same session, latest epoch. Until it does, the jump it
+///   replaced stays the running one (shown, and holding transcript reads).
+///   Only the latest jump's end clears the running jump and applies a held
+///   snapshot.
 /// - One transcript read at a time: a refresh while one runs asks for one
 ///   more after it (`stale`). A read that lands during a walk is delivered
 ///   at once but reaches the jump index only when the walk ends, so the walk
@@ -16,8 +18,9 @@
 struct MessageJumpSessionMachine: StateMachine {
     enum Jump: Equatable, Sendable {
         case idle
-        /// The jump Task for `epoch` exists and has not passed its entry check.
-        case scheduled(epoch: UInt64)
+        /// The jump Task for `epoch` exists and has not passed its entry
+        /// check; the jump it replaced, if one ran, is still the running one.
+        case scheduled(epoch: UInt64, previous: AttachRunningJump?)
         case running(epoch: UInt64, AttachRunningJump)
     }
 
@@ -75,8 +78,11 @@ struct MessageJumpSessionMachine: StateMachine {
     }
 
     var runningJump: AttachRunningJump? {
-        if case .running(_, let jump) = state.jump { return jump }
-        return nil
+        switch state.jump {
+        case .idle: nil
+        case .scheduled(_, let previous): previous
+        case .running(_, let jump): jump
+        }
     }
 
     var hasJumpTask: Bool { state.jump != .idle }
@@ -85,7 +91,7 @@ struct MessageJumpSessionMachine: StateMachine {
         switch event {
         case .jumpRequested:
             state.epoch &+= 1
-            state.jump = .scheduled(epoch: state.epoch)
+            state.jump = .scheduled(epoch: state.epoch, previous: runningJump)
             return [.startJump(epoch: state.epoch, generation: state.generation)]
         case .jumpEntered(let epoch, let generation, let taskCancelled, let jump):
             guard !taskCancelled, generation == state.generation, epoch == state.epoch else { return [] }
