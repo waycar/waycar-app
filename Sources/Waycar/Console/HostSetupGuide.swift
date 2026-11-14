@@ -41,17 +41,13 @@ struct HostSetupGuide: View {
         GeometryReader { viewport in
             ScrollViewReader { scroller in
                 ScrollView {
-                    content
+                    content(scroller)
                         // At least the visible height, so the spacers
                         // center the scan between the title and the
                         // folded steps.
                         .frame(minHeight: viewport.size.height)
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .onChange(of: showsManualSteps) {
-                    guard showsManualSteps else { return }
-                    withAnimation(.snappy) { scroller.scrollTo(Self.stepsAnchor, anchor: .top) }
-                }
             }
         }
         // Docked, so the default is in reach without scrolling: the setup on
@@ -65,7 +61,7 @@ struct HostSetupGuide: View {
 
     private static let stepsAnchor = "setup.by-hand.anchor"
 
-    private var content: some View {
+    private func content(_ scroller: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 28) {
             header
             if hasRowsAboveSteps {
@@ -75,7 +71,9 @@ struct HostSetupGuide: View {
                     if let sampleHostRow { sampleHostRow }
                 }
                 Spacer(minLength: 8)
-                setUpByHandToggle
+                setUpByHandToggle(scroller)
+                    // Room above it once it is scrolled to the top.
+                    .padding(.top, 16)
                     .id(Self.stepsAnchor)
                 if showsManualSteps {
                     manualSteps
@@ -120,9 +118,17 @@ struct HostSetupGuide: View {
 
     /// The manual steps fold away at the bottom: with a scan in the middle,
     /// most people never need them. Opening them scrolls them into view.
-    private var setUpByHandToggle: some View {
+    private func setUpByHandToggle(_ scroller: ScrollViewProxy) -> some View {
         Button {
-            withAnimation(.snappy) { showsManualSteps.toggle() }
+            withAnimation(.snappy) {
+                showsManualSteps.toggle()
+            } completion: {
+                // Only once the opening has settled: a scroll during it
+                // still finds the folded content, which fits the screen,
+                // and goes nowhere.
+                guard showsManualSteps else { return }
+                withAnimation(.snappy) { scroller.scrollTo(Self.stepsAnchor, anchor: .top) }
+            }
         } label: {
             HStack(spacing: 12) {
                 Text("Set up by hand")
