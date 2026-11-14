@@ -94,6 +94,108 @@ enum LivenessTiming {
     }
 }
 
+/// Where one `LivenessRace` stands (HERDR-14): the proof alone, the proof
+/// and the hedge racing, one of them failed while the other is still out,
+/// or decided.
+///
+/// The first success decides the race (the owner settles it directly). A
+/// proof that fails on the link starts the hedge at once; one that fails
+/// any other way, or with no hedge, fails the race with its own failure. A
+/// hedge that fails while the proof is out leaves the race to the proof,
+/// and its failure is the race's if the proof then fails on the link too.
+/// A failure is decided in a second step (`settle`), as it always was, so
+/// the hedge timer firing in between still starts the hedge, which the
+/// settlement then cancels. The owner keeps the hedge's failure, the
+/// continuation and the Tasks beside the machine, under the same lock.
+struct LivenessRaceMachine: StateMachine {
+    enum State: Equatable, Sendable {
+        /// The proof is out; the hedge has not started.
+        case proving
+        /// The proof and the hedge are both out.
+        case racing
+        /// The proof failed: the hedge, when `hedgeStarted`, decides.
+        /// Without a started hedge the race is about to be decided by that
+        /// failure.
+        case proofFailedAwaitingHedge(hedgeStarted: Bool)
+        /// The hedge failed while the proof is still out.
+        case hedgeFailedAwaitingProof
+        case settled
+    }
+
+    enum Event: Equatable, Sendable {
+        /// The hedge's delay passed.
+        case hedgeTimerElapsed
+        /// The proof failed; `startsHedge` when the failure calls for the
+        /// hedge (a link failure, the deadline).
+        case proofFailed(startsHedge: Bool)
+        case hedgeFailed
+        /// A success, a failure or the caller's cancellation decides the race.
+        case settle
+    }
+
+    enum Effect: Equatable, Sendable {
+        case launchHedge
+        /// Decide the race with the proof's failure.
+        case failWithProofFailure
+        /// Decide the race with the hedge's failure.
+        case failWithHedgeFailure
+        /// The race is decided: cancel its Tasks and resume the caller.
+        case settle
+    }
+
+    private(set) var state: State = .proving
+    private let hedged: Bool
+
+    init(hedged: Bool) {
+        self.hedged = hedged
+    }
+
+    var isSettled: Bool { state == .settled }
+
+    mutating func handle(_ event: Event) -> [Effect] {
+        switch (state, event) {
+        case (.proving, .hedgeTimerElapsed):
+            state = .racing
+            return [.launchHedge]
+        case (.proofFailedAwaitingHedge(hedgeStarted: false), .hedgeTimerElapsed):
+            state = .proofFailedAwaitingHedge(hedgeStarted: true)
+            return [.launchHedge]
+        case (.racing, .hedgeTimerElapsed), (.hedgeFailedAwaitingProof, .hedgeTimerElapsed),
+            (.proofFailedAwaitingHedge(hedgeStarted: true), .hedgeTimerElapsed),
+            (.settled, .hedgeTimerElapsed):
+            return []
+
+        case (.proving, .proofFailed(let startsHedge)):
+            state = .proofFailedAwaitingHedge(hedgeStarted: hedged && startsHedge)
+            guard hedged, startsHedge else { return [.failWithProofFailure] }
+            return [.launchHedge]
+        case (.racing, .proofFailed(let startsHedge)):
+            state = .proofFailedAwaitingHedge(hedgeStarted: true)
+            return startsHedge ? [] : [.failWithProofFailure]
+        case (.hedgeFailedAwaitingProof, .proofFailed(let startsHedge)):
+            state = .proofFailedAwaitingHedge(hedgeStarted: true)
+            return [startsHedge ? .failWithHedgeFailure : .failWithProofFailure]
+        case (.proofFailedAwaitingHedge, .proofFailed), (.settled, .proofFailed):
+            // A proof fails at most once.
+            return []
+
+        case (.proving, .hedgeFailed), (.racing, .hedgeFailed):
+            state = .hedgeFailedAwaitingProof
+            return []
+        case (.proofFailedAwaitingHedge, .hedgeFailed):
+            return [.failWithHedgeFailure]
+        case (.hedgeFailedAwaitingProof, .hedgeFailed), (.settled, .hedgeFailed):
+            return []
+
+        case (.settled, .settle):
+            return []
+        case (_, .settle):
+            state = .settled
+            return [.settle]
+        }
+    }
+}
+
 /// A liveness proof (a ping) raced against its deadline and, when hedged,
 /// against a replacement connection that starts once the proof is slow or
 /// has failed on the link (#105). The first success wins. The proof runs
@@ -153,30 +255,26 @@ enum LivenessRace {
         }
     }
 
-    /// What a failed proof leads to.
-    private enum AfterProofFailure: Sendable {
-        case nothing, fail(any Error), startHedge
-    }
-
     private final class Race<Proof: Sendable, Hedge: Sendable>: Sendable {
         typealias Continuation = CheckedContinuation<Outcome<Proof, Hedge>, any Error>
 
+        /// The machine and what is no value: the caller's continuation, the
+        /// hedge's failure and the race's Tasks, all under one lock.
         private struct State {
+            var machine: LivenessRaceMachine
             var continuation: Continuation?
-            var settled = false
-            var proofFailed = false
-            var hedgeStarted = false
             var hedgeFailure: (any Error)?
             var tasks: [Task<Void, Never>] = []
         }
 
-        private let state = Mutex(State())
+        private let state: Mutex<State>
         private let hedge: Hedging<Hedge>?
         private let clock: LivenessClock
 
         init(hedge: Hedging<Hedge>?, clock: LivenessClock) {
             self.hedge = hedge
             self.clock = clock
+            state = Mutex(State(machine: LivenessRaceMachine(hedged: hedge != nil)))
         }
 
         /// Starts `proof`, already bounded by its deadline, and the hedge
@@ -186,7 +284,7 @@ enum LivenessRace {
             proof: @escaping @Sendable () async throws -> Proof
         ) {
             let cancelled = state.withLock { state in
-                guard !state.settled else { return true }
+                guard !state.machine.isSettled else { return true }
                 state.continuation = continuation
                 return false
             }
@@ -219,28 +317,25 @@ enum LivenessRace {
         }
 
         private func proofFailed(_ error: any Error) {
-            let next = state.withLock { state -> AfterProofFailure in
-                guard !state.settled else { return .nothing }
-                // Latched, so a hedge that fails later fails the race at once.
-                state.proofFailed = true
-                guard let hedge, hedge.startsOn(error) else { return .fail(error) }
-                if let hedgeFailure = state.hedgeFailure { return .fail(hedgeFailure) }
-                guard !state.hedgeStarted else { return .nothing }
-                state.hedgeStarted = true
-                return .startHedge
+            // A pure classification of the failure, so it is taken outside
+            // the lock.
+            let startsHedge = hedge?.startsOn(error) ?? false
+            let (effects, hedgeFailure) = state.withLock { state in
+                (state.machine.handle(.proofFailed(startsHedge: startsHedge)), state.hedgeFailure)
             }
-            switch next {
-            case .nothing: break
-            case .fail(let failure): settle(with: .failure(failure))
-            case .startHedge: launchHedge()
+            for effect in effects {
+                switch effect {
+                case .failWithProofFailure: settle(with: .failure(error))
+                case .failWithHedgeFailure: settle(with: .failure(hedgeFailure ?? error))
+                case .launchHedge: launchHedge()
+                case .settle: break
+                }
             }
         }
 
         private func startHedge() {
             let starts = state.withLock { state in
-                guard !state.settled, !state.hedgeStarted else { return false }
-                state.hedgeStarted = true
-                return true
+                state.machine.handle(.hedgeTimerElapsed) == [.launchHedge]
             }
             if starts { launchHedge() }
         }
@@ -263,10 +358,9 @@ enum LivenessRace {
 
         private func hedgeFailed(_ error: any Error) {
             let fails = state.withLock { state in
-                guard !state.settled else { return false }
-                state.hedgeFailure = error
+                if !state.machine.isSettled { state.hedgeFailure = error }
                 // While the proof is still out, it may yet answer.
-                return state.proofFailed
+                return state.machine.handle(.hedgeFailed) == [.failWithHedgeFailure]
             }
             if fails { settle(with: .failure(error)) }
         }
@@ -275,8 +369,7 @@ enum LivenessRace {
         @discardableResult
         private func settle(with result: Result<Outcome<Proof, Hedge>, any Error>) -> Bool {
             let decided = state.withLock { state -> (Continuation?, [Task<Void, Never>])? in
-                guard !state.settled else { return nil }
-                state.settled = true
+                guard state.machine.handle(.settle) == [.settle] else { return nil }
                 defer {
                     state.continuation = nil
                     state.tasks = []
@@ -294,7 +387,7 @@ enum LivenessRace {
         /// starts after the race is decided is cancelled at once.
         private func track(_ task: Task<Void, Never>) {
             let settled = state.withLock { state in
-                guard !state.settled else { return true }
+                guard !state.machine.isSettled else { return true }
                 state.tasks.append(task)
                 return false
             }

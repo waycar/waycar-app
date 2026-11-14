@@ -5501,6 +5501,46 @@ stateDiagram-v2
     replaying --> completed: timed out / throwFirstFailure
 ```
 
+### LivenessRaceMachine
+
+- **File:** `Sources/Waycar/Transport/ConnectionLiveness.swift`
+- **Owner:** `LivenessRace.Race` keeps the machine under its one `Mutex`
+  with the caller's continuation, the hedge's failure and the race's
+  Tasks; it classifies the proof's failure (`Hedging.startsOn`), launches
+  the hedge, settles (cancels the Tasks, resumes the caller) and discards
+  a hedge that succeeded after the race was decided.
+- **States:** `proving`, `racing`, `proofFailedAwaitingHedge(hedgeStarted)`,
+  `hedgeFailedAwaitingProof`, `settled`.
+- **Events:** `hedgeTimerElapsed`, `proofFailed(startsHedge)`,
+  `hedgeFailed`, `settle` (a success, a failure being decided, or the
+  caller's cancellation).
+- **Effects:** `launchHedge`, `failWithProofFailure`,
+  `failWithHedgeFailure`, `settle`. The first success wins; a hedge
+  success after the decision is discarded; when both fail on the link the
+  hedge's failure is thrown, while a proof the server answered throws its
+  own. A failure is decided in a second locked step as before, so the
+  hedge timer firing in between still launches the hedge, which the
+  decision then cancels.
+- **Tests:** `LivenessRaceMachineTests`, `LivenessRaceTests`,
+  `EventsSessionResilienceTests` (kept probes, revalidation hedges).
+- **Catalogue:** HERDR-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> proving
+    proving --> racing: hedgeTimerElapsed / launchHedge
+    proving --> proofFailedAwaitingHedge: proofFailed on link / launchHedge
+    proving --> proofFailedAwaitingHedge: proofFailed otherwise / failWithProofFailure
+    racing --> proofFailedAwaitingHedge: proofFailed
+    racing --> hedgeFailedAwaitingProof: hedgeFailed
+    hedgeFailedAwaitingProof --> proofFailedAwaitingHedge: proofFailed / fail with hedge's or proof's failure
+    proofFailedAwaitingHedge --> proofFailedAwaitingHedge: hedgeFailed / failWithHedgeFailure
+    proving --> settled: settle
+    racing --> settled: settle
+    proofFailedAwaitingHedge --> settled: settle
+    hedgeFailedAwaitingProof --> settled: settle
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6318,7 +6358,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | convert | P3d |
 | HERDR-12 | Shared async operation | `Sources/Waycar/Transport/SharedAsyncOperation.swift` | implicit | M/M | leave: actor-serialized single flight | — |
 | HERDR-13 | Async deadline | `Sources/Waycar/Transport/AsyncDeadline.swift` | implicit | M/M | leave: single-winner primitive | — |
-| HERDR-14 | Liveness race | `Sources/Waycar/Transport/ConnectionLiveness.swift` | implicit | H/H | convert | P3d |
+| HERDR-14 | Liveness race | `Sources/Waycar/Transport/ConnectionLiveness.swift` | implicit | H/H | converted → `LivenessRaceMachine` | P3d |
 | HERDR-15 | Home directory resolver | `Sources/Waycar/Transport/HomeDirectoryResolver.swift` | implicit | M/M | leave: one retry, single flight | — |
 | HERDR-16 | Attach bootstrap gate | `Sources/Waycar/Transport/TerminalAttach.swift` | implicit | L/L | leave: pure two-state latch | — |
 | HERDR-17 | Attach input queue | `Sources/Waycar/Transport/TerminalAttach.swift` | implicit | M/M | leave: locked queue | — |
