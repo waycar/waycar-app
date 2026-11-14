@@ -1,6 +1,7 @@
 ---
 // /solutions: every solution page, a card each, in index order.
 import AppStoreCta from '../../components/AppStoreCta.astro';
+import SourceLink from '../../components/SourceLink.astro';
 import Layout from '../../layouts/Layout.astro';
 import { getSolutions, solutionPath } from '../../lib/solutions';
 
@@ -46,6 +47,7 @@ const solutions = await getSolutions();
         <div class="actions">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           <a class="btn btn-ghost btn-lg" href="/help/what-is-waycar">What is Waycar?</a>
+          <SourceLink />
         </div>
       </section>
     </div>

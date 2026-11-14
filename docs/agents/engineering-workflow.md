@@ -150,6 +150,23 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   the iPhone, so 23 iPad tests failed on `main` unseen; the weekly
   [iPad run](../../.github/workflows/ipad-weekly.yml) catches the rest, a
   week late.
+- **`Packages/WaycarSSH`:** run CI's package lane on the Mac,
+  `make test-ci-package` (through `mac_run`), not a hosted draft-PR round
+  trip: it runs the fixture-backed `SessionDriver*E2ETests` with the lane's
+  pinned count.
+- **Waiting for hosted CI** (a PR, a dispatch, a pushed commit): make one
+  call, `python3 scripts/ci/ci-evidence.py --pr <n> --wait` (or
+  `--sha <sha>`), or hand the wait to an automation (an `automation ask`
+  script running it with `--wait --fire`) and end your turn. Never poll with
+  ad-hoc `gh run view`/`gh run list` loops: one branch spent 38 of its 227
+  tool calls and 128 tool-minutes that way, and one poll timed out at 600 s
+  while an automation already watched. In a bash tool, give the call a
+  timeout above its `--deadline` (default 2 h) and mark it interruptible.
+  The report gives each workflow and job its conclusion and duration, each
+  CI lane its executed, pinned and skipped counts, the failing tests, the
+  first `##[error]`, and which runs were cancelled or superseded; `--json`
+  for scripts. Exit 0 is green, 1 red, 2 incomplete (gh failed, or a job
+  log it could not read), 3 still running.
 
 ## Parallel work
 
@@ -262,9 +279,11 @@ When a coordinator splits one change across workers:
   lines.
 - A workflow that runs only on some paths rots unseen: give it a weekly
   schedule too.
-- `gh run view --log` refuses a run still in progress:
-  `gh api repos/<owner>/<repo>/actions/jobs/<id>/logs` returns a finished
-  job's log.
+- Read CI results with `scripts/ci/ci-evidence.py`, which already reads
+  each finished job's log. By hand, `gh run view --log` refuses a run still
+  in progress, and `gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`
+  returns a finished job's log only with `--allow-escape-sequences` (gh
+  2.103 refuses a body with terminal escapes, and CI logs have them).
 - In one concurrency group a newly queued run cancels the run already
   pending, even with `cancel-in-progress: false`; check for queued `main`
   runs before a `workflow_dispatch`. A dispatch needs the workflow on the

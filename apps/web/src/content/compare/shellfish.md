@@ -28,7 +28,6 @@ rows:
   usage: { level: unknown, text: "Not documented" }
   resume: { level: partial, text: "Partial: pick tmux sessions. Agent resume not documented" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 17.4 or later" }
-  android: { level: unknown, text: "Not documented. Only Apple platforms are listed" }
   desktop: { level: yes, text: "Yes, a Mac app. No web client documented" }
   source: { level: info, text: "No public source repo found" }
   price: { level: info, text: "Free with ads. Pro $2.99/mo, $14.99/yr or $29.99 (US)" }

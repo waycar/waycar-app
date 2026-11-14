@@ -72,7 +72,6 @@ export const CAPABILITIES = /** @type {const} */ ([
   { id: 'usage', group: 'agents', label: 'Usage and rate limits', rated: true },
   { id: 'resume', group: 'agents', label: 'Resume a closed agent', rated: true },
   { id: 'ios', group: 'reach', label: 'iPhone and iPad app', rated: true },
-  { id: 'android', group: 'reach', label: 'Android app', rated: true },
   { id: 'desktop', group: 'reach', label: 'Desktop or web client', rated: true },
   { id: 'source', group: 'reach', label: 'Source code', rated: false },
   { id: 'price', group: 'reach', label: 'Price', rated: false },

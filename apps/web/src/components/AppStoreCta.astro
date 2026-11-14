@@ -5,9 +5,9 @@
 // or iPod touch it links straight to the App Store and sends `app_store_clicked`.
 // Everyone else opens the Get Waycar picker (`GetPicker`), sending
 // `get_picker_opened`; without JavaScript it opens via a fragment link, with no
-// event. The picker names the stores and devices: its App Store badge sends
-// `app_store_clicked`, Android is unclickable "Coming soon", and the QR is
-// always shown on wide screens with a mouse. Button and picker travel together
+// event. The picker names the store and devices: its App Store badge sends
+// `app_store_clicked`, and the QR is always shown on wide screens with a
+// mouse. The caller puts a `SourceLink` beside the button. Button and picker travel together
 // so either App Store link keeps this button's `ct` (or a paid campaign's), and
 // either event keeps the wrapper's `module`. With `APP_STORE_LISTING_URL`
 // emptied (the listing taken down) each is a plain text label,

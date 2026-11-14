@@ -28,7 +28,6 @@ rows:
   usage: { level: partial, text: "Partial: context and Claude 5h and 7d limits" }
   resume: { level: yes, text: "Yes, resume sessions from the app" }
   ios: { level: yes, text: "Yes, iPhone and iPad, iOS 15.1 or later" }
-  android: { level: yes, text: "Yes, on Google Play" }
   desktop: { level: yes, text: "Yes: desktop app for macOS, Windows, Linux, and a web app" }
   source: { level: info, text: "Open source, MIT licensed" }
   price: { level: info, text: "Free. Voice: 20 free min per 30 days, then a subscription" }
@@ -100,7 +99,7 @@ In Waycar the agent runs on your machine, in herdr or tmux, not in the app. Wayc
 
 ## Where Happy is better
 
-- **More platforms.** Happy runs on Android, the web and desktop. Waycar is an iPhone and iPad app with no native desktop or web client. An Android app is coming soon.
+- **More platforms.** Happy runs on Android, the web and desktop. Waycar is an iPhone and iPad app with no native desktop or web client.
 - **Its own agent runtime.** Happy Agent runs the agent itself, with subagents on any model, agents that message each other, scheduled messages and persistent bots. In Waycar the agent runs on your machine in herdr or tmux, and Waycar starts, shows and steers it.
 - **Sessions that outlive your laptop.** The daemon keeps sessions running when you quit Desktop. On a server, work goes on while your laptop sleeps. A Waycar machine must stay on and awake.
 

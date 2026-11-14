@@ -10,6 +10,7 @@ import { Image } from 'astro:assets';
 import listPhoto from '../assets/carplay/carplay-list.jpg';
 import voicePhoto from '../assets/carplay/carplay-voice.jpg';
 import AppStoreCta from '../components/AppStoreCta.astro';
+import SourceLink from '../components/SourceLink.astro';
 import VoiceExchange, { type ExchangeLine } from '../components/VoiceExchange.astro';
 import { ON_APP_STORE } from '../data/links';
 import Layout from '../layouts/Layout.astro';
@@ -109,6 +110,7 @@ const help = [
           <div class="get">
             <AppStoreCta kind="button">Get Waycar</AppStoreCta>
             <span class="get-note">{ON_APP_STORE && <><span>Free on the App Store</span> · </>}<span>iPhone, iOS 26.4 or later</span></span>
+            <SourceLink />
           </div>
         </div>
 
@@ -246,6 +248,7 @@ const help = [
         <div class="needs-cta">
           <AppStoreCta kind="button">Get Waycar</AppStoreCta>
           {ON_APP_STORE && <span class="get-note">Free on the App Store</span>}
+          <SourceLink />
         </div>
       </div>
 

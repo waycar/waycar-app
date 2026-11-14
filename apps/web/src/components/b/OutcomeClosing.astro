@@ -1,6 +1,7 @@
 ---
 import { ON_APP_STORE } from '../../data/links';
 import AppStoreCta from '../AppStoreCta.astro';
+import SourceLink from '../SourceLink.astro';
 ---
 
 <section class="section final" aria-labelledby="final-title">
@@ -10,7 +11,10 @@ import AppStoreCta from '../AppStoreCta.astro';
       <AppStoreCta kind="button" ct="site-closing">Get Waycar</AppStoreCta>
       <a class="btn btn-ghost btn-lg" href="#setup">Set up your computer →</a>
     </div>
-    {ON_APP_STORE && <p class="note"><span class="cta-note">Free on the App Store · iOS 18 or later</span></p>}
+    <p class="note">
+      {ON_APP_STORE && <span class="cta-note">Free on the App Store · iOS 18 or later</span>}
+      <SourceLink />
+    </p>
   </div>
 </section>
 
@@ -48,6 +52,11 @@ import AppStoreCta from '../AppStoreCta.astro';
   }
 
   .note {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 16px;
     margin-top: 16px;
   }
 

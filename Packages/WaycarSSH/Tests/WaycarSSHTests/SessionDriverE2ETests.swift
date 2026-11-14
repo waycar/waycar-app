@@ -1562,6 +1562,57 @@ struct SessionDriverE2ETests {
         try await connection.close(timeout: .sshdBudget(2))
     }
 
+    /// A one-shot exec turn reads stdout, then stderr, and each read drains
+    /// the whole socket. Output, EOF and CLOSE that arrive between the two
+    /// reads are queued by the stderr read: it finds no stderr bytes, the
+    /// queued stdout masks the EOF, and the socket has no edge left. Waiting
+    /// on readiness with a watch taken after that read slept out the whole
+    /// timeout on an exec sshd had already finished (CI, three times). The
+    /// hold widens the window from a few instructions to as long as the test
+    /// needs; a barrier file, released over a second connection, keeps the
+    /// command silent until the hold has caught a turn that has read nothing.
+    @Test("exec output and EOF that the stderr read queued finish the exec at once")
+    func execFinishesOnOutputTheStandardErrorReadQueued() async throws {
+        let environment = try #require(SessionDriverTestEnvironment.current)
+        let connection = try await environment.connect()
+        let control = try await environment.connect()
+        let barrier = "/tmp/waycar-exec-barrier-\(UUID().uuidString)"
+        let hold = SessionWaitHold()
+
+        await connection.holdNextExecExchangeStandardErrorReadForTesting {
+            await hold.waitUntilReleased()
+        }
+        let exec = Task {
+            try await connection.execute(
+                "while [ ! -e '\(barrier)' ]; do sleep 0.05; done; printf done; rm -f '\(barrier)'",
+                timeout: .sshdBudget(8))
+        }
+        try await requireEventually("the exec should reach its stderr read") { await hold.hasEntered }
+
+        // Let the command print and exit while the turn sits past its stdout
+        // read; it removes the barrier just before it exits.
+        _ = try await control.execute("touch '\(barrier)'", timeout: .sshdBudget(5))
+        try await requireEventually("the exec's command should finish") {
+            (try? await control.execute("[ ! -e '\(barrier)' ]", timeout: .sshdBudget(5)))?
+                .exitStatus == 0
+        }
+        // The exit status, EOF and CLOSE follow within milliseconds. Should
+        // they still be in flight at the release, the stderr read misses them
+        // and the test passes without exercising the window; it cannot fail.
+        try await Task.sleep(for: .milliseconds(500))
+        await hold.release()
+        let released = ContinuousClock.now
+        let result = try await exec.value
+        #expect(result.stdout == Data("done".utf8))
+        #expect(result.exitStatus == 0)
+        // Far below the exec's own budget, which the lost wakeup slept out.
+        #expect(released.duration(to: .now) < .sshdBudget(2))
+
+        #expect(await connection.isConnected)
+        try await connection.close(timeout: .sshdBudget(2))
+        try await control.close(timeout: .sshdBudget(2))
+    }
+
     @Test("exec stream reports EOF as nil, then the exit status")
     func execStreamReportsEOFThenExitStatus() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)

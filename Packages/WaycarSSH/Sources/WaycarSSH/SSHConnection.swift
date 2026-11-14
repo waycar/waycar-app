@@ -386,6 +386,12 @@ public final class SSHConnection: Sendable {
         await driver.holdNextExecStreamStandardErrorDrainForTesting(hold)
     }
 
+    public func holdNextExecExchangeStandardErrorReadForTesting(
+        _ hold: @escaping @Sendable () async throws -> Void
+    ) async {
+        await driver.holdNextExecExchangeStandardErrorReadForTesting(hold)
+    }
+
     public func runNextCompensationUnlinkPhaseHookForTesting(
         _ hook: @escaping @Sendable () async throws -> Void
     ) async {

@@ -1,0 +1,49 @@
+---
+// The quiet "Open source on GitHub" link that sits beside every download
+// button, and inside the Get Waycar picker, for the visitor who wants to read
+// the code before installing. Secondary on purpose: caption-size mono text in
+// text-2, no fill or border, so the button stays the one thing to press. It
+// sends `github_clicked` through Layout's `data-ph-event` listener (with the
+// `module` of a `data-ph-module` wrapper around it), and shows whether or not
+// the App Store listing is live. It takes no props and no caller attributes,
+// so a caller's scoped link styles never restyle it: callers place it.
+import { SOURCE_URL } from '../data/supported';
+---
+
+<a class="source-link" href={SOURCE_URL} data-ph-event="github_clicked">
+  <span class="label">Open source on GitHub</span><span class="go" aria-hidden="true">↗</span>
+</a>
+
+<style>
+  /* The padding makes a 24 px tap target out of one caption line. */
+  .source-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-block: 4px;
+    font: var(--fw-caption) var(--fs-caption) / 1.4 var(--font-mono);
+    color: var(--text-2);
+    white-space: nowrap;
+    transition: color 0.15s ease;
+  }
+
+  .source-link:hover {
+    color: var(--text);
+  }
+
+  /* Only the words are underlined; the arrow says the link leaves the site. */
+  .label {
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.15s ease;
+  }
+
+  .source-link:hover .label {
+    text-decoration-color: currentColor;
+  }
+
+  .go {
+    color: var(--text-3);
+  }
+</style>

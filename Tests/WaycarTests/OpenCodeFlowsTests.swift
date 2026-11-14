@@ -607,6 +607,11 @@ struct OpenCodeFlowsTests {
         if byFolder {
             await opencode.setServerSessionLinkFacts(.init(sessionOrigins: ["ses_a": "user"]))
         }
+        // The Host's first marker read lists no markers and lands only after
+        // the archive, inside the pin's local grace, the way a loaded test
+        // host can order it: it writes the pin again.
+        let markerRead = ScriptedTransportCallGate()
+        await terminal.gateNextChatModeMarkerRead(using: markerRead)
         store.setHosts([host])
         await store.resume()
         try await waitUntil { store.agents.count == 1 && store.agents.first?.linkedTerminal?.id == paneID }
@@ -619,9 +624,17 @@ struct OpenCodeFlowsTests {
         if byFolder {
             #expect(store.chatMode.marker(for: paneID)?.session == pin)
             #expect(store.chatMode.marker(for: paneID)?.chatMode == false)
-            try await waitUntil { await terminal.chatModeMarkerWrites.map(\.session) == [pin] }
+            try await waitUntil { await terminal.chatModeMarkerWrites.first?.session == pin }
         } else {
             #expect(store.chatMode.marker(for: paneID) == nil)
+        }
+        await markerRead.waitForEntry()
+        let writesBeforeRead = await terminal.chatModeMarkerWrites.count
+        await markerRead.open()
+        if byFolder {
+            // A repair rewrites the same pin; nothing writes another marker.
+            try await waitUntil { await terminal.chatModeMarkerWrites.count > writesBeforeRead }
+            #expect(await terminal.chatModeMarkerWrites.allSatisfy { $0.session == pin })
         }
         #expect(await terminal.closedPanes.isEmpty)
         #expect(await terminal.closedTabs.isEmpty)

@@ -1710,6 +1710,18 @@ final class ConsoleStore {
         return present.first { $0.status == .connected } ?? present.first
     }
 
+    /// `primaryProjection` once its session is activated. A visibility write
+    /// right after the reconcile that started the projection would otherwise
+    /// reach a still-suspended session, which fails at once rather than
+    /// waiting for its connection, and the write would be lost.
+    private func startedPrimaryProjection(on hostID: Host.ID) async -> HostConsoleProjection? {
+        guard let picked = primaryProjection(on: hostID) else { return nil }
+        await picked.started()
+        let current = primaryProjection(on: hostID)
+        if current !== picked { await current?.started() }
+        return current
+    }
+
     /// Core has no mosh attach; its placeholder probe must not poison the
     /// Host/network-wide availability shared by TUI and tmux attaches.
     func moshProjection(on hostID: Host.ID) -> HostConsoleProjection? {
@@ -2000,7 +2012,7 @@ final class ConsoleStore {
     private func writeCoreEnabled(
         _ enabled: Bool, on hostID: Host.ID, onlyIfUnset: Bool = false
     ) async -> Bool {
-        guard let projection = primaryProjection(on: hostID) else { return false }
+        guard let projection = await startedPrimaryProjection(on: hostID) else { return false }
         do {
             try await projection.session.withTransport { transport in
                 let current = try await transport.readNotificationConfig()
@@ -2100,7 +2112,7 @@ final class ConsoleStore {
             return await writeCoreEnabled(
                 backendPreferences.showsRuntime(.core, for: hostID), on: hostID)
         case .tmux(let enabled):
-            guard let projection = primaryProjection(on: hostID) else { return false }
+            guard let projection = await startedPrimaryProjection(on: hostID) else { return false }
             do {
                 try await projection.session.withTransport { transport in
                     let current = try await transport.readNotificationConfig()
@@ -2116,7 +2128,7 @@ final class ConsoleStore {
                 return false
             }
         case .zellij(let enabled):
-            guard let projection = primaryProjection(on: hostID) else { return false }
+            guard let projection = await startedPrimaryProjection(on: hostID) else { return false }
             do {
                 try await projection.session.withTransport { transport in
                     let current = try await transport.readNotificationConfig()

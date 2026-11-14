@@ -22,8 +22,8 @@ it shows everywhere, and "Decline" outside required regions stops PostHog too.
 Elsewhere the cookie is set from the first visit. Cookieless events need the PostHog
 project's cookieless tracking setting on, or PostHog drops them. The script
 sends `$pageview`, `$opt_in`, `get_picker_opened`, `app_store_clicked`,
-`install_command_copied`, `article_toc_clicked`, and `article_rail_clicked` to
-`us.i.posthog.com`. Controls opt in with `data-ph-event` (click) or
+`github_clicked`, `install_command_copied`, `article_toc_clicked`, and
+`article_rail_clicked` to `us.i.posthog.com`. Controls opt in with `data-ph-event` (click) or
 `data-ph-copy-event` (copy) attributes; see the script in
 `src/layouts/Layout.astro`. `install_command_copied` comes from the install
 command in the hero, in Setup, and in the article rail. An event sent from
@@ -37,9 +37,12 @@ else it opens a Get Waycar picker (see [App Store switch](#app-store-switch)):
 the button sends `get_picker_opened` with the `ct` of the App Store link inside
 its picker (a paid ad's `ct` after the rewrite) and its `module`; the picker's
 App Store link sends `app_store_clicked` with that same `ct` and `module`. So
-`get_picker_opened` counts computers and Android only, and `app_store_clicked`
-without one before it is an iPhone or iPad. The Android tile, Close and the
-backdrop send nothing. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
+`get_picker_opened` counts visitors on anything but an iPhone or iPad, and
+`app_store_clicked` without one before it is an iPhone or iPad. Close and the
+backdrop send nothing. `github_clicked` comes from the "Open source on GitHub"
+link (`src/components/SourceLink.astro`) beside every store button but the
+header's, and inside each picker; in an article's rail or TOC card it carries
+that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
 The Worker (`src/worker.ts`) also sends anonymous server-side events:
 `plugin_install_requested` per `GET /install.sh`, `plugin_package_downloaded`
 per plugin package download (see [Plugin install events](#plugin-install-events)),
@@ -366,8 +369,7 @@ marked. From 1280 px the rail sits beside the article and scrolls with the page;
 under 1280 px it follows the article. Its four modules (`get-app`,
 `start-here`, `host-setup`, `first-launch`), their copy and each article's four
 hand-picked guides live in `src/data/article-rail.ts`, which also records the
-claim limits (no "popular", no price, no Android link: Android stays "coming
-soon"). A short article keeps only the modules that fit beside it; the rest
+claim limits (no "popular", no price). A short article keeps only the modules that fit beside it; the rest
 follow below it. A thin reading progress bar draws only where the browser
 supports scroll-driven animations. All of it is same-origin: no new third-party
 request, cookie or CSP change.
@@ -522,7 +524,10 @@ surface's own campaign (`?pt=…&ct=<token>&mt=8`, see
 [Campaign tokens](#campaign-tokens)); the picker's App Store link is the tagged one.
 Every store button (header, hero, Setup step 1, Closing, the article's TOC card,
 rail and footer, the site footer, compare and solutions pages)
-is one component, `src/components/AppStoreCta.astro`, which follows
+is one component, `src/components/AppStoreCta.astro`. Every one but the
+header's has the quiet "Open source on GitHub" link
+(`src/components/SourceLink.astro`) placed beside it by its caller, in both
+states below; `scripts/picker.test.mjs` checks the count. The button follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
 - **Live** (the shipped state): with JavaScript on an iPhone, iPad or iPod
@@ -535,16 +540,16 @@ is one component, `src/components/AppStoreCta.astro`, which follows
   works in either script order: it updates the picker link before the copy, or
   both links after it. Layout's existing click listener reads the rewritten
   button's own `href` for `ct`; no `get_picker_opened` event is sent on this path.
-  Everyone else (computers and Android included) opens the **Get Waycar picker**
+  Everyone else (computers and other phones) opens the **Get Waycar picker**
   (`src/components/GetPicker.astro`), sending `get_picker_opened` with the
   picker's App Store `ct`. No button names a device or a store: the labels stay
   "Get Waycar" and "Download" (header). The picker is the one place that does.
-  Tile one, "iPhone and iPad", holds
+  Its one tile, "iPhone and iPad", holds
   Apple's official "Download on the App Store" badge
   (`public/app-store-badge.svg`) as the link to the listing, with
-  `data-ph-event="app_store_clicked"`. Tile two, "Android™", is plain text,
-  "Coming soon": not a link, not focusable, no Play name, badge or logo. A line
-  below says "Android is a trademark of Google LLC." Each button owns its
+  `data-ph-event="app_store_clicked"`. Under it sit the "Open source on GitHub"
+  link (`github_clicked`) and Close; nothing else in it is focusable. Each
+  button owns its
   picker (a `<dialog>` right after it), so the App Store link inside keeps that
   button's `ct` (or the paid campaign's) and the `module` of the wrapper around
   both; the direct link keeps them too. Inside the picker, the QR figure is
@@ -569,10 +574,6 @@ is one component, `src/components/AppStoreCta.astro`, which follows
   Apple's marketing guidelines allow them only with a live listing. On phones
   (600px and narrower) the header pill shows "Coming soon" and keeps the full
   phrase for screen readers.
-- **Google Play** (`PLAY_STORE_LISTING_URL`, empty today): set, the Android tile
-  links to it and the App Store badge turns black (`public/app-store-badge-black.svg`;
-  Apple's rule once another platform's badge appears). Never set it before a Play
-  listing exists. `scripts/picker.test.mjs` builds it once with a dummy URL.
 
 Availability statements (FAQ, footer, `/llms.txt`, the `{{app_store}}` token in
 `src/llms/index.md`) follow `ON_APP_STORE` too: "available now" while live,

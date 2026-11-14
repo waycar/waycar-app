@@ -1,0 +1,65 @@
+﻿2026-11-13T23:52:32.3048260Z Current runner version: '2.338.2'
+2026-11-13T23:52:47.9983160Z No runtime specified, using 'iOS 27.2 (27.2 - 24B8117) - com.apple.CoreSimulator.SimRuntime.iOS-27-2'
+2026-11-13T23:52:48.4407050Z Claimed simulator 00D1DFF4-4AAE-4844-A82B-79F4194BA547
+2026-11-13T23:52:51.3694900Z ##[group]WaycarSSH package build
+2026-11-13T23:52:52.7329070Z Command line invocation:
+2026-11-13T23:52:52.7344700Z     /Applications/Xcode_27.2.app/Contents/Developer/usr/bin/xcodebuild build-for-testing -scheme WaycarSSH -derivedDataPath /tmp/waycar-ci.7qxb3S/PackageDerivedData -destination "platform=iOS Simulator,id=00D1DFF4-4AAE-4844-A82B-79F4194BA547" -collect-test-diagnostics never
+2026-11-13T23:52:52.7346220Z 
+2026-11-13T23:52:55.2779630Z Resolve Package Graph
+2026-11-13T23:53:55.5578580Z 
+2026-11-13T23:53:55.5580520Z PruneExplicitPrecompiledModules /tmp/waycar-ci.7qxb3S/PackageDerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+2026-11-13T23:53:55.5581930Z 
+2026-11-13T23:53:55.6413280Z ** TEST BUILD SUCCEEDED **
+2026-11-13T23:53:55.6413960Z 
+2026-11-13T23:53:55.7574270Z ##[endgroup]
+2026-11-13T23:53:55.7575080Z ==> WaycarSSH package build: 64s (status 0)
+2026-11-13T23:57:48.1838610Z Monitoring boot status for Waycar CI (00D1DFF4-4AAE-4844-A82B-79F4194BA547).
+2026-11-13T23:57:48.1841330Z Device already booted, nothing to do.
+2026-11-13T23:57:48.5870860Z 
+2026-11-13T23:57:48.7537050Z ==> Simulator boot after the build: 233s
+2026-11-14T00:11:56.6149690Z ==> Simulator first-boot work settled: 1-minute load 23.87 on 3 cores, 1081s after the boot began
+2026-11-14T00:12:03.9200190Z ##[group]WaycarSSH package E2E
+2026-11-14T00:12:03.9201240Z ==> WaycarSSH package E2E: skipping automatic package resolution
+2026-11-14T00:12:16.6347350Z Command line invocation:
+2026-11-14T00:12:16.6511760Z     /Applications/Xcode_27.2.app/Contents/Developer/usr/bin/xcodebuild test-without-building -disableAutomaticPackageResolution -scheme WaycarSSH -derivedDataPath /tmp/waycar-ci.7qxb3S/PackageDerivedData -destination "platform=iOS Simulator,id=00D1DFF4-4AAE-4844-A82B-79F4194BA547" -collect-test-diagnostics never
+2026-11-14T00:13:48.0796130Z ✔ Test "exec stream round-trips several writes through cat without a PTY" passed after 0.261 seconds.
+2026-11-14T00:13:48.0802710Z ◇ Test "exec stream drains a stderr flood so stdout is not stalled" started.
+2026-11-14T00:13:50.7149210Z ✔ Test "exec stream drains a stderr flood so stdout is not stalled" passed after 2.598 seconds.
+2026-11-14T00:13:50.7197620Z ◇ Test "exec stream stdout that the stderr drain queued is read at once" started.
+2026-11-14T00:13:53.3239460Z ✔ Test "exec stream stdout that the stderr drain queued is read at once" passed after 2.503 seconds.
+2026-11-14T00:13:53.3765360Z ◇ Test "exec output and EOF that the stderr read queued finish the exec at once" started.
+2026-11-14T00:14:26.1887600Z [WaycarSSH] 2026-11-14T00:14:26.183Z exec, exchange timed out [elapsed=32.001s; channel open=0.002s; exec request=0.039s; exchange=31.960s; last_result=0; waits=3; last_wait=socket read]
+2026-11-14T00:14:26.2439750Z ✘ Test "exec output and EOF that the stderr read queued finish the exec at once" recorded an issue at SessionDriverE2ETests.swift:1574:6: Caught error: .timedOut
+2026-11-14T00:14:26.2544370Z ✘ Test "exec output and EOF that the stderr read queued finish the exec at once" failed after 33.054 seconds with 1 issue.
+2026-11-14T00:14:48.3597310Z ✔ Test "eight concurrent RPCs never exceed the budget while their closes are pending" passed after 0.307 seconds.
+2026-11-14T00:14:48.3709470Z ◇ Test "exec-until-line returns on the matching line before EOF" started.
+2026-11-14T00:14:51.9717720Z ✔ Test "exec-until-line returns on the matching line before EOF" passed after 3.612 seconds.
+2026-11-14T00:14:51.9772560Z ◇ Test "a direct connection reports its numeric peer address and a jumped one none" started.
+2026-11-14T00:14:52.6128720Z ✔ Test "a direct connection reports its numeric peer address and a jumped one none" passed after 0.628 seconds.
+2026-11-14T00:14:52.6132050Z ✘ Suite "Session driver resource e2e" failed after 141.710 seconds with 1 issue.
+2026-11-14T00:14:52.6243660Z ✘ Test run with 137 tests in 10 suites failed after 141.722 seconds with 1 issue.
+2026-11-14T00:14:53.1662120Z 2026-11-14 00:14:53.164 xcodebuild[40137:104933] [MT] IDETestOperationsObserverDebug: 152.738 elapsed -- Testing started completed.
+2026-11-14T00:14:53.1666830Z 2026-11-14 00:14:53.164 xcodebuild[40137:104933] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-14T00:14:53.1667840Z 2026-11-14 00:14:53.164 xcodebuild[40137:104933] [MT] IDETestOperationsObserverDebug: 152.738 sec, +152.738 sec -- end
+2026-11-14T00:14:53.7956630Z 
+2026-11-14T00:14:53.7984440Z Test session results, code coverage, and logs:
+2026-11-14T00:14:53.7985410Z 	/tmp/waycar-ci.7qxb3S/PackageDerivedData/Logs/Test/Test-WaycarSSH-2026.11.14_00-12-19-+0000.xcresult
+2026-11-14T00:14:53.7985990Z 
+2026-11-14T00:14:53.7986130Z Failing tests:
+2026-11-14T00:14:53.7986530Z 	SessionDriverE2ETests.execFinishesOnOutputTheStandardErrorReadQueued()
+2026-11-14T00:14:53.7986880Z 
+2026-11-14T00:14:53.7987000Z ** TEST EXECUTE FAILED **
+2026-11-14T00:14:53.7987120Z 
+2026-11-14T00:14:53.8830320Z Testing started
+2026-11-14T00:14:54.3425700Z WaycarSSH package E2E exited 65; diagnostics: /Users/runner/work/_temp/waycar-ci-diagnostics-43529595689-1/WaycarSSH-package-E2E/attempt-1
+2026-11-14T00:14:54.3845040Z ##[endgroup]
+2026-11-14T00:14:54.3846080Z ==> WaycarSSH package E2E: 171s (status 65)
+2026-11-14T00:15:07.2541520Z ==> Host load over the run: 48 samples, 1-minute load average 221.4, peak 628.2, 3 cores, 7 GB, lowest free memory 32%
+2026-11-14T00:15:07.6655740Z ==> Preserved failure diagnostics in /Users/runner/work/_temp/waycar-ci-diagnostics-43529595689-1/fixture (status 65)
+2026-11-14T00:15:07.6884610Z ===== /tmp/waycar-ci.7qxb3S/host-load.log (last 80 lines)
+2026-11-14T00:15:07.6979440Z 23:52:47 load 21.56 48.41 25.87 | free 75% swap 0.00M | booted sims 0 | xcodebuild 0 swift-frontend 0 clang 0 | top 55.3% com.apple.CoreSimulator.CoreSimulatorService,12.5% SimulatorTrampoline,8.6% tccd,7.4% simdiskimaged,7.1% linkd
+2026-11-14T00:15:08.7149600Z 2026-11-13T23:52:51Z debug1: audit_event: connection closed without authentication
+2026-11-14T00:15:08.7152950Z 2026-11-13T23:52:51Z debug1: child_reap: preauth child 4312 for connection from 127.0.0.1 to 127.0.0.1 exited with status 255
+2026-11-14T00:15:08.7160900Z 2026-11-13T23:52:51Z debug1: child_close: enter
+2026-11-14T00:15:09.4045400Z ##[error]Process completed with exit code 65.
+2026-11-14T00:15:09.6354830Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

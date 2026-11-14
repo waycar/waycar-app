@@ -245,16 +245,16 @@ machines without the disposable sshd fixture can skip the E2E suite cleanly.
 
 `scripts/run-ci-ios-tests.sh` runs the package lane against its disposable
 sshd fixture (including a no-pty key, `WAYCAR_SSH_E2E_NO_PTY_KEY_SEED`, for
-the PTY-denial cases) and requires exactly **136 tests in 10 suites** with no
+the PTY-denial cases) and requires exactly **137 tests in 10 suites** with no
 skips, plus a list of display names it greps for one by one (the block after
-"WaycarSSH package E2E" in that script is the authority; it currently pins 41
+"WaycarSSH package E2E" in that script is the authority; it currently pins 43
 names, among them `outbound backpressure does not livelock a channel open`,
 `one-shot RPCs yield so a live PTY can progress` and
 `a serialized channel-open wait honors deadline and cancellation`). The
 scheduling and patched-libssh2 suites (`SessionDriverSchedulingE2ETests`,
 `SessionDriverPatchedLibSSH2E2ETests`) and the state-machine transition suites
 (`ByteTransportMachineTests`, `TransportSendOwnerMachineTests`,
-`ChannelOpenSlotMachineTests`) count toward the 136; tests that rely on
+`ChannelOpenSlotMachineTests`) count toward the 137; tests that rely on
 a single open slot set it with `setChannelOpenLimitForTesting(1)`.
 
 The post-quantum handshake uses its own ML-KEM-only sshd endpoint. The shared
