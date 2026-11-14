@@ -7,47 +7,43 @@ import SourceLink from './SourceLink.astro';
 import { comparePath, getComparisons } from '../lib/compare';
 import { getSolutions, solutionPath } from '../lib/solutions';
 
-interface Props {
-  /** The page is served at `/`, so section links are in-page anchors. */
-  homePage?: boolean;
-}
-
-const { homePage = false } = Astro.props;
-/** Link to a home page section: `#id` on a home page, `/#id` elsewhere. */
-const section = (id: string) => (homePage ? `#${id}` : `/#${id}`);
-
-const product = [
-  { href: section('mosh'), label: 'mosh + SSH' },
-  { href: section('how'), label: 'How it works' },
-  { href: section('features'), label: 'Features' },
-  { href: section('setup'), label: 'Setup' },
-];
-
+// Pages only, as in the header. The header's links stay here too: on a phone
+// the header shows none of them.
 const more = [
-  { href: '/ipad', label: 'iPad gallery' },
   { href: '/carplay', label: 'CarPlay' },
-  { href: section('security'), label: 'Security' },
   { href: '/help', label: 'Help' },
   { href: '/articles', label: 'Articles' },
   { href: '/changelog', label: 'Changelog' },
   { href: '/support', label: 'Support' },
-  { href: '/third-party-notices.txt', label: 'Third-party notices' },
-  { href: '/privacy', label: 'Privacy policy' },
-  { href: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/', label: 'Terms of use ↗' },
-  { href: 'https://herdr.dev', label: 'herdr.dev ↗' },
-  { href: 'https://github.com/waycar/waycar-app', label: 'GitHub ↗' },
 ];
 
-// Every comparison and solution page, in index order, so a new page joins the
-// footer on its own. Each list ends with a link to its index.
+/** The entries `ids` names, in that order; a renamed or removed page fails the build. */
+function picked<T extends { id: string }>(entries: T[], ids: string[]): T[] {
+  return ids.map((id) => {
+    const entry = entries.find((item) => item.id === id);
+    if (!entry) throw new Error(`SiteFooter: no page "${id}"`);
+    return entry;
+  });
+}
+
+// A few pages, then the index with every page. Picked by PostHog page views
+// (30 days to 2026-11-14, a handful each), plus Termius, the best-known name.
 const compare = [
-  ...(await getComparisons()).map((entry) => ({ href: comparePath(entry.id), label: entry.data.name })),
+  ...picked(await getComparisons(), ['claude-code-remote-control', 'blink-shell', 'termius']).map((entry) => ({
+    href: comparePath(entry.id),
+    label: entry.data.name,
+  })),
   { href: '/compare', label: 'All comparisons' },
 ];
 const solutions = [
-  ...(await getSolutions()).map((entry) => ({ href: solutionPath(entry.id), label: entry.data.title })),
+  ...picked(await getSolutions(), ['check-ai-agent-remotely', 'mosh-client-ios']).map((entry) => ({
+    href: solutionPath(entry.id),
+    label: entry.data.title,
+  })),
   { href: '/solutions', label: 'All solutions' },
 ];
+
+const eula = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 ---
 
 <footer class="footer">
@@ -60,10 +56,6 @@ const solutions = [
         </p>
         <p class="blurb">Your agents in herdr, tmux, Herdr Core and Zellij, plus Codex and OpenCode chats, on iPhone and iPad. Over mosh and SSH, with no cloud between you and your sessions.</p>
       </div>
-      <nav aria-labelledby="foot-product">
-        <h2 id="foot-product">Product</h2>
-        <ul>{product.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
-      </nav>
       <nav aria-labelledby="foot-compare">
         <h2 id="foot-compare">Compare</h2>
         <ul>{compare.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
@@ -74,11 +66,7 @@ const solutions = [
       </nav>
       <nav aria-labelledby="foot-more">
         <h2 id="foot-more">More</h2>
-        <ul>
-          {more.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
-          {/* Unhidden by the Layout script (needs JavaScript). */}
-          <li><button type="button" class="consent-open" data-consent-open hidden>Cookie settings</button></li>
-        </ul>
+        <ul>{more.map((link) => <li><a href={link.href}>{link.label}</a></li>)}</ul>
       </nav>
     </div>
     <div class="foot-bottom">
@@ -92,10 +80,13 @@ const solutions = [
         }
         <SourceLink />
       </span>
-      <span class="legal">
-        Apple, the Apple logo, iPhone, iPad, Mac, Apple Watch, CarPlay, iCloud and App Store are trademarks of Apple Inc.,
-        registered in the U.S. and other countries and regions.
-      </span>
+      {/* Apple's trademark credit and the third-party notices are on /privacy. */}
+      <nav class="legal" aria-label="Legal">
+        <a href={eula}>Terms</a>
+        <a href="/privacy">Privacy</a>
+        {/* Unhidden by the Layout script (needs JavaScript). */}
+        <button type="button" class="consent-open" data-consent-open hidden>Cookie settings</button>
+      </nav>
     </div>
   </div>
 </footer>
@@ -110,7 +101,7 @@ const solutions = [
 
   .foot {
     display: grid;
-    grid-template-columns: 1.4fr repeat(4, 1fr);
+    grid-template-columns: 1.4fr repeat(3, 1fr);
     gap: 32px;
   }
 
@@ -181,19 +172,16 @@ const solutions = [
     gap: 16px;
     margin-top: 40px;
     padding-top: 24px;
-    font: 12px / 1.6 var(--font-mono);
+    font: var(--fs-caption) / 1.6 var(--font-mono);
     border-top: 1px solid var(--line);
   }
 
-  .foot-bottom .get {
+  .foot-bottom .get,
+  .foot-bottom .legal {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0 16px;
-  }
-
-  .foot-bottom .legal {
-    max-width: 62ch;
   }
 
   @media (max-width: 860px) {

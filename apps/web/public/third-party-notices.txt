@@ -12,7 +12,7 @@ and source maps, and a local Wrangler --dry-run --metafile Worker bundle.
 Trace prebundled SDK source maps too: package-lock.json alone is not an
 inventory of embedded code. Update the versions and copy the applicable
 upstream LICENSE/NOTICE texts here, then run npm run check and verify this
-file and its footer link in the built output. Do not deploy during an audit.
+file and its link on /privacy in the built output. Do not deploy during an audit.
 
 Included code:
 - posthog-js 1.434.15: Apache-2.0 AND MIT, in the same-origin analytics bundle.

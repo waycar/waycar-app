@@ -425,8 +425,8 @@ the lightbox shows `tailscale-subnet-router.svg`.
 `/compare` holds one honest comparison per product people use to reach a coding
 agent from a phone, and `/solutions` one landing page per thing they search
 for ("mosh client ios", "tmux on iphone"). Both are content collections: a new
-page is one Markdown file, and it joins its index, the footer's Compare and
-Solutions columns, the sitemap, `/llms.txt` and the Markdown twins on its own.
+page is one Markdown file, and it joins its index, the sitemap, `/llms.txt`
+and the Markdown twins on its own.
 Like Articles they are not bundled into the iOS app, so a change under
 `src/content/compare/` or `src/content/solutions/` redeploys the site through
 `web.yml` and never starts the iOS CI.
@@ -512,7 +512,8 @@ and a matrix of all of them against Waycar), `src/pages/compare/[slug].astro`
 twin and the link list), and the same four under `src/pages/solutions/` and
 `src/pages/solutions.md.ts`. `src/lib/compare.ts`, `src/lib/solutions.ts` and
 `src/lib/landing.ts` read the collections and build the twins and JSON-LD.
-`SiteFooter` lists every page in its Compare and Solutions columns.
+`SiteFooter`'s Compare and Solutions columns list a few picked pages by id (a
+missing id fails the build), then the index.
 
 
 ## App Store switch
