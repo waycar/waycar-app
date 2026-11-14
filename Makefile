@@ -173,7 +173,7 @@ harness-lab-reinstall-plugin: ## Reinstall Waycar Host Tools on the lab host fro
 # environment, which plain `make test` never sets, so it skips there.
 test-harness-lab: ## Run the harness lab e2e suite (KINDS=claude,agy BACKENDS=herdr,tmux KEEP_SIM=1 DRY_RUN=1)
 	$(if $(DRY_RUN),,$(MAKE) generate)
-	SIM='$(SIM)' DERIVED='$(DERIVED)' scripts/harness-lab/run-e2e.sh $(if $(DRY_RUN),--dry-run) \
+	SIM='$(SIM)' SIM_DESTINATION='$(SIM_DESTINATION)' DERIVED='$(DERIVED)' scripts/harness-lab/run-e2e.sh $(if $(DRY_RUN),--dry-run) \
 		$(if $(KEEP_SIM),--keep-simulator) $(if $(KINDS),--kinds '$(KINDS)') \
 		$(if $(BACKENDS),--backends '$(BACKENDS)')
 

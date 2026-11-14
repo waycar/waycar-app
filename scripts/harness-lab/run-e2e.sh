@@ -16,7 +16,9 @@
 #   --no-build         reuse the DerivedData test products as they are
 #   --keep-simulator   leave the simulator leased afterwards
 #
-# Environment: SIM (iPhone 17 Pro Max), DERIVED (build/DerivedData),
+# Environment: SIM (iPhone 17 Pro Max), SIM_DESTINATION (platform=iOS
+# Simulator,name=$SIM; as make test-app, add `,OS=<version>` when the newest
+# runtime has no such simulator), DERIVED (build/DerivedData),
 # HARNESS_LAB_E2E_TIMEOUT_SECONDS (14400, the whole xcodebuild run).
 #
 # Brings the lab up (lab.sh up) when its SSH does not answer. Never clears the
@@ -59,6 +61,7 @@ lab_port=22300
 lab_user=waycar
 lab_key=$HOME/.ssh/waycar_harness_lab
 simulator="${SIM:-iPhone 17 Pro Max}"
+destination="${SIM_DESTINATION:-platform=iOS Simulator,name=$simulator}"
 derived_data="${DERIVED:-build/DerivedData}"
 test_timeout_seconds="${HARNESS_LAB_E2E_TIMEOUT_SECONDS:-14400}"
 suite=HarnessLabE2ETests
@@ -167,7 +170,7 @@ print(json.dumps(config, indent=2))
 ' "$config_base64"
 
 build_command=(xcodebuild build-for-testing -project Waycar.xcodeproj -scheme Waycar
-    -destination "platform=iOS Simulator,name=$simulator" -derivedDataPath "$derived_data")
+    -destination "$destination" -derivedDataPath "$derived_data")
 test_arguments=(test-without-building -disableAutomaticPackageResolution
     -project Waycar.xcodeproj -scheme Waycar -derivedDataPath "$derived_data"
     -collect-test-diagnostics never -parallel-testing-enabled NO
@@ -177,7 +180,7 @@ if [[ "$dry_run" == 1 ]]; then
     echo "==> Dry run; a run would:"
     [[ "$build" == 1 ]] && echo "    ${build_command[*]}"
     echo "    copy e2e-reset.sh to $remote_reset and run it"
-    echo "    scripts/sim-slot.py acquire '$simulator'"
+    echo "    scripts/sim-slot.py acquire '$destination'"
     echo "    xcrun simctl spawn <UDID> launchctl setenv $config_variable <${#config_base64} base64 chars>"
     echo "    python3 scripts/run-app-simulator-tests.py ${test_arguments[*]} -destination platform=iOS Simulator,id=<UDID>"
     echo "    reset the lab, unset the Simulator environment$([[ "$keep_simulator" == 0 ]] && echo ", scripts/sim-slot.py release <UDID>")"
@@ -253,8 +256,8 @@ lab_ssh 'mkdir -p "$HOME/.cache/harness-lab" && cat > "$HOME/.cache/harness-lab/
     < "$here/e2e-reset.sh"
 lab_ssh "sh $remote_reset"
 
-echo "==> Acquiring $simulator"
-simulator_udid=$(scripts/sim-slot.py acquire "$simulator" | tail -n 1)
+echo "==> Acquiring $destination"
+simulator_udid=$(scripts/sim-slot.py acquire "$destination" | tail -n 1)
 [[ "$simulator_udid" =~ ^[0-9A-F-]{36}$ ]] || {
     echo "sim-slot granted no UDID ($simulator_udid)" >&2
     simulator_udid=""
