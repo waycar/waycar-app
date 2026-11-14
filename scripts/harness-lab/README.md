@@ -84,6 +84,14 @@ at sign-in: install, launch and the login screen are all that can be tested.
 | kiro (`kiro-cli chat`) | "Welcome to Kiro CLI, let's get you signed in!" (Builder ID / Google / GitHub / organization) | `KIRO_API_KEY`, non-interactive only, paid plan |
 | devin | "Welcome to Devin CLI! Waiting for login in browser…" | none; a token from a Devin account |
 
+Claude needs no Anthropic login in the lab: `config/claude/env` points it at
+the mock with `ANTHROPIC_BASE_URL` and a dummy `ANTHROPIC_AUTH_TOKEN`, sent as
+a Bearer token. Not `ANTHROPIC_API_KEY`: interactive claude then asks whether
+to use the key, with No marked, so a prompt's Enter would refuse it. Without
+either variable every turn answers "Not logged in". `DISABLE_AUTOUPDATER=1`
+keeps the pinned `CLAUDE_VERSION`: without it claude updated itself mid-run
+(2.1.296 to 2.1.325, 2026-11-14).
+
 Copilot needs no GitHub login in the lab: its BYOK variables
 (`COPILOT_PROVIDER_*`) point it at the mock. Its self-update is off twice:
 `COPILOT_AUTO_UPDATE=false` makes its loader run the installed version instead

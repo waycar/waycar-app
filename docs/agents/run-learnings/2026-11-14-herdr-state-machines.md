@@ -21,6 +21,7 @@
   (`run-e2e.sh` now takes `SIM_DESTINATION`). Then claude was not signed in to
   the mock, because its endpoint config was never committed, and it updated
   itself mid-run. codex covered the herdr path end to end.
-- **Watch out:** the lab's claude needs a committed `config/claude/env`
-  (endpoint, dummy token, no auto-update) before its case can pass anywhere
-  but the worktree that first ran it.
+- **Watch out:** a lab harness's config must be committed: claude's
+  (`config/claude/env`: endpoint, dummy `ANTHROPIC_AUTH_TOKEN`, no
+  auto-update) had lived only in the worktree that first ran the lab.
+  `ANTHROPIC_API_KEY` instead opens an approval dialog whose default is No.
