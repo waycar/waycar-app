@@ -334,14 +334,20 @@ struct MessageJumpDeferredOwnerTests {
         let newer = HarnessJumpCaptures.transcript(kind: "pi", messages: [("b", .user, frame)])
         var reads = 0
         var delivered = 0
+        var secondEnded = false
+        var replace: (() -> Void)?
         let wiring = AgentMessageJumpWiring(readTranscript: {
             reads += 1
             if reads == 1 { return older }
             await secondRead.wait()
+            // In the same main-actor turn as this read's answer, so the
+            // replacement is requested and cannot have entered yet.
+            replace?()
             return newer
         }, jumpUsesTranscript: true)
         defer {
             first.open(); second.open(); secondRead.open()
+            replace = nil
             wiring.resetSession()
         }
         wiring.onTranscript = { _ in delivered += 1 }
@@ -350,15 +356,15 @@ struct MessageJumpDeferredOwnerTests {
         wiring.refreshTranscript()
         try await waitUntil { delivered == 1 }
         #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "held for the walk")
+        replace = {
+            wiring.runJump(.newer) { _ in
+                await second.wait()
+                secondEnded = true
+            }
+        }
         wiring.refreshTranscript()
         try await waitUntil { secondRead.isWaiting }
-        // The read's answer is queued ahead of the replacement's entry.
         secondRead.open()
-        var secondEnded = false
-        wiring.runJump(.newer) { _ in
-            await second.wait()
-            secondEnded = true
-        }
         try await waitUntil { delivered == 2 }
         #expect(wiring.isJumpRunning)
         #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "still held: a jump runs")
