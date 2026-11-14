@@ -15,14 +15,22 @@ struct EventsSessionSubscriptionsTests {
         .pane(.agentStatusChanged, paneID: "w1:p1"),
     ]
 
-    private func makeSession(transport: ScriptedTransport) -> EventsSession {
+    private func makeSession(
+        transport: ScriptedTransport,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy(
+            initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50))
+    ) -> EventsSession {
         EventsSession(
             subscriptions: initial,
             connect: { transport },
-            reconnectPolicy: ReconnectPolicy(
-                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            reconnectPolicy: reconnectPolicy,
             keepalive: nil)
     }
+
+    /// A backoff no test waits out: what follows a `.reconnecting` stays put
+    /// until the test cuts it short or ends the session.
+    private let parkedPolicy = ReconnectPolicy(
+        initialDelay: .seconds(3600), multiplier: 1, maxDelay: .seconds(3600))
 
     @Test func distinctTerminalsRunTogetherAndSixthWaitsForTeardown() async throws {
         let transport = ScriptedTransport()
@@ -917,6 +925,212 @@ struct EventsSessionSubscriptionsTests {
 
     private static let attachRequest = TerminalAttachRequest(
         target: "w1:p1", takeover: true, cols: 80, rows: 24)
+
+    // MARK: Subscription lifecycle (HERDR-03)
+
+    /// An early subscribe (#105) whose set changed while it was in flight is
+    /// ended and replaced on the same connection: no second dial, and no
+    /// status between the activation's `.connecting` and `.connected`.
+    @Test func anEarlySubscribeOvertakenByAnUpdateIsReplacedOnTheSameConnection() async throws {
+        let transport = ScriptedTransport(
+            serverInfo: ServerInfo(version: "0.9.3", protocolVersion: 22))
+        let gate = ScriptedTransportCallGate()
+        await transport.gateNextSubscription(using: gate)
+        let connector = SequencedTransportConnector([transport])
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy,
+            keepalive: nil,
+            connectionMemory: RememberedFacts(protocolVersion: 19))
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        await gate.waitForEntry()
+        await session.updateSubscriptions(updated)
+        await gate.open()
+
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial, updated])
+        #expect(await connector.connectCount == 1)
+        await session.end()
+    }
+
+    /// The fallback from a rejected seed to the global set happens once: the
+    /// global set is no seed, so its own rejection is reported like any other.
+    @Test func aRejectedSeedFallsBackOnceAndARejectedFallbackReconnectsVisibly() async throws {
+        let transport = ScriptedTransport()
+        await transport.rejectSubscribes(
+            containing: .global(.paneAgentDetected), code: "invalid_params")
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume(seeding: updated)
+        #expect(await updates.next() == .status(.connecting))
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [updated, initial])
+        await session.end()
+    }
+
+    /// A rejected seed that holds only global entries has nothing to fall
+    /// back to: the rejection is reported at once.
+    @Test func aRejectedSeedWithNothingToDropReconnectsVisibly() async throws {
+        let transport = ScriptedTransport()
+        await transport.rejectSubscribes(
+            containing: .global(.paneAgentDetected), code: "invalid_params")
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume(seeding: initial)
+        #expect(await updates.next() == .status(.connecting))
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [initial])
+        await session.end()
+    }
+
+    /// `pane_not_found` falls back to the global set whether or not the set
+    /// was a seed: a live update naming an exited pane stays Connected.
+    @Test func aPaneMissingFromALiveUpdateFallsBackToTheGlobalSetSilently() async throws {
+        let transport = ScriptedTransport()
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        await transport.setMissingPanes(["w1:p1"])
+        await session.updateSubscriptions(updated)
+
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial, updated, initial])
+        #expect(await !transport.isClosed)
+        await session.end()
+    }
+
+    /// An update while a seed's subscribe is in flight makes the set no seed:
+    /// the seed's answer is replaced, and a rejection of the update is
+    /// reported instead of falling back silently.
+    @Test func anUpdateDuringASeededSubscribeEndsTheSeedsFallback() async throws {
+        let transport = ScriptedTransport()
+        let gate = ScriptedTransportCallGate()
+        await transport.gateNextSubscription(using: gate)
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+        let seed = initial + [.pane(.agentStatusChanged, paneID: "w1:p1")]
+        let replacementSet = initial + [.global(.workspaceReordered)]
+
+        await session.resume(seeding: seed)
+        #expect(await updates.next() == .status(.connecting))
+        await gate.waitForEntry()
+        await transport.rejectSubscribes(
+            containing: .global(.workspaceReordered), code: "invalid_params")
+        await session.updateSubscriptions(replacementSet)
+        await gate.open()
+
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [seed, replacementSet])
+        await session.end()
+    }
+
+    /// A dial that fails retryably is a disconnect too: the pane entries go
+    /// before the retry subscribes.
+    @Test func aFailedDialDropsThePaneSubscriptionsBeforeTheRetry() async throws {
+        let transport = ScriptedTransport()
+        let dials = Mutex(0)
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: { () async throws -> any Transport in
+                let dial = dials.withLock { count in
+                    count += 1
+                    return count
+                }
+                if dial == 1 { throw TransportError.sshUnreachable(detail: "no route") }
+                return transport
+            },
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.updateSubscriptions(updated)
+        await session.resume()
+
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting(1, _, .sshUnreachable)) = await updates.next() else {
+            Issue.record("the failed dial should reconnect")
+            await session.end()
+            return
+        }
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial])
+        await session.end()
+    }
+
+    /// Pre-existing race, pinned as it is (HERDR-03): a request that finds
+    /// the link dead while the run loop backs off asks for a re-subscribe
+    /// that no live channel takes. The request stays set, so the next
+    /// connection's first stream loss re-subscribes silently, with no
+    /// `.reconnecting`.
+    @Test func aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent() async throws {
+        let first = ScriptedTransport(
+            serverInfo: ServerInfo(version: "first", protocolVersion: 17))
+        let second = ScriptedTransport(
+            serverInfo: ServerInfo(version: "second", protocolVersion: 17))
+        let connector = SequencedTransportConnector([first, second])
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let lost = TransportError.channelFailed(detail: "remote closed")
+        await first.failEventStream(lost)
+        #expect(
+            await updates.next()
+                == .status(.reconnecting(attempt: 1, delay: .seconds(3600), failure: lost)))
+
+        let (distrusted, continuation) = AsyncStream.makeStream(of: Void.self)
+        var distrust = distrusted.makeAsyncIterator()
+        await first.setOnDistrusted { continuation.yield() }
+        let request = Task {
+            try await session.withTransport { transport in
+                if (transport as? ScriptedTransport) === first { throw TransportError.timedOut }
+                return try await transport.ping().version
+            }
+        }
+        _ = await distrust.next()
+        await session.redialNow(trigger: .pathChange)
+        #expect(await updates.next() == .status(.connected))
+        #expect(try await request.value == "second")
+
+        await second.failEventStream(lost)
+        #expect(await updates.next() == .status(.connected))
+        #expect(await connector.connectCount == 2)
+        #expect(await second.capturedSubscriptions == [initial, initial])
+        await session.end()
+        continuation.finish()
+    }
 
     @Test func updateWhileSuspendedTakesEffectOnResume() async throws {
         let transport = ScriptedTransport()
