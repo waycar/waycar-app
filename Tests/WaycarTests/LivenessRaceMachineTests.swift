@@ -75,6 +75,17 @@ struct LivenessRaceMachineTests {
         #expect(machine.handle(.proofFailed(startsHedge: false)) == [.failWithProofFailure])
     }
 
+    /// A server answer is decided in a second locked step: a hedge failure
+    /// landing in between asks to decide too, and the first to settle wins
+    /// (as before the conversion).
+    @Test func aServerFailureNotYetDecidedCanBeOvertakenByTheHedgesFailure() {
+        var machine = hedged.after([.hedgeTimerElapsed])
+        #expect(machine.handle(.proofFailed(startsHedge: false)) == [.failWithProofFailure])
+        #expect(machine.handle(.hedgeFailed) == [.failWithHedgeFailure])
+        #expect(machine.handle(.settle) == [.settle])
+        #expect(machine.handle(.settle) == [])
+    }
+
     @Test func aHedgeFailingAfterTheProofFailedFailsTheRaceWithIt() {
         var machine = hedged.after([.proofFailed(startsHedge: true)])
         #expect(machine.handle(.hedgeFailed) == [.failWithHedgeFailure])
