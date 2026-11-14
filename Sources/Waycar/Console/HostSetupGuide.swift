@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// What stands in for the Agents before any Host exists. Top to bottom: the
-/// Find computers card, the Sample Host row, then the manual steps under "Set
-/// up by hand", with Scan to Pair and Add Manually docked under them: text
-/// links beside the scan card's button, the one prominent button without it.
+/// What stands in for the Agents before any Host exists, in order of how
+/// much we want each: the scan for computers in the middle of the screen,
+/// the Sample Host under it, and "Set up by hand" folded at the bottom, with
+/// Scan to Pair and Add Manually docked under everything: text links beside
+/// the scan's button, the one prominent button without it.
 ///
-/// The two rows above the manual steps are slots, each empty until its
+/// The two choices above the manual steps are slots, each empty until its
 /// owner fills it: `findComputersRow` (the offer to scan for computers with
-/// SSH on, first because it is the quickest way to a Host) and
-/// `sampleHostRow` (the Sample Host). Rows stack in that order with 12 pt
-/// between them, and "Set up by hand" heads the steps whenever either slot is
-/// filled; with both empty the steps stand alone under the title.
+/// SSH on, the quickest way to a Host) and `sampleHostRow` (the Sample
+/// Host). They sit centered in the space between the title and "Set up by
+/// hand"; with both empty the steps stand alone under the title.
 struct HostSetupGuide: View {
     let scan: () -> Void
     let addManually: () -> Void
@@ -38,49 +38,22 @@ struct HostSetupGuide: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                HStack(alignment: .center) {
-                    Text(title)
-                        .font(.title2.weight(.semibold))
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 12)
-                    if let showSettings {
-                        Button(action: showSettings) {
-                            Image(systemName: "gearshape")
-                                .font(.title3)
-                                .padding(12)
-                                .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .hoverEffect(.highlight)
-                        .accessibilityLabel("Settings")
-                        // Laid out at the glyph's size, so it lines up with
-                        // the text column and leaves the row the title's
-                        // height at every text size; the 12pt around it stays
-                        // tappable (about 44pt at the default size).
-                        .padding(-12)
-                    }
+        GeometryReader { viewport in
+            ScrollViewReader { scroller in
+                ScrollView {
+                    content
+                        // At least the visible height, so the spacers
+                        // center the scan between the title and the
+                        // folded steps.
+                        .frame(minHeight: viewport.size.height)
                 }
-                if hasRowsAboveSteps {
-                    VStack(spacing: 12) {
-                        if let findComputersRow { findComputersRow }
-                        if let sampleHostRow { sampleHostRow }
-                    }
-                    setUpByHandToggle
-                }
-                if showsManualSteps || !hasRowsAboveSteps {
-                    manualSteps
-                    HelpLink(.install, action: showHelp)
+                .scrollBounceBehavior(.basedOnSize)
+                .onChange(of: showsManualSteps) {
+                    guard showsManualSteps else { return }
+                    withAnimation(.snappy) { scroller.scrollTo(Self.stepsAnchor, anchor: .top) }
                 }
             }
-            .frame(maxWidth: Self.readableWidth, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 32)
-            .frame(maxWidth: .infinity)
         }
-        .scrollBounceBehavior(.basedOnSize)
         // Docked, so the default is in reach without scrolling: the setup on
         // waycar.dev ends with the Pairing Code already on screen.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -90,15 +63,70 @@ struct HostSetupGuide: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
-    /// The manual steps fold away under the rows above them: with a scan on
-    /// top, most people never need them.
+    private static let stepsAnchor = "setup.by-hand.anchor"
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            header
+            if hasRowsAboveSteps {
+                Spacer(minLength: 8)
+                VStack(spacing: 20) {
+                    if let findComputersRow { findComputersRow }
+                    if let sampleHostRow { sampleHostRow }
+                }
+                Spacer(minLength: 8)
+                setUpByHandToggle
+                    .id(Self.stepsAnchor)
+                if showsManualSteps {
+                    manualSteps
+                    HelpLink(.install, action: showHelp)
+                }
+            } else {
+                manualSteps
+                HelpLink(.install, action: showHelp)
+            }
+        }
+        .frame(maxWidth: Self.readableWidth, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var header: some View {
+        HStack(alignment: .center) {
+            Text(title)
+                .font(.title2.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 12)
+            if let showSettings {
+                Button(action: showSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.title3)
+                        .padding(12)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Settings")
+                // Laid out at the glyph's size, so it lines up with the
+                // text column and leaves the row the title's height at
+                // every text size; the 12pt around it stays tappable
+                // (about 44pt at the default size).
+                .padding(-12)
+            }
+        }
+    }
+
+    /// The manual steps fold away at the bottom: with a scan in the middle,
+    /// most people never need them. Opening them scrolls them into view.
     private var setUpByHandToggle: some View {
         Button {
             withAnimation(.snappy) { showsManualSteps.toggle() }
         } label: {
             HStack(spacing: 12) {
                 Text("Set up by hand")
-                    .font(.title3.weight(.semibold))
+                    .font(.headline)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
