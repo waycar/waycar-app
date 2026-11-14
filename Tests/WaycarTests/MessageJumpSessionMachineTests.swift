@@ -43,6 +43,39 @@ struct MessageJumpSessionMachineTests {
         #expect(machine.handle(.jumpEnded(epoch: 2)) == [.clearJumpTask, .publishRunning(nil)])
     }
 
+    /// Until a replacement enters, the jump it replaced is still the running
+    /// one, as the owner's observed `runningJump` shows: a read landing then
+    /// replaces the held snapshot rather than reaching the index.
+    @Test func aReplacementKeepsThePreviousJumpRunningUntilItEnters() {
+        let other = HarnessJumpCaptures.transcript(
+            kind: "pi", messages: [("other", .user, "Explain the parser changes")])
+        var machine = Machine(jumpUsesTranscript: true).after([
+            .jumpRequested, .jumpEntered(epoch: 1, generation: 0, taskCancelled: false, older),
+            .refreshRequested, .readFinished(1, snapshot),
+        ])
+        #expect(machine.handle(.jumpRequested) == [.startJump(epoch: 2, generation: 0)])
+        #expect(machine.runningJump == older)
+        #expect(machine.handle(.jumpRequested) == [.startJump(epoch: 3, generation: 0)])
+        #expect(machine.runningJump == older, "a second replacement keeps it too")
+        _ = machine.handle(.refreshRequested)
+        #expect(machine.handle(.readFinished(2, other)) == [.clearRead, .deliverTranscript(other)])
+        #expect(machine.state.held == other)
+        #expect(machine.handle(.jumpEnded(epoch: 1)).isEmpty)
+        #expect(machine.runningJump == older)
+        _ = machine.handle(.jumpEntered(epoch: 3, generation: 0, taskCancelled: false, newer))
+        #expect(machine.runningJump == newer)
+        #expect(machine.handle(.jumpEnded(epoch: 3)) == [
+            .clearJumpTask, .publishRunning(nil), .indexTranscript(other),
+        ])
+        var failedEntry = Machine(jumpUsesTranscript: true).after([
+            .jumpRequested, .jumpEntered(epoch: 1, generation: 0, taskCancelled: false, older),
+            .jumpRequested, .jumpEntered(epoch: 2, generation: 0, taskCancelled: true, newer),
+        ])
+        #expect(failedEntry.runningJump == older)
+        #expect(failedEntry.handle(.jumpEnded(epoch: 2)) == [.clearJumpTask, .publishRunning(nil)])
+        #expect(failedEntry.runningJump == nil)
+    }
+
     @Test func aJumpThatFailedItsEntryStillEndsAsTheLatest() {
         var machine = Machine(jumpUsesTranscript: false).after([
             .jumpRequested, .jumpEntered(epoch: 1, generation: 0, taskCancelled: true, older),

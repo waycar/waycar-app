@@ -321,6 +321,53 @@ struct MessageJumpDeferredOwnerTests {
         #expect(reads == 3)
     }
 
+    /// A replacement jump keeps holding transcript reads until it enters:
+    /// a read landing in between replaces the held snapshot (it is not
+    /// indexed under the walk), and the replacement's end indexes it, never
+    /// the older one it replaced.
+    @Test func aReadBeforeTheReplacementJumpEntersReplacesTheHeldSnapshot() async throws {
+        let first = DeferredOwnerGate()
+        let second = DeferredOwnerGate()
+        let secondRead = DeferredOwnerGate()
+        let frame = "Explain the parser changes"
+        let older = HarnessJumpCaptures.transcript(kind: "pi", messages: [("a", .user, frame)])
+        let newer = HarnessJumpCaptures.transcript(kind: "pi", messages: [("b", .user, frame)])
+        var reads = 0
+        var delivered = 0
+        let wiring = AgentMessageJumpWiring(readTranscript: {
+            reads += 1
+            if reads == 1 { return older }
+            await secondRead.wait()
+            return newer
+        }, jumpUsesTranscript: true)
+        defer {
+            first.open(); second.open(); secondRead.open()
+            wiring.resetSession()
+        }
+        wiring.onTranscript = { _ in delivered += 1 }
+        wiring.runJump(.older) { _ in await first.wait() }
+        try await waitUntil { first.isWaiting && wiring.runningDirection == .older }
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 1 }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "held for the walk")
+        wiring.refreshTranscript()
+        try await waitUntil { secondRead.isWaiting }
+        // The read's answer is queued ahead of the replacement's entry.
+        secondRead.open()
+        var secondEnded = false
+        wiring.runJump(.newer) { _ in
+            await second.wait()
+            secondEnded = true
+        }
+        try await waitUntil { delivered == 2 }
+        #expect(wiring.isJumpRunning)
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "still held: a jump runs")
+        try await waitUntil { second.isWaiting && wiring.runningDirection == .newer }
+        second.open()
+        try await waitUntil { secondEnded && !wiring.isJumpRunning }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:b"])
+    }
+
     /// A snapshot held for a walk belongs to its session: a reset drops it,
     /// and the old walk ending later applies nothing to the new session.
     @Test func aSnapshotHeldForAWalkDiesWithItsSession() async throws {

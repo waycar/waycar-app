@@ -3434,7 +3434,9 @@ stateDiagram-v2
   transcript reader, the index, reach and scroll run; it mirrors the observed
   `liveGeneration` and `runningJump`.
 - **States:** the session generation and jump epoch; the jump (`idle`,
-  `scheduled(epoch)`, `running(epoch, jump)`); the read (`idle`,
+  `scheduled(epoch, previous)`, `running(epoch, jump)`; until a replacement
+  enters, the jump it replaced stays the running one and keeps holding
+  reads, as the observed `runningJump` shows); the read (`idle`,
   `reading(token, stale)`); a snapshot held for a walk.
 - **Events:** `jumpRequested`, `jumpEntered(epoch, generation,
   taskCancelled)`, `jumpEnded(epoch)`, `refreshRequested`,
