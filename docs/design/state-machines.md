@@ -5502,10 +5502,10 @@ stateDiagram-v2
   Host was offline cannot wedge it. `pane_not_found`, and any rejection of
   a seed, retries once at once with the global set. An answer for a set
   that is no longer the requested one subscribes again. `replacing` sits
-  beside the stage as the old flag did: a request that finds the link dead
-  during a backoff leaves it set with no live channel, and the next
-  channel's loss then re-subscribes silently (pre-existing, kept, pinned by
-  `aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent`).
+  beside the stage and is set only while a channel is live: a `replace`
+  with none live (a request that finds the link dead during a backoff)
+  requests nothing, so the next channel's loss shows `.reconnecting`
+  (B-46, `aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible`).
 - **Tests:** `EventsSubscriptionMachineTests`, `EventsSessionSubscriptionsTests`,
   `EventsSessionConnectFlowTests`.
 - **Catalogue:** HERDR-03.
@@ -6568,7 +6568,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | converted → `EventsLifecycleMachine` | P3d |
 | HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | converted → `EventsConnectionMachine` | P3d |
-| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
+| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; bug B-46 fixed | P3d |
 | HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsLivenessMachine` | P3d |
 | HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `RequestRecoveryMachine` | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |
@@ -6659,6 +6659,6 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-43 | ATTACH-03 | Two taps on Use SSH Instead schedule two restarts: a run's end clears the run handle without checking which run it belongs to | open |
 | B-44 | ATTACH-18 | Rows queued before a tmux history leave are sent or dropped depending on whether the in-flight answer reaches the main actor before the leave's first step | open |
 | B-45 | ATTACH-08 | A last frame captured while the device is locked is indexed on the next load although its JPEG was never written; after a relaunch it misses and is removed | open |
-| B-46 | HERDR-03 | A request that finds the herdr link dead during a backoff leaves a re-subscribe request with no live channel, so the next connection's first stream loss re-subscribes without showing Reconnecting | open (pinned by `EventsSessionSubscriptionsTests.aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent`) |
+| B-46 | HERDR-03 | A request that finds the herdr link dead during a backoff leaves a re-subscribe request with no live channel, so the next connection's first stream loss re-subscribes without showing Reconnecting | fixed (P3d): a `replace` with no live channel requests nothing (`EventsSessionSubscriptionsTests.aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible`) |
 
 B-02 and B-03 are unused.
