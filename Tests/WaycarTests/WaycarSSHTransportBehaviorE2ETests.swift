@@ -386,6 +386,46 @@ struct WaycarSSHTransportBehaviorE2ETests {
         await reattached.end()
     }
 
+    /// B-32: a closed Transport opens no Attach, even while another holder
+    /// keeps its session open. Nothing would ever end one: its close is
+    /// done, a repeated close returns at once, and the Attach would hold
+    /// herdr's resize lock on the pane. It is refused as every request on a
+    /// closed Transport is, before anything opens, so the target stays free.
+    @Test("a closed Transport refuses an Attach while another holder keeps the session")
+    func closedTransportRefusesAttachOnASharedSession() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let settings = environment.directSettings()
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
+        try await transport.close()
+        #expect(await session.isOpen)
+
+        let outcome: Result<TerminalAttachSession, any Error>
+        do {
+            outcome = .success(
+                try await transport.attachTerminal(
+                    TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24)))
+        } catch {
+            outcome = .failure(error)
+        }
+        if case .success(let opened) = outcome { await opened.end() }
+        #expect(throws: TransportError.sshUnreachable(detail: "the SSH connection is closed")) {
+            _ = try outcome.get()
+        }
+
+        #expect(await session.retain())
+        let next = WaycarSSHTransport(session: session, settings: settings)
+        defer { Task { try? await next.close() } }
+        let attach = try await next.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var iterator = attach.output.makeAsyncIterator()
+        var output = ""
+        try await expectAttachOutput(&iterator, accumulated: &output, contains: "TTY-OK")
+        await attach.end()
+    }
+
     @Test("nonzero Attach exit reports the primary channel failure and wakes input")
     func failedAttachExitFreesChannel() async throws {
         let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)

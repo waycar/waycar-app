@@ -2681,9 +2681,15 @@ actor WaycarSSHTransport: Transport {
         }
     }
 
+    /// A closed Transport opens no Attach, before anything opens (B-32):
+    /// its session may live on for another holder, and nothing would ever
+    /// end an Attach recorded after `close()`.
     func attachTerminal(
         _ request: TerminalAttachRequest
     ) async throws -> TerminalAttachSession {
+        guard !closed else {
+            throw TransportError.sshUnreachable(detail: "the SSH connection is closed")
+        }
         guard terminalChannelStates[request.target] == nil else {
             throw TransportError.terminalChannelAlreadyOpen
         }
