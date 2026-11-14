@@ -13,7 +13,7 @@ The local-network search for computers with SSH on, offered before the first Hos
 _Avoid_: backend detection, automatic scan (the network sweep requires a tap)
 
 **Found Computer**:
-A computer listed by Find Computers, not yet a saved Host. Bonjour names identify one row even across several interfaces; Waycar prefers the address on the phone's subnet. An SSH banner found by a sweep enriches that row, but says nothing about the Backends available after sign-in.
+A computer listed by Find Computers, not yet a saved Host; a row at the address and port of a saved direct Host is that Host, shows **Added** and opens its page. Bonjour names identify one row even across several interfaces; Waycar prefers the address on the phone's subnet. An SSH banner found by a sweep enriches that row, but says nothing about the Backends available after sign-in.
 _Avoid_: discovered Host (it is not a Host until saved)
 
 **Sample Host**:
@@ -104,7 +104,7 @@ Jump Host is configured.
 _Avoid_: gateway key, provider key, legacy RSA
 
 **Pairing**:
-The full new-device ceremony: scan a Pairing Code, connect with its Bootstrap Key, complete Enrollment, then reconnect with the Device Key. Success produces a working Host, persisted only at that point.
+The full new-device ceremony: scan a Pairing Code, connect with its Bootstrap Key, complete Enrollment, then reconnect with the Device Key. Success produces a working Host, persisted only at that point. Started from a saved Host's page (a keys-only Host), it runs only at that Host's address and port, so a code whose host key differs there fails before Enrollment, and success updates that Host in place: same id, Device Key, the code's user. Started from a Found Computer, it tries the found address first and keeps the computer's name when that address answers.
 _Avoid_: scan to connect, binding
 
 **Pairing Code**:

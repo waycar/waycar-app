@@ -83,6 +83,17 @@ struct FoundComputerTests {
             software: "OpenSSH_for_Windows_9.5", source: .sweep)
         #expect(!windows.canPair)
     }
+
+    /// A computer already saved opens its Host instead of becoming a second one.
+    @Test func aSavedDirectHostAtTheSameAddressAndPortIsThisComputer() {
+        let found = computer("192.168.1.20", name: "Mac mini", source: .bonjour)
+        let saved = Host(address: "192.168.1.20", username: "mike", authMethod: .password)
+        let otherPort = Host(address: "192.168.1.20", port: 2222, username: "mike")
+        let throughJump = Host(
+            address: "192.168.1.20", username: "mike", jumpAddress: "bastion.example")
+        #expect(found.savedHost(in: [otherPort, throughJump, saved]) == saved)
+        #expect(found.savedHost(in: [otherPort, throughJump]) == nil)
+    }
 }
 
 @Suite("IPv4 subnet")

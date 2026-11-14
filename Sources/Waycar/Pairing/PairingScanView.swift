@@ -9,10 +9,12 @@ import VisionKit
 /// denied path. Once a code parses, the pairing ceremony runs immediately —
 /// one scan or paste, no confirmation step — and on success the persisted
 /// Host is handed to `onPaired`, entering the same preflight a manually
-/// added Host does.
+/// added Host does. Opened from a saved Host's page, it updates that Host
+/// instead and offers no manual form.
 struct PairingScanView: View {
     let onPaired: (Host) -> Void
-    let onAddManually: () -> Void
+    /// The manual Add Host fallback; nil when pairing a saved Host.
+    let onAddManually: (() -> Void)?
     @State private var store: PairingScanStore
     @State private var cameraAccess = PairingCameraAccessStore()
     @Environment(\.scenePhase) private var scenePhase
@@ -26,19 +28,20 @@ struct PairingScanView: View {
 
     init(
         catalog: HostStore,
+        target: PairingTarget = .newHost,
         onPaired: @escaping (Host) -> Void = { _ in },
-        onAddManually: @escaping () -> Void = {}
+        onAddManually: (() -> Void)? = {}
     ) {
         self.onPaired = onPaired
         self.onAddManually = onAddManually
-        _store = State(initialValue: PairingScanStore(catalog: catalog))
+        _store = State(initialValue: PairingScanStore(catalog: catalog, target: target))
     }
 
     var body: some View {
         NavigationStack {
             Group {
                 if let code = store.pairingCode {
-                    PairingCeremonyView(code: code, store: store)
+                    PairingCeremonyView(code: store.target.retargeted(code), store: store)
                 } else {
                     scanner
                 }
@@ -86,9 +89,12 @@ struct PairingScanView: View {
             }
             .onChange(of: store.pairedHost) { _, paired in
                 guard let paired else { return }
-                // A paired Host is a new Host too, so it counts toward both.
+                // A paired Host is a new Host too, so it counts toward both;
+                // a saved Host paired from its page is not.
                 analytics?.capture(.pairingSucceeded)
-                analytics?.capture(.hostAdded(method: HostAddMethod(store.method ?? .scan)))
+                if store.target.existingHost == nil {
+                    analytics?.capture(.hostAdded(method: HostAddMethod(store.method ?? .scan)))
+                }
                 dismiss()
                 onPaired(paired)
             }
@@ -109,7 +115,9 @@ struct PairingScanView: View {
             } actions: {
                 pastePairingCodeButton
                 Button("Open Settings") { openSettings() }
-                Button("Add Manually") { addManually() }
+                if onAddManually != nil {
+                    Button("Add Manually") { addManually() }
+                }
             }
         case .authorized:
             if DataScannerViewController.isSupported {
@@ -120,11 +128,15 @@ struct PairingScanView: View {
                 } description: {
                     Text(
                         store.scanFailureMessage
-                            ?? "This device cannot scan QR codes. "
-                            + "Paste a Pairing Code, or add the Host manually instead.")
+                            ?? (onAddManually == nil
+                                ? "This device cannot scan QR codes. Paste a Pairing Code instead."
+                                : "This device cannot scan QR codes. "
+                                    + "Paste a Pairing Code, or add the Host manually instead."))
                 } actions: {
                     pastePairingCodeButton
-                    Button("Add Manually") { addManually() }
+                    if onAddManually != nil {
+                        Button("Add Manually") { addManually() }
+                    }
                 }
             }
         }
@@ -133,7 +145,7 @@ struct PairingScanView: View {
     /// The manual fallback: hand off to the presenter (which owns the manual
     /// Host form) and close this sheet, mirroring the `onPaired` hand-off.
     private func addManually() {
-        onAddManually()
+        onAddManually?()
         dismiss()
     }
 
@@ -164,8 +176,11 @@ struct PairingScanView: View {
     }
 
     private var deniedCameraCopy: String {
-        "Scanning a Pairing Code uses the camera. Allow camera access in Settings, "
-            + "paste a Pairing Code, or add the Host manually instead."
+        onAddManually == nil
+            ? "Scanning a Pairing Code uses the camera. Allow camera access in Settings, "
+                + "or paste a Pairing Code instead."
+            : "Scanning a Pairing Code uses the camera. Allow camera access in Settings, "
+                + "paste a Pairing Code, or add the Host manually instead."
     }
 
     private func pastePairingCode() {

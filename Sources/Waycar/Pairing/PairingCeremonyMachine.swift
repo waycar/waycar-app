@@ -177,6 +177,12 @@ struct PairingCeremonyMachine: StateMachine {
                     + "device is on the same network or VPN as the computer, then try again "
                     + "with the same code.",
                 canRetry: true)
+        case .hostKeyMismatch:
+            PairingFailure(
+                step: .reach,
+                message: "Another computer answered at this code's addresses. Scan the Pairing "
+                    + "Code on the computer you want to add.",
+                canRetry: false)
         case .bootstrapRejected:
             PairingFailure(
                 step: .authenticate,

@@ -1887,8 +1887,10 @@ stateDiagram-v2
 ### PairingCeremonyMachine
 
 - **File:** `Sources/Waycar/Pairing/PairingCeremonyMachine.swift`
-- **Owner:** `PairingScanStore` decodes scans, loads the Device Key, awaits the
-  connector, adds the verified Host and pins its fingerprint before publishing it.
+- **Owner:** `PairingScanStore` decodes scans, loads the Device Key, aims the
+  code at its `PairingTarget`, awaits the connector, and adds the verified Host
+  (or updates the saved Host it was opened for) with its fingerprint pinned
+  before publishing it.
 - **States:** `scanning(failure?)`, `ready(scan)`, `attempting(token, scan, step?)`,
   `saving(token, scan, step?)`, `failed(scan, failure)`, `paired(scan, host)`.
   A scan retains its arrival method and either the scanned credential or the

@@ -16,11 +16,13 @@ Find Computers lists computers on your Wi-Fi that have SSH on. Pick one to add i
 3. Allow Local Network access when iOS asks. The search starts as soon as you tap.
 4. Tap your computer under **Computers with SSH on**. Under **Sign In**, enter **User** and **Password**, then tap **Add**.
 
-To sign in with a key, tap **Use a Key Instead**. Run the command it shows in Terminal on that computer, then tap **Scan Pairing Code** and scan the code the command shows: pairing adds your key there and checks the computer's fingerprint, so there is nothing to copy or confirm. To add the key yourself instead, tap **Add the Key Yourself**; the form keeps the computer's address and your user. A Windows computer goes straight to that form. See [SSH keys and passwords](/help/ssh-keys).
+A computer you already added shows **Added**; tapping it opens its Host page.
+
+To sign in with a key, tap **Use a Key Instead**. Run the command it shows in Terminal on that computer, then tap **Scan Pairing Code** and scan the code the command shows: pairing adds your key there and checks the computer's fingerprint, so there is nothing to copy or confirm. The Host keeps the computer's name and address. To add the key yourself instead, tap **Add the Key Yourself**; the form keeps the computer's address and your user. A Windows computer goes straight to that form. See [SSH keys and passwords](/help/ssh-keys).
 
 After signing in with a password or adding the key yourself, check and trust the Host's fingerprint on its page. See [Host keys and fingerprints](/help/host-keys).
 
-If the computer accepts only keys, its Host page says so and shows one command to run in Terminal on it. Run it, then tap **Check Again**.
+If the computer accepts only keys, its Host page says so and offers the same pairing, which keeps that Host. See [Pair a Host you already added](/help/pairing#pair-a-host-you-already-added).
 
 ## If your computer is missing
 

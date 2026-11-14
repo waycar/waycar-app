@@ -16,8 +16,7 @@ struct PreflightReportTests {
         #expect(report.needsDeviceKey)
         #expect(report.stoppedRuntime == nil)
         #expect(report[.connection] == .failed(
-            hint: "Studio Mac accepts only keys. Run the command below in Terminal on "
-                + "Studio Mac, then tap Check Again."))
+            hint: "Studio Mac accepts only keys, so this device's key has to be added there."))
         #expect(!report.isFullyPassed)
     }
 

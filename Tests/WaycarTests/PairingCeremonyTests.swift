@@ -56,6 +56,7 @@ struct EnrollmentResponseTests {
 struct PairingCeremonyErrorTests {
     @Test func classifiesEveryFailureToItsStep() {
         #expect(PairingCeremonyError.hostUnreachable(detail: "x").step == .reach)
+        #expect(PairingCeremonyError.hostKeyMismatch(detail: "x").step == .reach)
         #expect(PairingCeremonyError.bootstrapRejected.step == .authenticate)
         #expect(PairingCeremonyError.enrollmentRefused(.expired).step == .enroll)
         #expect(PairingCeremonyError.enrollmentFailed(detail: "x").step == .enroll)

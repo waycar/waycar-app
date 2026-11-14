@@ -17,6 +17,42 @@ struct PairingFailure: Equatable, Sendable {
     let canRetry: Bool
 }
 
+/// What a Pairing Code is scanned for. Plain Scan to Pair adds whichever
+/// computer showed the code. A found computer is tried first at the address
+/// Find Computers saw and keeps its name when that address answers with the
+/// code's host key. A saved Host's page pairs only at that Host's own
+/// address and port, so a code from another computer fails before anything
+/// reaches either machine, and success updates that Host in place.
+enum PairingTarget: Hashable, Sendable {
+    case newHost
+    case found(FoundComputer)
+    case existing(Host)
+
+    /// The saved Host this code updates, when its page asked for it.
+    var existingHost: Host? {
+        if case .existing(let host) = self { return host }
+        return nil
+    }
+
+    /// The code the ceremony runs: `code` aimed at this target.
+    func retargeted(_ code: PairingCode) -> PairingCode {
+        switch self {
+        case .newHost:
+            return code
+        case .found(let computer):
+            guard computer.port == code.port else { return code }
+            return PairingCode(
+                addresses: [computer.address] + code.addresses.filter { $0 != computer.address },
+                port: code.port, username: code.username,
+                hostKeyFingerprint: code.hostKeyFingerprint, bootstrap: code.bootstrap)
+        case .existing(let host):
+            return PairingCode(
+                addresses: [host.address], port: host.port, username: code.username,
+                hostKeyFingerprint: code.hostKeyFingerprint, bootstrap: code.bootstrap)
+        }
+    }
+}
+
 /// Drives Scan to Pair (#62, #66, #204): turns strings recognized by the QR
 /// scanner or pasted from the clipboard into a parsed Pairing Code, runs
 /// the ceremony through the injected `PairingConnector`, and persists the
@@ -39,6 +75,7 @@ final class PairingScanStore {
     /// Where the flow stands, for the abandonment funnel event.
     var stage: PairingStage { ceremony.stage }
 
+    @ObservationIgnored let target: PairingTarget
     @ObservationIgnored private let catalog: HostStore
     @ObservationIgnored private let connector: any PairingConnector
     @ObservationIgnored private let knownHosts: any KnownHostsStore
@@ -47,12 +84,14 @@ final class PairingScanStore {
 
     init(
         catalog: HostStore,
+        target: PairingTarget = .newHost,
         connector: any PairingConnector = SSHPairingConnector(),
         knownHosts: any KnownHostsStore = UserDefaultsKnownHostsStore.shared,
         credentials: HostCredentialsProvider = HostCredentialsProvider(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.catalog = catalog
+        self.target = target
         self.connector = connector
         self.knownHosts = knownHosts
         self.credentials = credentials
@@ -110,11 +149,20 @@ final class PairingScanStore {
 
         let result: PairingResult
         do {
-            result = try await connector.pair(code: code, deviceKey: deviceKey) { [weak self] step in
+            result = try await connector.pair(
+                code: target.retargeted(code), deviceKey: deviceKey
+            ) { [weak self] step in
                 Task { @MainActor [weak self] in
                     _ = self?.ceremony.handle(.step(token, step))
                 }
             }
+        } catch PairingCeremonyError.hostKeyMismatch where target.existingHost != nil {
+            let name = target.existingHost?.displayName ?? "this Host"
+            await send(.failed(token, PairingFailure(
+                step: .reach,
+                message: "This Pairing Code is from another computer. Run the command on \(name).",
+                canRetry: false)))
+            return
         } catch let error as PairingCeremonyError {
             await send(.ceremonyFailed(token, error))
             return
@@ -133,11 +181,19 @@ final class PairingScanStore {
     }
 
     private func save(token: UInt64, result: PairingResult) async {
+        if let existing = target.existingHost {
+            await update(existing, token: token, result: result)
+            return
+        }
         // Only a fully verified ceremony creates a Host (ADR 0007). The
         // fingerprint pin lands with it, against the address that actually
         // answered, so preflight connects without a TOFU prompt.
+        var name = ""
+        if case .found(let computer) = target, computer.address == result.address {
+            name = computer.serviceName ?? ""
+        }
         let host = Host(
-            address: result.address, port: result.port, username: result.username,
+            name: name, address: result.address, port: result.port, username: result.username,
             authMethod: .deviceKey)
         do {
             try catalog.add(host)
@@ -152,6 +208,40 @@ final class PairingScanStore {
         }
         await knownHosts.setFingerprint(
             result.hostKeyFingerprint, host: result.address, port: result.port)
+        await send(.saved(token, host))
+    }
+
+    /// The Host whose page asked for the code signs in with the Device Key
+    /// from now on, as the code's user; its id, and everything kept under
+    /// it, stays. The ceremony ran at its own address and port, so the pin
+    /// goes there, first: the update re-keys the Host page, whose checks run
+    /// at once and must find the key pinned.
+    private func update(_ existing: Host, token: UInt64, result: PairingResult) async {
+        await knownHosts.setFingerprint(
+            result.hostKeyFingerprint, host: existing.address, port: existing.port)
+        guard
+            var host = catalog.hosts.first(where: { $0.id == existing.id }),
+            host.address == existing.address, host.port == existing.port
+        else {
+            await send(.failed(token, PairingFailure(
+                step: .verify,
+                message: "This device was enrolled, but the Host was removed or changed while "
+                    + "pairing. Open it again and pair with a fresh code.",
+                canRetry: false)))
+            return
+        }
+        host.username = result.username
+        host.authMethod = .deviceKey
+        do {
+            try catalog.update(host)
+        } catch {
+            await send(.failed(token, PairingFailure(
+                step: .verify,
+                message: "This device was enrolled, but the Host could not be saved. "
+                    + "Choose Device Key in Edit Host, then run the checks again.",
+                canRetry: false)))
+            return
+        }
         await send(.saved(token, host))
     }
 

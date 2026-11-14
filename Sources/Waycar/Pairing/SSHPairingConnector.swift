@@ -85,6 +85,7 @@ struct SSHPairingConnector: PairingConnector {
         whenAuthenticationFails: PairingCeremonyError
     ) async throws -> ReachedHost {
         var attempts: [String] = []
+        var answeredWithAnotherKey = 0
 
         for address in code.addresses {
             try Task.checkCancellation()
@@ -113,6 +114,7 @@ struct SSHPairingConnector: PairingConnector {
             let presented = HostKeyFingerprint(publicKeyBlob: connection.hostKey.key)
             guard presented == code.hostKeyFingerprint else {
                 await Self.close(connection)
+                answeredWithAnotherKey += 1
                 attempts.append(
                     "\(address): presented \(presented.displayString), not the pinned host key")
                 continue
@@ -142,7 +144,11 @@ struct SSHPairingConnector: PairingConnector {
             }
         }
 
-        throw PairingCeremonyError.hostUnreachable(detail: attempts.joined(separator: "; "))
+        let detail = attempts.joined(separator: "; ")
+        if answeredWithAnotherKey > 0, answeredWithAnotherKey == attempts.count {
+            throw PairingCeremonyError.hostKeyMismatch(detail: detail)
+        }
+        throw PairingCeremonyError.hostUnreachable(detail: detail)
     }
 
     // MARK: Enroll

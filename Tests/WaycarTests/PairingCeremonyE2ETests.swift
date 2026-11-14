@@ -171,7 +171,8 @@ struct PairingCeremonyE2ETests {
 
     /// A pin that matches nothing: the ceremony must never authenticate
     /// against a host whose key differs from the Pairing Code's fingerprint
-    /// (that host is not ours), and the failure reads as unreachable.
+    /// (that host is not ours), and the failure names another computer, so
+    /// a saved Host's page can say the code is not its computer's.
     @Test func mismatchedPinnedFingerprintNeverAuthenticates() async throws {
         let environment = try #require(PairingE2EEnvironment.current)
 
@@ -190,8 +191,8 @@ struct PairingCeremonyE2ETests {
             ) { _ in }
             Issue.record("ceremony succeeded against a host with the wrong key")
         } catch let error as PairingCeremonyError {
-            guard case .hostUnreachable(let detail) = error else {
-                Issue.record("expected hostUnreachable, got \(error)")
+            guard case .hostKeyMismatch(let detail) = error else {
+                Issue.record("expected hostKeyMismatch, got \(error)")
                 return
             }
             #expect(detail.contains("not the pinned host key"))

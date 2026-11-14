@@ -19,10 +19,13 @@ Entries reference the issue that motivated them.
   SSH on, such as a Mac with Remote Login on. Tap one, sign in with its username and password (or pair with a code to use a key), and confirm
   its host key. The scan also tries every address on your Wi-Fi, so computers
   that don't announce themselves show up too. If Local Network access is off,
-  Find Computers says so and opens Settings.
+  Find Computers says so and opens Settings. A computer you already added
+  opens its Host, and pairing a found computer keeps its name.
 - **Keys-only computers**: when a computer doesn't accept password sign-in,
-  its Host page says so and shows one command to run on it that adds this
-  device's key; Check Again then signs in with the key.
+  its Host page says so and offers Scan Pairing Code: run the command it shows
+  on that computer and scan the code, and the same Host switches to this
+  device's key. Add the Key Yourself shows one command that adds the key;
+  Check Again then signs in with it.
 - **Zellij**: Zellij 0.46 or later is a runtime. Its sessions, tabs and panes
   appear in the Console with live status from agents that report it (Claude
   Code, Pi) or from Waycar's hooks. Open an agent's pane without moving your

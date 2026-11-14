@@ -3,9 +3,11 @@ import SwiftUI
 /// The ways to add a Host. Scan to Pair is the default (ADR 0007); the
 /// manual form is the alternative, and the scanner's fallback when the
 /// camera can't scan. Duplicate opens the manual form prefilled from an
-/// existing Host.
+/// existing Host. Pair scans for a found computer, or for a saved Host from
+/// its own page, which it updates rather than adds.
 enum HostAddition: Identifiable, Hashable {
     case scan, manual, find
+    case pair(PairingTarget)
     case duplicate(Host)
     case prefilled(HostDraft)
 
@@ -36,6 +38,17 @@ struct HostAdditionSheet: ViewModifier {
                     addedHostID = paired.id
                 } onAddManually: {
                     followUp = .manual
+                }
+            case .pair(let target):
+                if target.existingHost != nil {
+                    // Its page is already open, and reruns its checks.
+                    PairingScanView(catalog: store, target: target, onAddManually: nil)
+                } else {
+                    PairingScanView(catalog: store, target: target) { paired in
+                        addedHostID = paired.id
+                    } onAddManually: {
+                        followUp = .manual
+                    }
                 }
             case .find:
                 FindComputersView(
