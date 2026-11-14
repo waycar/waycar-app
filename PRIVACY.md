@@ -458,8 +458,8 @@ firsts, once for each on an install: `host_connected`, `agent_seen`,
 `attention_seen` (the Console showed an Agent that is Blocked or Done),
 `first_steer` (a message reached an Agent), `sample_host_opened` (you opened
 the offline sample). It carries the name and `days_since_first_open` (`0`,
-`1-3`, `4-7` or `8+`). Find Computers sends `lan_scan_started` when a search
-starts, `lan_scan_found` when it first settles, and `lan_permission_denied`
+`1-3`, `4-7` or `8+`). Find Computers sends `lan_scan_started` when you start a
+search, `lan_scan_found` once it has finished, and `lan_permission_denied`
 when iOS refuses Local Network access. `lan_scan_found` also says how many
 computers the search listed (`found`: `0`, `1` or `2+`). No computer names,
 addresses or SSH banners are sent.
