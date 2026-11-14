@@ -318,9 +318,10 @@ private struct AgentKindGlyph: View {
     }
 }
 
-/// The Agent Summary under the headline: the sentence in secondary text,
-/// up to two lines. A stale one dims; the first one on its way shows two
-/// placeholder bars. Its age sits under the status (`AgentSummaryAgeView`).
+/// The Agent Summary under the headline: the sentence in small secondary
+/// text, one line, ending in … when it runs longer. A stale one dims; the
+/// first one on its way shows a placeholder bar. Its age sits under the
+/// status (`AgentSummaryAgeView`).
 /// Re-evaluated every 15 s so the switch to stale keeps up without a new read.
 private struct AgentSummaryLineView: View {
     let agent: ConsoleAgent
@@ -343,10 +344,9 @@ private struct AgentSummaryLineView: View {
         case .summary(let text, _, let isStale):
             Text(verbatim: text)
                 .foregroundStyle(isStale ? HierarchicalShapeStyle.tertiary : .secondary)
-                .font(.subheadline)
-                .lineLimit(2)
+                .font(.footnote)
+                .lineLimit(1)
                 .truncationMode(.tail)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -417,8 +417,8 @@ private struct AgentSummaryAgeLabelStyle: LabelStyle {
     }
 }
 
-/// Two placeholder bars (92% and 58% wide) while an Agent's first summary
-/// is on its way. A gentle pulse, held still under Reduce Motion.
+/// A placeholder bar, as tall as the summary's line, while an Agent's first
+/// summary is on its way. A gentle pulse, held still under Reduce Motion.
 private struct AgentSummarySkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// On iPad the list stays mounted under the Agent screen; an invisible
@@ -428,14 +428,10 @@ private struct AgentSummarySkeleton: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(alignment: .leading, spacing: 7) {
-                bar(width: proxy.size.width * 0.92)
-                bar(width: proxy.size.width * 0.58)
-            }
+            bar(width: proxy.size.width * 0.75)
         }
-        .frame(height: 11 * 2 + 7)
-        .padding(.top, 3)
-        .padding(.bottom, 2)
+        .frame(height: 10)
+        .padding(.vertical, 4)
         .opacity(isDimmed ? 0.55 : 1)
         .onAppear { syncPulse() }
         .onChange(of: reduceMotion) { _, _ in syncPulse() }
@@ -459,7 +455,7 @@ private struct AgentSummarySkeleton: View {
     private func bar(width: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
             .fill(Color(uiColor: .tertiarySystemFill))
-            .frame(width: width, height: 11)
+            .frame(width: width, height: 10)
     }
 }
 
