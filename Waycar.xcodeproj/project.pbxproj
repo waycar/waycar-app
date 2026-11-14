@@ -897,6 +897,7 @@
 		9D1C3785619C37B9800FBB5A /* EventsSubscriptionMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D8B88784FB7F46E525F72B /* EventsSubscriptionMachineTests.swift */; };
 		9D24DEBA9D11CF9AFF1401AB /* WaycarSSHErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31896F1CFABC91A4118B395 /* WaycarSSHErrorMappingTests.swift */; };
 		9D598A5D70867D3EE37B5543 /* InputShortcutStripPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55D42492FD75A263B2930DDF /* InputShortcutStripPresentation.swift */; };
+		9D81DA0B48EF5DED1DA4FDF9 /* LivenessRaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D46E28AFBEB4D28647008700 /* LivenessRaceTests.swift */; };
 		9D85166D8F1CEFFF8C94A0A0 /* ChatTranscriptAcquisitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F62BAE2BF060148FCE559EE /* ChatTranscriptAcquisitionTests.swift */; };
 		9D9D875BD348CE602552DCCE /* ComposerStagingMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7DD40592EEEAA236ACAE07 /* ComposerStagingMachine.swift */; };
 		9DA6DDA86E32A44F5129DEDC /* AgentRowLayoutStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13357EE59E75545C2DABBFD7 /* AgentRowLayoutStoreTests.swift */; };
@@ -2675,6 +2676,7 @@
 		D443B76B28444AC96F1DF789 /* HarnessLabE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessLabE2ETests.swift; sourceTree = "<group>"; };
 		D444594C006C400DB0FD9C8D /* BackendInstallPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendInstallPresentationTests.swift; sourceTree = "<group>"; };
 		D45EE2AFD7BF1A7A2C39A43F /* ChatMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMedia.swift; sourceTree = "<group>"; };
+		D46E28AFBEB4D28647008700 /* LivenessRaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivenessRaceTests.swift; sourceTree = "<group>"; };
 		D4734DC12CD77518A6C5C21A /* ZellijTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZellijTransport.swift; sourceTree = "<group>"; };
 		D484781EF1E61E29859D712F /* NotificationConfigFileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationConfigFileTests.swift; sourceTree = "<group>"; };
 		D4D05E0D44F4B35B8E552835 /* CoreKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreKeys.swift; sourceTree = "<group>"; };
@@ -3251,6 +3253,7 @@
 				09A3FEFFDE8D614F42673B4B /* LiveActivityLifecycleMachineTests.swift */,
 				C06FE9E87624CCCA3F515ABE /* LiveActivityRegistrationMachineTests.swift */,
 				5AE436686E8C8C89688E436C /* LiveInAnotherWindowPresentationTests.swift */,
+				D46E28AFBEB4D28647008700 /* LivenessRaceTests.swift */,
 				33EF7B3863DE3F4BECE2A612 /* MarkdownDocumentRowsTests.swift */,
 				94CFC1DBA7600C16ACD302C3 /* MarkdownDocumentTests.swift */,
 				EAB4E402B22978013FBF55AA /* MarkdownLinkDestinationTests.swift */,
@@ -6305,6 +6308,7 @@
 				26E1203FB4B13837EFA0C37D /* LiveActivityRegistrationMachineTests.swift in Sources */,
 				D17302C6A9C6037515A78D5A /* LiveActivityVectorFile.swift in Sources */,
 				9472CD8E31D2B104318525ED /* LiveInAnotherWindowPresentationTests.swift in Sources */,
+				9D81DA0B48EF5DED1DA4FDF9 /* LivenessRaceTests.swift in Sources */,
 				C3CBABC26E0283053958478C /* LocalSSHTestEnvironment.swift in Sources */,
 				EDF747375868EE74E41432E9 /* MarkdownDocumentRowsTests.swift in Sources */,
 				F420ACDFF550F2CFFD802A45 /* MarkdownDocumentTests.swift in Sources */,
