@@ -5461,6 +5461,46 @@ stateDiagram-v2
     suspect --> healthy: wentLive or woundDown
 ```
 
+### RequestRecoveryMachine
+
+- **File:** `Sources/Waycar/Transport/RequestRecoveryMachine.swift`
+- **Owner:** `EventsSession.withTransport`, one per request: it waits for
+  the installed Transport, runs the operation, classifies a failure
+  (`isTransportLinkFailure`, exactly `.timedOut`, still installed), and
+  performs the distrust (the connection machine's `distrust`, the detached
+  `transportDistrusted()`, the subscription machine's `replace`).
+- **States:** `awaitingConnection`, `executing`, `replacing` (the first
+  attempt failed on the link; waiting for the run loop's replacement),
+  `replaying`, `completed(succeeded | firstFailure | replayFailure)`.
+- **Events:** `connected`, `succeeded`, `failed(linkFailure, timedOut,
+  stillInstalled)`.
+- **Effects:** `noteActivity`, `distrust`, `awaitReplacement`,
+  `throwFirstFailure`, `throwReplayFailure`. One replay only; a server's
+  answer is thrown as it is; `retryOnLinkFailure: false` (input that
+  submits, prompts) distrusts the dead link but never replays, since a
+  link failure cannot say whether herdr got the request (the write
+  boundary itself is the callers' `RequestWriteMark`); a replay that times
+  out reports the first failure; the wait for a replacement starts
+  nothing, and a run loop that cannot connect releases it with its own
+  failure.
+- **Tests:** `RequestRecoveryMachineTests`, `EventsSessionSubscriptionsTests`
+  (silent replacement, request recovery).
+- **Catalogue:** HERDR-05.
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaitingConnection
+    awaitingConnection --> executing: connected
+    executing --> completed: succeeded / noteActivity
+    executing --> completed: failed, server answer / throwFirstFailure
+    executing --> completed: failed on link, no replay / distrust, throwFirstFailure
+    executing --> replacing: failed on link / distrust, awaitReplacement
+    replacing --> replaying: connected
+    replaying --> completed: succeeded / noteActivity
+    replaying --> completed: failed / throwReplayFailure
+    replaying --> completed: timed out / throwFirstFailure
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6269,7 +6309,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | converted → `EventsConnectionMachine` | P3d |
 | HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
 | HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsLivenessMachine` | P3d |
-| HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
+| HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `RequestRecoveryMachine` | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |
 | HERDR-07 | herdr events channel | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | M/H | leave: reader identity guarded | — |
 | HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | convert; bug B-32 | P3d |

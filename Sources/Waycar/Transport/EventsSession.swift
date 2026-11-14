@@ -557,12 +557,18 @@ actor EventsSession {
         retryOnLinkFailure: Bool = true,
         _ operation: @escaping @Sendable (any Transport) async throws -> Value
     ) async throws -> Value {
+        var recovery = RequestRecoveryMachine(replaysLinkFailures: retryOnLinkFailure)
         let transport = try await awaitUsableTransport()
+        _ = recovery.handle(.connected)
+        let firstFailure: any Error
         do {
             let value = try await operation(transport)
-            noteConnectionActivity()
+            for effect in recovery.handle(.succeeded) where effect == .noteActivity {
+                noteConnectionActivity()
+            }
             return value
         } catch {
+            firstFailure = error
             // A degraded SSH link can sit installed-but-dead until the run
             // loop's own traffic notices. A caller that hit it first does
             // what the keepalive does — distrust the transport, let the run
@@ -570,9 +576,7 @@ actor EventsSession {
             // while this transport is still the installed one keeps a raced
             // replacement from double-failing a caller, and server answers
             // (API rejections) are never retried.
-            guard Self.isTransportLinkFailure(error) else {
-                throw error
-            }
+            //
             // A replacement may already be in flight (currentTransport nil)
             // or a fresher transport may have been installed since; either
             // way the single retry rides whatever is current. It is also
@@ -580,39 +584,60 @@ actor EventsSession {
             // replacement surfaces that cause instead of a second full
             // wait, and a failing redial releases the waiter through the
             // run loop's announce with its real cause.
-            if isSameTransport(currentTransport, transport) {
-                connectionStep(.distrust)
-                // Dropped without `close()`, since Terminals may still use
-                // it; it gives up what its replacement on the same
-                // connection waits for (tmux's control slot). Detached, so
-                // the redial below never waits on it. herdr's is a no-op.
-                Task { await transport.transportDistrusted() }
-                // The run loop is parked on the live stream and cannot act on
-                // the suspect mark by itself: a link whose events reader is
-                // still alive never ends the stream, and with the keepalive
-                // quiet or disabled nothing else wakes it — the retry below
-                // would wait forever. End the channel the way a failed
-                // keepalive does, but flagged as a deliberate re-subscribe so
-                // the run loop re-dials silently (no `.reconnecting`) and
-                // installs the replacement this retry rides. A redial that
-                // fails instead releases the waiter through the run loop's
-                // announce with its real cause.
-                for effect in subscriptionStep(.replace) {
-                    guard case .endChannel(let channel) = effect else { continue }
-                    await channels[channel]?.end()
+            let effects = recovery.handle(
+                .failed(
+                    linkFailure: Self.isTransportLinkFailure(error),
+                    timedOut: (error as? TransportError) == .timedOut,
+                    stillInstalled: isSameTransport(currentTransport, transport)))
+            for effect in effects {
+                switch effect {
+                case .distrust:
+                    await distrust(transport)
+                case .throwFirstFailure, .throwReplayFailure:
+                    throw error
+                case .awaitReplacement, .noteActivity:
+                    break
                 }
             }
-            guard retryOnLinkFailure else {
-                throw error
-            }
-            let replacement = try await awaitUsableTransport()
-            do {
-                let value = try await operation(replacement)
+        }
+        let replacement = try await awaitUsableTransport()
+        _ = recovery.handle(.connected)
+        do {
+            let value = try await operation(replacement)
+            for effect in recovery.handle(.succeeded) where effect == .noteActivity {
                 noteConnectionActivity()
-                return value
-            } catch TransportError.timedOut {
-                throw error
             }
+            return value
+        } catch let replayError {
+            let effects = recovery.handle(
+                .failed(
+                    linkFailure: Self.isTransportLinkFailure(replayError),
+                    timedOut: (replayError as? TransportError) == .timedOut,
+                    stillInstalled: isSameTransport(currentTransport, replacement)))
+            throw effects.contains(.throwFirstFailure) ? firstFailure : replayError
+        }
+    }
+
+    /// A request found the installed connection dead (`withTransport`).
+    private func distrust(_ transport: any Transport) async {
+        connectionStep(.distrust)
+        // Dropped without `close()`, since Terminals may still use it; it
+        // gives up what its replacement on the same connection waits for
+        // (tmux's control slot). Detached, so the redial below never waits
+        // on it. herdr's is a no-op.
+        Task { await transport.transportDistrusted() }
+        // The run loop is parked on the live stream and cannot act on the
+        // suspect mark by itself: a link whose events reader is still alive
+        // never ends the stream, and with the keepalive quiet or disabled
+        // nothing else wakes it — the retry would wait forever. End the
+        // channel the way a failed keepalive does, but flagged as a
+        // deliberate re-subscribe so the run loop re-dials silently (no
+        // `.reconnecting`) and installs the replacement the retry rides. A
+        // redial that fails instead releases the waiter through the run
+        // loop's announce with its real cause.
+        for effect in subscriptionStep(.replace) {
+            guard case .endChannel(let channel) = effect else { continue }
+            await channels[channel]?.end()
         }
     }
 
