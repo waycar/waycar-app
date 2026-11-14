@@ -176,13 +176,15 @@ struct EventsSubscriptionMachineTests {
         #expect(machine.state.replacing)
     }
 
-    @Test func aReplacementWithNoLiveChannelStaysRequested() {
+    /// B-46: with no live channel there is nothing to replace, and the run
+    /// loop subscribes afresh anyway, so nothing is requested: the next
+    /// channel's loss is an ordinary one.
+    @Test func aReplacementWithNoLiveChannelRequestsNothing() {
         var machine = live(globals).after([.channelEnded(channel: 1)])
         #expect(machine.handle(.replace) == [])
-        #expect(machine.state.replacing)
-        // The next channel's loss is then a deliberate one (kept as it was).
+        #expect(!machine.state.replacing)
         _ = machine.handle([.accepted, .goLive, .channelEnded(channel: 2)])
-        #expect(machine.handle(.streamFinished) == [.subscribeAgain])
+        #expect(machine.handle(.streamFinished) == [])
     }
 
     @Test func teardownTakesTheLiveChannel() {

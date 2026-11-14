@@ -17,10 +17,11 @@ import Foundation
 /// link, a hedge that won) ends the live channel and re-subscribes without
 /// leaving Connected.
 ///
-/// The re-subscribe request is a flag beside the stage, as it always was:
-/// a request can be left set while no channel is live (a link failure a
-/// request finds during a backoff), and the next channel's loss then
-/// re-subscribes silently. That race is kept as it was.
+/// The re-subscribe request is a flag beside the stage: it is made only
+/// while a channel is live (an update, a distrusted link, a hedge that
+/// won) and taken by that channel's end. A link failure a request finds
+/// while no channel is live (during a backoff) requests nothing, so the
+/// next channel's loss shows `.reconnecting` like any other (B-46).
 struct EventsSubscriptionMachine: StateMachine {
     enum Stage: Equatable, Sendable {
         /// The set is a seed no subscribe has accepted; no channel is live.
@@ -177,8 +178,12 @@ struct EventsSubscriptionMachine: StateMachine {
             return []
 
         case .replace:
+            // A replacement is of the live channel: with none live the run
+            // loop subscribes afresh anyway, and a request left standing
+            // would make the next channel's loss silent (B-46).
+            guard let channel = liveChannel else { return [] }
             state.replacing = true
-            return liveChannel.map { [.endChannel($0)] } ?? []
+            return [.endChannel(channel)]
 
         case .windDownStarted:
             guard let channel = liveChannel else { return [] }

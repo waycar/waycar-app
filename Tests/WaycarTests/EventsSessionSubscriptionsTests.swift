@@ -1248,12 +1248,11 @@ struct EventsSessionSubscriptionsTests {
         await session.end()
     }
 
-    /// Pre-existing race, pinned as it is (HERDR-03): a request that finds
-    /// the link dead while the run loop backs off asks for a re-subscribe
-    /// that no live channel takes. The request stays set, so the next
-    /// connection's first stream loss re-subscribes silently, with no
-    /// `.reconnecting`.
-    @Test func aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent() async throws {
+    /// B-46 (HERDR-03): a request that finds the link dead while the run
+    /// loop backs off has no live channel to replace, so it asks for no
+    /// re-subscribe. The next connection's first stream loss is a loss like
+    /// any other and shows `.reconnecting`.
+    @Test func aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible() async throws {
         let first = ScriptedTransport(
             serverInfo: ServerInfo(version: "first", protocolVersion: 17))
         let second = ScriptedTransport(
@@ -1288,9 +1287,11 @@ struct EventsSessionSubscriptionsTests {
         #expect(try await request.value == "second")
 
         await second.failEventStream(lost)
-        #expect(await updates.next() == .status(.connected))
+        #expect(
+            await updates.next()
+                == .status(.reconnecting(attempt: 1, delay: .seconds(3600), failure: lost)))
         #expect(await connector.connectCount == 2)
-        #expect(await second.capturedSubscriptions == [initial, initial])
+        #expect(await second.capturedSubscriptions == [initial])
         await session.end()
         continuation.finish()
     }
