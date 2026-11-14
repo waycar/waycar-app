@@ -510,6 +510,22 @@ struct OpenCodeFlowsTests {
         }
     }
 
+    /// B-39 pin, open: a plain TUI that Archive pinned to its session can
+    /// move on to a new desk session unseen (its New session, or a relaunch
+    /// whose shell gap no inventory sees; O27). Its pane still matches the
+    /// pin, so it stays hidden behind the archived session and the new
+    /// session gets no terminal.
+    @Test func anArchivePinnedPaneStaysHiddenWhenItsTUIMovesOnUnseen() {
+        let plain = pane(line: "opencode")
+        let pin = ChatModeMarker(paneID: plain.agent.paneID, terminalID: plain.agent.terminalID, kind: "opencode",
+            cwd: "/work/app", session: .init(kind: "id", value: "ses_a"), chatMode: false, launchedAt: .now)
+        let archived = [ConsoleScope(hostID: host.id, backend: .opencode): Set(["ses_a"])]
+        let resolved = ServerSessionLinks.resolve([plain, sessionRow("ses_b")], archived: archived) { _ in pin }
+        #expect(resolved.rows.map(\.agent.paneID) == ["opencode:ses_b"])
+        #expect(resolved.rows.first?.linkedTerminal == nil)
+        #expect(resolved.terminals[.init(hostID: host.id, paneID: "opencode:ses_a")]?.id == plain.id)
+    }
+
     @Test func aJoinedLaunchsChatMarkerLinksAHerdrPane() {
         let herdr = pane("w1:p1", line: nil, backend: .herdr)
         let marker = ChatModeMarker(paneID: "w1:p1", terminalID: herdr.agent.terminalID, kind: "opencode",
