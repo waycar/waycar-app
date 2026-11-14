@@ -16,9 +16,9 @@ counts has finished, then prints the report once. Use it, or an automation, inst
 `automation ask` script, --fire prints one `FIRE <verdict>` line and `DONE` instead of the report (exit 0); read the
 report afterwards with the same command without --wait.
 
-Exit status: 0 every run that counts succeeded; 1 one failed or was cancelled; 2 gh failed (a job log it could
-not read included: the report says INCOMPLETE) or the arguments are wrong; 3 runs are still going (no --wait, or the
-deadline passed) or there are none.
+Exit status: 0 every run that counts succeeded; 1 one failed or was cancelled; 2 gh failed, a job log it could not
+read included (the report says INCOMPLETE and still shows each run's conclusion), or the arguments are wrong; 3 runs
+are still going (no --wait, or the deadline passed) or there are none.
 
 Logs are read only for finished jobs that did not succeed and for successful jobs with a test step (a step whose
 name says test or e2e). Needs gh, logged in; it only reads from GitHub. Scheduled runs (they also carry main's sha)
@@ -339,8 +339,9 @@ def collect(repo: str, target: dict, runs: list[dict]) -> dict:
     pending = [r for r in counted if r["status"] != "completed"]
     red = [r for r in counted if r["status"] == "completed" and r["conclusion"] not in ("success", "neutral", "skipped")]
     unread = [j for r in counted for j in r["jobs"] if j.get("log_error")]
-    # Green needs its evidence: a job log gh could not read leaves the report incomplete (exit 2), not green.
-    verdict = "RED" if red else "PENDING" if pending or not counted else "INCOMPLETE" if unread else "GREEN"
+    # A job log gh could not read leaves the evidence incomplete (exit 2), whatever the runs concluded; the report
+    # still shows each run's conclusion.
+    verdict = "INCOMPLETE" if unread else "RED" if red else "PENDING" if pending or not counted else "GREEN"
     return {"repo": repo, **target, "verdict": verdict, "runs": report_runs}
 
 
@@ -463,6 +464,9 @@ def fire_line(report: dict) -> str:
             for j in jobs
         )
         problems.append(f"{run['name']} {run['conclusion']}{f' ({detail})' if detail else ''}")
+    unread = [j["name"] for r in report["runs"] if not r["superseded_by"] for j in r["jobs"] if j.get("log_error")]
+    if unread:
+        problems.append(f"logs gh could not read: {', '.join(unread)}")
     head = f"{report['verdict']} {report['sha'][:12]}" + (f" (PR #{report['pr']})" if report.get("pr") else "")
     return f"FIRE {head}: " + ("; ".join(problems) if problems else f"{len(report['runs'])} runs") + " — details: ci-evidence.py without --wait"
 
@@ -499,7 +503,8 @@ def wait_for_runs(args, target: dict) -> list[dict]:
             if failures >= 5:
                 raise
             print(f"ci-evidence: gh failed ({error}); retrying", file=sys.stderr, flush=True)
-            last_error, runs = error, None
+            # Two answers in a row confirm the runs are done; one with a failure between them does not.
+            last_error, runs, previous = error, None, None
         if runs is not None:
             last_runs = runs
             counted = [r for r in runs if not r["_superseded_by"]]

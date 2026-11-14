@@ -165,7 +165,8 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   The report gives each workflow and job its conclusion and duration, each
   CI lane its executed, pinned and skipped counts, the failing tests, the
   first `##[error]`, and which runs were cancelled or superseded; `--json`
-  for scripts. Exit 0 is green, 1 red, 3 still running.
+  for scripts. Exit 0 is green, 1 red, 2 incomplete (gh failed, or a job
+  log it could not read), 3 still running.
 
 ## Parallel work
 

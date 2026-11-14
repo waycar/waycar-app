@@ -247,6 +247,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "INCOMPLETE")
         self.assertIn("log unavailable: HTTP 403", ce.render(report))
 
+    def test_an_unread_log_makes_a_red_report_incomplete_too(self) -> None:
+        self.stub([run(1, "CI", "completed", "failure")], {1: [job(11, "Build & test", "failure")]})
+
+        def refused(repo, job_id):
+            raise ce.GhError("HTTP 403: Resource not accessible")
+
+        ce.job_log = refused
+        report = self.report()
+        self.assertEqual(report["verdict"], "INCOMPLETE")
+        self.assertTrue(ce.render(report).startswith("INCOMPLETE o/r aaaaaaaaaaaa: 1 failure"))
+        self.assertIn("INCOMPLETE aaaaaaaaaaaa: CI failure (Build & test); logs gh could not read: Build & test",
+                      ce.fire_line(report))
+
     def wait(self, polls: list) -> tuple[list[dict], list[str]]:
         calls: list[str] = []
 
@@ -272,6 +285,11 @@ class ReportTests(unittest.TestCase):
         runs, calls = self.wait([[run(1, "CI", "in_progress", None)], [a], [a, b], [a, b]])
         self.assertEqual([r["name"] for r in runs], ["CI", "Web"])
         self.assertEqual(len(calls), 4)  # pending; done; a late run appeared; the same again
+
+    def test_wait_needs_two_answers_in_a_row(self) -> None:
+        a = run(1, "CI", "completed", "success")
+        runs, calls = self.wait([[a], ce.GhError("HTTP 503"), [a], [a]])
+        self.assertEqual(len(calls), 4)  # done; gh failed; done; done again
 
     def test_wait_gives_up_when_gh_keeps_failing(self) -> None:
         with self.assertRaises(ce.GhError):
