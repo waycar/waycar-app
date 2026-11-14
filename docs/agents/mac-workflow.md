@@ -24,7 +24,10 @@ crash reports, durations and the Mac's load before and after.
   commit, and refuses what would break the recipe or select no tests, saying
   how to write it. Write Swift Testing ids as xcodebuild prints them,
   `-only-testing:WaycarTests/FooTests/bar()` or `bar(label:)`; it adds the
-  backslashes make's shell needs.
+  backslashes make's shell needs. It passes only the variables it knows, so
+  try a new make variable through a throwaway commit that sets its default.
+  A throwaway test (rendering previews, probing a behavior) runs the same
+  way, from a temporary branch never submitted.
 - It stages the exact commit, bundling commits GitHub doesn't have, and
   checks HEAD.
 - One run at a time on the whole Mac, first come first served; a waiting run

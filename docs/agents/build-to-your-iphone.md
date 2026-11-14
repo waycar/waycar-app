@@ -230,6 +230,10 @@ every target's bundle ID and the app group from it), and
 `WAYCAR_APP_ENTITLEMENTS=Sources/Waycar/WaycarSelfBuild.entitlements`, which
 keeps only the app group. Without `TEAM` nothing changes. The Makefile's
 self-build block and `project.yml`'s `WAYCAR_BUNDLE_ID` are the code.
+XcodeGen (2.46) always overwrites `CODE_SIGN_ENTITLEMENTS` with a target's
+`entitlements.path`, so the swap is the setting itself
+(`CODE_SIGN_ENTITLEMENTS: $(WAYCAR_APP_ENTITLEMENTS)`) over hand-kept
+entitlements files.
 
 Last checked 2026-11-13 with Xcode 27.2 on macOS 27.2: the default build
 signs and validates unchanged, and `TEAM` gives every target its own bundle
