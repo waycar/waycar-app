@@ -156,6 +156,9 @@ Entries reference the issue that motivated them.
 - **Agent terminals on herdr**: an Agent's terminal no longer opens on a
   connection Waycar has already let go of, where it could keep the Agent's
   pane at your phone's size.
+- **herdr Hosts**: if you used a Host while it was reconnecting, the next
+  time its connection dropped could go unshown. That drop now shows
+  Reconnecting like any other.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

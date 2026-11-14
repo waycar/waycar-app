@@ -6659,6 +6659,6 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-43 | ATTACH-03 | Two taps on Use SSH Instead schedule two restarts: a run's end clears the run handle without checking which run it belongs to | open |
 | B-44 | ATTACH-18 | Rows queued before a tmux history leave are sent or dropped depending on whether the in-flight answer reaches the main actor before the leave's first step | open |
 | B-45 | ATTACH-08 | A last frame captured while the device is locked is indexed on the next load although its JPEG was never written; after a relaunch it misses and is removed | open |
-| B-46 | HERDR-03 | A request that finds the herdr link dead during a backoff leaves a re-subscribe request with no live channel, so the next connection's first stream loss re-subscribes without showing Reconnecting | fixed (P3d): a `replace` with no live channel requests nothing (`EventsSessionSubscriptionsTests.aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible`) |
+| B-46 | HERDR-03 | A request that finds the herdr link dead during a backoff leaves a re-subscribe request with no live channel, so the next connection's first stream loss re-subscribes without showing Reconnecting | fixed (P3d, `c6673183`): a `replace` with no live channel requests nothing (`EventsSessionSubscriptionsTests.aRequestThatFindsTheLinkDeadDuringABackoffLeavesTheNextLossVisible`) |
 
 B-02 and B-03 are unused.
