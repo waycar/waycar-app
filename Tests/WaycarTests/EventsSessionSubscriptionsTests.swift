@@ -1055,15 +1055,11 @@ struct EventsSessionSubscriptionsTests {
     /// before the retry subscribes.
     @Test func aFailedDialDropsThePaneSubscriptionsBeforeTheRetry() async throws {
         let transport = ScriptedTransport()
-        let dials = Mutex(0)
+        let dials = DialCount()
         let session = EventsSession(
             subscriptions: initial,
             connect: { () async throws -> any Transport in
-                let dial = dials.withLock { count in
-                    count += 1
-                    return count
-                }
-                if dial == 1 { throw TransportError.sshUnreachable(detail: "no route") }
+                if dials.next() == 1 { throw TransportError.sshUnreachable(detail: "no route") }
                 return transport
             },
             reconnectPolicy: ReconnectPolicy(
@@ -1130,6 +1126,155 @@ struct EventsSessionSubscriptionsTests {
         #expect(await second.capturedSubscriptions == [initial, initial])
         await session.end()
         continuation.finish()
+    }
+
+    // MARK: Lifecycle (HERDR-01)
+
+    /// A connect closure whose first dial fails with `failure`; every later
+    /// one answers `transport`. `dials` counts them.
+    private func failingFirstDial(
+        with failure: TransportError, then transport: ScriptedTransport, dials: DialCount
+    ) -> @Sendable () async throws -> any Transport {
+        { () async throws -> any Transport in
+            if dials.next() == 1 { throw failure }
+            return transport
+        }
+    }
+
+    @Test func aRetryDuringABackoffStartsANewActivationAtOnce() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let unreachable = TransportError.sshUnreachable(detail: "no route")
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(with: unreachable, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(
+            await updates.next()
+                == .status(.reconnecting(attempt: 1, delay: .seconds(3600), failure: unreachable)))
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+        #expect(await updates.next() == .status(.ended))
+    }
+
+    @Test func aRetryAfterAFailureConnectsAgain() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(
+                with: .authenticationFailed, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.failed(.authenticationFailed)))
+        // A failed activation waits for the user: a link coming back dials
+        // nothing.
+        await session.redialNow(trigger: .pathChange)
+        #expect(dials.value == 1)
+
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+    }
+
+    @Test func aRetryWhileSuspendedActivates() async throws {
+        let transport = ScriptedTransport()
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        await session.end()
+    }
+
+    @Test func aSuspensionDuringABackoffEndsItAndTheReturnConnects() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let unreachable = TransportError.sshUnreachable(detail: "no route")
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(with: unreachable, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the failed dial should back off")
+            await session.end()
+            return
+        }
+        await session.suspend()
+        #expect(await updates.next() == .status(.suspended))
+        #expect(dials.value == 1)
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+    }
+
+    @Test func endingDuringABackoffFinishesTheUpdates() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(
+                with: .sshUnreachable(detail: "no route"), then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the failed dial should back off")
+            await session.end()
+            return
+        }
+        await session.end()
+        #expect(await updates.next() == .status(.ended))
+        #expect(await updates.next() == nil)
+        #expect(dials.value == 1)
+    }
+
+    @Test func aResumeWhileActiveAndAnythingAfterEndAreNoOps() async throws {
+        let transport = ScriptedTransport()
+        let connector = SequencedTransportConnector([transport])
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        // Nothing is live while suspended: a link coming back dials nothing.
+        await session.redialNow(trigger: .pathChange)
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        await session.resume()
+        // A live channel is `revalidate()`'s business, not a redial's.
+        await session.redialNow(trigger: .pathChange)
+        await session.end()
+        await session.end()
+        await session.resume()
+        await session.retry()
+        #expect(await updates.next() == .status(.ended))
+        #expect(await updates.next() == nil)
+        #expect(await connector.connectCount == 1)
+        #expect(await transport.isClosed)
     }
 
     @Test func updateWhileSuspendedTakesEffectOnResume() async throws {
@@ -1458,6 +1603,21 @@ private final class ProjectionGenerationBarrier {
         }
         await withCheckedContinuation { continuation in
             waiters.append((generation, continuation))
+        }
+    }
+}
+
+/// How many dials a scripted connect closure has seen.
+private final class DialCount: Sendable {
+    private let count = Mutex(0)
+
+    var value: Int { count.withLock { $0 } }
+
+    /// Counts one more dial and returns its ordinal.
+    func next() -> Int {
+        count.withLock { count in
+            count += 1
+            return count
         }
     }
 }
