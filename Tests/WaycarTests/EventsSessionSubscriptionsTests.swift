@@ -709,6 +709,173 @@ struct EventsSessionSubscriptionsTests {
         await session.end()
     }
 
+    // MARK: Request recovery (HERDR-05)
+
+    private func connectedSession(
+        _ transports: [ScriptedTransport]
+    ) -> (EventsSession, SequencedTransportConnector) {
+        let connector = SequencedTransportConnector(transports)
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            keepalive: nil)
+        return (session, connector)
+    }
+
+    /// A server's answer says the link works: it is thrown as it is, never
+    /// replayed, and the connection stays trusted and live.
+    @Test func aServerAnswerIsNeitherReplayedNorDistrustsTheConnection() async throws {
+        let transport = ScriptedTransport()
+        let (session, connector) = connectedSession([transport])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        let rejection = TransportError.apiRejected(code: "agent_not_found", message: "gone")
+        await #expect(throws: rejection) {
+            try await session.withTransport { _ in
+                _ = calls.next()
+                throw rejection
+            }
+        }
+        #expect(calls.value == 1)
+        #expect(await transport.distrustCount == 0)
+        #expect(await transport.emit(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(
+            await updates.next()
+                == .event(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(await connector.connectCount == 1)
+        await session.end()
+    }
+
+    /// One replay only: a replay that fails on the link too reports its own
+    /// failure, is not replayed again, and leaves the replacement trusted.
+    @Test func aRequestIsReplayedOnceAndAFailedReplayReportsItsOwnFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, connector) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        await #expect(throws: TransportError.sshUnreachable(detail: "still dead")) {
+            try await session.withTransport { transport in
+                _ = calls.next()
+                if (transport as? ScriptedTransport) === first {
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                throw TransportError.sshUnreachable(detail: "still dead")
+            }
+        }
+        #expect(calls.value == 2)
+        // Told on a detached Task, as the replacement dials.
+        try await waitUntil("the dead Transport should be told it is distrusted") {
+            await first.distrustCount == 1
+        }
+        #expect(await second.distrustCount == 0)
+        #expect(await connector.connectCount == 2)
+        await session.end()
+    }
+
+    /// A replay that runs out its own time reports the first failure, not
+    /// a second wait's.
+    @Test func aReplayThatTimesOutReportsTheFirstFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, _) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        await #expect(throws: TransportError.sshUnreachable(detail: "dead link")) {
+            try await session.withTransport { transport in
+                _ = calls.next()
+                if (transport as? ScriptedTransport) === first {
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                throw TransportError.timedOut
+            }
+        }
+        #expect(calls.value == 2)
+        #expect(await second.distrustCount == 0)
+        await session.end()
+    }
+
+    /// A link failure the Transport marked unsent is a link failure all the
+    /// same: the connection is distrusted and the request replayed.
+    @Test func anUnsentRequestIsReplayedLikeABareLinkFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, _) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let answer = try await session.withTransport { transport -> String in
+            if (transport as? ScriptedTransport) === first {
+                throw RequestNotSentError(
+                    cause: TransportError.sshUnreachable(detail: "never written"))
+            }
+            return "second"
+        }
+        #expect(answer == "second")
+        try await waitUntil("the dead Transport should be told it is distrusted") {
+            await first.distrustCount == 1
+        }
+        await session.end()
+    }
+
+    /// A link failure on a Transport the run loop already replaced retries
+    /// on the replacement without distrusting it.
+    @Test func aLinkFailureOnAReplacedTransportRetriesWithoutDistrustingTheReplacement()
+        async throws
+    {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, connector) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let gate = ScriptedTransportCallGate()
+        let request = Task {
+            try await session.withTransport { transport -> String in
+                if (transport as? ScriptedTransport) === first {
+                    await gate.waitUntilOpen()
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                return "second"
+            }
+        }
+        await gate.waitForEntry()
+        await first.setConnectionAlive(false)
+        await first.failEventStream(.channelFailed(detail: "remote closed"))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the dropped stream should reconnect")
+            await gate.open()
+            _ = await request.result
+            await session.end()
+            return
+        }
+        #expect(await updates.next() == .status(.connected))
+        #expect(await connector.connectCount == 2)
+        await gate.open()
+
+        #expect(try await request.value == "second")
+        #expect(await first.distrustCount == 0)
+        #expect(await second.distrustCount == 0)
+        await session.end()
+    }
+
     /// Parity with `withTerminalTransport`: after the run loop stopped on an
     /// action-required failure, a Host-scoped RPC reports that cause instead
     /// of a generic unreachable Host.
