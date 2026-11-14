@@ -1,4 +1,5 @@
 ---
+import { ON_APP_STORE } from '../../data/links';
 import AppStoreCta from '../AppStoreCta.astro';
 ---
 
@@ -9,6 +10,7 @@ import AppStoreCta from '../AppStoreCta.astro';
       <AppStoreCta kind="button" ct="site-closing">Get Waycar</AppStoreCta>
       <a class="btn btn-ghost btn-lg" href="#setup">Set up your computer →</a>
     </div>
+    {ON_APP_STORE && <p class="note"><span class="cta-note">Free on the App Store · iOS 18 or later</span></p>}
   </div>
 </section>
 
@@ -43,6 +45,10 @@ import AppStoreCta from '../AppStoreCta.astro';
     justify-content: center;
     gap: 12px;
     margin-top: 36px;
+  }
+
+  .note {
+    margin-top: 16px;
   }
 
   @media (max-width: 560px) {

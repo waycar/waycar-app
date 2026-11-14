@@ -1,8 +1,8 @@
 ---
 // A list of questions and answers in glass rows: the home page FAQ and the
-// pricing page. `cmd`, when set, follows the answer as inline code.
+// pricing page. Optional `cmd` and `link` follow the answer.
 interface Props {
-  items: { q: string; a: string; cmd?: string }[];
+  items: { q: string; a: string; cmd?: string; link?: { href: string; label: string } }[];
 }
 
 const { items } = Astro.props;
@@ -19,6 +19,12 @@ const { items } = Astro.props;
             <>
               {' '}
               <code>{item.cmd}</code>.
+            </>
+          )}
+          {item.link && (
+            <>
+              {' '}
+              <a href={item.link.href}>{item.link.label}</a>
             </>
           )}
         </dd>
@@ -49,6 +55,12 @@ const { items } = Astro.props;
     font-size: 15px;
     line-height: 1.65;
     color: var(--text-2);
+  }
+
+  dd a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   dd code {

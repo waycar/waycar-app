@@ -279,6 +279,13 @@ main:focus {
   border-radius: var(--radius-control-lg);
 }
 
+/* The line beside a download button ("Free on the App Store"): the site's one
+   price mention. */
+.cta-note {
+  font: var(--fs-caption) var(--font-mono);
+  color: var(--text-3);
+}
+
 .pill {
   display: inline-block;
   padding: 3px 9px;

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: October 26, 2026._
+_Last updated: November 13, 2026._
 
 Waycar is an iPhone and iPad app for [herdr](https://herdr.dev) and tmux.
 Waycar is made by OTREVA, LLC ("we" or "us"), which is responsible for the
@@ -526,7 +526,7 @@ us to delete your data sooner. To ask for analytics data to be deleted, email
 ## This website
 
 `waycar.dev` is a static site served by Cloudflare. It uses PostHog to count
-page views, opens of the Get Waycar picker, clicks on its App Store link, and
+page views, opens of the Get Waycar picker, clicks on App Store links, and
 copies of the install command,
 with the same `env` property. How visitors are counted depends on where you
 are, which Cloudflare works out from your IP address:
