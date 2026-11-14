@@ -441,7 +441,7 @@ Like Articles they are not bundled into the iOS app, so a change under
   `description` (70 to 165), `name`, `kind` (`ssh-client`, `agent-environment`,
   `agent-client` or `first-party`), `summary` (the index card and the page's
   lead), `checked` (`YYYY-MM-DD`, the day the facts were last checked), `order`
-  (unique; the index and footer order), `keywords` (3 to 10 lowercase terms,
+  (unique; the index order), `keywords` (3 to 10 lowercase terms,
   emitted in the page's JSON-LD).
 - `rows`: every row id below, each `{ level, text }`.
 - `pickWaycar` and `pickThem`: 3 to 5 bullets each.
