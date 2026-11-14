@@ -56,13 +56,14 @@ struct PaneHistoryScrollMachineTests {
     @Test func aLeaveRefusesScrollsDropsPendingRowsAndLeavesOnlyFromCopyMode() {
         var machine = Machine().after([
             .scroll(towardOlderContent: true, rows: 3), .pumpNext(1),
-            .scroll(towardOlderContent: true, rows: 5),
+            .scroll(towardOlderContent: true, rows: 5), .refresh,
         ])
         #expect(machine.handle(.leaveRequested(onlyIfEntered: false)) == [.startLeave(2, onlyIfEntered: false)])
+        // B-44: dropped as the leave is asked for, before any later step.
+        #expect(machine.state.pendingRows == 0)
+        #expect(!machine.state.wantsRefresh)
         #expect(machine.handle(.scroll(towardOlderContent: true, rows: 7)).isEmpty)
         #expect(machine.handle(.refresh).isEmpty)
-        #expect(machine.state.pendingRows == 5, "pending rows go only once the leave runs")
-        #expect(machine.handle(.leaveStarted(2)).isEmpty)
         #expect(machine.state.pendingRows == 0)
         #expect(machine.holdsInput)
         _ = machine.handle(.answered(1, PaneHistoryScroll(position: .inHistory, enteredHistory: true)))
@@ -78,7 +79,7 @@ struct PaneHistoryScrollMachineTests {
     @Test func aLeaveAtLiveLeavesNothing() {
         var machine = Machine().after([
             .refresh, .pumpNext(1), .answered(1, PaneHistoryScroll(position: .live)), .pumpNext(1),
-            .leaveRequested(onlyIfEntered: false), .leaveStarted(2),
+            .leaveRequested(onlyIfEntered: false),
         ])
         #expect(machine.handle(.pumpDrained(2)).isEmpty)
         #expect(machine.handle(.leaveEnded(2)).isEmpty)
@@ -88,7 +89,7 @@ struct PaneHistoryScrollMachineTests {
     @Test func aDepartureKeepsCopyModeItDidNotEnter() {
         var machine = Machine().after([
             .refresh, .pumpNext(1), .answered(1, PaneHistoryScroll(position: .inHistory)), .pumpNext(1),
-            .leaveRequested(onlyIfEntered: true), .leaveStarted(2),
+            .leaveRequested(onlyIfEntered: true),
         ])
         #expect(machine.handle(.pumpDrained(2)).isEmpty)
         _ = machine.handle(.leaveEnded(2))
@@ -96,7 +97,7 @@ struct PaneHistoryScrollMachineTests {
         var entered = Machine().after([
             .scroll(towardOlderContent: true, rows: 1), .pumpNext(1),
             .answered(1, PaneHistoryScroll(position: .inHistory, enteredHistory: true)), .pumpNext(1),
-            .leaveRequested(onlyIfEntered: true), .leaveStarted(2),
+            .leaveRequested(onlyIfEntered: true),
         ])
         #expect(entered.handle(.pumpDrained(2)) == [.leaveCopyMode(2)])
     }
@@ -108,11 +109,11 @@ struct PaneHistoryScrollMachineTests {
         ])
         #expect(machine.handle(.leaveRequested(onlyIfEntered: false)) == [.joinLeave])
         #expect(machine.handle(.leaveRequested(onlyIfEntered: true)) == [.joinLeave])
-        _ = machine.handle([.leaveStarted(2), .pumpDrained(2), .leaveEnded(2)])
+        _ = machine.handle([.pumpDrained(2), .leaveEnded(2)])
         #expect(machine.handle(.joinedLeaveEnded(onlyIfEntered: true)).isEmpty)
         #expect(machine.handle(.joinedLeaveEnded(onlyIfEntered: false)) == [.leaveAgain])
         #expect(machine.handle(.leaveRequested(onlyIfEntered: false)) == [.startLeave(3, onlyIfEntered: false)])
-        _ = machine.handle([.leaveStarted(3), .pumpDrained(3), .copyModeLeft(3), .leaveEnded(3)])
+        _ = machine.handle([.pumpDrained(3), .copyModeLeft(3), .leaveEnded(3)])
         #expect(machine.handle(.joinedLeaveEnded(onlyIfEntered: false)).isEmpty)
     }
 
@@ -121,7 +122,6 @@ struct PaneHistoryScrollMachineTests {
             .refresh, .pumpNext(1), .answered(1, PaneHistoryScroll(position: .inHistory)), .pumpNext(1),
             .leaveRequested(onlyIfEntered: false),
         ])
-        #expect(machine.handle(.leaveStarted(9)).isEmpty)
         #expect(machine.handle(.pumpDrained(9)).isEmpty)
         #expect(machine.handle(.copyModeLeft(9)).isEmpty)
         #expect(machine.handle(.leaveEnded(9)).isEmpty)

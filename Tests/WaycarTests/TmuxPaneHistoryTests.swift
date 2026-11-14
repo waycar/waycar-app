@@ -69,6 +69,28 @@ struct TmuxPaneHistoryTests {
         #expect(history.holdsInput)
     }
 
+    /// B-44: rows queued behind a scroll in flight never go out once a leave
+    /// is asked for, even when that scroll's answer reaches the main actor
+    /// ahead of the leave's own task: here it is released in the same step
+    /// that asks for the leave, so its continuation is queued first.
+    @Test func rowsQueuedBeforeALeaveAreDroppedWhicheverStepRunsFirst() async throws {
+        let host = Host()
+        let history = host.history()
+        host.holdsNext = true
+        history.scroll(towardOlderContent: true, rows: 3)
+        try await waitUntil { host.scrolls.count == 1 }
+        history.scroll(towardOlderContent: true, rows: 5)
+        let leave = Task {
+            host.release()
+            await history.leave()
+        }
+        await leave.value
+        #expect(host.scrolls.map(\.rows) == [3])
+        #expect(host.leaves == 1)
+        #expect(history.position == .live)
+        #expect(!history.holdsInput)
+    }
+
     @Test func leaveReturnsToLiveOnlyFromHistory() async throws {
         let host = Host()
         let history = host.history()

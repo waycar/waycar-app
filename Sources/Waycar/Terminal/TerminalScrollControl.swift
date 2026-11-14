@@ -235,7 +235,6 @@ final class TmuxPaneHistory {
             case .startLeave(let token, _):
                 let task = Task { [weak self] in
                     guard let self else { return }
-                    _ = self.machine.handle(.leaveStarted(token))
                     await self.pump?.value
                     if self.machine.handle(.pumpDrained(token)) == [.leaveCopyMode(token)] {
                         try? await self.leaveAction()

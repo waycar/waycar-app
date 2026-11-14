@@ -6,11 +6,12 @@
 /// - The pump runs one loop per token; each turn takes everything pending
 ///   as one request. A failed request drops what is pending and ends the
 ///   loop; the next scroll starts a new one.
-/// - A leave rejects scrolls and reads from the moment it is asked for. Its
-///   own first step drops what is pending (rows never sent), it then waits
-///   for the request in flight, and only then leaves copy mode, and only
-///   when the view is in it (a departure: only copy mode this history's own
-///   scroll entered). A failed leave still reads live.
+/// - A leave rejects scrolls and reads from the moment it is asked for, and
+///   drops what is pending then (rows never sent, whenever the answer in
+///   flight lands: B-44). It waits for the request in flight, and only then
+///   leaves copy mode, and only when the view is in it (a departure: only
+///   copy mode this history's own scroll entered). A failed leave still
+///   reads live.
 /// - A leave asked for while one runs joins it; afterwards only input's
 ///   leave goes again, when the view is still in copy mode.
 struct PaneHistoryScrollMachine: StateMachine {
@@ -57,8 +58,6 @@ struct PaneHistoryScrollMachine: StateMachine {
         /// The request's answer; nil when it failed.
         case answered(UInt64, PaneHistoryScroll?)
         case leaveRequested(onlyIfEntered: Bool)
-        /// The leave's own first step.
-        case leaveStarted(UInt64)
         /// The leave waited out the pump.
         case pumpDrained(UInt64)
         /// The leave's copy-mode exit returned, whether or not it succeeded.
@@ -143,12 +142,9 @@ struct PaneHistoryScrollMachine: StateMachine {
             guard state.leave == .none else { return [.joinLeave] }
             let token = nextToken()
             state.leave = .leaving(token: token, onlyIfEntered: onlyIfEntered)
-            return [.startLeave(token, onlyIfEntered: onlyIfEntered)]
-        case .leaveStarted(let token):
-            guard case .leaving(token, _) = state.leave else { return [] }
             state.pendingRows = 0
             state.wantsRefresh = false
-            return []
+            return [.startLeave(token, onlyIfEntered: onlyIfEntered)]
         case .pumpDrained(let token):
             guard case .leaving(token, let onlyIfEntered) = state.leave,
                 state.position == .inHistory, !onlyIfEntered || state.enteredHistory
