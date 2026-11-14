@@ -2,8 +2,8 @@ import SwiftUI
 
 /// What stands in for the Agents before any Host exists. Top to bottom: the
 /// Find computers card, the Sample Host row, then the manual steps under "Set
-/// up by hand", with Scan to Pair (the default) and Add Manually docked
-/// under them.
+/// up by hand", with Scan to Pair and Add Manually docked under them: text
+/// links beside the scan card's button, the one prominent button without it.
 ///
 /// The two rows above the manual steps are slots, each empty until its
 /// owner fills it: `findComputersRow` (the offer to scan for computers with
@@ -155,21 +155,27 @@ struct HostSetupGuide: View {
     }
 
     private var actions: some View {
-        VStack(spacing: 4) {
-            // Outlined, not filled, when a scan for computers sits above:
-            // that is the path most people should take.
+        Group {
+            // Text links when a scan for computers sits above: that is the
+            // path most people should take, and an outlined button beside
+            // it read as disabled.
             if hasRowsAboveSteps {
-                scanToPair.buttonStyle(.bordered)
+                HStack(spacing: 0) {
+                    textLink("Scan to Pair", action: scan)
+                    textLink("Add Manually", action: addManually)
+                }
             } else {
-                scanToPair.buttonStyle(.borderedProminent)
+                VStack(spacing: 4) {
+                    Button(action: scan) {
+                        Label("Scan to Pair", systemImage: "qrcode.viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .hoverEffect(.highlight)
+                    textLink("Add Manually", action: addManually)
+                }
             }
-            Button(action: addManually) {
-                Text("Add Manually")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.borderless)
-            .hoverEffect(.highlight)
         }
         .frame(maxWidth: Self.readableWidth)
         .padding(.horizontal, 24)
@@ -179,12 +185,15 @@ struct HostSetupGuide: View {
         .overlay(alignment: .top) { Divider() }
     }
 
-    private var scanToPair: some View {
-        Button(action: scan) {
-            Label("Scan to Pair", systemImage: "qrcode.viewfinder")
-                .frame(maxWidth: .infinity)
+    /// Tinted text, at least 44 pt tall across its half of the row.
+    private func textLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(.rect)
         }
-        .controlSize(.large)
+        .buttonStyle(.borderless)
         .hoverEffect(.highlight)
     }
 }
@@ -226,13 +235,18 @@ private struct HostSetupStep: View {
 /// AirDrop, Mail) so it can reach a computer this phone is not paired with.
 /// Nothing but the command text is shared. A Mac on the same Apple Account
 /// pastes it through Universal Clipboard; the tip under it says so as a
-/// bonus, since a Linux Host runs it too.
-private struct HostSetupCommand: View {
+/// bonus, since a Linux Host runs it too. Find Computers' pairing page shows
+/// the same block, with no step number.
+struct HostSetupCommand: View {
     let command: String
-    let step: Int
+    var step: Int?
     /// Counts copies, so every tap gets its haptic and restarts the checkmark.
     @State private var copies = 0
     @State private var isCopied = false
+
+    private var commandName: String {
+        step.map { "Step \($0) Command" } ?? "Command"
+    }
 
     private func copy() {
         UIPasteboard.general.string = command
@@ -267,14 +281,14 @@ private struct HostSetupCommand: View {
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
-                    .accessibilityLabel(isCopied ? "Copied" : "Copy Step \(step) Command")
+                    .accessibilityLabel(isCopied ? "Copied" : "Copy \(commandName)")
                     .accessibilityValue(command)
                     ShareLink(item: command) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
-                    .accessibilityLabel("Share Step \(step) Command")
+                    .accessibilityLabel("Share \(commandName)")
                     .accessibilityValue(command)
                     Spacer(minLength: 0)
                 }

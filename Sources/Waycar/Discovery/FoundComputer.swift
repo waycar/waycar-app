@@ -31,6 +31,11 @@ struct FoundComputer: Identifiable, Hashable, Sendable {
     /// The address under a named title; nil when the address is the title.
     var subtitle: String? { serviceName == nil ? nil : address }
 
+    /// Whether a Pairing Code can add the key: the installer that shows one
+    /// runs on macOS and Linux, and a Windows OpenSSH server names itself in
+    /// its banner.
+    var canPair: Bool { software?.contains("Windows") != true }
+
     /// The SSH software the banner names, from `SSH-2.0-OpenSSH_9.6p1 Ubuntu`
     /// to `OpenSSH_9.6p1 Ubuntu`. Nil unless the line is an SSH banner.
     static func software(fromBanner banner: String) -> String? {

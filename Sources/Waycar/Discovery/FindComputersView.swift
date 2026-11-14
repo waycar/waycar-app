@@ -6,9 +6,9 @@ import SwiftUI
 /// trust the host key and then shows the agents.
 struct FindComputersView: View {
     let catalog: HostStore
-    /// A form to open once this sheet is gone: the manual form, or the
-    /// manual form with a found computer's address for a user who chose a
-    /// key over a password.
+    /// What to open once this sheet is gone: the manual form, the scanner
+    /// for a user pairing a found computer with a code, or the manual form
+    /// with its address for one adding the key by hand.
     let onFollowUp: (HostAddition) -> Void
     let onAdded: (Host) -> Void
 
@@ -36,6 +36,10 @@ struct FindComputersView: View {
                         onUseKey: { draft in
                             dismiss()
                             onFollowUp(.prefilled(draft))
+                        },
+                        onScanPairingCode: {
+                            dismiss()
+                            onFollowUp(.scan)
                         },
                         onAdded: { host in
                             dismiss()
@@ -178,15 +182,17 @@ private struct FoundComputerRow: View {
 }
 
 /// The username and password for a found computer. A key is one tap away:
-/// the manual form opens with the address filled in.
+/// pairing with a code, or the manual form with the address filled in.
 struct FindComputerSignInView: View {
     let computer: FoundComputer
     let catalog: HostStore
     let onUseKey: (HostDraft) -> Void
+    let onScanPairingCode: () -> Void
     let onAdded: (Host) -> Void
 
     @State private var draft: HostDraft
     @State private var saveFailed = false
+    @State private var showsPairing = false
     @FocusState private var focusedField: Field?
     @Environment(\.analytics) private var analytics
 
@@ -194,11 +200,14 @@ struct FindComputerSignInView: View {
 
     init(
         computer: FoundComputer, catalog: HostStore,
-        onUseKey: @escaping (HostDraft) -> Void, onAdded: @escaping (Host) -> Void
+        onUseKey: @escaping (HostDraft) -> Void,
+        onScanPairingCode: @escaping () -> Void,
+        onAdded: @escaping (Host) -> Void
     ) {
         self.computer = computer
         self.catalog = catalog
         self.onUseKey = onUseKey
+        self.onScanPairingCode = onScanPairingCode
         self.onAdded = onAdded
         var draft = HostDraft()
         draft.name = computer.serviceName ?? ""
@@ -235,17 +244,21 @@ struct FindComputerSignInView: View {
             }
             Section {
                 Button("Use a Key Instead") {
-                    var keyDraft = draft
-                    keyDraft.authMethod = .deviceKey
-                    keyDraft.password = ""
-                    onUseKey(keyDraft)
+                    if computer.canPair { showsPairing = true } else { addKeyYourself() }
                 }
             } footer: {
-                Text("Sign in with a Device Key. Waycar shows the line to add on the computer.")
+                Text(
+                    computer.canPair
+                        ? "Sign in with a Device Key. Pair with a code and Waycar adds the key for you."
+                        : "Sign in with a Device Key. Waycar shows the line to add on the computer.")
             }
         }
         .navigationTitle(computer.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showsPairing) {
+            FindComputerPairingView(
+                computer: computer, scan: onScanPairingCode, addKeyYourself: addKeyYourself)
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Add") { save() }
@@ -267,6 +280,13 @@ struct FindComputerSignInView: View {
             : "The password stays in the Keychain."
     }
 
+    private func addKeyYourself() {
+        var keyDraft = draft
+        keyDraft.authMethod = .deviceKey
+        keyDraft.password = ""
+        onUseKey(keyDraft)
+    }
+
     private func save() {
         guard draft.canSave(editing: nil), let host = draft.makeHost() else { return }
         do {
@@ -277,5 +297,56 @@ struct FindComputerSignInView: View {
             return
         }
         onAdded(host)
+    }
+}
+
+/// A key with nothing to copy: the Host Tools installer, run on the found
+/// computer, ends with a Pairing Code, and scanning it adds this device's
+/// Device Key there (ADR 0007). Pairing creates the Host, so the found row
+/// never becomes a second one. Adding the key by hand stays one tap away.
+struct FindComputerPairingView: View {
+    let computer: FoundComputer
+    let scan: () -> Void
+    let addKeyYourself: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Pair with a Code")
+                        .font(.title2.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    Text(
+                        "Run this in Terminal on \(computer.title), then scan the Pairing Code it shows. Waycar adds its key there for you."
+                    )
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                HostSetupCommand(command: WaycarPluginRequirement.installCommand)
+                VStack(spacing: 4) {
+                    Button(action: scan) {
+                        Label("Scan Pairing Code", systemImage: "qrcode.viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .hoverEffect(.highlight)
+                    Button(action: addKeyYourself) {
+                        Text("Add the Key Yourself")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.borderless)
+                    .hoverEffect(.highlight)
+                }
+            }
+            .frame(maxWidth: 560, alignment: .leading)
+            .padding(24)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(computer.title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

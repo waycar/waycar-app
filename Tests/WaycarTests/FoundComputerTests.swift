@@ -74,6 +74,15 @@ struct FoundComputerTests {
         #expect(bare.title == "10.0.0.3")
         #expect(bare.subtitle == nil)
     }
+
+    /// The pairing installer runs on macOS and Linux only.
+    @Test func aWindowsServerIsNotOfferedPairing() {
+        #expect(computer("10.0.0.2", name: "Studio").canPair)
+        let windows = FoundComputer(
+            address: "10.0.0.3", port: 22, serviceName: nil,
+            software: "OpenSSH_for_Windows_9.5", source: .sweep)
+        #expect(!windows.canPair)
+    }
 }
 
 @Suite("IPv4 subnet")
