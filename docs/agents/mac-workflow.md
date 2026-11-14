@@ -38,7 +38,10 @@ crash reports, durations and the Mac's load before and after.
   build of `test-app`, `test` and `test-ipad`, and `build-sim`, at half the
   cores.
 - Simulators come only through the make targets' queue, on the runtime that
-  holds the pool. Device builds sign in the GUI session; installs need notes.
+  holds the pool (it pins `SIM_DESTINATION` to that runtime's OS: a
+  name-only destination resolves to the newest runtime, and since iOS 27.2
+  arrived that one holds no shared Pro Max). Device builds sign in the GUI
+  session; installs need notes.
 - It copies deliverables to the Mac's Desktop before it removes anything,
   removes only what it made, then copies them to Google Drive.
 

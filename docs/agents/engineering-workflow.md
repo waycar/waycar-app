@@ -328,6 +328,13 @@ When a coordinator splits one change across workers:
   scripts through `test_support::write_script`.
 - Tests never find machine-wide programs (`/usr/local/bin`,
   `/opt/homebrew/bin`): such lookups are dead ends under `cfg(test)`.
+- A Dependabot cargo PR changes `Cargo.lock` but never regenerates
+  `plugin/THIRD-PARTY-LICENSES` or bumps the plugin version, so it fails
+  `plugin-licenses.py --check`. Land it as its own branch: cherry-pick
+  Dependabot's commit, bump the plugin patch version, run
+  `python3 scripts/plugin-licenses.py`, then the Before submit plugin checks.
+  Other Dependabot PRs merge one at a time, oldest first, with
+  `gh pr merge <n> --squash --match-head-commit <full 40-char sha>`.
 
 **Site (`apps/web`)**
 
