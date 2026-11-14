@@ -6,8 +6,8 @@ import UIKit
 /// its own colour at the top trailing corner with the summary's age under
 /// it (led by the Agent Progress label, `3/7 · 1m`, while there is an
 /// estimate), the Agent Summary line across
-/// the full card width beneath them, and any further layout rows below a
-/// hairline. Fields retain their emphasis using accessible semantic
+/// the full card width beneath them, and any further layout rows right under
+/// it, with no rule between. Fields retain their emphasis using accessible semantic
 /// colors; plugin colors and weights do not replace app typography. The
 /// surface around it belongs to the host view: the Console list applies
 /// `AgentCardChrome`, which also draws the progress rail, and the Settings
@@ -51,7 +51,7 @@ struct AgentCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 AgentKindGlyph(agent: agent)
                     .overlay(alignment: .bottomTrailing) {
@@ -135,10 +135,6 @@ struct AgentCardView: View {
             }
             let additionalRows = Array(presentation.rows.dropFirst())
             if !additionalRows.isEmpty {
-                Rectangle()
-                    .fill(Color(uiColor: .separator))
-                    .frame(height: 1)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(additionalRows.enumerated()), id: \.offset) { _, row in
                         AgentRowText(tokens: row, isSecondary: true)
@@ -149,7 +145,6 @@ struct AgentCardView: View {
                 }
             }
             if agent.isUltimateLeader, let openUltimateChild {
-                Divider()
                 HStack {
                     Text(verbatim: agent.ultimateBranchSummary)
                         .font(.footnote)
@@ -249,7 +244,7 @@ struct AgentCardChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
             .overlay(alignment: .bottom) {
                 if let progressAgent {
