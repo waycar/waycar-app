@@ -179,6 +179,11 @@ jobs:
       - name: Test crash report check
         run: python3 scripts/test-check-crash-reports.py
 
+      # The CI evidence report's log parsing, on saved snippets of real job
+      # logs, and its report on stubbed gh answers; no network.
+      - name: Test CI evidence report
+        run: python3 scripts/test-ci-evidence.py
+
       # The Pairing ceremony e2e runs the native `waycar pair-accept` as the
       # sshd forced command; the Node accept script was removed in WAY-443.
       - name: Build native waycar

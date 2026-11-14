@@ -1,0 +1,87 @@
+﻿2026-11-13T23:19:35.3887740Z Current runner version: '2.338.2'
+2026-11-13T23:24:08.7231850Z ##[group]Build for testing
+2026-11-13T23:24:09.7884010Z Command line invocation:
+2026-11-13T23:35:58.6222890Z 
+2026-11-13T23:35:58.6227340Z PruneExplicitPrecompiledModules /tmp/waycar-ci.fkf0kY/AppDerivedData/SDKExplicitPrecompiledModules
+2026-11-13T23:35:58.6234710Z 
+2026-11-13T23:35:58.6240290Z PruneExplicitPrecompiledModules /tmp/waycar-ci.fkf0kY/AppDerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+2026-11-13T23:35:58.6244850Z 
+2026-11-13T23:35:58.8811370Z note: Run script build phase 'Remove unused LuxTTS resources' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Waycar' from project 'Waycar')
+2026-11-13T23:35:59.0444640Z ** TEST BUILD SUCCEEDED **
+2026-11-13T23:35:59.0444940Z 
+2026-11-13T23:35:59.5078210Z ##[endgroup]
+2026-11-13T23:35:59.5079660Z ==> Build for testing: 711s (status 0)
+2026-11-13T23:36:52.1752020Z Monitoring boot status for Waycar CI (1294220A-AAE9-4B05-8324-99D95F6CF489).
+2026-11-13T23:58:50.1865390Z ##[group]ZellijTransportE2ETests
+2026-11-13T23:58:50.1972130Z ==> ZellijTransportE2ETests: skipping automatic package resolution
+2026-11-13T23:58:50.5340130Z Monitoring boot status for Waycar CI (1294220A-AAE9-4B05-8324-99D95F6CF489).
+2026-11-13T23:59:21.1559590Z 2026-11-13 23:59:21.154345+0000 Waycar[62100:399862] [network] ssh auth: done in 21 ms
+2026-11-13T23:59:21.1593720Z 2026-11-13 23:59:21.154482+0000 Waycar[62100:399862] [network] ssh dial: connected in 87 ms
+2026-11-13T23:59:24.7832240Z ✔ Test exactPaneAttachLeavesDeskFocusAndSizeAlone() passed after 4.784 seconds.
+2026-11-13T23:59:24.7843110Z ◇ Test closedSessionIsListedAndDeletedWithoutResurrection() started.
+2026-11-13T23:59:27.0331890Z 2026-11-13 23:59:27.031901+0000 Waycar[62100:399858] [network] ssh handshake: done in 12 ms
+2026-11-13T23:59:27.0332930Z 2026-11-13 23:59:27.032051+0000 Waycar[62100:399858] [network] ssh tcp connect 0 ms, key exchange 12 ms
+2026-11-13T23:59:27.0474750Z 2026-11-13 23:59:27.046830+0000 Waycar[62100:399849] [network] ssh handshake: done in 14 ms
+2026-11-13T23:59:27.0476250Z 2026-11-13 23:59:27.046949+0000 Waycar[62100:399849] [network] ssh tcp connect 0 ms, key exchange 14 ms
+2026-11-13T23:59:27.1193330Z 2026-11-13 23:59:27.118279+0000 Waycar[62100:399853] [network] ssh auth: done in 71 ms
+2026-11-13T23:59:27.1194190Z 2026-11-13 23:59:27.118429+0000 Waycar[62100:399853] [network] ssh dial: connected in 99 ms
+2026-11-13T23:59:28.7449600Z ✔ Test closedSessionIsListedAndDeletedWithoutResurrection() passed after 3.960 seconds.
+2026-11-13T23:59:28.7559450Z ✔ Suite "Zellij Transport e2e" passed after 18.637 seconds.
+2026-11-13T23:59:28.7560320Z ✔ Test run with 6 tests in 1 suite passed after 18.708 seconds.
+2026-11-13T23:59:29.1781520Z 2026-11-13 23:59:29.170 xcodebuild[62037:397544] [MT] IDETestOperationsObserverDebug: 33.178 elapsed -- Testing started completed.
+2026-11-13T23:59:29.1884140Z 2026-11-13 23:59:29.170 xcodebuild[62037:397544] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-13T23:59:29.1891380Z 2026-11-13 23:59:29.171 xcodebuild[62037:397544] [MT] IDETestOperationsObserverDebug: 33.178 sec, +33.178 sec -- end
+2026-11-13T23:59:29.2394260Z 
+2026-11-13T23:59:29.2395130Z Test session results, code coverage, and logs:
+2026-11-13T23:59:29.2395900Z 	/tmp/waycar-ci.fkf0kY/AppDerivedData/Logs/Test/Test-Waycar-2026.11.13_23-58-55-+0000.xcresult
+2026-11-13T23:59:29.2396740Z 
+2026-11-13T23:59:29.2397250Z ** TEST EXECUTE SUCCEEDED **
+2026-11-13T23:59:29.2397470Z 
+2026-11-13T23:59:29.2430350Z Testing started
+2026-11-13T23:59:34.1574470Z No Waycar crash reports from this run.
+2026-11-13T23:59:34.1871620Z ##[endgroup]
+2026-11-13T23:59:34.1878850Z ==> ZellijTransportE2ETests: 44s (status 0)
+2026-11-13T23:59:38.9466530Z ##[group]Full app test lane
+2026-11-13T23:59:38.9467440Z ==> Full app test lane: skipping automatic package resolution
+2026-11-13T23:59:39.2476580Z Monitoring boot status for Waycar CI (1294220A-AAE9-4B05-8324-99D95F6CF489).
+2026-11-14T00:02:06.1156260Z ◇ Test "a skipped read keeps the previous branch" started.
+2026-11-14T00:02:06.1357570Z ✔ Test "a skipped read keeps the previous branch" passed after 0.014 seconds.
+2026-11-14T00:02:13.7046500Z ​◇ Test case passing 1 argument row → malformed, empty, and truncated lines are skipped to "folds the accounting rule" started.
+2026-11-14T00:03:07.0582040Z ✔ Suite "Codex thread activity machine" passed after 0.003 seconds.
+2026-11-14T00:03:07.0582630Z ​➜ Suite "Codex Transport e2e" skipped: "requires the disposable Codex SSH fixture"
+2026-11-14T00:03:07.0774750Z ​​➜ Test "Codex detection finds the pinned CLI without starting a daemon" skipped: "requires the disposable Codex SSH fixture"
+2026-11-14T00:03:07.0776020Z ​​➜ Test "Start Codex server over SSH makes detection report its running socket" skipped: "requires the disposable Codex SSH fixture"
+2026-11-14T00:03:07.0777320Z ​​➜ Test "a named Codex launch is listed and a lost launch answer reconciles without duplication" skipped: "requires the disposable Codex SSH fixture"
+2026-11-14T00:07:46.2588040Z ◇ Test screenPollingRotatesPastEightPanesAndSkipsUnsupportedKinds() started.
+2026-11-14T00:07:46.2853320Z ✔ Test screenPollingRotatesPastEightPanesAndSkipsUnsupportedKinds() passed after 0.031 seconds.
+2026-11-14T00:07:46.2856940Z ◇ Test delayedEnterIsSkippedWhenFreshReportTurnsBlocked() started.
+2026-11-14T00:07:46.5402240Z ✔ Test delayedEnterIsSkippedWhenFreshReportTurnsBlocked() passed after 0.251 seconds.
+2026-11-14T00:07:46.5406510Z ◇ Test keysCloseAndRenameUseAddressedCommands() started.
+2026-11-14T00:07:46.5417360Z ✔ Test keysCloseAndRenameUseAddressedCommands() passed after 0.001 seconds.
+2026-11-14T00:07:46.5417980Z ◇ Test splitTabAgentRenamesOnlyItsPane() started.
+2026-11-14T00:07:46.5418710Z ✔ Test splitTabAgentRenamesOnlyItsPane() passed after 0.001 seconds.
+2026-11-14T00:07:46.5419330Z ◇ Test readsUseDumpScreenFullOnlyForHistory() started.
+2026-11-14T00:07:46.5419950Z ✔ Test readsUseDumpScreenFullOnlyForHistory() passed after 0.001 seconds.
+2026-11-14T00:07:46.5420570Z ◇ Test sessionReappearanceChangesTerminalGeneration() started.
+2026-11-14T00:07:46.5642960Z ✔ Test sessionReappearanceChangesTerminalGeneration() passed after 0.013 seconds.
+2026-11-14T00:07:46.5747210Z ◇ Test openingDoneAgentAcknowledgesOnlyThatReport() started.
+2026-11-14T00:07:46.5847360Z ✔ Test openingDoneAgentAcknowledgesOnlyThatReport() passed after 0.013 seconds.
+2026-11-14T00:07:46.5848450Z ◇ Test emptySessionListPassesPing() started.
+2026-11-14T00:07:46.5849190Z ✔ Test emptySessionListPassesPing() passed after 0.001 seconds.
+2026-11-14T00:07:46.5849830Z ✔ Suite "Zellij Transport" passed after 1.109 seconds.
+2026-11-14T00:07:46.5952910Z ✔ Test run with 7150 tests in 626 suites passed after 456.656 seconds.
+2026-11-14T00:07:48.8034660Z 2026-11-14 00:07:48.802 xcodebuild[66593:409250] [MT] IDETestOperationsObserverDebug: 479.634 elapsed -- Testing started completed.
+2026-11-14T00:07:48.8039200Z 2026-11-14 00:07:48.802 xcodebuild[66593:409250] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-14T00:07:48.8040440Z 2026-11-14 00:07:48.802 xcodebuild[66593:409250] [MT] IDETestOperationsObserverDebug: 479.634 sec, +479.634 sec -- end
+2026-11-14T00:07:50.0780100Z 
+2026-11-14T00:07:50.0781080Z Test session results, code coverage, and logs:
+2026-11-14T00:07:50.0782510Z 	/tmp/waycar-ci.fkf0kY/AppDerivedData/Logs/Test/Test-Waycar-2026.11.13_23-59-49-+0000.xcresult
+2026-11-14T00:07:50.0782900Z 
+2026-11-14T00:07:50.0784810Z ** TEST EXECUTE SUCCEEDED **
+2026-11-14T00:07:50.0785140Z 
+2026-11-14T00:07:50.1623660Z Testing started
+2026-11-14T00:07:55.1227630Z No Waycar crash reports from this run.
+2026-11-14T00:07:55.1656460Z ##[endgroup]
+2026-11-14T00:07:55.1690650Z ==> Full app test lane: 497s (status 0)
+2026-11-14T00:07:55.7913390Z ==> Full lane executed 6912 of 7150 tests, 238 skipped and all of them proven elsewhere.
+2026-11-14T00:08:02.9681430Z 2026-11-14 00:08:02.966 sysadminctl[4938:491271] ----------------------------
