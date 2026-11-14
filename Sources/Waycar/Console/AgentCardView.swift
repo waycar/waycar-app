@@ -6,8 +6,8 @@ import UIKit
 /// its own colour at the top trailing corner with the summary's age under
 /// it (led by the Agent Progress label, `3/7 · 1m`, while there is an
 /// estimate), the Agent Summary line across
-/// the full card width beneath them, and any further layout rows below a
-/// hairline. Fields retain their emphasis using accessible semantic
+/// the full card width beneath them, and any further layout rows right under
+/// it, with no rule between. Fields retain their emphasis using accessible semantic
 /// colors; plugin colors and weights do not replace app typography. The
 /// surface around it belongs to the host view: the Console list applies
 /// `AgentCardChrome`, which also draws the progress rail, and the Settings
@@ -51,7 +51,7 @@ struct AgentCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 AgentKindGlyph(agent: agent)
                     .overlay(alignment: .bottomTrailing) {
@@ -135,10 +135,6 @@ struct AgentCardView: View {
             }
             let additionalRows = Array(presentation.rows.dropFirst())
             if !additionalRows.isEmpty {
-                Rectangle()
-                    .fill(Color(uiColor: .separator))
-                    .frame(height: 1)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(additionalRows.enumerated()), id: \.offset) { _, row in
                         AgentRowText(tokens: row, isSecondary: true)
@@ -149,7 +145,6 @@ struct AgentCardView: View {
                 }
             }
             if agent.isUltimateLeader, let openUltimateChild {
-                Divider()
                 HStack {
                     Text(verbatim: agent.ultimateBranchSummary)
                         .font(.footnote)
@@ -249,7 +244,7 @@ struct AgentCardChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
             .overlay(alignment: .bottom) {
                 if let progressAgent {
@@ -323,9 +318,10 @@ private struct AgentKindGlyph: View {
     }
 }
 
-/// The Agent Summary under the headline: the sentence in secondary text,
-/// up to two lines. A stale one dims; the first one on its way shows two
-/// placeholder bars. Its age sits under the status (`AgentSummaryAgeView`).
+/// The Agent Summary under the headline: the sentence in small secondary
+/// text, one line, ending in … when it runs longer. A stale one dims; the
+/// first one on its way shows a placeholder bar. Its age sits under the
+/// status (`AgentSummaryAgeView`).
 /// Re-evaluated every 15 s so the switch to stale keeps up without a new read.
 private struct AgentSummaryLineView: View {
     let agent: ConsoleAgent
@@ -348,10 +344,9 @@ private struct AgentSummaryLineView: View {
         case .summary(let text, _, let isStale):
             Text(verbatim: text)
                 .foregroundStyle(isStale ? HierarchicalShapeStyle.tertiary : .secondary)
-                .font(.subheadline)
-                .lineLimit(2)
+                .font(.footnote)
+                .lineLimit(1)
                 .truncationMode(.tail)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -422,8 +417,9 @@ private struct AgentSummaryAgeLabelStyle: LabelStyle {
     }
 }
 
-/// Two placeholder bars (92% and 58% wide) while an Agent's first summary
-/// is on its way. A gentle pulse, held still under Reduce Motion.
+/// A placeholder bar while an Agent's first summary is on its way: 10 pt
+/// tall, its padding making about one footnote line at the default text
+/// size. A gentle pulse, held still under Reduce Motion.
 private struct AgentSummarySkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// On iPad the list stays mounted under the Agent screen; an invisible
@@ -433,14 +429,10 @@ private struct AgentSummarySkeleton: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(alignment: .leading, spacing: 7) {
-                bar(width: proxy.size.width * 0.92)
-                bar(width: proxy.size.width * 0.58)
-            }
+            bar(width: proxy.size.width * 0.75)
         }
-        .frame(height: 11 * 2 + 7)
-        .padding(.top, 3)
-        .padding(.bottom, 2)
+        .frame(height: 10)
+        .padding(.vertical, 4)
         .opacity(isDimmed ? 0.55 : 1)
         .onAppear { syncPulse() }
         .onChange(of: reduceMotion) { _, _ in syncPulse() }
@@ -464,7 +456,7 @@ private struct AgentSummarySkeleton: View {
     private func bar(width: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
             .fill(Color(uiColor: .tertiarySystemFill))
-            .frame(width: width, height: 11)
+            .frame(width: width, height: 10)
     }
 }
 

@@ -19,7 +19,7 @@ AI Summaries put one short sentence under each agent card saying what the agent 
 
 ## What does a summary look like?
 
-Each card shows one sentence of at most 100 characters, with how old it is, for example "1m". When the agent has moved on to another status, or the line is more than three minutes old, the sentence dims, and the age under the status stays visible. While an agent's first summary is on its way, the card shows a placeholder.
+Each card shows one sentence of at most 100 characters on a single line, ending in "…" when the card is too narrow for all of it, with how old it is, for example "1m". When the agent has moved on to another status, or the line is more than three minutes old, the sentence dims, and the age under the status stays visible. While an agent's first summary is on its way, the card shows a placeholder.
 
 ## When are summaries written?
 
