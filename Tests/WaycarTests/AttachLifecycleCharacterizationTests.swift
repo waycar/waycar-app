@@ -140,19 +140,22 @@ struct AttachLifecycleCharacterizationTests {
         #expect(await transport.hasLiveAttachSession == false)
     }
 
-    /// ATTACH-03 pin, a pre-existing race kept as it is: the automatic
-    /// mosh fallback checks for a stop only before it invalidates mosh, so a
-    /// stop that lands while the invalidation runs is followed by one more
-    /// start. That run sees the stop and ends its session at once; the
-    /// stopped store then reads Connecting.
-    @Test func aStopDuringTheFallbackInvalidationIsFollowedByOneSelfEndingRun() async throws {
+    /// B-42: the automatic mosh fallback checks for a stop before it
+    /// invalidates mosh; a stop that lands while the invalidation runs
+    /// still starts nothing once it returns, and the store stays Stopped.
+    @Test func aStopDuringTheFallbackInvalidationStartsNoOtherRun() async throws {
         let mosh = ScriptedMoshSessions()
         let invalidation = CharacterizationGate()
+        let invalidated = CharacterizationCounter()
         let finished = CharacterizationCounter()
         let store = AttachTerminalStore(
             target: .agentPane("w1:p1"), takeover: true,
             runDidFinish: { _ in finished.increment() },
-            onMoshFailure: { _ in await invalidation.wait() }
+            onMoshFailure: { _ in
+                await invalidation.wait()
+                // The restart resumes from here to its start without awaiting.
+                invalidated.increment()
+            }
         ) { request, handler in
             await handler.transportDidBecomeReady(1, flavor: .mosh)
             let session = mosh.factory(
@@ -169,13 +172,45 @@ struct AttachLifecycleCharacterizationTests {
         await store.stop()
         #expect(store.status == .stopped)
         invalidation.open()
-        try await waitUntil { finished.value == 2 }
-        #expect(mosh.sessions.count == 2)
-        #expect(mosh.sessions[1].teardown == .ended)
-        #expect(store.status == .connecting)
+        try await waitUntil { invalidated.value == 1 }
+        #expect(store.status == .stopped)
+        #expect(finished.value == 1)
+        #expect(mosh.sessions.count == 1)
         #expect(!store.isRunningMosh)
-        #expect(!store.isAwaitingTransport)
         #expect(!store.canUpgradeToMosh)
+    }
+
+    /// B-43: two taps on Use SSH Instead invalidate mosh once and start one
+    /// run: the first tap already reads Connecting, so the second finds
+    /// nothing to retry.
+    @Test func twoUseSSHInsteadTapsStartOneRun() async throws {
+        let runs = CharacterizationCounter()
+        let invalidations = CharacterizationCounter()
+        let opens = AttachLifecycleSessionTrace()
+        let store = AttachTerminalStore(
+            target: .agentPane("w1:p1"), takeover: true,
+            onMoshFailure: { _ in invalidations.increment() }
+        ) { request, handler in
+            // The first try and the automatic fallback's both fail on mosh.
+            if await runs.increment() <= 2 {
+                throw TransportError.moshSessionFailed(detail: "handshake")
+            }
+            try await handler.runEndingSession(await opens.open(request))
+        }
+        store.viewDidResize(cols: 80, rows: 24)
+        try await waitUntil {
+            guard case .ended = store.status else { return false }
+            return runs.value == 2 && store.endedWithMoshFailure
+        }
+        #expect(invalidations.value == 1)
+        store.retryOverSSH()
+        #expect(store.status == .connecting)
+        store.retryOverSSH()
+        try await waitUntil { store.status == .live }
+        #expect(invalidations.value == 2)
+        #expect(runs.value == 3)
+        await store.stop()
+        #expect(await opens.requests.count == 1)
     }
 
     /// ATTACH-03 pin: an upgrade while the run still waits for its

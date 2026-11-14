@@ -10,11 +10,12 @@
 ///   once per live stretch, the automatic mosh→SSH fallback once per store
 ///   (a user's retry or the upgrade give it back), a transient channel death
 ///   once per ended episode. Anything else ends with its message.
-/// - A stop is terminal: no run ending after it changes the status, and a
-///   restart that wakes after it does not start. As before, a restart that
-///   passed that check before the mosh invalidation it awaits still starts
-///   once the invalidation returns; that run sees the stop and ends its
-///   session at once.
+/// - A stop is terminal: no run ending after it changes the status, and
+///   nothing starts after it, a restart that passed its check before the
+///   mosh invalidation it awaits included (B-42).
+/// - One restart at a time: "Use SSH Instead" leaves the ended session at
+///   once, so a second tap, or a Reattach, cannot schedule another (B-43).
+///   No two runs overlap, so a run's end needs no token.
 /// - An upgrade restart owns the status while it is scheduled: the dying
 ///   run's end changes nothing.
 /// - The blank-frame grace belongs to the session that armed it.
@@ -67,12 +68,11 @@ struct TerminalRunMachine: StateMachine {
         /// The session drew something, or no content is waited for.
         case contentShown
         case graceElapsed(session: UInt64)
-        /// The runner threw. Like the run's end below, it is not checked
-        /// against the run's token: the old code never did, and a second
-        /// run can only overlap a first through two queued restarts.
+        /// The runner threw. Like the run's end below, it carries no token:
+        /// no two runs overlap.
         case runFailed(Failure, message: String, canInvalidateMosh: Bool)
         case runCompleted
-        /// The run Task's own end: unconditional, as before.
+        /// The run Task's own end.
         case runFinished
         case retry
         case retryOverSSH
@@ -130,6 +130,7 @@ struct TerminalRunMachine: StateMachine {
     mutating func handle(_ event: Event) -> [Effect] {
         switch event {
         case .start:
+            guard !state.stopRequested else { return [] }
             state.status = .connecting
             state.endedWithMoshFailure = false
             state.runningFlavor = nil
@@ -192,7 +193,10 @@ struct TerminalRunMachine: StateMachine {
         case .retryOverSSH:
             guard case .ended = state.status else { return [] }
             state.moshAutoFallbackUsed = true
-            return [.scheduleRestart(invalidating: .userChoseSSH)]
+            // Connecting at once: the restart waits for the invalidation, and
+            // a second tap must find nothing to retry.
+            state.status = .connecting
+            return [.publishStatus(.connecting), .scheduleRestart(invalidating: .userChoseSSH)]
         case .upgrade:
             guard canUpgradeToMosh else { return [] }
             state.upgradeRestartScheduled = true

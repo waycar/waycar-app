@@ -503,7 +503,8 @@ final class AttachTerminalStore {
     }
 
     /// The connection dot popover's "Use SSH Instead": invalidates mosh for
-    /// the Host (so the runner picks SSH), then reattaches. The automatic
+    /// the Host (so the runner picks SSH), then reattaches. The terminal
+    /// reads Connecting at once, so a second tap does nothing. The automatic
     /// fallback budget stays spent — if mosh were somehow chosen again and
     /// failed, the overlay would come back rather than loop.
     func retryOverSSH() {
@@ -619,6 +620,7 @@ final class AttachTerminalStore {
                     await current?.value
                     guard self.runs.handle(.restartDue) == [.restart] else { return }
                     if let cause { await self.onMoshFailure?(cause) }
+                    // A stop that landed during the invalidation refuses it.
                     self.start()
                 }
             case .scheduleUpgradeRestart:

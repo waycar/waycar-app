@@ -101,7 +101,7 @@ struct TerminalRunMachineTests {
         ])
     }
 
-    @Test func aStopIsTerminalForRunEndsAndRestartsButNotForAPassedRestart() {
+    @Test func aStopIsTerminalForRunEndsRestartsAndStarts() {
         var machine = live(.mosh)
         #expect(machine.handle(.stop) == [.publishStopRequested, .telemetryStopped])
         #expect(machine.handle(.runFailed(.moshLinkLost, message: "l", canInvalidateMosh: true)).isEmpty)
@@ -110,8 +110,10 @@ struct TerminalRunMachineTests {
         #expect(machine.handle(.upgradeRestartDue).isEmpty)
         #expect(machine.handle(.stopFinished) == [.publishStatus(.stopped)])
         #expect(!machine.canUpgradeToMosh)
-        // A restart that passed its check before the stop still starts.
-        #expect(machine.handle(.start).last == .startRun(3))
+        // B-42: a restart that passed its check before the stop starts nothing.
+        #expect(machine.handle(.start).isEmpty)
+        #expect(machine.status == .stopped)
+        #expect(!machine.isRunning)
     }
 
     @Test func anUpgradeOwnsTheStatusUntilItsRestartRuns() {
@@ -144,10 +146,22 @@ struct TerminalRunMachineTests {
         #expect(machine.handle(.retryOverSSH).isEmpty)
         _ = machine.handle(.runCompleted)
         #expect(machine.handle(.retry).isEmpty, "the run has not finished yet")
-        #expect(machine.handle(.retryOverSSH) == [.scheduleRestart(invalidating: .userChoseSSH)])
-        #expect(machine.state.moshAutoFallbackUsed)
         _ = machine.handle(.runFinished)
         #expect(machine.handle(.retry).last == .startRun(3))
-        #expect(!machine.state.moshAutoFallbackUsed)
+    }
+
+    /// B-43: Use SSH Instead leaves the ended session at once, so a second
+    /// tap, or a Reattach, schedules no second restart.
+    @Test func useSSHInsteadSchedulesOneRestart() {
+        var machine = live(.mosh)
+        _ = machine.handle([.runFailed(.moshSessionFailed, message: "m", canInvalidateMosh: false), .runFinished])
+        #expect(machine.handle(.retryOverSSH) == [
+            .publishStatus(.connecting), .scheduleRestart(invalidating: .userChoseSSH),
+        ])
+        #expect(machine.state.moshAutoFallbackUsed)
+        #expect(machine.handle(.retryOverSSH).isEmpty)
+        #expect(machine.handle(.retry).isEmpty)
+        #expect(machine.handle(.restartDue) == [.restart])
+        #expect(machine.handle(.start).last == .startRun(3))
     }
 }
