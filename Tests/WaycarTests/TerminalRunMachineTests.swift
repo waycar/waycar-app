@@ -106,6 +106,7 @@ struct TerminalRunMachineTests {
         #expect(machine.handle(.stop) == [.publishStopRequested, .telemetryStopped])
         #expect(machine.handle(.runFailed(.moshLinkLost, message: "l", canInvalidateMosh: true)).isEmpty)
         #expect(machine.handle(.runCompleted).isEmpty)
+        _ = machine.handle(.runFinished)
         #expect(machine.handle(.restartDue).isEmpty)
         #expect(machine.handle(.upgradeRestartDue).isEmpty)
         #expect(machine.handle(.stopFinished) == [.publishStatus(.stopped)])
