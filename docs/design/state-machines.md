@@ -5332,7 +5332,6 @@ stateDiagram-v2
 
 **herdr events and transport**
 
-<<<<<<< HEAD
 ### LaunchSettleMachine
 
 - **File:** `Sources/Waycar/Transport/LaunchSettleMachine.swift`
@@ -5477,7 +5476,8 @@ stateDiagram-v2
     live --> [*]: channelEnded / forget
     live --> closing: closeRequested / takeLiveAttaches
     closing --> [*]: channelEnded / forget
-=======
+```
+
 ### EventsSubscriptionMachine
 
 - **File:** `Sources/Waycar/Transport/EventsSubscriptionMachine.swift`
@@ -5757,7 +5757,6 @@ stateDiagram-v2
     racing --> settled: settle
     proofFailedAwaitingHedge --> settled: settle
     hedgeFailedAwaitingProof --> settled: settle
->>>>>>> ultimate/5c0486-219548
 ```
 
 **Host Tools plugin**
