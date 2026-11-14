@@ -27,7 +27,7 @@ interface Props {
    * (`src/pages/b.astro`) at `/`. Sets the canonical URL and `og:url`.
    */
   canonicalPath?: string;
-  /** The page is served at `/`, so section links are in-page anchors (`#features`, not `/#features`). */
+  /** The page is served at `/`, so the footer's section links are in-page anchors (`#features`, not `/#features`). */
   homePage?: boolean;
   /** `og:type`: `article` for help pages. */
   ogType?: 'website' | 'article';
@@ -129,7 +129,7 @@ const jsonLd = [
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <SiteHeader homePage={homePage} />
+    <SiteHeader />
     <main id="main" tabindex="-1">
       <slot />
     </main>

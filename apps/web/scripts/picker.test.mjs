@@ -68,11 +68,10 @@ test('every store button opens a picker and names no store or device (M1, M2, M3
       if (label !== undefined && (!BUTTON_LABELS.has(label) || NAMES_A_DEVICE_OR_STORE.test(label))) problems.push(`${file}: aria-label "${label}"`);
     }
 
-    // Every store button but the header's has the "Open source on GitHub" link beside it (SourceLink).
+    // Every store button has a GitHub link beside it: SourceLink, or the header's "GitHub".
     const rest = found.reduce((page, picker) => page.replace(picker.html, ''), html);
     const sourceLinks = rest.match(/<a\b[^>]*\bdata-ph-event="github_clicked"/g)?.length ?? 0;
-    const besideButtons = triggers.filter((trigger) => !/\bcta-header\b/.test(trigger.attributes)).length;
-    if (sourceLinks !== besideButtons) problems.push(`${file}: ${besideButtons} store buttons but ${sourceLinks} GitHub links`);
+    if (sourceLinks !== triggers.length) problems.push(`${file}: ${triggers.length} store buttons but ${sourceLinks} GitHub links`);
 
     // M2: the App Store listing is linked from a picker and from nowhere else. The ad hop page (/go)
     // keeps its own fallback link to the listing; the article's setup prompt is text, not a link.

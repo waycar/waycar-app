@@ -41,8 +41,8 @@ App Store link sends `app_store_clicked` with that same `ct` and `module`. So
 `app_store_clicked` without one before it is an iPhone or iPad. Close and the
 backdrop send nothing. `github_clicked` comes from the "Open source on GitHub"
 link (`src/components/SourceLink.astro`) beside every store button but the
-header's, and inside each picker; in an article's rail or TOC card it carries
-that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
+header's, from the header's "GitHub" link beside its Download button, and from
+inside each picker; in an article's rail or TOC card it carries that `module`. Without JavaScript the site still works: the copy button stays hidden, the header's help search is a plain link to `/help`, a store button opens its picker through `:target` (two taps to the App Store link), and no events are sent.
 The Worker (`src/worker.ts`) also sends anonymous server-side events:
 `plugin_install_requested` per `GET /install.sh`, `plugin_package_downloaded`
 per plugin package download (see [Plugin install events](#plugin-install-events)),
@@ -527,7 +527,8 @@ rail and footer, the site footer, compare and solutions pages)
 is one component, `src/components/AppStoreCta.astro`. Every one but the
 header's has the quiet "Open source on GitHub" link
 (`src/components/SourceLink.astro`) placed beside it by its caller, in both
-states below; `scripts/picker.test.mjs` checks the count. The button follows
+states below; the header's has a plain "GitHub" link
+(`src/components/SiteHeader.astro`). `scripts/picker.test.mjs` checks the count. The button follows
 `ON_APP_STORE` (the listing URL starts with `https://`):
 
 - **Live** (the shipped state): with JavaScript on an iPhone, iPad or iPod
