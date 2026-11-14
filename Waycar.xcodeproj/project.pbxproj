@@ -596,6 +596,7 @@
 		6A0FF82F30BAAE47384FA920 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D985F1C349BED2DD0326F69 /* WatchBridge.swift */; };
 		6A4AC2E04D7760BB21D8C936 /* BackendInstallCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EECEFDB309E329AAD75A137 /* BackendInstallCenterTests.swift */; };
 		6A7524F987ACD00162189E63 /* ClosedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7D9A8D451F96A630AAEE4B /* ClosedSession.swift */; };
+		6A8F5B765C802B7C119636B9 /* EventsLifecycleMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 974993DFF9C6346165753F3F /* EventsLifecycleMachineTests.swift */; };
 		6AC808F0181F9EAD74968705 /* DictationWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917406805B2A58CD80717166 /* DictationWaveform.swift */; };
 		6ACFEA4ECBAE7BC0C2D7B984 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68229422D6B41E1D3C84C253 /* SettingsView.swift */; };
 		6ADE95022569F0C979F6DACD /* AgentStatusPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C0ECD37F14C1E814EC1057 /* AgentStatusPaletteTests.swift */; };
@@ -1415,6 +1416,7 @@
 		FB159A0D11C9174EB5F16100 /* RemoteFilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F212FE7F51F3A059E17C07 /* RemoteFilePreview.swift */; };
 		FB7430755D40B07A1525A953 /* AIUsagePollingMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091A87CB89279C70096CBC8F /* AIUsagePollingMachine.swift */; };
 		FB826869D803663A9DE2D4C6 /* HerdrSidebarSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35E8985A08B22D4508D4A3F /* HerdrSidebarSnapshotStoreTests.swift */; };
+		FC1BA7F8273DDB9580B7B0C3 /* EventsLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F31816B5817437EA0F8CAF /* EventsLifecycleMachine.swift */; };
 		FC526CB9529721BB2625808F /* ZellijTransport+Host.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDC8392B122813CBB89CF02 /* ZellijTransport+Host.swift */; };
 		FC6E96408EC606EADA355123 /* CodexConnectionMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4381E60EA1116910483307A /* CodexConnectionMachineTests.swift */; };
 		FC9E119C963BDB0B21900A45 /* WatchBrandTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1687486F222B0959D267386 /* WatchBrandTokens.swift */; };
@@ -2316,9 +2318,11 @@
 		967C1B7A911058DDED3D6681 /* AppActivityMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppActivityMachineTests.swift; sourceTree = "<group>"; };
 		96B6B396CADD67F3DB491B54 /* QueuedMessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedMessageStore.swift; sourceTree = "<group>"; };
 		9720E0C8344DA48886D01D7E /* WorktreeRemovalMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeRemovalMachineTests.swift; sourceTree = "<group>"; };
+		974993DFF9C6346165753F3F /* EventsLifecycleMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsLifecycleMachineTests.swift; sourceTree = "<group>"; };
 		97C0055555881432ABC50A50 /* HostSetupGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSetupGuide.swift; sourceTree = "<group>"; };
 		986995BAC1D60A781D2DB46E /* NormalizingTextFieldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizingTextFieldTests.swift; sourceTree = "<group>"; };
 		98EF7C9092BA0FB0FEA124B1 /* AgentNotificationBannerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNotificationBannerStore.swift; sourceTree = "<group>"; };
+		98F31816B5817437EA0F8CAF /* EventsLifecycleMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsLifecycleMachine.swift; sourceTree = "<group>"; };
 		9916AFAAA06D1F2D6EB854A5 /* MessageJumpSessionMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageJumpSessionMachine.swift; sourceTree = "<group>"; };
 		994E97D69FFC3C8B7408213D /* CancellablePhaseGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellablePhaseGate.swift; sourceTree = "<group>"; };
 		997C858BEBB92C2567D8E030 /* BlockedPromptClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedPromptClassifierTests.swift; sourceTree = "<group>"; };
@@ -3153,6 +3157,7 @@
 				3AF3D719DC24194C34A93A8B /* DictationStoreTests.swift */,
 				36749F764B5B0CCED6E17A7E /* DirectKeyboardHandoffMachineTests.swift */,
 				3ACD1FA5F3169DDDA31877B5 /* EdgeDockSettingsTests.swift */,
+				974993DFF9C6346165753F3F /* EventsLifecycleMachineTests.swift */,
 				2A7BE75D0795BC1A8F6E9AFC /* EventsSessionBufferingTests.swift */,
 				5FA18370C1B21A42C26E153E /* EventsSessionConnectFlowTests.swift */,
 				CCC55F024D45D133509DFE6F /* EventsSessionKeepaliveTests.swift */,
@@ -4533,6 +4538,7 @@
 				4D9924E01DDDA82597051C2B /* ConnectionLiveness.swift */,
 				AE956D35B67C0CCE4C947AEC /* DeviceKey.swift */,
 				D69EFF1747B3E1D982331EFE /* DeviceKeyStore.swift */,
+				98F31816B5817437EA0F8CAF /* EventsLifecycleMachine.swift */,
 				34FED785422BBFE035EC877D /* EventsSession.swift */,
 				6AC47A91F92D0CFC7A8E151A /* EventsSession+KeptConnection.swift */,
 				E26B4AB60DD633E39F749DFC /* EventsSubscriptionMachine.swift */,
@@ -5429,6 +5435,7 @@
 				04376BC9031AF06A9A85C968 /* DirectKeyboardHandoffMachine.swift in Sources */,
 				E9826F22A6DA8182088DC36B /* EdgeDockLift.swift in Sources */,
 				9177EC7D760C872F1C697766 /* EdgeDockSettings.swift in Sources */,
+				FC1BA7F8273DDB9580B7B0C3 /* EventsLifecycleMachine.swift in Sources */,
 				D74EBEA5E4B20FFD68D266D9 /* EventsSession+KeptConnection.swift in Sources */,
 				6F244E5462ED50100085FF3B /* EventsSession.swift in Sources */,
 				81276AB4D049DD81D4FFA023 /* EventsSubscriptionMachine.swift in Sources */,
@@ -6180,6 +6187,7 @@
 				97C06BB76CC7E911AD77F2B2 /* DictationStoreTests.swift in Sources */,
 				E5FD0C457581A3BF0C711A8C /* DirectKeyboardHandoffMachineTests.swift in Sources */,
 				1C926C6D99D46DC1E83FB985 /* EdgeDockSettingsTests.swift in Sources */,
+				6A8F5B765C802B7C119636B9 /* EventsLifecycleMachineTests.swift in Sources */,
 				E1FC3B9C680B7180C5D2FAA9 /* EventsSessionBufferingTests.swift in Sources */,
 				34001BFD640C24508DC88D9F /* EventsSessionConnectFlowTests.swift in Sources */,
 				EE05A691B69994B5B8007093 /* EventsSessionKeepaliveTests.swift in Sources */,

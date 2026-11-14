@@ -133,10 +133,6 @@ enum EventsSessionUpdate: Sendable, Equatable {
 /// thing yielded and therefore survive, and a shed `.connected`'s resync
 /// duty is covered by the marker.
 actor EventsSession {
-    private enum Phase {
-        case suspended, active, ended
-    }
-
     /// Status transitions and events, in order. Finishes after `end()`.
     nonisolated let updates: AsyncStream<EventsSessionUpdate>
     private let updatesContinuation: AsyncStream<EventsSessionUpdate>.Continuation
@@ -194,7 +190,15 @@ actor EventsSession {
     /// out alongside its `ping` instead of after it.
     let connectionMemory: (any HostConnectionMemory)?
 
-    private var phase: Phase = .suspended
+    /// Suspended, active or ended; the current activation; a teardown in
+    /// progress; the run loop's stage; the dial, redial and backoff
+    /// bookkeeping (HERDR-01).
+    private var lifecycle = EventsLifecycleMachine()
+    private var phase: EventsLifecycleMachine.Phase { lifecycle.phase }
+    /// Identifies the current activation so a cancelled connection attempt
+    /// cannot install itself after a later resume has already started.
+    var activationGeneration: UInt64 { lifecycle.activation }
+    private var isWindingDown: Bool { lifecycle.isWindingDown }
     /// The Host's live Transport. It never escapes this module; consumers
     /// use `withTransport` or `withTerminalTransport` so replacement and
     /// terminal admission remain local.
@@ -211,8 +215,7 @@ actor EventsSession {
     /// attaches on it rode the connection kept across the suspension.
     var keptTransportGeneration: UInt64?
     /// What set the next connect off, for its report (#105).
-    private var connectTrigger: NetworkAnalytics.ConnectTrigger = .launch
-    private var hasActivated = false
+    private var connectTrigger: NetworkAnalytics.ConnectTrigger { lifecycle.state.trigger }
     /// The live events channel's loss, and when, until it is back or given
     /// up on (#105).
     private var pendingLoss: (reason: NetworkAnalytics.Failure, at: ContinuousClock.Instant)?
@@ -225,20 +228,9 @@ actor EventsSession {
     /// revalidation's deadline and hedge delay derive from this alone, and
     /// take `LivenessTiming`'s patient defaults until one is observed.
     var lastRevalidateLatency: Duration?
-    /// The dial the run loop is waiting on, so `redialNow()` can cancel one
-    /// a network change left stuck. `afterRedial`: it started after a
-    /// redial, with the link already known to be back, so a later redial
-    /// leaves it alone.
-    private var dialInFlight:
-        (id: UInt64, afterRedial: Bool, task: Task<SharedTransport, any Error>)?
-    private var nextDialID: UInt64 = 0
-    /// A `redialNow()` came since the last dial started: the next dial is
-    /// the redial's own. Cleared once the events channel is live.
-    private var redialSinceLastDial = false
-    /// Set when `redialNow()` cancelled the dial in flight: the run loop
-    /// dials again at once instead of treating the cancellation as a
-    /// failure.
-    private var redialRequested = false
+    /// The dial the run loop is waiting on (`lifecycle.state.dial`), so
+    /// `redialNow()` can cancel one a network change left stuck.
+    private var dialTask: Task<SharedTransport, any Error>?
     /// A new connection's Transport between its dial and its `ping`: already
     /// offered to terminals (attach first), not yet to RPCs, the events
     /// channel or `terminalTransportGenerations`. Closed with the activation
@@ -266,16 +258,13 @@ actor EventsSession {
     /// answered keepalive. The keepalive loop skips its ping while this is
     /// fresher than its interval (see `KeepalivePolicy.interval`).
     private var lastConnectionActivity: ContinuousClock.Instant?
-    /// Identifies the current activation so a cancelled connection attempt
-    /// cannot install itself after a later resume has already started.
-    var activationGeneration: UInt64 = 0
     private var runTask: Task<Void, Never>?
     #if DEBUG
         var runTaskForTesting: Task<Void, Never>? { runTask }
     #endif
     private var keepaliveTask: Task<Void, Never>?
+    /// The backoff's sleep (`lifecycle.state.backoff`).
     private var backoffSleep: Task<Void, any Error>?
-    private var backoffGeneration: UInt64?
     /// The most recently enqueued lifecycle transition; each new one chains
     /// behind it, so transitions never interleave across the suspension
     /// points inside a teardown (see the actor doc).
@@ -294,7 +283,6 @@ actor EventsSession {
     /// new activation. Requests arriving after the failed run must receive the
     /// real failure instead of waiting for work that no longer exists.
     private var terminalTransportFailure: TransportError?
-    private var isWindingDown = false
     /// Virtual sessions must not report fixture activity as network usage.
     private let recordsNetworkTelemetry: Bool
 
@@ -523,16 +511,12 @@ actor EventsSession {
     /// channel is live (`revalidate()` covers that) and while inactive.
     /// `trigger` labels the connect this sets off.
     func redialNow(trigger: NetworkAnalytics.ConnectTrigger) async {
-        guard phase == .active, !isWindingDown, subscription.liveChannel == nil else { return }
-        if dialInFlight?.afterRedial == true { return }
-        connectTrigger = trigger
-        redialSinceLastDial = true
-        if let stuck = dialInFlight {
-            redialRequested = true
+        let effects = lifecycleStep(
+            .redial(channelLive: subscription.liveChannel != nil, trigger: trigger))
+        for case .abandonDial(let stuck) in effects {
             await sharing.abandonDial()
-            if dialInFlight?.id == stuck.id { stuck.task.cancel() }
+            lifecycleStep(.dialAbandoned(id: stuck))
         }
-        backoffSleep?.cancel()
     }
 
     /// Terminal teardown: like `suspend()`, then finishes `updates` for
@@ -668,7 +652,7 @@ actor EventsSession {
     private func awaitUsableTransport() async throws -> any Transport {
         if let terminalTransportFailure { throw terminalTransportFailure }
         if let transport = currentTransport { return transport }
-        guard phase == .active, !isWindingDown, runTask != nil else {
+        guard lifecycle.acceptsWaiters else {
             throw TransportError.sshUnreachable(detail: "The Host is not connected.")
         }
         let id = UUID()
@@ -747,18 +731,11 @@ actor EventsSession {
         trigger: NetworkAnalytics.ConnectTrigger? = nil
     ) {
         guard phase == .suspended else { return }
-        phase = .active
-        connectTrigger = trigger ?? (hasActivated ? .foreground : .launch)
-        hasActivated = true
         if let seed {
             subscriptionStep(.seed(seed))
         }
         terminalTransportFailure = nil
-        redialSinceLastDial = false
-        activationGeneration &+= 1
-        let generation = activationGeneration
-        yieldUpdate(.status(.connecting))
-        runTask = Task { await self.run(generation: generation) }
+        lifecycleStep(.activate(trigger: trigger))
     }
 
     /// Restarts the current activation. `.connecting` is announced and the
@@ -771,22 +748,18 @@ actor EventsSession {
             activate(trigger: .retry)
             return
         }
-        activationGeneration &+= 1
+        let effects = lifecycleStep(.restart)
         let generation = activationGeneration
-        connectTrigger = .retry
-        yieldUpdate(.status(.connecting))
-        await windDown()
-        guard phase == .active, activationGeneration == generation else { return }
-        runTask = Task { await self.run(generation: generation) }
+        if effects.contains(.windDown) { await windDown() }
+        lifecycleStep(.restartWoundDown(activation: generation))
     }
 
     private func deactivate(locally: Bool) async {
-        guard phase == .active else { return }
-        phase = .suspended
+        guard lifecycleStep(.suspend).contains(.windDown) else { return }
         settleLoss(recovered: false)
         await keepConnectionAcrossSuspension()
         await windDown(locally: locally)
-        yieldUpdate(.status(.suspended))
+        lifecycleStep(.suspendWoundDown)
     }
 
     /// Holds the installed, trusted connection open before `windDown`
@@ -803,15 +776,14 @@ actor EventsSession {
     }
 
     private func finish() async {
-        guard phase != .ended else { return }
-        phase = .ended
+        guard lifecycleStep(.end).contains(.windDown) else { return }
         settleLoss(recovered: false)
         await windDown()
         if let kept = keptConnection {
             keptConnection = nil
             await sharing.release(kept.id)
         }
-        yieldUpdate(.status(.ended))
+        lifecycleStep(.endWoundDown)
         updatesContinuation.finish()
         latencyContinuation.finish()
         terminalTransportContinuation.finish()
@@ -834,6 +806,43 @@ actor EventsSession {
         if case .dropped = updatesContinuation.yield(.event(.eventsDropped)) {
             droppedUpdateCount += 1
         }
+    }
+
+    /// Feeds the lifecycle machine and performs, in order, every effect it
+    /// can perform at once; returns the effects for the caller, which
+    /// performs the rest (teardown, dial tracking, the backoff's sleep, a
+    /// pool hop, an immediate redial).
+    @discardableResult
+    private func lifecycleStep(
+        _ event: EventsLifecycleMachine.Event
+    ) -> [EventsLifecycleMachine.Effect] {
+        let effects = lifecycle.handle(event)
+        for effect in effects {
+            switch effect {
+            case .announce(let status):
+                yieldUpdate(.status(status))
+            case .spawnRun(let activation):
+                runTask = Task { await self.run(generation: activation) }
+            case .cancelRun:
+                let task = runTask
+                runTask = nil
+                task?.cancel()
+            case .forgetDial:
+                dialTask = nil
+            case .cancelDial:
+                dialTask?.cancel()
+            case .cutBackoff:
+                backoffSleep?.cancel()
+            case .cancelBackoff:
+                backoffSleep?.cancel()
+                backoffSleep = nil
+            case .forgetBackoff:
+                backoffSleep = nil
+            case .windDown, .dialing, .abandonDial, .sleep, .dialAgain:
+                break
+            }
+        }
+        return effects
     }
 
     /// Chains `transition` behind the previously enqueued one and waits for
@@ -900,11 +909,10 @@ actor EventsSession {
                 }
             } catch {
                 guard activationIsCurrent(generation) else { break }
-                if redialRequested {
+                if lifecycleStep(.connectFailed).contains(.dialAgain) {
                     // `redialNow()` cancelled a dial the network change left
                     // stuck: dial again at once, with no backoff and no
                     // `.reconnecting`.
-                    redialRequested = false
                     continue
                 }
                 let failure = Self.transportFailure(error)
@@ -927,16 +935,14 @@ actor EventsSession {
                     recordTerminalTransportFailure(failure)
                     failTerminalTransportWaiters(failure, for: generation)
                     failTransportWaiters(failure)
-                    yieldUpdate(.status(.failed(failure)))
+                    lifecycleStep(.failed(failure))
                     settleLoss(recovered: false)
                     return
                 }
                 failTransportWaiters(failure)
                 subscriptionStep(.disconnected)
                 attempt += 1
-                connectTrigger = .retry
-                await emitReconnectingAndBackOff(
-                    attempt: attempt, failure: failure, generation: generation)
+                await emitReconnectingAndBackOff(attempt: attempt, failure: failure)
                 continue
             }
             subscriptionStep(.accepted)
@@ -945,10 +951,9 @@ actor EventsSession {
                 break
             }
             let channel = goLive(stream)
-            redialSinceLastDial = false
             attempt = 0
             pendingKeepaliveFailure = nil
-            yieldUpdate(.status(.connected))
+            lifecycleStep(.wentLive)
             settleLoss(recovered: true)
             startKeepalive(channel: channel)
 
@@ -993,16 +998,14 @@ actor EventsSession {
                 recordTerminalTransportFailure(failure)
                 failTerminalTransportWaiters(failure, for: generation)
                 failTransportWaiters(failure)
-                yieldUpdate(.status(.failed(failure)))
+                lifecycleStep(.failed(failure))
                 settleLoss(recovered: false)
                 return
             }
             failTransportWaiters(failure)
             subscriptionStep(.disconnected)
             attempt += 1
-            connectTrigger = .retry
-            await emitReconnectingAndBackOff(
-                attempt: attempt, failure: failure, generation: generation)
+            await emitReconnectingAndBackOff(attempt: attempt, failure: failure)
         }
     }
 
@@ -1149,40 +1152,34 @@ actor EventsSession {
     func dial() async throws -> SharedTransport {
         let sharing = sharing
         let task = Task { try await sharing.connect(nil) }
-        nextDialID &+= 1
-        let id = nextDialID
-        dialInFlight = (id, redialSinceLastDial, task)
-        redialSinceLastDial = false
-        defer {
-            if dialInFlight?.id == id { dialInFlight = nil }
+        var id: UInt64 = 0
+        for case .dialing(let dialing) in lifecycleStep(.dialStarted) {
+            id = dialing
+            dialTask = task
         }
+        defer { lifecycleStep(.dialEnded(id: id)) }
         let connected = try await withTaskCancellationHandler {
             try await task.value
         } onCancel: {
             task.cancel()
         }
-        redialRequested = false
+        lifecycleStep(.dialSucceeded)
         return connected
     }
 
     func activationIsCurrent(_ generation: UInt64) -> Bool {
-        phase == .active && activationGeneration == generation && !Task.isCancelled
+        lifecycle.isCurrent(generation) && !Task.isCancelled
     }
 
-    private func emitReconnectingAndBackOff(
-        attempt: Int,
-        failure: TransportError,
-        generation: UInt64
-    ) async {
+    private func emitReconnectingAndBackOff(attempt: Int, failure: TransportError) async {
         let delay = reconnectPolicy.delay(beforeAttempt: attempt)
-        yieldUpdate(.status(.reconnecting(attempt: attempt, delay: delay, failure: failure)))
-        let sleep = Task { try await Task.sleep(for: delay) }
-        backoffSleep = sleep
-        backoffGeneration = generation
-        try? await sleep.value
-        if backoffGeneration == generation {
-            backoffSleep = nil
-            backoffGeneration = nil
+        let effects = lifecycleStep(
+            .backoffStarted(attempt: attempt, delay: delay, failure: failure))
+        for case .sleep(let timer, let pause) in effects {
+            let sleep = Task { try await Task.sleep(for: pause) }
+            backoffSleep = sleep
+            try? await sleep.value
+            lifecycleStep(.backoffElapsed(timer: timer))
         }
     }
 
@@ -1196,16 +1193,12 @@ actor EventsSession {
     /// nothing the network decides: the closes run on their own, in the
     /// same order, and terminals are not waited for.
     private func windDown(locally: Bool = false) async {
-        isWindingDown = true
+        lifecycleStep(.windDownStarted)
         failTerminalTransportWaiters(TransportError.cancelled)
         failTransportWaiters(TransportError.cancelled)
-        backoffSleep?.cancel()
-        backoffSleep = nil
-        backoffGeneration = nil
+        lifecycleStep(.backoffAbandoned)
         stopKeepalive()
-        let task = runTask
-        runTask = nil
-        task?.cancel()
+        lifecycleStep(.runAbandoned)
         var taken: HerdrEventStream?
         for case .take(let channel) in subscriptionStep(.windDownStarted) {
             taken = channels.removeValue(forKey: channel)
@@ -1235,11 +1228,10 @@ actor EventsSession {
         }
         transportSuspect = false
         pendingKeepaliveFailure = nil
-        redialRequested = false
         lastConnectionActivity = nil
         terminalTransportFailure = nil
         subscriptionStep(.woundDown)
-        isWindingDown = false
+        lifecycleStep(.windDownEnded)
     }
 
     // MARK: Keepalive

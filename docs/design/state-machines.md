@@ -5309,6 +5309,68 @@ stateDiagram-v2
     subscribing --> seeded: seed
 ```
 
+### EventsLifecycleMachine
+
+- **File:** `Sources/Waycar/Transport/EventsLifecycleMachine.swift`
+- **Owner:** `EventsSession` keeps the lifecycle Task chain
+  (`enqueueLifecycleTransition`), the run Task, the dial Task and the
+  backoff's sleep, performs the teardown (`windDown`), the pool hop of a
+  redial and the announcements, and reads `phase`, `activationGeneration`,
+  `isWindingDown`, `acceptsWaiters` and the connect trigger from the machine.
+- **States:** `stage` is `suspended`, `connecting`, `connected`,
+  `backingOff`, `failed`, `windingDown` or `ended`, derived from the phase
+  (`suspended`, `active`, `ended`), a teardown in progress, and what the
+  current activation's run loop last announced. They are kept apart because
+  they are apart in time: a suspension is suspended at once while its run
+  loop goes on until the teardown cancels it (a dial or backoff begun before
+  may finish meanwhile), and a Reconnect's teardown runs while active. Also
+  the activation token, `running` (`runTask != nil`), the backoff's timer
+  token, the dial in flight (`id`, `afterRedial`), `redialSinceLastDial`,
+  `redialRequested` and the connect trigger.
+- **Events:** `activate(trigger)`, `restart`, `restartWoundDown(activation)`,
+  `suspend`, `suspendWoundDown`, `end`, `endWoundDown`, `windDownStarted`,
+  `backoffAbandoned`, `runAbandoned`, `windDownEnded`, `dialStarted`,
+  `dialSucceeded`, `dialEnded(id)`, `redial(channelLive, trigger)`,
+  `dialAbandoned(id)`, `connectFailed`, `wentLive`, `failed(failure)`,
+  `backoffStarted(attempt, delay, failure)`, `backoffElapsed(timer)`.
+- **Effects:** `announce(status)`, `spawnRun(activation)`, `cancelRun`,
+  `windDown`, `dialing(id)`, `forgetDial`, `abandonDial(id)`,
+  `cancelDial`, `cutBackoff`, `sleep(timer, delay)`, `cancelBackoff`,
+  `forgetBackoff`, `dialAgain`. Every activation and Reconnect mints the
+  next activation token before its teardown, so an old run loop never
+  installs into the new one; a redial cancels only the dial it found stuck
+  and leaves a dial a redial started alone; only the current backoff
+  clears itself as it wakes (the activation-generation check it replaces).
+- **Tests:** `EventsLifecycleMachineTests`, `EventsSessionSubscriptionsTests`
+  (Reconnect, suspend and end during a backoff, the chain, the no-ops),
+  `EventsSessionResilienceTests` (redials), `HostConsoleProjectionLifecycleTests`.
+- **Catalogue:** HERDR-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> suspended
+    suspended --> connecting: activate / announce, spawnRun
+    connecting --> connected: wentLive / announce
+    connecting --> backingOff: backoffStarted / announce, sleep
+    connected --> backingOff: backoffStarted / announce, sleep
+    backingOff --> connected: wentLive / announce
+    backingOff --> backingOff: redial / cutBackoff or abandonDial
+    connecting --> failed: failed / announce
+    connected --> failed: failed / announce
+    backingOff --> failed: failed / announce
+    connected --> windingDown: restart / announce connecting, windDown
+    backingOff --> windingDown: restart
+    failed --> windingDown: restart
+    windingDown --> connecting: restartWoundDown / spawnRun
+    connected --> suspended: suspend / windDown
+    backingOff --> suspended: suspend / windDown
+    suspended --> windingDown: windDownStarted
+    windingDown --> suspended: suspendWoundDown / announce
+    suspended --> ended: end / windDown
+    connected --> ended: end / windDown
+    windingDown --> ended: endWoundDown / announce
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6113,7 +6175,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | convert | P3d |
+| HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | converted → `EventsLifecycleMachine` | P3d |
 | HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | convert | P3d |
 | HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
 | HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
