@@ -219,9 +219,13 @@ final class PairingScanStore {
     private func update(_ existing: Host, token: UInt64, result: PairingResult) async {
         await knownHosts.setFingerprint(
             result.hostKeyFingerprint, host: existing.address, port: existing.port)
+        // Only the endpoint the ceremony ran at was verified: a Host edited
+        // meanwhile (another device, through iCloud) to another address,
+        // port or a Jump Host is not that endpoint any more.
         guard
             var host = catalog.hosts.first(where: { $0.id == existing.id }),
-            host.address == existing.address, host.port == existing.port
+            host.address == existing.address, host.port == existing.port,
+            !host.usesJumpHost
         else {
             await send(.failed(token, PairingFailure(
                 step: .verify,
