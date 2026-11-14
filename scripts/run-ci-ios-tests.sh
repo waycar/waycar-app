@@ -1895,6 +1895,7 @@ printf '%s\n' \
 # shellcheck disable=SC2016
 printf '%s\n' \
     '#!/bin/sh' \
+    'case "$1" in fixture:exitnow) exit 0 ;; esac' \
     'stty -echo' \
     'printf "TTY-OK\\n"' \
     'printf "ARGS:%s\\n" "$*"' \
@@ -3199,7 +3200,7 @@ if [[ "$password_fixture_available" == "1" ]]; then
 fi
 run_suite WaycarSSHDirectStreamLocalE2ETests 9 1 0 \
     WaycarSSHDirectStreamLocalE2ETests
-run_suite SharedFixtureE2ETests 155 6 0 \
+run_suite SharedFixtureE2ETests 157 6 0 \
     WaycarSSHPTYE2ETests \
     WaycarSSHJumpHostGateE2ETests \
     WaycarSSHTransportBehaviorE2ETests \

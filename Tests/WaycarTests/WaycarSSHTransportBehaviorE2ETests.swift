@@ -333,6 +333,59 @@ struct WaycarSSHTransportBehaviorE2ETests {
         await replacement.end()
     }
 
+    /// An Attach whose remote command exits at once may end before
+    /// `attachTerminal` has recorded it, or after: either way its target is
+    /// free again once its output has finished, since the session reports the
+    /// end before it finishes the output (HERDR-08).
+    @Test("an Attach that exits at once frees its target")
+    func attachExitingAtOnceFreesItsTarget() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let transport = try await WaycarSSHTransport.connect(settings: environment.directSettings())
+        defer { Task { try? await transport.close() } }
+
+        for _ in 0..<5 {
+            let attach = try await transport.attachTerminal(
+                TerminalAttachRequest(target: "fixture:exitnow", cols: 80, rows: 24))
+            var iterator = attach.output.makeAsyncIterator()
+            while try await iterator.next() != nil {}
+        }
+        #expect(try await transport.ping().protocolVersion == 17)
+    }
+
+    /// A Transport whose session another holder keeps open ends its own
+    /// Attaches on close, and leaves their targets free for the next
+    /// Transport on that session (design §4.1, HERDR-08).
+    @Test("close ends a live Attach while another holder keeps the session")
+    func closeEndsLiveAttachesOnASharedSession() async throws {
+        let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
+        let settings = environment.directSettings()
+        let session = try await HostSSHSession.dial(settings: settings)
+        defer { Task { await session.release() } }
+        #expect(await session.retain())
+        let transport = WaycarSSHTransport(session: session, settings: settings)
+
+        let attach = try await transport.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var iterator = attach.output.makeAsyncIterator()
+        var output = ""
+        try await expectAttachOutput(&iterator, accumulated: &output, contains: "TTY-OK")
+
+        try await transport.close()
+        #expect(try await iterator.next() == nil)
+        #expect(await session.isOpen)
+
+        #expect(await session.retain())
+        let next = WaycarSSHTransport(session: session, settings: settings)
+        defer { Task { try? await next.close() } }
+        let reattached = try await next.attachTerminal(
+            TerminalAttachRequest(target: "fixture:pane", cols: 80, rows: 24))
+        var reattachedIterator = reattached.output.makeAsyncIterator()
+        var reattachedOutput = ""
+        try await expectAttachOutput(
+            &reattachedIterator, accumulated: &reattachedOutput, contains: "TTY-OK")
+        await reattached.end()
+    }
+
     @Test("nonzero Attach exit reports the primary channel failure and wakes input")
     func failedAttachExitFreesChannel() async throws {
         let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
