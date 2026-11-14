@@ -221,15 +221,18 @@ actor EventsSession {
     /// The live events channel's loss, and when, until it is back or given
     /// up on (#105).
     private var pendingLoss: (reason: NetworkAnalytics.Failure, at: ContinuousClock.Instant)?
+    /// The shown round trip, the round trips that time the next checks, the
+    /// latest proof of life, the keepalive and its failure (HERDR-04).
+    private var liveness = EventsLivenessMachine()
     /// The latest ping round trip any connection proved; liveness
     /// deadlines and the hedge delay derive from it (`LivenessTiming`).
-    var lastRoundTrip: Duration?
+    var lastRoundTrip: Duration? { liveness.roundTrip }
     /// The latest `revalidate()` round trip, kept apart from the ping's
     /// (#105): a backend's revalidate can cost more than its ping (tmux on
     /// an idle dual Host runs a `tmux ls` exec where its ping is local), so
     /// revalidation's deadline and hedge delay derive from this alone, and
     /// take `LivenessTiming`'s patient defaults until one is observed.
-    var lastRevalidateLatency: Duration?
+    var lastRevalidateLatency: Duration? { liveness.revalidateRoundTrip }
     /// The dial the run loop is waiting on (`lifecycle.state.dial`), so
     /// `redialNow()` can cancel one a network change left stuck.
     private var dialTask: Task<SharedTransport, any Error>?
@@ -246,14 +249,6 @@ actor EventsSession {
     /// still look alive (a timed-out request or keepalive ping): the next
     /// reconnect replaces the transport instead of reusing it.
     var transportSuspect: Bool { selection.isDistrusted }
-    /// The keepalive failure that forced the current teardown, surfaced in
-    /// the following `.reconnecting` status.
-    private var pendingKeepaliveFailure: TransportError?
-    /// The most recent proof the connection is alive: the connect-path ping,
-    /// a successful RPC through `withTransport`, an arriving event, or an
-    /// answered keepalive. The keepalive loop skips its ping while this is
-    /// fresher than its interval (see `KeepalivePolicy.interval`).
-    private var lastConnectionActivity: ContinuousClock.Instant?
     private var runTask: Task<Void, Never>?
     #if DEBUG
         var runTaskForTesting: Task<Void, Never>? { runTask }
@@ -429,7 +424,7 @@ actor EventsSession {
         switch outcome {
         case .proof(let measured):
             interval.end("kept")
-            lastRevalidateLatency = measured.latency
+            livenessStep(.revalidated(measured.latency))
             guard publishLatency(measured.latency, measuredOn: channel) else { return }
             noteConnectionActivity()
         case .hedge(let replacement):
@@ -470,7 +465,7 @@ actor EventsSession {
             ) {
                 try await Self.measure(transport, revalidating: false, now: clock.now)
             }
-            lastRoundTrip = measured.latency
+            livenessStep(.measured(measured.latency))
             guard publishLatency(measured.latency, measuredOn: channel) else { return false }
             noteConnectionActivity()
             return true
@@ -789,8 +784,8 @@ actor EventsSession {
         // Ordered before the yield, so no consumer can observe a status that
         // ends a connection while `currentLatency` still holds that
         // connection's measurement.
-        if case .status(let status) = update, status != .connected {
-            latencyBox.withLock { $0 = nil }
+        if case .status(let status) = update {
+            livenessStep(.announced(connected: status == .connected))
         }
         guard case .dropped = updatesContinuation.yield(update) else { return }
         droppedUpdateCount += 1
@@ -943,7 +938,7 @@ actor EventsSession {
             }
             let channel = goLive(stream)
             attempt = 0
-            pendingKeepaliveFailure = nil
+            livenessStep(.wentLive)
             lifecycleStep(.wentLive)
             settleLoss(recovered: true)
             startKeepalive(channel: channel)
@@ -980,10 +975,10 @@ actor EventsSession {
                 // the subscribe path re-checks the connection anyway.
                 continue
             }
-            let failure =
-                pendingKeepaliveFailure ?? streamFailure
-                ?? .channelFailed(detail: "events stream ended unexpectedly")
-            pendingKeepaliveFailure = nil
+            var failure = TransportError.channelFailed(detail: "events stream ended unexpectedly")
+            for case .lost(let lost) in livenessStep(.streamEnded(failure: streamFailure)) {
+                failure = lost
+            }
             noteLoss(failure)
             guard failure.isRetryable else {
                 recordTerminalTransportFailure(failure)
@@ -1112,7 +1107,7 @@ actor EventsSession {
         _ transport: any Transport, on connection: SharedConnection.ID?, generation: UInt64,
         latency: Duration, info: ServerInfo
     ) {
-        lastRoundTrip = latency
+        livenessStep(.measured(latency))
         // herdr's protocol number only: tmux reports none and herdr-core's
         // generation is no herdr protocol.
         if info.backend == .herdr {
@@ -1242,8 +1237,7 @@ actor EventsSession {
             await waitForTerminalIdle()
         }
         connectionStep(.woundDown)
-        pendingKeepaliveFailure = nil
-        lastConnectionActivity = nil
+        livenessStep(.woundDown)
         terminalTransportFailure = nil
         subscriptionStep(.woundDown)
         lifecycleStep(.windDownEnded)
@@ -1253,39 +1247,64 @@ actor EventsSession {
 
     private func startKeepalive(channel: EventsChannel) {
         guard let keepalive, let transport = currentTransport else { return }
-        keepaliveTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: keepalive.interval)
-                if Task.isCancelled { break }
-                guard self.connectionIsIdle(within: keepalive.interval) else { continue }
-                do {
-                    try await self.proveLiveness(on: transport)
-                    // A ping answered after this channel was replaced also
-                    // means this loop is keeping a connection alive that the
-                    // session no longer has. It proves liveness either way;
-                    // see `KeepalivePolicy.interval` for why it does not
-                    // republish the latency badge.
-                    guard self.isLive(channel) else { break }
-                    self.noteConnectionActivity()
-                } catch is CancellationError {
-                    break
-                } catch TransportError.cancelled {
-                    break
-                } catch {
-                    await self.keepaliveDidFail(Self.transportFailure(error), on: channel)
-                    break
+        for case .runKeepalive in livenessStep(.keepaliveStarted) {
+            keepaliveTask = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: keepalive.interval)
+                    if Task.isCancelled { break }
+                    guard self.connectionIsIdle(within: keepalive.interval) else { continue }
+                    do {
+                        try await self.proveLiveness(on: transport)
+                        // A ping answered after this channel was replaced
+                        // also means this loop is keeping a connection alive
+                        // that the session no longer has. It proves liveness
+                        // either way; see `KeepalivePolicy.interval` for why
+                        // it does not republish the latency badge.
+                        guard self.isLive(channel) else { break }
+                        self.noteConnectionActivity()
+                    } catch is CancellationError {
+                        break
+                    } catch TransportError.cancelled {
+                        break
+                    } catch {
+                        await self.keepaliveDidFail(Self.transportFailure(error), on: channel)
+                        break
+                    }
                 }
             }
         }
     }
 
     func stopKeepalive() {
-        keepaliveTask?.cancel()
-        keepaliveTask = nil
+        livenessStep(.keepaliveStopped)
     }
 
     private func noteConnectionActivity() {
-        lastConnectionActivity = .now
+        livenessStep(.activity(now: .now))
+    }
+
+    /// Feeds the liveness machine and performs its effects, in order, but
+    /// for starting the keepalive loop, which `startKeepalive` does.
+    @discardableResult
+    private func livenessStep(
+        _ event: EventsLivenessMachine.Event
+    ) -> [EventsLivenessMachine.Effect] {
+        let effects = liveness.handle(event)
+        for effect in effects {
+            switch effect {
+            case .show(let latency):
+                latencyBox.withLock { $0 = latency }
+                latencyContinuation.yield(latency)
+            case .hide:
+                latencyBox.withLock { $0 = nil }
+            case .cancelKeepalive:
+                keepaliveTask?.cancel()
+                keepaliveTask = nil
+            case .runKeepalive, .lost:
+                break
+            }
+        }
+        return effects
     }
 
     /// Whether `channel` is still this session's live channel — the same
@@ -1316,17 +1335,14 @@ actor EventsSession {
     private func publishLatency(
         _ latency: Duration, measuredOn channel: EventsChannel
     ) -> Bool {
-        guard isLive(channel) else { return false }
-        publishLatency(latency)
-        return true
+        !livenessStep(.showIfLive(latency, channelLive: isLive(channel))).isEmpty
     }
 
     /// The single gate every measurement leaves through: the connection-scoped
     /// value first, then the signal. A consumer woken by the signal reads the
     /// value it was woken for or a newer one, never an older one.
     private func publishLatency(_ latency: Duration) {
-        latencyBox.withLock { $0 = latency }
-        latencyContinuation.yield(latency)
+        livenessStep(.show(latency))
     }
 
     /// Measures only the herdr `ping` request on a new connection. The
@@ -1339,7 +1355,7 @@ actor EventsSession {
         on transport: any Transport
     ) async throws -> (latency: Duration, info: ServerInfo) {
         let measured = try await Self.measure(transport, revalidating: false, now: clock.now)
-        lastRoundTrip = measured.latency
+        livenessStep(.measured(measured.latency))
         return measured
     }
 
@@ -1425,14 +1441,13 @@ actor EventsSession {
         ) {
             try await Self.measure(transport, revalidating: false, now: clock.now)
         }
-        lastRoundTrip = measured.latency
+        livenessStep(.measured(measured.latency))
     }
 
     /// Whether no liveness proof arrived within `interval`, meaning the next
     /// keepalive ping is actually needed.
     private func connectionIsIdle(within interval: Duration) -> Bool {
-        guard let last = lastConnectionActivity else { return true }
-        return ContinuousClock.now - last >= interval
+        liveness.isIdle(now: ContinuousClock.now, within: interval)
     }
 
     /// A keepalive ping failed: the connection cannot be trusted. Tears the
@@ -1444,7 +1459,7 @@ actor EventsSession {
     private func keepaliveDidFail(_ failure: TransportError, on channel: EventsChannel) async {
         guard phase == .active, subscription.isLive(channel.id) else { return }
         connectionStep(.suspect)
-        pendingKeepaliveFailure = failure
+        livenessStep(.keepaliveFailed(failure))
         if Self.isTransportLinkFailure(failure), let connection = currentConnection {
             await sharing.retire(connection)
         }

@@ -5422,6 +5422,45 @@ stateDiagram-v2
     distrusted --> absent: woundDown
 ```
 
+### EventsLivenessMachine
+
+- **File:** `Sources/Waycar/Transport/EventsLivenessMachine.swift`
+- **Owner:** `EventsSession` keeps the latency box (`currentLatency`, read
+  off the actor) and the latency stream, writes them on `show` and `hide`,
+  runs the keepalive Task and every ping, and checks channel identity
+  (`isLive`) before a sample or revalidation may show its value or fail
+  the connection.
+- **States:** `stage` is `unproven` (nothing shown), `healthy` or
+  `suspect` (a keepalive failure forced the teardown), derived from the
+  shown round trip, the latest ping and revalidate round trips, the latest
+  proof of life, whether the keepalive runs, and the pending keepalive
+  failure. The survey's `checking` holds no state of its own: no field
+  marks a ping in flight, and nothing reads one.
+- **Events:** `measured`, `revalidated`, `show`, `showIfLive(channelLive)`,
+  `activity(now)`, `announced(connected)`, `keepaliveStarted`,
+  `keepaliveStopped`, `keepaliveFailed`, `wentLive`, `streamEnded(failure)`,
+  `woundDown`.
+- **Effects:** `show`, `hide`, `runKeepalive`, `cancelKeepalive`,
+  `lost(failure)`. A round trip is kept before the stale-channel check
+  that refuses to show it (`aRevalidationAnsweredOnAReplacedChannelStillTimesTheNextOne`);
+  the box is written before the signal and cleared before every status but
+  `.connected`; a keepalive failure outranks the stream's own.
+- **Tests:** `EventsLivenessMachineTests`, `EventsSessionKeepaliveTests`,
+  `EventsSessionLatencyTests`, `EventsSessionSampleLatencyTests`,
+  `EventsSessionResilienceTests`.
+- **Catalogue:** HERDR-04.
+
+```mermaid
+stateDiagram-v2
+    [*] --> unproven
+    unproven --> healthy: show / showIfLive, live
+    healthy --> healthy: showIfLive, live / measured, activity
+    healthy --> unproven: announced, not connected / hide
+    healthy --> suspect: keepaliveFailed
+    suspect --> healthy: streamEnded / lost(keepalive failure)
+    suspect --> healthy: wentLive or woundDown
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6229,7 +6268,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | converted → `EventsLifecycleMachine` | P3d |
 | HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | converted → `EventsConnectionMachine` | P3d |
 | HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
-| HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
+| HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsLivenessMachine` | P3d |
 | HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |
 | HERDR-07 | herdr events channel | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | M/H | leave: reader identity guarded | — |
