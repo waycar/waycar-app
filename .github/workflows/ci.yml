@@ -103,6 +103,12 @@ jobs:
     # The Build and test step's 85 plus the steps before it.
     timeout-minutes: 90
     steps:
+      # The hosted runner has 3 cores, and a fresh VM spends about one and a
+      # half of them on Spotlight indexing (four mdworker_shared at 30-50%
+      # each in the simulator boot probe, 2026-11-13). Nothing here searches.
+      - name: Turn Spotlight indexing off
+        run: sudo mdutil -a -i off || echo "::warning::could not turn Spotlight indexing off"
+
       # Full history: scripts/test-sim-slot.sh runs the sim-slot copy other
       # worktrees still use (an older commit) against the current one when
       # that commit is in the clone.
@@ -193,19 +199,43 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install tmux pkg-config libevent ncurses utf8proc
 
-      - name: Cache the pinned tmux builds
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The builds link the image's Homebrew libraries, so the key names the
+      # image too. A plain actions/cache saves only when the whole job passes,
+      # so a red lane rebuilt every release on every run (5-11 minutes on the
+      # 3-core hosted runner, competing with the simulator's first boot).
+      # Build them in a step of their own and save the cache right after it.
+      - name: Key the pinned tmux builds
+        id: tmux-key
+        env:
+          SCRIPT_HASH: ${{ hashFiles('scripts/build-ci-tmux.sh') }}
+        run: echo "key=tmux-$ImageOS-$ImageVersion-$RUNNER_ARCH-$SCRIPT_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pinned tmux builds
+        id: tmux-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/waycar-ci/tmux
-          key: tmux-${{ runner.os }}-${{ hashFiles('scripts/build-ci-tmux.sh') }}
+          key: ${{ steps.tmux-key.outputs.key }}
+
+      - name: Build the pinned tmux releases
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        run: scripts/build-ci-tmux.sh
+
+      - name: Save the pinned tmux builds
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/waycar-ci/tmux
+          key: ${{ steps.tmux-key.outputs.key }}
 
       # The script selects its own Waycar CI simulator (an iPhone 17 Pro Max),
       # boots it, injects the fixture environment there, and targets that same
       # device for every test action. The app deployment target is iOS 26.
       - name: Build and test
-        # 40 for the lane, plus up to 45 waiting for the Waycar CI Simulator
-        # while another run (a local `make test-ci-app` on this Mac, or the
-        # other lane) holds it: WAYCAR_CI_SIM_WAIT_SECONDS, default 2700.
+        # 40 for the lane (about 15 of it the deferred simulator boot), plus
+        # up to 45 waiting for the Waycar CI Simulator while another run (a
+        # local `make test-ci-app` on this Mac, or the other lane) holds it:
+        # WAYCAR_CI_SIM_WAIT_SECONDS, default 2700.
         timeout-minutes: 85
         # The fixture runs unprivileged; WAYCAR_CI_MANDATORY makes every
         # suite a hard requirement, the real-password sshd included: hosted
@@ -214,6 +244,10 @@ jobs:
         # run.
         env:
           WAYCAR_CI_LANE: app
+          # A fresh simulator's first boot saturates this runner for about
+          # 15 minutes: boot it after the build and let it settle before the
+          # suites (see wait_for_simulator_boot in the script).
+          WAYCAR_CI_BOOT_AFTER_BUILD: "1"
           WAYCAR_CI_MANDATORY: "1"
           # Hosted runners are small: sshd can miss the idle-machine 5 s
           # budgets. See Duration.sshdBudget.
@@ -224,8 +258,9 @@ jobs:
           WAYCAR_XCODEBUILD_TEST_TIMEOUT_SECONDS: "900"
           # A cold build-for-testing (no DerivedData on a fresh image) ran
           # past the script's 900 s default on the first public run, its
-          # test target still compiling; 1800 s still stops a hung build
-          # well inside the step's 85 minutes.
+          # test target still compiling, while the simulator's first boot
+          # ran beside it; 1800 s still stops a hung build well inside the
+          # step's 85 minutes.
           WAYCAR_XCODEBUILD_BUILD_TIMEOUT_SECONDS: "1800"
         run: scripts/run-ci-ios-tests.sh
 
@@ -241,15 +276,19 @@ jobs:
   waycarssh-package-e2e:
     name: WaycarSSH package E2E (iOS Simulator)
     runs-on: xcode-27
-    # The package step's 57 plus the steps before it.
-    timeout-minutes: 60
+    # The package step's 72 plus the steps before it.
+    timeout-minutes: 75
     steps:
+      # As in the app job.
+      - name: Turn Spotlight indexing off
+        run: sudo mdutil -a -i off || echo "::warning::could not turn Spotlight indexing off"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Same rationale as the app job: avoid a critical-path CoreSimulator
-      # cold-start; package-lane boot overlaps with build-for-testing.
+      # cold-start before the gate's own boot.
       - name: Select the newest Xcode 27
         run: |
           # shellcheck disable=SC2012 # sort -V needs the plain list
@@ -259,11 +298,13 @@ jobs:
         run: xcodebuild -version
 
       - name: Run package E2E
-        # 12 for the lane plus up to 45 waiting for the Waycar CI Simulator,
-        # as in the app job.
-        timeout-minutes: 57
+        # 27 for the lane (about 15 of it the deferred simulator boot) plus
+        # up to 45 waiting for the Waycar CI Simulator, as in the app job.
+        timeout-minutes: 72
         env:
           WAYCAR_CI_LANE: package
+          # Same as the app lane.
+          WAYCAR_CI_BOOT_AFTER_BUILD: "1"
           WAYCAR_CI_MANDATORY: "1"
           # Same scaling as the app lane; see Duration.sshdBudget.
           WAYCAR_SSH_E2E_TIMEOUT_SCALE: "4"

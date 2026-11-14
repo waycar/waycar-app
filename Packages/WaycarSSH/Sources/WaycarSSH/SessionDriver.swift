@@ -244,6 +244,7 @@ actor SessionDriver {
     private var nextExecChannelAllocatedHoldForTesting: (@Sendable () async throws -> Void)?
     private var nextExecCleanupHoldForTesting: (@Sendable () async throws -> Void)?
     private var nextExecStreamStandardErrorDrainHoldForTesting: (@Sendable () async throws -> Void)?
+    private var nextExecExchangeStandardErrorReadHoldForTesting: (@Sendable () async throws -> Void)?
     private var nextCompensationUnlinkPhaseHookForTesting: (@Sendable () async throws -> Void)?
     private var nextCompensationStatPhaseHookForTesting: (@Sendable () async throws -> Void)?
     private var nextCompensationShutdownHoldForTesting: (@Sendable () async throws -> Void)?
@@ -3279,6 +3280,16 @@ actor SessionDriver {
         nextExecStreamStandardErrorDrainHoldForTesting = hold
     }
 
+    /// Holds the next one-shot exec exchange turn that has made no progress
+    /// yet between its stdout read and its stderr read, with the session
+    /// still held: whatever reaches the socket meanwhile is queued by the
+    /// stderr read, not the stdout read.
+    func holdNextExecExchangeStandardErrorReadForTesting(
+        _ hold: @escaping @Sendable () async throws -> Void
+    ) {
+        nextExecExchangeStandardErrorReadHoldForTesting = hold
+    }
+
     func holdNextOutboundWriteParkForTesting(
         _ hold: @escaping @Sendable () async -> Void
     ) {
@@ -5016,6 +5027,13 @@ actor SessionDriver {
         while true {
             do {
                 try checkProgress(deadline: deadline)
+                // Taken before this turn's reads. Each read drains the whole
+                // socket into libssh2's queue, so the stderr read can queue
+                // stdout, EOF and CLOSE that arrived after the stdout read
+                // looked: no bytes for stderr, EOF masked by the queued
+                // stdout, and no socket edge left. A watch taken after the
+                // reads would then sleep out the deadline on a finished exec.
+                let watch = activity.watch()
                 var madeProgress = false
                 var skipReads = false
 
@@ -5087,6 +5105,13 @@ actor SessionDriver {
                         }
                     }
                     if transportSendOwner != stdoutOwner {
+#if DEBUG
+                        if !madeProgress,
+                            let hold = nextExecExchangeStandardErrorReadHoldForTesting {
+                            nextExecExchangeStandardErrorReadHoldForTesting = nil
+                            try await hold()
+                        }
+#endif
                         try await waitForTransportSendAdmission(
                             owner: stderrOwner,
                             deadline: deadline,
@@ -5115,7 +5140,7 @@ actor SessionDriver {
                     return true
                 }
 
-                let plan = sessionWaitPlan(try requireSession())
+                let plan = sessionWaitPlan(try requireSession(), watching: watch)
                 if madeProgress {
                     releaseOperation()
                     await Task.yield()
