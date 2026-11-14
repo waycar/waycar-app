@@ -496,6 +496,130 @@ struct EventsSessionResilienceTests {
         await session.end()
     }
 
+    // MARK: Connection selection (HERDR-02)
+
+    /// The kept connection's probe reserves a generation of its own: one
+    /// that answers is published under it, and terminals on it ride the
+    /// kept connection.
+    @Test func aKeptConnectionThatAnswersIsPublishedUnderItsProbesGeneration() async throws {
+        let first = ScriptedTransport()
+        let returning = ScriptedTransport()
+        let sharing = ScriptedSharedConnection()
+        await sharing.answer(.transport(first, on: Self.kept))
+        await sharing.answer(.transport(returning, on: Self.kept))
+        let clock = ScriptedLivenessClock()
+        let session = makeSession(sharing, clock: clock)
+        let log = UpdateLog(following: session)
+
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 1)
+        #expect(await session.transportGeneration == 0)
+        #expect(await !session.ridesKeptConnection(generation: 0))
+        await session.suspend()
+        try await log.waitForStatus(.suspended, count: 1)
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 2)
+
+        #expect(await session.transportGeneration == 1)
+        #expect(await session.ridesKeptConnection(generation: 1))
+        await session.end()
+    }
+
+    /// A kept connection whose probe gets a server's answer, not a link
+    /// failure, is released rather than retired, and the generation its
+    /// probe reserved is burned: the fresh dial after it publishes the next.
+    @Test func aKeptProbeThatFailsOnTheServerReleasesItAndBurnsItsGeneration() async throws {
+        let first = ScriptedTransport()
+        let returning = ScriptedTransport()
+        let fresh = ScriptedTransport()
+        let sharing = ScriptedSharedConnection()
+        await sharing.answer(.transport(first, on: Self.kept))
+        await sharing.answer(.transport(returning, on: Self.kept))
+        await sharing.answer(.transport(fresh, on: Self.fresh))
+        let refusal = TransportError.channelFailed(detail: "herdr went away")
+        await returning.failPing(atCall: 1, with: refusal)
+        let clock = ScriptedLivenessClock()
+        let session = makeSession(sharing, clock: clock)
+        let log = UpdateLog(following: session)
+
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 1)
+        await session.suspend()
+        try await log.waitForStatus(.suspended, count: 1)
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 2)
+
+        #expect(await log.reconnectFailures == [refusal])
+        #expect(
+            await sharing.calls == [
+                .connect(replacing: nil), .keep(Self.kept),
+                .connect(replacing: nil), .release(Self.kept), .connect(replacing: nil),
+            ])
+        #expect(await session.transportGeneration == 2)
+        #expect(await !session.ridesKeptConnection(generation: 2))
+        try await waitUntil("the failed probe's Transport should close") {
+            await returning.isClosed
+        }
+        #expect(await fresh.capturedSubscriptions == [subscriptions])
+        await session.end()
+    }
+
+    /// A connection that swallowed a request is distrusted: a suspension
+    /// then keeps nothing, and the return dials anew.
+    @Test func aConnectionThatTimedOutIsNotKeptAcrossASuspension() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let sharing = ScriptedSharedConnection()
+        await sharing.answer(.transport(first, on: Self.kept))
+        await sharing.answer(.transport(second, on: Self.fresh))
+        let clock = ScriptedLivenessClock()
+        let session = makeSession(
+            sharing, clock: clock,
+            reconnect: ReconnectPolicy(
+                initialDelay: .seconds(3600), multiplier: 1, maxDelay: .seconds(3600)))
+        let log = UpdateLog(following: session)
+
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 1)
+        await first.failNextSubscription(with: .timedOut)
+        await session.updateSubscriptions(
+            subscriptions + [.pane(.agentStatusChanged, paneID: "w1:p1")])
+        try await waitUntil("the swallowed subscribe should back off") {
+            await log.reconnectFailures == [.timedOut]
+        }
+        await session.suspend()
+        try await log.waitForStatus(.suspended, count: 1)
+        #expect(await sharing.calls == [.connect(replacing: nil)])
+        #expect(await first.isClosed)
+
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 2)
+        #expect(await sharing.calls == [.connect(replacing: nil), .connect(replacing: nil)])
+        #expect(await second.capturedSubscriptions == [subscriptions])
+        #expect(await session.transportGeneration == 1)
+        await session.end()
+    }
+
+    @Test func endingWhileSuspendedReleasesTheKeptConnection() async throws {
+        let first = ScriptedTransport()
+        let sharing = ScriptedSharedConnection()
+        await sharing.answer(.transport(first, on: Self.kept))
+        let clock = ScriptedLivenessClock()
+        let session = makeSession(sharing, clock: clock)
+        let log = UpdateLog(following: session)
+
+        await session.resume()
+        try await log.waitForStatus(.connected, count: 1)
+        await session.suspend()
+        try await log.waitForStatus(.suspended, count: 1)
+        await session.end()
+        try await log.waitForStatus(.ended, count: 1)
+        #expect(
+            await sharing.calls == [
+                .connect(replacing: nil), .keep(Self.kept), .release(Self.kept),
+            ])
+    }
+
     @Test func aPathBackCutsAReconnectBackoffShort() async throws {
         let transport = ScriptedTransport()
         let sharing = ScriptedSharedConnection()

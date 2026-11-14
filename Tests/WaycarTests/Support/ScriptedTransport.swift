@@ -139,6 +139,7 @@ final actor ScriptedTransport: Transport {
     private var eventContinuation: AsyncThrowingStream<HerdrEvent, any Error>.Continuation?
     private var subscriptionObservers: [UUID: AsyncStream<[EventSubscription]>.Continuation] = [:]
     private var nextSubscriptionGate: ScriptedTransportCallGate?
+    private var nextSubscriptionFailure: TransportError?
     private var nextAttachID: UInt64 = 0
     private var liveAttachID: UInt64?
     private var nextAttachGate: ScriptedTransportCallGate?
@@ -407,6 +408,12 @@ final actor ScriptedTransport: Transport {
     }
 
     /// Pauses the next events subscription after recording its requested set.
+    /// Fails the next events subscription with `failure`, after recording
+    /// its requested set: what a subscribe the link swallowed answers.
+    func failNextSubscription(with failure: TransportError) {
+        nextSubscriptionFailure = failure
+    }
+
     func gateNextSubscription(using gate: ScriptedTransportCallGate) {
         nextSubscriptionGate = gate
     }
@@ -1107,6 +1114,10 @@ final actor ScriptedTransport: Transport {
         let gate = nextSubscriptionGate
         nextSubscriptionGate = nil
         await gate?.waitUntilOpen()
+        if let failure = nextSubscriptionFailure {
+            nextSubscriptionFailure = nil
+            throw failure
+        }
         if let missing = subscriptions.firstMissingPane(in: missingPaneIDs) {
             throw HerdrAPIError(code: "pane_not_found", message: "pane \(missing) not found")
         }
