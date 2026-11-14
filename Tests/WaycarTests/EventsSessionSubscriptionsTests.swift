@@ -15,14 +15,22 @@ struct EventsSessionSubscriptionsTests {
         .pane(.agentStatusChanged, paneID: "w1:p1"),
     ]
 
-    private func makeSession(transport: ScriptedTransport) -> EventsSession {
+    private func makeSession(
+        transport: ScriptedTransport,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy(
+            initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50))
+    ) -> EventsSession {
         EventsSession(
             subscriptions: initial,
             connect: { transport },
-            reconnectPolicy: ReconnectPolicy(
-                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            reconnectPolicy: reconnectPolicy,
             keepalive: nil)
     }
+
+    /// A backoff no test waits out: what follows a `.reconnecting` stays put
+    /// until the test cuts it short or ends the session.
+    private let parkedPolicy = ReconnectPolicy(
+        initialDelay: .seconds(3600), multiplier: 1, maxDelay: .seconds(3600))
 
     @Test func distinctTerminalsRunTogetherAndSixthWaitsForTeardown() async throws {
         let transport = ScriptedTransport()
@@ -701,6 +709,173 @@ struct EventsSessionSubscriptionsTests {
         await session.end()
     }
 
+    // MARK: Request recovery (HERDR-05)
+
+    private func connectedSession(
+        _ transports: [ScriptedTransport]
+    ) -> (EventsSession, SequencedTransportConnector) {
+        let connector = SequencedTransportConnector(transports)
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            keepalive: nil)
+        return (session, connector)
+    }
+
+    /// A server's answer says the link works: it is thrown as it is, never
+    /// replayed, and the connection stays trusted and live.
+    @Test func aServerAnswerIsNeitherReplayedNorDistrustsTheConnection() async throws {
+        let transport = ScriptedTransport()
+        let (session, connector) = connectedSession([transport])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        let rejection = TransportError.apiRejected(code: "agent_not_found", message: "gone")
+        await #expect(throws: rejection) {
+            try await session.withTransport { _ in
+                _ = calls.next()
+                throw rejection
+            }
+        }
+        #expect(calls.value == 1)
+        #expect(await transport.distrustCount == 0)
+        #expect(await transport.emit(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(
+            await updates.next()
+                == .event(.agentStatusChanged(paneID: "w1:p1", status: .blocked)))
+        #expect(await connector.connectCount == 1)
+        await session.end()
+    }
+
+    /// One replay only: a replay that fails on the link too reports its own
+    /// failure, is not replayed again, and leaves the replacement trusted.
+    @Test func aRequestIsReplayedOnceAndAFailedReplayReportsItsOwnFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, connector) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        await #expect(throws: TransportError.sshUnreachable(detail: "still dead")) {
+            try await session.withTransport { transport in
+                _ = calls.next()
+                if (transport as? ScriptedTransport) === first {
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                throw TransportError.sshUnreachable(detail: "still dead")
+            }
+        }
+        #expect(calls.value == 2)
+        // Told on a detached Task, as the replacement dials.
+        try await waitUntil("the dead Transport should be told it is distrusted") {
+            await first.distrustCount == 1
+        }
+        #expect(await second.distrustCount == 0)
+        #expect(await connector.connectCount == 2)
+        await session.end()
+    }
+
+    /// A replay that runs out its own time reports the first failure, not
+    /// a second wait's.
+    @Test func aReplayThatTimesOutReportsTheFirstFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, _) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let calls = DialCount()
+        await #expect(throws: TransportError.sshUnreachable(detail: "dead link")) {
+            try await session.withTransport { transport in
+                _ = calls.next()
+                if (transport as? ScriptedTransport) === first {
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                throw TransportError.timedOut
+            }
+        }
+        #expect(calls.value == 2)
+        #expect(await second.distrustCount == 0)
+        await session.end()
+    }
+
+    /// A link failure the Transport marked unsent is a link failure all the
+    /// same: the connection is distrusted and the request replayed.
+    @Test func anUnsentRequestIsReplayedLikeABareLinkFailure() async throws {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, _) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let answer = try await session.withTransport { transport -> String in
+            if (transport as? ScriptedTransport) === first {
+                throw RequestNotSentError(
+                    cause: TransportError.sshUnreachable(detail: "never written"))
+            }
+            return "second"
+        }
+        #expect(answer == "second")
+        try await waitUntil("the dead Transport should be told it is distrusted") {
+            await first.distrustCount == 1
+        }
+        await session.end()
+    }
+
+    /// A link failure on a Transport the run loop already replaced retries
+    /// on the replacement without distrusting it.
+    @Test func aLinkFailureOnAReplacedTransportRetriesWithoutDistrustingTheReplacement()
+        async throws
+    {
+        let first = ScriptedTransport()
+        let second = ScriptedTransport()
+        let (session, connector) = connectedSession([first, second])
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let gate = ScriptedTransportCallGate()
+        let request = Task {
+            try await session.withTransport { transport -> String in
+                if (transport as? ScriptedTransport) === first {
+                    await gate.waitUntilOpen()
+                    throw TransportError.sshUnreachable(detail: "dead link")
+                }
+                return "second"
+            }
+        }
+        await gate.waitForEntry()
+        await first.setConnectionAlive(false)
+        await first.failEventStream(.channelFailed(detail: "remote closed"))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the dropped stream should reconnect")
+            await gate.open()
+            _ = await request.result
+            await session.end()
+            return
+        }
+        #expect(await updates.next() == .status(.connected))
+        #expect(await connector.connectCount == 2)
+        await gate.open()
+
+        #expect(try await request.value == "second")
+        #expect(await first.distrustCount == 0)
+        #expect(await second.distrustCount == 0)
+        await session.end()
+    }
+
     /// Parity with `withTerminalTransport`: after the run loop stopped on an
     /// action-required failure, a Host-scoped RPC reports that cause instead
     /// of a generic unreachable Host.
@@ -917,6 +1092,357 @@ struct EventsSessionSubscriptionsTests {
 
     private static let attachRequest = TerminalAttachRequest(
         target: "w1:p1", takeover: true, cols: 80, rows: 24)
+
+    // MARK: Subscription lifecycle (HERDR-03)
+
+    /// An early subscribe (#105) whose set changed while it was in flight is
+    /// ended and replaced on the same connection: no second dial, and no
+    /// status between the activation's `.connecting` and `.connected`.
+    @Test func anEarlySubscribeOvertakenByAnUpdateIsReplacedOnTheSameConnection() async throws {
+        let transport = ScriptedTransport(
+            serverInfo: ServerInfo(version: "0.9.3", protocolVersion: 22))
+        let gate = ScriptedTransportCallGate()
+        await transport.gateNextSubscription(using: gate)
+        let connector = SequencedTransportConnector([transport])
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy,
+            keepalive: nil,
+            connectionMemory: RememberedFacts(protocolVersion: 19))
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        await gate.waitForEntry()
+        await session.updateSubscriptions(updated)
+        await gate.open()
+
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial, updated])
+        #expect(await connector.connectCount == 1)
+        await session.end()
+    }
+
+    /// The fallback from a rejected seed to the global set happens once: the
+    /// global set is no seed, so its own rejection is reported like any other.
+    @Test func aRejectedSeedFallsBackOnceAndARejectedFallbackReconnectsVisibly() async throws {
+        let transport = ScriptedTransport()
+        await transport.rejectSubscribes(
+            containing: .global(.paneAgentDetected), code: "invalid_params")
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume(seeding: updated)
+        #expect(await updates.next() == .status(.connecting))
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [updated, initial])
+        await session.end()
+    }
+
+    /// A rejected seed that holds only global entries has nothing to fall
+    /// back to: the rejection is reported at once.
+    @Test func aRejectedSeedWithNothingToDropReconnectsVisibly() async throws {
+        let transport = ScriptedTransport()
+        await transport.rejectSubscribes(
+            containing: .global(.paneAgentDetected), code: "invalid_params")
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume(seeding: initial)
+        #expect(await updates.next() == .status(.connecting))
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [initial])
+        await session.end()
+    }
+
+    /// `pane_not_found` falls back to the global set whether or not the set
+    /// was a seed: a live update naming an exited pane stays Connected.
+    @Test func aPaneMissingFromALiveUpdateFallsBackToTheGlobalSetSilently() async throws {
+        let transport = ScriptedTransport()
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        await transport.setMissingPanes(["w1:p1"])
+        await session.updateSubscriptions(updated)
+
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial, updated, initial])
+        #expect(await !transport.isClosed)
+        await session.end()
+    }
+
+    /// An update while a seed's subscribe is in flight makes the set no seed:
+    /// the seed's answer is replaced, and a rejection of the update is
+    /// reported instead of falling back silently.
+    @Test func anUpdateDuringASeededSubscribeEndsTheSeedsFallback() async throws {
+        let transport = ScriptedTransport()
+        let gate = ScriptedTransportCallGate()
+        await transport.gateNextSubscription(using: gate)
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+        let seed = initial + [.pane(.agentStatusChanged, paneID: "w1:p1")]
+        let replacementSet = initial + [.global(.workspaceReordered)]
+
+        await session.resume(seeding: seed)
+        #expect(await updates.next() == .status(.connecting))
+        await gate.waitForEntry()
+        await transport.rejectSubscribes(
+            containing: .global(.workspaceReordered), code: "invalid_params")
+        await session.updateSubscriptions(replacementSet)
+        await gate.open()
+
+        let next = await updates.next()
+        guard case .status(.reconnecting(1, _, .apiRejected(code: "invalid_params", _))) = next
+        else {
+            Issue.record("expected a visible reconnect, got \(String(describing: next))")
+            await session.end()
+            return
+        }
+        #expect(await transport.capturedSubscriptions == [seed, replacementSet])
+        await session.end()
+    }
+
+    /// A dial that fails retryably is a disconnect too: the pane entries go
+    /// before the retry subscribes.
+    @Test func aFailedDialDropsThePaneSubscriptionsBeforeTheRetry() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: { () async throws -> any Transport in
+                if dials.next() == 1 { throw TransportError.sshUnreachable(detail: "no route") }
+                return transport
+            },
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: .milliseconds(10), multiplier: 2, maxDelay: .milliseconds(50)),
+            keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.updateSubscriptions(updated)
+        await session.resume()
+
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting(1, _, .sshUnreachable)) = await updates.next() else {
+            Issue.record("the failed dial should reconnect")
+            await session.end()
+            return
+        }
+        #expect(await updates.next() == .status(.connected))
+        #expect(await transport.capturedSubscriptions == [initial])
+        await session.end()
+    }
+
+    /// Pre-existing race, pinned as it is (HERDR-03): a request that finds
+    /// the link dead while the run loop backs off asks for a re-subscribe
+    /// that no live channel takes. The request stays set, so the next
+    /// connection's first stream loss re-subscribes silently, with no
+    /// `.reconnecting`.
+    @Test func aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent() async throws {
+        let first = ScriptedTransport(
+            serverInfo: ServerInfo(version: "first", protocolVersion: 17))
+        let second = ScriptedTransport(
+            serverInfo: ServerInfo(version: "second", protocolVersion: 17))
+        let connector = SequencedTransportConnector([first, second])
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+
+        let lost = TransportError.channelFailed(detail: "remote closed")
+        await first.failEventStream(lost)
+        #expect(
+            await updates.next()
+                == .status(.reconnecting(attempt: 1, delay: .seconds(3600), failure: lost)))
+
+        let (distrusted, continuation) = AsyncStream.makeStream(of: Void.self)
+        var distrust = distrusted.makeAsyncIterator()
+        await first.setOnDistrusted { continuation.yield() }
+        let request = Task {
+            try await session.withTransport { transport in
+                if (transport as? ScriptedTransport) === first { throw TransportError.timedOut }
+                return try await transport.ping().version
+            }
+        }
+        _ = await distrust.next()
+        await session.redialNow(trigger: .pathChange)
+        #expect(await updates.next() == .status(.connected))
+        #expect(try await request.value == "second")
+
+        await second.failEventStream(lost)
+        #expect(await updates.next() == .status(.connected))
+        #expect(await connector.connectCount == 2)
+        #expect(await second.capturedSubscriptions == [initial, initial])
+        await session.end()
+        continuation.finish()
+    }
+
+    // MARK: Lifecycle (HERDR-01)
+
+    /// A connect closure whose first dial fails with `failure`; every later
+    /// one answers `transport`. `dials` counts them.
+    private func failingFirstDial(
+        with failure: TransportError, then transport: ScriptedTransport, dials: DialCount
+    ) -> @Sendable () async throws -> any Transport {
+        { () async throws -> any Transport in
+            if dials.next() == 1 { throw failure }
+            return transport
+        }
+    }
+
+    @Test func aRetryDuringABackoffStartsANewActivationAtOnce() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let unreachable = TransportError.sshUnreachable(detail: "no route")
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(with: unreachable, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(
+            await updates.next()
+                == .status(.reconnecting(attempt: 1, delay: .seconds(3600), failure: unreachable)))
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+        #expect(await updates.next() == .status(.ended))
+    }
+
+    @Test func aRetryAfterAFailureConnectsAgain() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(
+                with: .authenticationFailed, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.failed(.authenticationFailed)))
+        // A failed activation waits for the user: a link coming back dials
+        // nothing.
+        await session.redialNow(trigger: .pathChange)
+        #expect(dials.value == 1)
+
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+    }
+
+    @Test func aRetryWhileSuspendedActivates() async throws {
+        let transport = ScriptedTransport()
+        let session = makeSession(transport: transport, reconnectPolicy: parkedPolicy)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.retry()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        await session.end()
+    }
+
+    @Test func aSuspensionDuringABackoffEndsItAndTheReturnConnects() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let unreachable = TransportError.sshUnreachable(detail: "no route")
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(with: unreachable, then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the failed dial should back off")
+            await session.end()
+            return
+        }
+        await session.suspend()
+        #expect(await updates.next() == .status(.suspended))
+        #expect(dials.value == 1)
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        #expect(dials.value == 2)
+        await session.end()
+    }
+
+    @Test func endingDuringABackoffFinishesTheUpdates() async throws {
+        let transport = ScriptedTransport()
+        let dials = DialCount()
+        let session = EventsSession(
+            subscriptions: initial,
+            connect: failingFirstDial(
+                with: .sshUnreachable(detail: "no route"), then: transport, dials: dials),
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        guard case .status(.reconnecting) = await updates.next() else {
+            Issue.record("the failed dial should back off")
+            await session.end()
+            return
+        }
+        await session.end()
+        #expect(await updates.next() == .status(.ended))
+        #expect(await updates.next() == nil)
+        #expect(dials.value == 1)
+    }
+
+    @Test func aResumeWhileActiveAndAnythingAfterEndAreNoOps() async throws {
+        let transport = ScriptedTransport()
+        let connector = SequencedTransportConnector([transport])
+        let session = EventsSession(
+            subscriptions: initial, connect: { try await connector.connect() },
+            reconnectPolicy: parkedPolicy, keepalive: nil)
+        var updates = session.updates.makeAsyncIterator()
+
+        // Nothing is live while suspended: a link coming back dials nothing.
+        await session.redialNow(trigger: .pathChange)
+        await session.resume()
+        #expect(await updates.next() == .status(.connecting))
+        #expect(await updates.next() == .status(.connected))
+        await session.resume()
+        // A live channel is `revalidate()`'s business, not a redial's.
+        await session.redialNow(trigger: .pathChange)
+        await session.end()
+        await session.end()
+        await session.resume()
+        await session.retry()
+        #expect(await updates.next() == .status(.ended))
+        #expect(await updates.next() == nil)
+        #expect(await connector.connectCount == 1)
+        #expect(await transport.isClosed)
+    }
 
     @Test func updateWhileSuspendedTakesEffectOnResume() async throws {
         let transport = ScriptedTransport()
@@ -1244,6 +1770,21 @@ private final class ProjectionGenerationBarrier {
         }
         await withCheckedContinuation { continuation in
             waiters.append((generation, continuation))
+        }
+    }
+}
+
+/// How many dials a scripted connect closure has seen.
+private final class DialCount: Sendable {
+    private let count = Mutex(0)
+
+    var value: Int { count.withLock { $0 } }
+
+    /// Counts one more dial and returns its ordinal.
+    func next() -> Int {
+        count.withLock { count in
+            count += 1
+            return count
         }
     }
 }

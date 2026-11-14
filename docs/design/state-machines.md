@@ -132,7 +132,7 @@ boundary, into the new state, never inside `handle`.
 The AGENTS.md "Load-bearing" facts name guards that took live debugging to
 find: `WaycarSSHTransport.scheduleLaunchSettle`,
 `AgentComposerStore.promptWaitingOutLaunch`,
-`EventsSession.subscriptionsAreSeeded` and `dropSnapshotSubscriptions`,
+`EventsSubscriptionMachine`'s `seeded` stage and `dropSnapshotSubscriptions`,
 `MoshClientSession.abandon()`, the input gates, T24's no-replay rule, and the
 rule that nothing starts a runtime without the user's tap. A conversion turns
 each into a state or a transition and keeps its behaviour exactly; it never
@@ -5332,6 +5332,7 @@ stateDiagram-v2
 
 **herdr events and transport**
 
+<<<<<<< HEAD
 ### LaunchSettleMachine
 
 - **File:** `Sources/Waycar/Transport/LaunchSettleMachine.swift`
@@ -5476,6 +5477,287 @@ stateDiagram-v2
     live --> [*]: channelEnded / forget
     live --> closing: closeRequested / takeLiveAttaches
     closing --> [*]: channelEnded / forget
+=======
+### EventsSubscriptionMachine
+
+- **File:** `Sources/Waycar/Transport/EventsSubscriptionMachine.swift`
+- **Owner:** `EventsSession` subscribes, keeps the live channel's stream
+  under the machine's channel token (`channels`, `liveChannel`), ends
+  channels, stops the keepalive and drives the run loop's `continue`s.
+  Work that awaits (keepalive, `revalidate()`, `sampleLatency()`, a hedge's
+  `adopt`) names the `EventsChannel` it started on and counts only while it
+  is still live (`isLive`).
+- **States:** the requested set; stage `seeded` (a cached snapshot's set no
+  subscribe accepted), `subscribing`, `globalFallback` (cut back to the
+  global entries), `live(channel)`; and `replacing` (a deliberate teardown
+  asked for an immediate re-subscribe, which stays Connected).
+- **Events:** `seed`, `update(set, active)`, `answered(asked)`,
+  `answeredOnReplacedTransport(activationCurrent)`, `accepted`, `goLive`,
+  `channelEnded(channel)`, `streamFinished`, `connectFailed(failure)`,
+  `disconnected`, `replace`, `windDownStarted`, `woundDown`.
+- **Effects:** `endChannel`, `subscribeAgain`, `retain(channel)`,
+  `stopKeepalive`, `forget(channel)`, `take(channel)`, `retryAtOnce`.
+  `dropSnapshotSubscriptions` is the machine's: every disconnect and every
+  teardown cuts the set to its globals, so a pane that exited while the
+  Host was offline cannot wedge it. `pane_not_found`, and any rejection of
+  a seed, retries once at once with the global set. An answer for a set
+  that is no longer the requested one subscribes again. `replacing` sits
+  beside the stage as the old flag did: a request that finds the link dead
+  during a backoff leaves it set with no live channel, and the next
+  channel's loss then re-subscribes silently (pre-existing, kept, pinned by
+  `aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent`).
+- **Tests:** `EventsSubscriptionMachineTests`, `EventsSessionSubscriptionsTests`,
+  `EventsSessionConnectFlowTests`.
+- **Catalogue:** HERDR-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> seeded
+    seeded --> subscribing: accepted / update
+    seeded --> globalFallback: rejected or pane_not_found, set had more / retryAtOnce
+    subscribing --> globalFallback: pane_not_found / retryAtOnce
+    subscribing --> globalFallback: disconnected / woundDown
+    globalFallback --> subscribing: accepted / update
+    subscribing --> live: goLive / retain
+    live --> live: update while active / endChannel, replacing
+    live --> live: replace / endChannel, replacing
+    live --> subscribing: channelEnded / stopKeepalive, forget
+    live --> subscribing: windDownStarted / take
+    subscribing --> subscribing: streamFinished while replacing / subscribeAgain
+    subscribing --> seeded: seed
+```
+
+### EventsLifecycleMachine
+
+- **File:** `Sources/Waycar/Transport/EventsLifecycleMachine.swift`
+- **Owner:** `EventsSession` keeps the lifecycle Task chain
+  (`enqueueLifecycleTransition`), the run Task, the dial Task and the
+  backoff's sleep, performs the teardown (`windDown`), the pool hop of a
+  redial and the announcements, and reads `phase`, `activationGeneration`,
+  `isWindingDown`, `acceptsWaiters` and the connect trigger from the machine.
+- **States:** `stage` is `suspended`, `connecting`, `connected`,
+  `backingOff`, `failed`, `windingDown` or `ended`, derived from the phase
+  (`suspended`, `active`, `ended`), a teardown in progress, and what the
+  current activation's run loop last announced. They are kept apart because
+  they are apart in time: a suspension is suspended at once while its run
+  loop goes on until the teardown cancels it (a dial or backoff begun before
+  may finish meanwhile), and a Reconnect's teardown runs while active. Also
+  the activation token, `running` (`runTask != nil`), the backoff's timer
+  token, the dial in flight (`id`, `afterRedial`), `redialSinceLastDial`,
+  `redialRequested` and the connect trigger.
+- **Events:** `activate(trigger)`, `restart`, `restartWoundDown(activation)`,
+  `suspend`, `suspendWoundDown`, `end`, `endWoundDown`, `windDownStarted`,
+  `backoffAbandoned`, `runAbandoned`, `windDownEnded`, `dialStarted`,
+  `dialSucceeded`, `dialEnded(id)`, `redial(channelLive, trigger)`,
+  `dialAbandoned(id)`, `connectFailed`, `wentLive`, `failed(failure)`,
+  `backoffStarted(attempt, delay, failure)`, `backoffElapsed(timer)`.
+- **Effects:** `announce(status)`, `spawnRun(activation)`, `cancelRun`,
+  `windDown`, `dialing(id)`, `forgetDial`, `abandonDial(id)`,
+  `cancelDial`, `cutBackoff`, `sleep(timer, delay)`, `cancelBackoff`,
+  `forgetBackoff`, `dialAgain`. Every activation and Reconnect mints the
+  next activation token before its teardown, so an old run loop never
+  installs into the new one; a redial cancels only the dial it found stuck
+  and leaves a dial a redial started alone; only the current backoff
+  clears itself as it wakes (the activation-generation check it replaces).
+- **Tests:** `EventsLifecycleMachineTests`, `EventsSessionSubscriptionsTests`
+  (Reconnect, suspend and end during a backoff, the chain, the no-ops),
+  `EventsSessionResilienceTests` (redials), `HostConsoleProjectionLifecycleTests`.
+- **Catalogue:** HERDR-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> suspended
+    suspended --> connecting: activate / announce, spawnRun
+    connecting --> connected: wentLive / announce
+    connecting --> backingOff: backoffStarted / announce, sleep
+    connected --> backingOff: backoffStarted / announce, sleep
+    backingOff --> connected: wentLive / announce
+    backingOff --> backingOff: redial / cutBackoff or abandonDial
+    connecting --> failed: failed / announce
+    connected --> failed: failed / announce
+    backingOff --> failed: failed / announce
+    connected --> windingDown: restart / announce connecting, windDown
+    backingOff --> windingDown: restart
+    failed --> windingDown: restart
+    windingDown --> connecting: restartWoundDown / spawnRun
+    connected --> suspended: suspend / windDown
+    backingOff --> suspended: suspend / windDown
+    suspended --> windingDown: windDownStarted
+    windingDown --> suspended: suspendWoundDown / announce
+    suspended --> ended: end / windDown
+    connected --> ended: end / windDown
+    windingDown --> ended: endWoundDown / announce
+```
+
+### EventsConnectionMachine
+
+- **File:** `Sources/Waycar/Transport/EventsConnectionMachine.swift`
+- **Owner:** `EventsSession` keeps the objects under the generations the
+  machine names (`currentTransport`, `provisional` with its rejection, the
+  kept probe's handout), makes the provisional Transport in
+  `offerToTerminals`, and performs the pool hops (probe, retire, release)
+  and every Transport identity check (`isSameTransport`), as before.
+- **States:** `stage` is `absent`, `kept`, `provisional`, `proven` or
+  `distrusted`, derived from the installed connection (generation and
+  pooled connection), the generation offered ahead of its `ping`, the
+  connection kept across a suspension (and since when), the kept probe's
+  generation, trust, the published generation and the last reserved one.
+  The survey's `preparing` and `retiring` hold no state of their own: a
+  dial or setup in flight is the lifecycle's dial, and a retirement is a
+  pool call the owner awaits with nothing to observe in between.
+- **Events:** `offer`, `reserve`, `install(generation, connection)`,
+  `provisionalFailed(generation)`, `distrust`, `suspect`, `drop`,
+  `keep(id, since)`, `takeKept(now)`, `probeOffered(generation)`,
+  `probeSettled`, `probeAbandoned`, `end`, `windDownStarted`, `woundDown`.
+- **Effects:** `offer(generation)`, `reserved(generation)`,
+  `publish(generation)`, `uninstall`, `forgetProvisional`, `probeKept(id)`,
+  `retireKept(id)`, `releaseKept(id)`, `holdProbe`, `forgetProbe`. Every
+  new connection reserves the next generation, and one whose `ping` fails
+  burns it; a distrusted connection is never kept, never handed to
+  terminals, and replaced by the next connect; one kept past
+  `keptConnectionMaxAge` is retired unprobed.
+- **Tests:** `EventsConnectionMachineTests`, `EventsSessionResilienceTests`,
+  `EventsSessionConnectFlowTests`, `EventsSessionSubscriptionsTests`
+  (distrust and silent replacement).
+- **Catalogue:** HERDR-02.
+
+```mermaid
+stateDiagram-v2
+    [*] --> absent
+    absent --> provisional: offer / reserve generation
+    provisional --> proven: install / publish
+    provisional --> absent: provisionalFailed (generation burned)
+    absent --> proven: reserve, install (hedge replacement)
+    proven --> distrusted: suspect
+    proven --> distrusted: distrust / uninstall
+    distrusted --> provisional: offer
+    distrusted --> proven: install
+    proven --> absent: drop / uninstall
+    proven --> kept: keep, windDown
+    kept --> provisional: takeKept / probeKept, offer, holdProbe
+    kept --> absent: takeKept, too old / retireKept
+    kept --> absent: end / releaseKept
+    distrusted --> absent: woundDown
+```
+
+### EventsLivenessMachine
+
+- **File:** `Sources/Waycar/Transport/EventsLivenessMachine.swift`
+- **Owner:** `EventsSession` keeps the latency box (`currentLatency`, read
+  off the actor) and the latency stream, writes them on `show` and `hide`,
+  runs the keepalive Task and every ping, and checks channel identity
+  (`isLive`) before a sample or revalidation may show its value or fail
+  the connection.
+- **States:** `stage` is `unproven` (nothing shown), `healthy` or
+  `suspect` (a keepalive failure forced the teardown), derived from the
+  shown round trip, the latest ping and revalidate round trips, the latest
+  proof of life, whether the keepalive runs, and the pending keepalive
+  failure. The survey's `checking` holds no state of its own: no field
+  marks a ping in flight, and nothing reads one.
+- **Events:** `measured`, `revalidated`, `show`, `showIfLive(channelLive)`,
+  `activity(now)`, `announced(connected)`, `keepaliveStarted`,
+  `keepaliveStopped`, `keepaliveFailed`, `wentLive`, `streamEnded(failure)`,
+  `woundDown`.
+- **Effects:** `show`, `hide`, `runKeepalive`, `cancelKeepalive`,
+  `lost(failure)`. A round trip is kept before the stale-channel check
+  that refuses to show it (`aRevalidationAnsweredOnAReplacedChannelStillTimesTheNextOne`);
+  the box is written before the signal and cleared before every status but
+  `.connected`; a keepalive failure outranks the stream's own.
+- **Tests:** `EventsLivenessMachineTests`, `EventsSessionKeepaliveTests`,
+  `EventsSessionLatencyTests`, `EventsSessionSampleLatencyTests`,
+  `EventsSessionResilienceTests`.
+- **Catalogue:** HERDR-04.
+
+```mermaid
+stateDiagram-v2
+    [*] --> unproven
+    unproven --> healthy: show / showIfLive, live
+    healthy --> healthy: showIfLive, live / measured, activity
+    healthy --> unproven: announced, not connected / hide
+    healthy --> suspect: keepaliveFailed
+    suspect --> healthy: streamEnded / lost(keepalive failure)
+    suspect --> healthy: wentLive or woundDown
+```
+
+### RequestRecoveryMachine
+
+- **File:** `Sources/Waycar/Transport/RequestRecoveryMachine.swift`
+- **Owner:** `EventsSession.withTransport`, one per request: it waits for
+  the installed Transport, runs the operation, classifies a failure
+  (`isTransportLinkFailure`, exactly `.timedOut`, still installed), and
+  performs the distrust (the connection machine's `distrust`, the detached
+  `transportDistrusted()`, the subscription machine's `replace`).
+- **States:** `awaitingConnection`, `executing`, `replacing` (the first
+  attempt failed on the link; waiting for the run loop's replacement),
+  `replaying`, `completed(succeeded | firstFailure | replayFailure)`.
+- **Events:** `connected`, `succeeded`, `failed(linkFailure, timedOut,
+  stillInstalled)`.
+- **Effects:** `noteActivity`, `distrust`, `awaitReplacement`,
+  `throwFirstFailure`, `throwReplayFailure`. One replay only; a server's
+  answer is thrown as it is; `retryOnLinkFailure: false` (input that
+  submits, prompts) distrusts the dead link but never replays, since a
+  link failure cannot say whether herdr got the request (the write
+  boundary itself is the callers' `RequestWriteMark`); a replay that times
+  out reports the first failure; the wait for a replacement starts
+  nothing, and a run loop that cannot connect releases it with its own
+  failure.
+- **Tests:** `RequestRecoveryMachineTests`, `EventsSessionSubscriptionsTests`
+  (silent replacement, request recovery).
+- **Catalogue:** HERDR-05.
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaitingConnection
+    awaitingConnection --> executing: connected
+    executing --> completed: succeeded / noteActivity
+    executing --> completed: failed, server answer / throwFirstFailure
+    executing --> completed: failed on link, no replay / distrust, throwFirstFailure
+    executing --> replacing: failed on link / distrust, awaitReplacement
+    replacing --> replaying: connected
+    replaying --> completed: succeeded / noteActivity
+    replaying --> completed: failed / throwReplayFailure
+    replaying --> completed: timed out / throwFirstFailure
+```
+
+### LivenessRaceMachine
+
+- **File:** `Sources/Waycar/Transport/ConnectionLiveness.swift`
+- **Owner:** `LivenessRace.Race` keeps the machine under its one `Mutex`
+  with the caller's continuation, the hedge's failure and the race's
+  Tasks; it classifies the proof's failure (`Hedging.startsOn`), launches
+  the hedge, settles (cancels the Tasks, resumes the caller) and discards
+  a hedge that succeeded after the race was decided.
+- **States:** `proving`, `racing`, `proofFailedAwaitingHedge(hedgeStarted)`,
+  `hedgeFailedAwaitingProof`, `settled`.
+- **Events:** `hedgeTimerElapsed`, `proofFailed(startsHedge)`,
+  `hedgeFailed`, `settle` (a success, a failure being decided, or the
+  caller's cancellation).
+- **Effects:** `launchHedge`, `failWithProofFailure`,
+  `failWithHedgeFailure`, `settle`. The first success wins; a hedge
+  success after the decision is discarded; when both fail on the link the
+  hedge's failure is thrown, while a proof the server answered throws its
+  own. A failure is decided in a second locked step as before, so the
+  hedge timer firing in between still launches the hedge, which the
+  decision then cancels.
+- **Tests:** `LivenessRaceMachineTests`, `LivenessRaceTests`,
+  `EventsSessionResilienceTests` (kept probes, revalidation hedges).
+- **Catalogue:** HERDR-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> proving
+    proving --> racing: hedgeTimerElapsed / launchHedge
+    proving --> proofFailedAwaitingHedge: proofFailed on link / launchHedge
+    proving --> proofFailedAwaitingHedge: proofFailed otherwise / failWithProofFailure
+    racing --> proofFailedAwaitingHedge: proofFailed
+    racing --> hedgeFailedAwaitingProof: hedgeFailed
+    hedgeFailedAwaitingProof --> proofFailedAwaitingHedge: proofFailed / fail with hedge's or proof's failure
+    proofFailedAwaitingHedge --> proofFailedAwaitingHedge: hedgeFailed / failWithHedgeFailure
+    proving --> settled: settle
+    racing --> settled: settle
+    proofFailedAwaitingHedge --> settled: settle
+    hedgeFailedAwaitingProof --> settled: settle
+>>>>>>> ultimate/5c0486-219548
 ```
 
 **Host Tools plugin**
@@ -6285,11 +6567,11 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | convert | P3d |
-| HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | convert | P3d |
-| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
-| HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
-| HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
+| HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | converted → `EventsLifecycleMachine` | P3d |
+| HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | converted → `EventsConnectionMachine` | P3d |
+| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
+| HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsLivenessMachine` | P3d |
+| HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `RequestRecoveryMachine` | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |
 | HERDR-07 | herdr events channel | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | M/H | leave: reader identity guarded | — |
 | HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | converted → `AttachOwnershipMachine`; bug B-32 fixed; an opening that completes during the close is still recorded and left to its own end, as before | P3d |
@@ -6298,7 +6580,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `AgentInputGateMachine`; a refused close still drops the gate (HCT-03) and a listed kind still keeps it (HCT-04), as before | P3d |
 | HERDR-12 | Shared async operation | `Sources/Waycar/Transport/SharedAsyncOperation.swift` | implicit | M/M | leave: actor-serialized single flight | — |
 | HERDR-13 | Async deadline | `Sources/Waycar/Transport/AsyncDeadline.swift` | implicit | M/M | leave: single-winner primitive | — |
-| HERDR-14 | Liveness race | `Sources/Waycar/Transport/ConnectionLiveness.swift` | implicit | H/H | convert | P3d |
+| HERDR-14 | Liveness race | `Sources/Waycar/Transport/ConnectionLiveness.swift` | implicit | H/H | converted → `LivenessRaceMachine` | P3d |
 | HERDR-15 | Home directory resolver | `Sources/Waycar/Transport/HomeDirectoryResolver.swift` | implicit | M/M | leave: one retry, single flight | — |
 | HERDR-16 | Attach bootstrap gate | `Sources/Waycar/Transport/TerminalAttach.swift` | implicit | L/L | leave: pure two-state latch | — |
 | HERDR-17 | Attach input queue | `Sources/Waycar/Transport/TerminalAttach.swift` | implicit | M/M | leave: locked queue | — |

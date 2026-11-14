@@ -133,10 +133,6 @@ enum EventsSessionUpdate: Sendable, Equatable {
 /// thing yielded and therefore survive, and a shed `.connected`'s resync
 /// duty is covered by the marker.
 actor EventsSession {
-    private enum Phase {
-        case suspended, active, ended
-    }
-
     /// Status transitions and events, in order. Finishes after `end()`.
     nonisolated let updates: AsyncStream<EventsSessionUpdate>
     private let updatesContinuation: AsyncStream<EventsSessionUpdate>.Continuation
@@ -175,7 +171,13 @@ actor EventsSession {
     /// observability for diagnostics and tests, not a consumer signal.
     private(set) var droppedUpdateCount = 0
 
-    var subscriptions: [EventSubscription]
+    /// The subscription set, whether it is a seed, the live channel and a
+    /// pending re-subscribe (HERDR-03).
+    private var subscription: EventsSubscriptionMachine
+    /// The live channel's stream, under the token the machine kept it with.
+    private(set) var channels: [UInt64: HerdrEventStream] = [:]
+    /// What the next `events.subscribe` asks for.
+    var subscriptions: [EventSubscription] { subscription.requested }
     /// The Host's connection: which pooled connection each Transport rides,
     /// and the holds that keep it across a suspension (#105).
     let sharing: SharedConnection
@@ -188,99 +190,72 @@ actor EventsSession {
     /// out alongside its `ping` instead of after it.
     let connectionMemory: (any HostConnectionMemory)?
 
-    private var phase: Phase = .suspended
-    /// The Host's live Transport. It never escapes this module; consumers
-    /// use `withTransport` or `withTerminalTransport` so replacement and
-    /// terminal admission remain local.
-    var currentTransport: (any Transport)?
+    /// Suspended, active or ended; the current activation; a teardown in
+    /// progress; the run loop's stage; the dial, redial and backoff
+    /// bookkeeping (HERDR-01).
+    private var lifecycle = EventsLifecycleMachine()
+    private var phase: EventsLifecycleMachine.Phase { lifecycle.phase }
+    /// Identifies the current activation so a cancelled connection attempt
+    /// cannot install itself after a later resume has already started.
+    var activationGeneration: UInt64 { lifecycle.activation }
+    private var isWindingDown: Bool { lifecycle.isWindingDown }
+    /// Which connection the session rides, the one offered ahead of its
+    /// `ping`, the one kept across a suspension, trust and generations
+    /// (HERDR-02). The objects stay here, set and dropped by its effects.
+    private(set) var selection = EventsConnectionMachine()
+    /// The Host's live Transport (`selection.state.installed`). It never
+    /// escapes this module; consumers use `withTransport` or
+    /// `withTerminalTransport` so replacement and terminal admission remain
+    /// local.
+    private(set) var currentTransport: (any Transport)?
     /// The pooled connection `currentTransport` rides; nil when unpooled.
-    var currentConnection: SharedConnection.ID?
+    var currentConnection: SharedConnection.ID? { selection.state.installed?.connection }
     /// The connection held open across the last suspension, and since when
     /// (#105). The next activation probes it instead of dialing.
-    var keptConnection: KeptConnection?
+    var keptConnection: KeptConnection? { selection.state.kept }
     /// What the kept connection's probe in flight has handed out
-    /// (`resumeKept`).
-    var keptProbe: KeptProbeHandout?
-    /// The generation the kept connection's probe offered terminals (#105):
-    /// attaches on it rode the connection kept across the suspension.
-    var keptTransportGeneration: UInt64?
+    /// (`resumeKept`; `selection.state.probe`).
+    private(set) var keptProbe: KeptProbeHandout?
     /// What set the next connect off, for its report (#105).
-    private var connectTrigger: NetworkAnalytics.ConnectTrigger = .launch
-    private var hasActivated = false
+    private var connectTrigger: NetworkAnalytics.ConnectTrigger { lifecycle.state.trigger }
     /// The live events channel's loss, and when, until it is back or given
     /// up on (#105).
     private var pendingLoss: (reason: NetworkAnalytics.Failure, at: ContinuousClock.Instant)?
+    /// The shown round trip, the round trips that time the next checks, the
+    /// latest proof of life, the keepalive and its failure (HERDR-04).
+    private var liveness = EventsLivenessMachine()
     /// The latest ping round trip any connection proved; liveness
     /// deadlines and the hedge delay derive from it (`LivenessTiming`).
-    var lastRoundTrip: Duration?
+    var lastRoundTrip: Duration? { liveness.roundTrip }
     /// The latest `revalidate()` round trip, kept apart from the ping's
     /// (#105): a backend's revalidate can cost more than its ping (tmux on
     /// an idle dual Host runs a `tmux ls` exec where its ping is local), so
     /// revalidation's deadline and hedge delay derive from this alone, and
     /// take `LivenessTiming`'s patient defaults until one is observed.
-    var lastRevalidateLatency: Duration?
-    /// The dial the run loop is waiting on, so `redialNow()` can cancel one
-    /// a network change left stuck. `afterRedial`: it started after a
-    /// redial, with the link already known to be back, so a later redial
-    /// leaves it alone.
-    private var dialInFlight:
-        (id: UInt64, afterRedial: Bool, task: Task<SharedTransport, any Error>)?
-    private var nextDialID: UInt64 = 0
-    /// A `redialNow()` came since the last dial started: the next dial is
-    /// the redial's own. Cleared once the events channel is live.
-    private var redialSinceLastDial = false
-    /// Set when `redialNow()` cancelled the dial in flight: the run loop
-    /// dials again at once instead of treating the cancellation as a
-    /// failure.
-    private var redialRequested = false
+    var lastRevalidateLatency: Duration? { liveness.revalidateRoundTrip }
+    /// The dial the run loop is waiting on (`lifecycle.state.dial`), so
+    /// `redialNow()` can cancel one a network change left stuck.
+    private var dialTask: Task<SharedTransport, any Error>?
     /// A new connection's Transport between its dial and its `ping`: already
     /// offered to terminals (attach first), not yet to RPCs, the events
     /// channel or `terminalTransportGenerations`. Closed with the activation
-    /// like `currentTransport`.
+    /// like `currentTransport` (`selection.state.provisional`).
     var provisional: ProvisionalTransport?
     /// Monotonic identity for the installed, ping-proven Transport.
     /// Subscription-only reconnects reuse the same Transport and therefore do
     /// not advance it.
-    private(set) var transportGeneration: UInt64 = 0
-    /// The generation most recently reserved for a new connection
-    /// (`reserveTransportGeneration`). A connection whose `ping` fails
-    /// burns its reservation, so terminals that rode it never share a
-    /// generation with the next one.
-    var reservedTransportGeneration: UInt64 = 0
-    var hasReservedTransportGeneration = false
+    var transportGeneration: UInt64 { selection.state.published }
     /// Set when the connection can no longer be trusted even though it may
     /// still look alive (a timed-out request or keepalive ping): the next
     /// reconnect replaces the transport instead of reusing it.
-    var transportSuspect = false
-    /// The keepalive failure that forced the current teardown, surfaced in
-    /// the following `.reconnecting` status.
-    private var pendingKeepaliveFailure: TransportError?
-    /// The most recent proof the connection is alive: the connect-path ping,
-    /// a successful RPC through `withTransport`, an arriving event, or an
-    /// answered keepalive. The keepalive loop skips its ping while this is
-    /// fresher than its interval (see `KeepalivePolicy.interval`).
-    private var lastConnectionActivity: ContinuousClock.Instant?
-    /// Set while `updateSubscriptions` tears the live channel down on
-    /// purpose: the run loop then re-subscribes immediately — same
-    /// connection, no backoff, no `.reconnecting` — instead of treating the
-    /// graceful stream end as a failure.
-    var resubscribeRequested = false
-    /// Whether `subscriptions` is a seed — derived from a cached snapshot
-    /// (#105) rather than a live one on this connection — that no
-    /// subscribe has accepted yet. Any rejection of a seed falls back to the
-    /// global set once, like `pane_not_found` always does.
-    private var subscriptionsAreSeeded = true
-    private var liveStream: HerdrEventStream?
-    /// Identifies the current activation so a cancelled connection attempt
-    /// cannot install itself after a later resume has already started.
-    var activationGeneration: UInt64 = 0
+    var transportSuspect: Bool { selection.isDistrusted }
     private var runTask: Task<Void, Never>?
     #if DEBUG
         var runTaskForTesting: Task<Void, Never>? { runTask }
     #endif
     private var keepaliveTask: Task<Void, Never>?
+    /// The backoff's sleep (`lifecycle.state.backoff`).
     private var backoffSleep: Task<Void, any Error>?
-    private var backoffGeneration: UInt64?
     /// The most recently enqueued lifecycle transition; each new one chains
     /// behind it, so transitions never interleave across the suspension
     /// points inside a teardown (see the actor doc).
@@ -299,7 +274,6 @@ actor EventsSession {
     /// new activation. Requests arriving after the failed run must receive the
     /// real failure instead of waiting for work that no longer exists.
     private var terminalTransportFailure: TransportError?
-    private var isWindingDown = false
     /// Virtual sessions must not report fixture activity as network usage.
     private let recordsNetworkTelemetry: Bool
 
@@ -339,7 +313,7 @@ actor EventsSession {
         clock: LivenessClock = .continuous,
         recordsNetworkTelemetry: Bool = true
     ) {
-        self.subscriptions = subscriptions
+        subscription = EventsSubscriptionMachine(subscriptions: subscriptions)
         sharing = connection
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
@@ -421,7 +395,7 @@ actor EventsSession {
     func revalidate(after trigger: NetworkAnalytics.ConnectTrigger = .foreground) async {
         guard
             phase == .active,
-            let stream = liveStream,
+            let channel = liveChannel,
             let transport = currentTransport
         else { return }
         let connection = currentConnection
@@ -444,21 +418,21 @@ actor EventsSession {
             return
         } catch {
             interval.end(NetworkAnalytics.Failure(error).rawValue)
-            await keepaliveDidFail(Self.transportFailure(error), on: stream)
+            await keepaliveDidFail(Self.transportFailure(error), on: channel)
             return
         }
         switch outcome {
         case .proof(let measured):
             interval.end("kept")
-            lastRevalidateLatency = measured.latency
-            guard publishLatency(measured.latency, measuredOn: stream) else { return }
+            livenessStep(.revalidated(measured.latency))
+            guard publishLatency(measured.latency, measuredOn: channel) else { return }
             noteConnectionActivity()
         case .hedge(let replacement):
             let elapsed = interval.end("hedge")
             reportConnect(
                 HostConnectReport(
                     outcome: .success, duration: elapsed, path: .hedge, trigger: trigger))
-            await adopt(replacement, replacing: transport, on: stream)
+            await adopt(replacement, replacing: transport, on: channel)
         }
     }
 
@@ -481,7 +455,7 @@ actor EventsSession {
     func sampleLatency() async -> Bool {
         guard
             phase == .active,
-            let stream = liveStream,
+            let channel = liveChannel,
             let transport = currentTransport
         else { return false }
         do {
@@ -491,14 +465,14 @@ actor EventsSession {
             ) {
                 try await Self.measure(transport, revalidating: false, now: clock.now)
             }
-            lastRoundTrip = measured.latency
-            guard publishLatency(measured.latency, measuredOn: stream) else { return false }
+            livenessStep(.measured(measured.latency))
+            guard publishLatency(measured.latency, measuredOn: channel) else { return false }
             noteConnectionActivity()
             return true
         } catch is CancellationError {
         } catch TransportError.cancelled {
         } catch {
-            await keepaliveDidFail(Self.transportFailure(error), on: stream)
+            await keepaliveDidFail(Self.transportFailure(error), on: channel)
         }
         return false
     }
@@ -528,16 +502,12 @@ actor EventsSession {
     /// channel is live (`revalidate()` covers that) and while inactive.
     /// `trigger` labels the connect this sets off.
     func redialNow(trigger: NetworkAnalytics.ConnectTrigger) async {
-        guard phase == .active, !isWindingDown, liveStream == nil else { return }
-        if dialInFlight?.afterRedial == true { return }
-        connectTrigger = trigger
-        redialSinceLastDial = true
-        if let stuck = dialInFlight {
-            redialRequested = true
+        let effects = lifecycleStep(
+            .redial(channelLive: subscription.liveChannel != nil, trigger: trigger))
+        for case .abandonDial(let stuck) in effects {
             await sharing.abandonDial()
-            if dialInFlight?.id == stuck.id { stuck.task.cancel() }
+            lifecycleStep(.dialAbandoned(id: stuck))
         }
-        backoffSleep?.cancel()
     }
 
     /// Terminal teardown: like `suspend()`, then finishes `updates` for
@@ -560,12 +530,10 @@ actor EventsSession {
     /// so callers must reinstall the set after every `.connected` rather than
     /// assume the last one is still in force.
     func updateSubscriptions(_ subscriptions: [EventSubscription]) async {
-        guard self.subscriptions != subscriptions else { return }
-        self.subscriptions = subscriptions
-        subscriptionsAreSeeded = false
-        guard phase == .active, let stream = liveStream else { return }
-        resubscribeRequested = true
-        await stream.end()
+        for effect in subscriptionStep(.update(subscriptions, active: phase == .active)) {
+            guard case .endChannel(let channel) = effect else { continue }
+            await channels[channel]?.end()
+        }
     }
 
     /// Runs an ordinary RPC against the currently installed Transport.
@@ -589,12 +557,18 @@ actor EventsSession {
         retryOnLinkFailure: Bool = true,
         _ operation: @escaping @Sendable (any Transport) async throws -> Value
     ) async throws -> Value {
+        var recovery = RequestRecoveryMachine(replaysLinkFailures: retryOnLinkFailure)
         let transport = try await awaitUsableTransport()
+        _ = recovery.handle(.connected)
+        let firstFailure: any Error
         do {
             let value = try await operation(transport)
-            noteConnectionActivity()
+            for effect in recovery.handle(.succeeded) where effect == .noteActivity {
+                noteConnectionActivity()
+            }
             return value
         } catch {
+            firstFailure = error
             // A degraded SSH link can sit installed-but-dead until the run
             // loop's own traffic notices. A caller that hit it first does
             // what the keepalive does — distrust the transport, let the run
@@ -602,9 +576,7 @@ actor EventsSession {
             // while this transport is still the installed one keeps a raced
             // replacement from double-failing a caller, and server answers
             // (API rejections) are never retried.
-            guard Self.isTransportLinkFailure(error) else {
-                throw error
-            }
+            //
             // A replacement may already be in flight (currentTransport nil)
             // or a fresher transport may have been installed since; either
             // way the single retry rides whatever is current. It is also
@@ -612,39 +584,60 @@ actor EventsSession {
             // replacement surfaces that cause instead of a second full
             // wait, and a failing redial releases the waiter through the
             // run loop's announce with its real cause.
-            if isSameTransport(currentTransport, transport) {
-                transportSuspect = true
-                currentTransport = nil
-                currentConnection = nil
-                // Dropped without `close()`, since Terminals may still use
-                // it; it gives up what its replacement on the same
-                // connection waits for (tmux's control slot). Detached, so
-                // the redial below never waits on it. herdr's is a no-op.
-                Task { await transport.transportDistrusted() }
-                // The run loop is parked on the live stream and cannot act on
-                // the suspect mark by itself: a link whose events reader is
-                // still alive never ends the stream, and with the keepalive
-                // quiet or disabled nothing else wakes it — the retry below
-                // would wait forever. End the channel the way a failed
-                // keepalive does, but flagged as a deliberate re-subscribe so
-                // the run loop re-dials silently (no `.reconnecting`) and
-                // installs the replacement this retry rides. A redial that
-                // fails instead releases the waiter through the run loop's
-                // announce with its real cause.
-                resubscribeRequested = true
-                await liveStream?.end()
+            let effects = recovery.handle(
+                .failed(
+                    linkFailure: Self.isTransportLinkFailure(error),
+                    timedOut: (error as? TransportError) == .timedOut,
+                    stillInstalled: isSameTransport(currentTransport, transport)))
+            for effect in effects {
+                switch effect {
+                case .distrust:
+                    await distrust(transport)
+                case .throwFirstFailure, .throwReplayFailure:
+                    throw error
+                case .awaitReplacement, .noteActivity:
+                    break
+                }
             }
-            guard retryOnLinkFailure else {
-                throw error
-            }
-            let replacement = try await awaitUsableTransport()
-            do {
-                let value = try await operation(replacement)
+        }
+        let replacement = try await awaitUsableTransport()
+        _ = recovery.handle(.connected)
+        do {
+            let value = try await operation(replacement)
+            for effect in recovery.handle(.succeeded) where effect == .noteActivity {
                 noteConnectionActivity()
-                return value
-            } catch TransportError.timedOut {
-                throw error
             }
+            return value
+        } catch let replayError {
+            let effects = recovery.handle(
+                .failed(
+                    linkFailure: Self.isTransportLinkFailure(replayError),
+                    timedOut: (replayError as? TransportError) == .timedOut,
+                    stillInstalled: isSameTransport(currentTransport, replacement)))
+            throw effects.contains(.throwFirstFailure) ? firstFailure : replayError
+        }
+    }
+
+    /// A request found the installed connection dead (`withTransport`).
+    private func distrust(_ transport: any Transport) async {
+        connectionStep(.distrust)
+        // Dropped without `close()`, since Terminals may still use it; it
+        // gives up what its replacement on the same connection waits for
+        // (tmux's control slot). Detached, so the redial below never waits
+        // on it. herdr's is a no-op.
+        Task { await transport.transportDistrusted() }
+        // The run loop is parked on the live stream and cannot act on the
+        // suspect mark by itself: a link whose events reader is still alive
+        // never ends the stream, and with the keepalive quiet or disabled
+        // nothing else wakes it — the retry would wait forever. End the
+        // channel the way a failed keepalive does, but flagged as a
+        // deliberate re-subscribe so the run loop re-dials silently (no
+        // `.reconnecting`) and installs the replacement the retry rides. A
+        // redial that fails instead releases the waiter through the run
+        // loop's announce with its real cause.
+        for effect in subscriptionStep(.replace) {
+            guard case .endChannel(let channel) = effect else { continue }
+            await channels[channel]?.end()
         }
     }
 
@@ -673,7 +666,7 @@ actor EventsSession {
     private func awaitUsableTransport() async throws -> any Transport {
         if let terminalTransportFailure { throw terminalTransportFailure }
         if let transport = currentTransport { return transport }
-        guard phase == .active, !isWindingDown, runTask != nil else {
+        guard lifecycle.acceptsWaiters else {
             throw TransportError.sshUnreachable(detail: "The Host is not connected.")
         }
         let id = UUID()
@@ -752,19 +745,11 @@ actor EventsSession {
         trigger: NetworkAnalytics.ConnectTrigger? = nil
     ) {
         guard phase == .suspended else { return }
-        phase = .active
-        connectTrigger = trigger ?? (hasActivated ? .foreground : .launch)
-        hasActivated = true
         if let seed {
-            subscriptions = seed
-            subscriptionsAreSeeded = true
+            subscriptionStep(.seed(seed))
         }
         terminalTransportFailure = nil
-        redialSinceLastDial = false
-        activationGeneration &+= 1
-        let generation = activationGeneration
-        yieldUpdate(.status(.connecting))
-        runTask = Task { await self.run(generation: generation) }
+        lifecycleStep(.activate(trigger: trigger))
     }
 
     /// Restarts the current activation. `.connecting` is announced and the
@@ -777,47 +762,39 @@ actor EventsSession {
             activate(trigger: .retry)
             return
         }
-        activationGeneration &+= 1
+        let effects = lifecycleStep(.restart)
         let generation = activationGeneration
-        connectTrigger = .retry
-        yieldUpdate(.status(.connecting))
-        await windDown()
-        guard phase == .active, activationGeneration == generation else { return }
-        runTask = Task { await self.run(generation: generation) }
+        if effects.contains(.windDown) { await windDown() }
+        lifecycleStep(.restartWoundDown(activation: generation))
     }
 
     private func deactivate(locally: Bool) async {
-        guard phase == .active else { return }
-        phase = .suspended
+        guard lifecycleStep(.suspend).contains(.windDown) else { return }
         settleLoss(recovered: false)
         await keepConnectionAcrossSuspension()
         await windDown(locally: locally)
-        yieldUpdate(.status(.suspended))
+        lifecycleStep(.suspendWoundDown)
     }
 
     /// Holds the installed, trusted connection open before `windDown`
     /// closes the Transport on it (#105), so the next activation can probe
     /// it instead of dialing. A pool hop: no network.
     private func keepConnectionAcrossSuspension() async {
-        guard currentTransport != nil, !transportSuspect, let connection = currentConnection,
-            await sharing.keep(connection)
-        else { return }
+        guard let connection = selection.keepable, await sharing.keep(connection) else { return }
         if let previous = keptConnection, previous.id != connection {
             await sharing.release(previous.id)
         }
-        keptConnection = KeptConnection(id: connection, since: clock.now())
+        connectionStep(.keep(id: connection, since: clock.now()))
     }
 
     private func finish() async {
-        guard phase != .ended else { return }
-        phase = .ended
+        guard lifecycleStep(.end).contains(.windDown) else { return }
         settleLoss(recovered: false)
         await windDown()
-        if let kept = keptConnection {
-            keptConnection = nil
-            await sharing.release(kept.id)
+        for case .releaseKept(let kept) in connectionStep(.end) {
+            await sharing.release(kept)
         }
-        yieldUpdate(.status(.ended))
+        lifecycleStep(.endWoundDown)
         updatesContinuation.finish()
         latencyContinuation.finish()
         terminalTransportContinuation.finish()
@@ -832,14 +809,51 @@ actor EventsSession {
         // Ordered before the yield, so no consumer can observe a status that
         // ends a connection while `currentLatency` still holds that
         // connection's measurement.
-        if case .status(let status) = update, status != .connected {
-            latencyBox.withLock { $0 = nil }
+        if case .status(let status) = update {
+            livenessStep(.announced(connected: status == .connected))
         }
         guard case .dropped = updatesContinuation.yield(update) else { return }
         droppedUpdateCount += 1
         if case .dropped = updatesContinuation.yield(.event(.eventsDropped)) {
             droppedUpdateCount += 1
         }
+    }
+
+    /// Feeds the lifecycle machine and performs, in order, every effect it
+    /// can perform at once; returns the effects for the caller, which
+    /// performs the rest (teardown, dial tracking, the backoff's sleep, a
+    /// pool hop, an immediate redial).
+    @discardableResult
+    private func lifecycleStep(
+        _ event: EventsLifecycleMachine.Event
+    ) -> [EventsLifecycleMachine.Effect] {
+        let effects = lifecycle.handle(event)
+        for effect in effects {
+            switch effect {
+            case .announce(let status):
+                yieldUpdate(.status(status))
+            case .spawnRun(let activation):
+                runTask = Task { await self.run(generation: activation) }
+            case .cancelRun:
+                let task = runTask
+                runTask = nil
+                task?.cancel()
+            case .forgetDial:
+                dialTask = nil
+            case .cancelDial:
+                dialTask?.cancel()
+            case .cutBackoff:
+                backoffSleep?.cancel()
+            case .cancelBackoff:
+                backoffSleep?.cancel()
+                backoffSleep = nil
+            case .forgetBackoff:
+                backoffSleep = nil
+            case .windDown, .dialing, .abandonDial, .sleep, .dialAgain:
+                break
+            }
+        }
+        return effects
     }
 
     /// Chains `transition` behind the previously enqueued one and waits for
@@ -877,7 +891,10 @@ actor EventsSession {
                     let earlyStream = try await early.stream.value
                     // The set changed while the early subscribe was in
                     // flight: replace it on the same connection.
-                    guard early.subscriptions == subscriptions else {
+                    guard
+                        !subscriptionStep(.answered(asked: early.subscriptions))
+                            .contains(.subscribeAgain)
+                    else {
                         await earlyStream.end()
                         continue
                     }
@@ -885,7 +902,9 @@ actor EventsSession {
                 } else {
                     let requested = subscriptions
                     stream = try await Self.subscribe(transport, requested)
-                    guard requested == subscriptions else {
+                    guard
+                        !subscriptionStep(.answered(asked: requested)).contains(.subscribeAgain)
+                    else {
                         await stream.end()
                         continue
                     }
@@ -893,24 +912,25 @@ actor EventsSession {
                 // An RPC may have distrusted this connection while the
                 // subscribe was in flight; its stream cannot make it live again.
                 guard isSameTransport(currentTransport, transport), !transportSuspect else {
-                    if activationIsCurrent(generation) { resubscribeRequested = false }
+                    subscriptionStep(
+                        .answeredOnReplacedTransport(
+                            activationCurrent: activationIsCurrent(generation)))
                     await stream.end()
                     continue
                 }
             } catch {
                 guard activationIsCurrent(generation) else { break }
-                if redialRequested {
+                if lifecycleStep(.connectFailed).contains(.dialAgain) {
                     // `redialNow()` cancelled a dial the network change left
                     // stuck: dial again at once, with no backoff and no
                     // `.reconnecting`.
-                    redialRequested = false
                     continue
                 }
                 let failure = Self.transportFailure(error)
                 if failure == .timedOut {
                     // The connection swallowed a request whole; do not trust
                     // it for the retry even if it still looks alive.
-                    transportSuspect = true
+                    connectionStep(.suspect)
                 }
                 // A pane that exited between the snapshot behind this
                 // subscription set and this subscribe is an ordinary race,
@@ -919,40 +939,34 @@ actor EventsSession {
                 // seeded from a cached snapshot (#105) may also name an event
                 // kind this server no longer speaks, so any rejection of a
                 // seeded set gets the same one retry.
-                if Self.namesAMissingPane(failure)
-                    || (subscriptionsAreSeeded && Self.isRejection(failure)),
-                    dropSnapshotSubscriptions()
-                {
+                if subscriptionStep(.connectFailed(failure)).contains(.retryAtOnce) {
                     continue
                 }
                 guard failure.isRetryable else {
                     recordTerminalTransportFailure(failure)
                     failTerminalTransportWaiters(failure, for: generation)
                     failTransportWaiters(failure)
-                    yieldUpdate(.status(.failed(failure)))
+                    lifecycleStep(.failed(failure))
                     settleLoss(recovered: false)
                     return
                 }
                 failTransportWaiters(failure)
-                dropSnapshotSubscriptions()
+                subscriptionStep(.disconnected)
                 attempt += 1
-                connectTrigger = .retry
-                await emitReconnectingAndBackOff(
-                    attempt: attempt, failure: failure, generation: generation)
+                await emitReconnectingAndBackOff(attempt: attempt, failure: failure)
                 continue
             }
-            subscriptionsAreSeeded = false
+            subscriptionStep(.accepted)
             if !activationIsCurrent(generation) {
                 await stream.end()
                 break
             }
-            liveStream = stream
-            redialSinceLastDial = false
+            let channel = goLive(stream)
             attempt = 0
-            pendingKeepaliveFailure = nil
-            yieldUpdate(.status(.connected))
+            livenessStep(.wentLive)
+            lifecycleStep(.wentLive)
             settleLoss(recovered: true)
-            startKeepalive(stream: stream)
+            startKeepalive(channel: channel)
 
             var streamFailure: TransportError?
             do {
@@ -977,76 +991,78 @@ actor EventsSession {
             } catch {
                 streamFailure = Self.transportFailure(error)
             }
-            if liveStream === stream {
-                stopKeepalive()
-                liveStream = nil
-            }
+            subscriptionStep(.channelEnded(channel: channel.id))
             guard activationIsCurrent(generation) else { break }
-            if resubscribeRequested {
+            if subscriptionStep(.streamFinished).contains(.subscribeAgain) {
                 // Deliberate teardown by updateSubscriptions: re-subscribe
                 // right away (the connection is still trusted), even if the
                 // stream happened to die on its own in the same instant —
                 // the subscribe path re-checks the connection anyway.
-                resubscribeRequested = false
                 continue
             }
-            let failure =
-                pendingKeepaliveFailure ?? streamFailure
-                ?? .channelFailed(detail: "events stream ended unexpectedly")
-            pendingKeepaliveFailure = nil
+            var failure = TransportError.channelFailed(detail: "events stream ended unexpectedly")
+            for case .lost(let lost) in livenessStep(.streamEnded(failure: streamFailure)) {
+                failure = lost
+            }
             noteLoss(failure)
             guard failure.isRetryable else {
                 recordTerminalTransportFailure(failure)
                 failTerminalTransportWaiters(failure, for: generation)
                 failTransportWaiters(failure)
-                yieldUpdate(.status(.failed(failure)))
+                lifecycleStep(.failed(failure))
                 settleLoss(recovered: false)
                 return
             }
             failTransportWaiters(failure)
-            dropSnapshotSubscriptions()
+            subscriptionStep(.disconnected)
             attempt += 1
-            connectTrigger = .retry
-            await emitReconnectingAndBackOff(
-                attempt: attempt, failure: failure, generation: generation)
+            await emitReconnectingAndBackOff(attempt: attempt, failure: failure)
         }
     }
 
-    /// Discards snapshot-derived subscriptions, keeping baseline global ones.
-    /// workspace.reordered requires protocol 19; a new connection must prove
-    /// that capability again before it is included alongside its Pane set.
-    /// Returns whether the set actually changed.
-    ///
-    /// Pane-scoped entries are derived from a snapshot, and herdr rejects an
-    /// entire `events.subscribe` when a single one names a pane that has
-    /// exited (verified against 0.7.5). Keeping them across a disconnect
-    /// would let one dead pane wedge the Host offline permanently, because
-    /// the reconnect loop would resend the same doomed set forever and the
-    /// `.connected` that refreshes it would never arrive. Every `.connected`
-    /// already obliges the consumer to re-snapshot, and that resync
-    /// reinstalls the pane set through `updateSubscriptions`.
+    // MARK: Subscriptions (HERDR-03)
+
+    /// A live events channel: its stream, under the token the subscription
+    /// machine kept it with. Work that awaits names the channel it started
+    /// on, and counts only while that channel is still the live one.
+    struct EventsChannel: Sendable {
+        let id: UInt64
+        let stream: HerdrEventStream
+    }
+
+    /// The live events channel, if one is.
+    var liveChannel: EventsChannel? {
+        guard let id = subscription.liveChannel, let stream = channels[id] else { return nil }
+        return EventsChannel(id: id, stream: stream)
+    }
+
+    /// Feeds the subscription machine and keeps its channel bookkeeping;
+    /// `stream` is the stream a subscribe just answered with. Returns the
+    /// effects for the caller, which ends channels and decides what the run
+    /// loop does next.
     @discardableResult
-    private func dropSnapshotSubscriptions() -> Bool {
-        subscriptionsAreSeeded = false
-        let globalsOnly = subscriptions.filter { subscription in
-            switch subscription {
-            case .global(.workspaceReordered), .pane: false
-            case .global: true
+    func subscriptionStep(
+        _ event: EventsSubscriptionMachine.Event, answered stream: HerdrEventStream? = nil
+    ) -> [EventsSubscriptionMachine.Effect] {
+        let effects = subscription.handle(event)
+        for effect in effects {
+            switch effect {
+            case .retain(let channel): channels[channel] = stream
+            case .forget(let channel): channels[channel] = nil
+            case .stopKeepalive: stopKeepalive()
+            case .endChannel, .take, .subscribeAgain, .retryAtOnce: break
             }
         }
-        guard globalsOnly.count != subscriptions.count else { return false }
-        subscriptions = globalsOnly
-        return true
+        return effects
     }
 
-    private static func namesAMissingPane(_ failure: TransportError) -> Bool {
-        guard case .apiRejected(let code, _) = failure else { return false }
-        return code == "pane_not_found"
-    }
-
-    private static func isRejection(_ failure: TransportError) -> Bool {
-        guard case .apiRejected = failure else { return false }
-        return true
+    /// Makes the stream a subscribe accepted the live channel.
+    private func goLive(_ stream: HerdrEventStream) -> EventsChannel {
+        var kept: UInt64 = 0
+        for case .retain(let channel) in subscriptionStep(.goLive, answered: stream) {
+            kept = channel
+        }
+        return EventsChannel(id: kept, stream: stream)
     }
 
     /// The Host's live transport: reuses the current one while its SSH
@@ -1076,8 +1092,7 @@ actor EventsSession {
                 throw TransportError.cancelled
             }
             if isSameTransport(currentTransport, transport) {
-                currentTransport = nil
-                currentConnection = nil
+                connectionStep(.drop)
             }
             try? await transport.close()
         }
@@ -1117,22 +1132,49 @@ actor EventsSession {
         _ transport: any Transport, on connection: SharedConnection.ID?, generation: UInt64,
         latency: Duration, info: ServerInfo
     ) {
-        lastRoundTrip = latency
+        livenessStep(.measured(latency))
         // herdr's protocol number only: tmux reports none and herdr-core's
         // generation is no herdr protocol.
         if info.backend == .herdr {
             connectionMemory?.rememberProtocolVersion(info.protocolVersion)
         }
         publishLatency(latency)
-        provisional = nil
-        transportSuspect = false
+        connectionStep(.install(generation: generation, connection: connection), transport: transport)
         terminalTransportFailure = nil
         noteConnectionActivity()
-        currentTransport = transport
-        currentConnection = connection
-        transportGeneration = generation
         terminalTransportContinuation.yield(transportGeneration)
         resumeTransportWaiters(with: transport)
+    }
+
+    /// Feeds the connection machine and keeps the objects it names in step:
+    /// `transport` is the Transport an `.install` is about, `handout` what a
+    /// kept probe handed out. Returns the effects for the
+    /// caller, which performs the pool hops.
+    @discardableResult
+    func connectionStep(
+        _ event: EventsConnectionMachine.Event,
+        transport: (any Transport)? = nil,
+        handout: KeptProbeHandout? = nil
+    ) -> [EventsConnectionMachine.Effect] {
+        let effects = selection.handle(event)
+        for effect in effects {
+            switch effect {
+            case .publish:
+                currentTransport = transport
+            case .uninstall:
+                currentTransport = nil
+            case .forgetProvisional:
+                provisional = nil
+            case .holdProbe:
+                keptProbe = handout
+            case .forgetProbe:
+                keptProbe = nil
+            case .offer, .reserved, .probeKept, .retireKept, .releaseKept:
+                // `offerToTerminals` makes the provisional Transport.
+                break
+            }
+        }
+        return effects
     }
 
     /// A server that speaks another protocol voids the remembered one, so
@@ -1147,40 +1189,34 @@ actor EventsSession {
     func dial() async throws -> SharedTransport {
         let sharing = sharing
         let task = Task { try await sharing.connect(nil) }
-        nextDialID &+= 1
-        let id = nextDialID
-        dialInFlight = (id, redialSinceLastDial, task)
-        redialSinceLastDial = false
-        defer {
-            if dialInFlight?.id == id { dialInFlight = nil }
+        var id: UInt64 = 0
+        for case .dialing(let dialing) in lifecycleStep(.dialStarted) {
+            id = dialing
+            dialTask = task
         }
+        defer { lifecycleStep(.dialEnded(id: id)) }
         let connected = try await withTaskCancellationHandler {
             try await task.value
         } onCancel: {
             task.cancel()
         }
-        redialRequested = false
+        lifecycleStep(.dialSucceeded)
         return connected
     }
 
     func activationIsCurrent(_ generation: UInt64) -> Bool {
-        phase == .active && activationGeneration == generation && !Task.isCancelled
+        lifecycle.isCurrent(generation) && !Task.isCancelled
     }
 
-    private func emitReconnectingAndBackOff(
-        attempt: Int,
-        failure: TransportError,
-        generation: UInt64
-    ) async {
+    private func emitReconnectingAndBackOff(attempt: Int, failure: TransportError) async {
         let delay = reconnectPolicy.delay(beforeAttempt: attempt)
-        yieldUpdate(.status(.reconnecting(attempt: attempt, delay: delay, failure: failure)))
-        let sleep = Task { try await Task.sleep(for: delay) }
-        backoffSleep = sleep
-        backoffGeneration = generation
-        try? await sleep.value
-        if backoffGeneration == generation {
-            backoffSleep = nil
-            backoffGeneration = nil
+        let effects = lifecycleStep(
+            .backoffStarted(attempt: attempt, delay: delay, failure: failure))
+        for case .sleep(let timer, let pause) in effects {
+            let sleep = Task { try await Task.sleep(for: pause) }
+            backoffSleep = sleep
+            try? await sleep.value
+            lifecycleStep(.backoffElapsed(timer: timer))
         }
     }
 
@@ -1194,26 +1230,23 @@ actor EventsSession {
     /// nothing the network decides: the closes run on their own, in the
     /// same order, and terminals are not waited for.
     private func windDown(locally: Bool = false) async {
-        isWindingDown = true
+        lifecycleStep(.windDownStarted)
         failTerminalTransportWaiters(TransportError.cancelled)
         failTransportWaiters(TransportError.cancelled)
-        backoffSleep?.cancel()
-        backoffSleep = nil
-        backoffGeneration = nil
+        lifecycleStep(.backoffAbandoned)
         stopKeepalive()
-        let task = runTask
-        runTask = nil
-        task?.cancel()
-        let stream = liveStream
-        liveStream = nil
+        lifecycleStep(.runAbandoned)
+        var taken: HerdrEventStream?
+        for case .take(let channel) in subscriptionStep(.windDownStarted) {
+            taken = channels.removeValue(forKey: channel)
+        }
+        let stream = taken
         let transport = currentTransport
-        currentTransport = nil
-        currentConnection = nil
         // A connection still awaiting its ping may carry terminals already
         // (attach first): closing it ends them, so the wait below cannot
         // hang on a ping that ignores cancellation.
         let provisionalTransport = provisional?.transport
-        provisional = nil
+        connectionStep(.windDownStarted)
         // End the events channel before closing the transport it rides on.
         // Otherwise close can queue behind the still-running reader on the
         // same SSH session and turn a bounded teardown into an unbounded one.
@@ -1228,66 +1261,88 @@ actor EventsSession {
             await closeAll()
             await waitForTerminalIdle()
         }
-        transportSuspect = false
-        pendingKeepaliveFailure = nil
-        resubscribeRequested = false
-        redialRequested = false
-        lastConnectionActivity = nil
+        connectionStep(.woundDown)
+        livenessStep(.woundDown)
         terminalTransportFailure = nil
-        dropSnapshotSubscriptions()
-        isWindingDown = false
+        subscriptionStep(.woundDown)
+        lifecycleStep(.windDownEnded)
     }
 
     // MARK: Keepalive
 
-    private func startKeepalive(stream: HerdrEventStream) {
+    private func startKeepalive(channel: EventsChannel) {
         guard let keepalive, let transport = currentTransport else { return }
-        keepaliveTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: keepalive.interval)
-                if Task.isCancelled { break }
-                guard self.connectionIsIdle(within: keepalive.interval) else { continue }
-                do {
-                    try await self.proveLiveness(on: transport)
-                    // A ping answered after this channel was replaced also
-                    // means this loop is keeping a connection alive that the
-                    // session no longer has. It proves liveness either way;
-                    // see `KeepalivePolicy.interval` for why it does not
-                    // republish the latency badge.
-                    guard self.isLiveStream(stream) else { break }
-                    self.noteConnectionActivity()
-                } catch is CancellationError {
-                    break
-                } catch TransportError.cancelled {
-                    break
-                } catch {
-                    await self.keepaliveDidFail(Self.transportFailure(error), on: stream)
-                    break
+        for case .runKeepalive in livenessStep(.keepaliveStarted) {
+            keepaliveTask = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: keepalive.interval)
+                    if Task.isCancelled { break }
+                    guard self.connectionIsIdle(within: keepalive.interval) else { continue }
+                    do {
+                        try await self.proveLiveness(on: transport)
+                        // A ping answered after this channel was replaced
+                        // also means this loop is keeping a connection alive
+                        // that the session no longer has. It proves liveness
+                        // either way; see `KeepalivePolicy.interval` for why
+                        // it does not republish the latency badge.
+                        guard self.isLive(channel) else { break }
+                        self.noteConnectionActivity()
+                    } catch is CancellationError {
+                        break
+                    } catch TransportError.cancelled {
+                        break
+                    } catch {
+                        await self.keepaliveDidFail(Self.transportFailure(error), on: channel)
+                        break
+                    }
                 }
             }
         }
     }
 
     func stopKeepalive() {
-        keepaliveTask?.cancel()
-        keepaliveTask = nil
+        livenessStep(.keepaliveStopped)
     }
 
     private func noteConnectionActivity() {
-        lastConnectionActivity = .now
+        livenessStep(.activity(now: .now))
     }
 
-    /// Whether `stream` is still this session's live channel — the same
+    /// Feeds the liveness machine and performs its effects, in order, but
+    /// for starting the keepalive loop, which `startKeepalive` does.
+    @discardableResult
+    private func livenessStep(
+        _ event: EventsLivenessMachine.Event
+    ) -> [EventsLivenessMachine.Effect] {
+        let effects = liveness.handle(event)
+        for effect in effects {
+            switch effect {
+            case .show(let latency):
+                latencyBox.withLock { $0 = latency }
+                latencyContinuation.yield(latency)
+            case .hide:
+                latencyBox.withLock { $0 = nil }
+            case .cancelKeepalive:
+                keepaliveTask?.cancel()
+                keepaliveTask = nil
+            case .runKeepalive, .lost:
+                break
+            }
+        }
+        return effects
+    }
+
+    /// Whether `channel` is still this session's live channel — the same
     /// staleness check `publishLatency(_:measuredOn:)` gates on, shared so
     /// the keepalive loop can prove liveness and detect a replaced channel
     /// without publishing a value through it (see `KeepalivePolicy.interval`).
-    func isLiveStream(_ stream: HerdrEventStream) -> Bool {
-        phase == .active && liveStream === stream
+    func isLive(_ channel: EventsChannel) -> Bool {
+        phase == .active && subscription.isLive(channel.id)
     }
 
-    /// Publishes a measurement taken on `stream`, unless that channel is no
+    /// Publishes a measurement taken on `channel`, unless that channel is no
     /// longer the session's live one — and reports which it was. The
-    /// keepalive loop proves liveness through `isLiveStream` instead, so
+    /// keepalive loop proves liveness through `isLive` instead, so
     /// `revalidate()` (the foreground re-proof) and `sampleLatency()` (the
     /// Hosts sheet's re-measure) are this overload's only callers.
     ///
@@ -1303,19 +1358,16 @@ actor EventsSession {
     /// write, and any teardown after that clears the value through the status
     /// it publishes.
     private func publishLatency(
-        _ latency: Duration, measuredOn stream: HerdrEventStream
+        _ latency: Duration, measuredOn channel: EventsChannel
     ) -> Bool {
-        guard isLiveStream(stream) else { return false }
-        publishLatency(latency)
-        return true
+        !livenessStep(.showIfLive(latency, channelLive: isLive(channel))).isEmpty
     }
 
     /// The single gate every measurement leaves through: the connection-scoped
     /// value first, then the signal. A consumer woken by the signal reads the
     /// value it was woken for or a newer one, never an older one.
     private func publishLatency(_ latency: Duration) {
-        latencyBox.withLock { $0 = latency }
-        latencyContinuation.yield(latency)
+        livenessStep(.show(latency))
     }
 
     /// Measures only the herdr `ping` request on a new connection. The
@@ -1328,7 +1380,7 @@ actor EventsSession {
         on transport: any Transport
     ) async throws -> (latency: Duration, info: ServerInfo) {
         let measured = try await Self.measure(transport, revalidating: false, now: clock.now)
-        lastRoundTrip = measured.latency
+        livenessStep(.measured(measured.latency))
         return measured
     }
 
@@ -1355,7 +1407,7 @@ actor EventsSession {
     /// Whether a terminal on `generation` rides the connection kept across
     /// the last suspension.
     func ridesKeptConnection(generation: UInt64) -> Bool {
-        keptTransportGeneration == generation
+        selection.ridesKept(generation: generation)
     }
 
     /// `events.subscribe`, timed.
@@ -1414,14 +1466,13 @@ actor EventsSession {
         ) {
             try await Self.measure(transport, revalidating: false, now: clock.now)
         }
-        lastRoundTrip = measured.latency
+        livenessStep(.measured(measured.latency))
     }
 
     /// Whether no liveness proof arrived within `interval`, meaning the next
     /// keepalive ping is actually needed.
     private func connectionIsIdle(within interval: Duration) -> Bool {
-        guard let last = lastConnectionActivity else { return true }
-        return ContinuousClock.now - last >= interval
+        liveness.isIdle(now: ContinuousClock.now, within: interval)
     }
 
     /// A keepalive ping failed: the connection cannot be trusted. Tears the
@@ -1430,14 +1481,14 @@ actor EventsSession {
     /// failure also retires the pooled connection (#105): a liveness
     /// deadline finds it dead before the SSH layer does, and the redial
     /// must not ride it again.
-    private func keepaliveDidFail(_ failure: TransportError, on stream: HerdrEventStream) async {
-        guard phase == .active, liveStream === stream else { return }
-        transportSuspect = true
-        pendingKeepaliveFailure = failure
+    private func keepaliveDidFail(_ failure: TransportError, on channel: EventsChannel) async {
+        guard phase == .active, subscription.isLive(channel.id) else { return }
+        connectionStep(.suspect)
+        livenessStep(.keepaliveFailed(failure))
         if Self.isTransportLinkFailure(failure), let connection = currentConnection {
             await sharing.retire(connection)
         }
-        await stream.end()
+        await channel.stream.end()
     }
 
     static func transportFailure(_ error: any Error) -> TransportError {
@@ -1625,7 +1676,7 @@ actor EventsSession {
     }
 
     private func recordTerminalTransportFailure(_ failure: TransportError) {
-        guard currentTransport == nil || transportSuspect else { return }
+        guard selection.hasNoTrustedConnection else { return }
         terminalTransportFailure = failure
     }
 

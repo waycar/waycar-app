@@ -347,8 +347,8 @@ struct AppForegroundRecoveryTests {
     /// and returning is enough on its own.
     ///
     /// Without it nothing asks the Host again on this return. `run()` returned
-    /// with the phase still `.active`, so `resume()` no-ops; `liveStream` is
-    /// nil, so the ping no-ops. The trip out here is inside the grace period,
+    /// with the phase still `.active`, so `resume()` no-ops; no events
+    /// channel is live, so the ping no-ops. The trip out here is inside the grace period,
     /// which is the case that was stranded — a longer absence suspends the
     /// session and the return's `resume()` already restarts it. Inside the
     /// window only the Retry button was left, and a user who has just

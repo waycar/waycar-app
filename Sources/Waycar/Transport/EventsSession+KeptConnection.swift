@@ -12,10 +12,7 @@ extension EventsSession {
     }
 
     /// A pooled connection held open across a suspension (#105).
-    struct KeptConnection {
-        let id: SharedConnection.ID
-        let since: ContinuousClock.Instant
-    }
+    typealias KeptConnection = EventsConnectionMachine.Kept
 
     /// A kept connection's probe that answered (#105): its Transport, the
     /// pooled connection it rode, the generation terminals already ride it
@@ -108,9 +105,7 @@ extension EventsSession {
                 if activationIsCurrent(generation) {
                     offered.rejection.reject(Self.transportFailure(error))
                 }
-                if provisional?.rejection === offered.rejection {
-                    provisional = nil
-                }
+                connectionStep(.provisionalFailed(generation: offered.generation))
             }
             if let early { Self.discard(early.stream) }
             try? await transport.close()
@@ -133,13 +128,20 @@ extension EventsSession {
     /// kept too long is retired instead, and nil returned, so the activation
     /// dials anew.
     func takeKeptConnection() async -> SharedConnection.ID? {
-        guard let kept = keptConnection else { return nil }
-        keptConnection = nil
-        guard clock.now() - kept.since <= LivenessTiming.keptConnectionMaxAge else {
-            await sharing.retire(kept.id)
-            return nil
+        guard keptConnection != nil else { return nil }
+        for effect in connectionStep(.takeKept(now: clock.now())) {
+            switch effect {
+            case .probeKept(let kept):
+                return kept
+            case .retireKept(let kept):
+                await sharing.retire(kept)
+                return nil
+            case .offer, .reserved, .publish, .uninstall, .forgetProvisional, .releaseKept,
+                .holdProbe, .forgetProbe:
+                continue
+            }
         }
-        return kept.id
+        return nil
     }
 
     /// Reaches the Host through the connection kept across the suspension
@@ -180,7 +182,7 @@ extension EventsSession {
         }
         switch outcome {
         case .proof(let probe):
-            keptProbe = nil
+            connectionStep(.probeSettled)
             // Proven: its Transport holds the connection now, not the keep.
             await sharing.release(kept)
             guard activationIsCurrent(generation) else {
@@ -259,9 +261,10 @@ extension EventsSession {
         }
         let proving = offerToTerminals(transport, activationGeneration: generation)
         firstChannel.end("offered on kept connection")
-        keptTransportGeneration = proving.generation
         let early = startEarlySubscription(on: transport)
-        keptProbe = KeptProbeHandout(transport: transport, proving: proving, early: early)
+        connectionStep(
+            .probeOffered(generation: proving.generation),
+            handout: KeptProbeHandout(transport: transport, proving: proving, early: early))
         let measured = try await Self.measure(transport, revalidating: false, now: clock.now)
         return KeptProbe(
             transport: transport, connection: connected.connection, proving: proving,
@@ -273,13 +276,11 @@ extension EventsSession {
     /// subscribe is dropped, and it closes without being waited for.
     func abandonKeptProbe(_ failure: TransportError, generation: UInt64) {
         guard let handout = keptProbe else { return }
-        keptProbe = nil
+        connectionStep(.probeAbandoned)
         if activationIsCurrent(generation) {
             handout.proving.rejection.reject(failure)
         }
-        if provisional?.rejection === handout.proving.rejection {
-            provisional = nil
-        }
+        connectionStep(.provisionalFailed(generation: handout.proving.generation))
         if let early = handout.early { Self.discard(early.stream) }
         Self.close(handout.transport)
     }
@@ -319,9 +320,10 @@ extension EventsSession {
     /// Installs a replacement its own ping proved (#105): published under a
     /// generation of its own, and handed to waiting RPCs and terminals.
     func install(_ replacement: Replacement) {
+        var generation: UInt64 = 0
+        for case .reserved(let reserved) in connectionStep(.reserve) { generation = reserved }
         installProven(
-            replacement.transport, on: replacement.connection,
-            generation: reserveTransportGeneration(),
+            replacement.transport, on: replacement.connection, generation: generation,
             latency: replacement.latency, info: replacement.info)
         resumeTerminalTransportWaiters(
             with: TerminalTransportReady(
@@ -335,22 +337,25 @@ extension EventsSession {
     /// the replacement without a `.reconnecting`. The lost connection is
     /// retired and its Transport closed.
     func adopt(
-        _ replacement: Replacement, replacing old: any Transport, on stream: HerdrEventStream
+        _ replacement: Replacement, replacing old: any Transport, on channel: EventsChannel
     ) async {
-        guard isLiveStream(stream), isSameTransport(currentTransport, old) else {
+        guard isLive(channel), isSameTransport(currentTransport, old) else {
             Self.close(replacement.transport)
             return
         }
         if let lost = currentConnection { await sharing.retire(lost) }
-        guard isLiveStream(stream), isSameTransport(currentTransport, old) else {
+        guard isLive(channel), isSameTransport(currentTransport, old) else {
             Self.close(replacement.transport)
             return
         }
         stopKeepalive()
         install(replacement)
         Self.close(old)
-        resubscribeRequested = true
-        await stream.end()
+        // The channel checked above is the live one: no await since.
+        for effect in subscriptionStep(.replace) {
+            guard case .endChannel(let live) = effect else { continue }
+            await channels[live]?.end()
+        }
     }
 
     /// Closes `transport` without waiting: nothing on the caller's path may
@@ -366,24 +371,13 @@ extension EventsSession {
     func offerToTerminals(
         _ transport: any Transport, activationGeneration: UInt64
     ) -> ProvisionalTransport {
-        let offered = ProvisionalTransport(
-            transport: transport, generation: reserveTransportGeneration())
+        var generation: UInt64 = 0
+        for case .offer(let reserved) in connectionStep(.offer) { generation = reserved }
+        let offered = ProvisionalTransport(transport: transport, generation: generation)
         provisional = offered
-        transportSuspect = false
         resumeTerminalTransportWaiters(
             with: offered.ready(activationGeneration: activationGeneration))
         return offered
-    }
-
-    /// The next generation for a new connection: the first connection's is
-    /// 0, and each later one's is one past the last reserved.
-    func reserveTransportGeneration() -> UInt64 {
-        if hasReservedTransportGeneration {
-            reservedTransportGeneration &+= 1
-        } else {
-            hasReservedTransportGeneration = true
-        }
-        return reservedTransportGeneration
     }
 
     /// A connection offered to terminals ahead of its `ping` (#105).
