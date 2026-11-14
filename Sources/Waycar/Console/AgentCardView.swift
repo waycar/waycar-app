@@ -417,8 +417,9 @@ private struct AgentSummaryAgeLabelStyle: LabelStyle {
     }
 }
 
-/// A placeholder bar, as tall as the summary's line, while an Agent's first
-/// summary is on its way. A gentle pulse, held still under Reduce Motion.
+/// A placeholder bar while an Agent's first summary is on its way: 10 pt
+/// tall, its padding making about one footnote line at the default text
+/// size. A gentle pulse, held still under Reduce Motion.
 private struct AgentSummarySkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// On iPad the list stays mounted under the Agent screen; an invisible
