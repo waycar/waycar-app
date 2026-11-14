@@ -335,22 +335,25 @@ extension EventsSession {
     /// the replacement without a `.reconnecting`. The lost connection is
     /// retired and its Transport closed.
     func adopt(
-        _ replacement: Replacement, replacing old: any Transport, on stream: HerdrEventStream
+        _ replacement: Replacement, replacing old: any Transport, on channel: EventsChannel
     ) async {
-        guard isLiveStream(stream), isSameTransport(currentTransport, old) else {
+        guard isLive(channel), isSameTransport(currentTransport, old) else {
             Self.close(replacement.transport)
             return
         }
         if let lost = currentConnection { await sharing.retire(lost) }
-        guard isLiveStream(stream), isSameTransport(currentTransport, old) else {
+        guard isLive(channel), isSameTransport(currentTransport, old) else {
             Self.close(replacement.transport)
             return
         }
         stopKeepalive()
         install(replacement)
         Self.close(old)
-        resubscribeRequested = true
-        await stream.end()
+        // The channel checked above is the live one: no await since.
+        for effect in subscriptionStep(.replace) {
+            guard case .endChannel(let live) = effect else { continue }
+            await channels[live]?.end()
+        }
     }
 
     /// Closes `transport` without waiting: nothing on the caller's path may

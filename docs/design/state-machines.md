@@ -5260,6 +5260,55 @@ stateDiagram-v2
 
 **herdr events and transport**
 
+### EventsSubscriptionMachine
+
+- **File:** `Sources/Waycar/Transport/EventsSubscriptionMachine.swift`
+- **Owner:** `EventsSession` subscribes, keeps the live channel's stream
+  under the machine's channel token (`channels`, `liveChannel`), ends
+  channels, stops the keepalive and drives the run loop's `continue`s.
+  Work that awaits (keepalive, `revalidate()`, `sampleLatency()`, a hedge's
+  `adopt`) names the `EventsChannel` it started on and counts only while it
+  is still live (`isLive`).
+- **States:** the requested set; stage `seeded` (a cached snapshot's set no
+  subscribe accepted), `subscribing`, `globalFallback` (cut back to the
+  global entries), `live(channel)`; and `replacing` (a deliberate teardown
+  asked for an immediate re-subscribe, which stays Connected).
+- **Events:** `seed`, `update(set, active)`, `answered(asked)`,
+  `answeredOnReplacedTransport(activationCurrent)`, `accepted`, `goLive`,
+  `channelEnded(channel)`, `streamFinished`, `connectFailed(failure)`,
+  `disconnected`, `replace`, `windDownStarted`, `woundDown`.
+- **Effects:** `endChannel`, `subscribeAgain`, `retain(channel)`,
+  `stopKeepalive`, `forget(channel)`, `take(channel)`, `retryAtOnce`.
+  `dropSnapshotSubscriptions` is the machine's: every disconnect and every
+  teardown cuts the set to its globals, so a pane that exited while the
+  Host was offline cannot wedge it. `pane_not_found`, and any rejection of
+  a seed, retries once at once with the global set. An answer for a set
+  that is no longer the requested one subscribes again. `replacing` sits
+  beside the stage as the old flag did: a request that finds the link dead
+  during a backoff leaves it set with no live channel, and the next
+  channel's loss then re-subscribes silently (pre-existing, kept, pinned by
+  `aResubscribeRequestLeftDuringABackoffMakesTheNextStreamLossSilent`).
+- **Tests:** `EventsSubscriptionMachineTests`, `EventsSessionSubscriptionsTests`,
+  `EventsSessionConnectFlowTests`.
+- **Catalogue:** HERDR-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> seeded
+    seeded --> subscribing: accepted / update
+    seeded --> globalFallback: rejected or pane_not_found, set had more / retryAtOnce
+    subscribing --> globalFallback: pane_not_found / retryAtOnce
+    subscribing --> globalFallback: disconnected / woundDown
+    globalFallback --> subscribing: accepted / update
+    subscribing --> live: goLive / retain
+    live --> live: update while active / endChannel, replacing
+    live --> live: replace / endChannel, replacing
+    live --> subscribing: channelEnded / stopKeepalive, forget
+    live --> subscribing: windDownStarted / take
+    subscribing --> subscribing: streamFinished while replacing / subscribeAgain
+    subscribing --> seeded: seed
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6066,7 +6115,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 |---|---|---|---|---|---|---|
 | HERDR-01 | Events session lifecycle | `Sources/Waycar/Transport/EventsSession.swift` | partial | H/H | convert | P3d |
 | HERDR-02 | Events session connection selection | `Sources/Waycar/Transport/EventsSession+KeptConnection.swift` | implicit | H/H | convert | P3d |
-| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
+| HERDR-03 | Events session subscriptions (seeded, live, fallback) | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | converted → `EventsSubscriptionMachine`; a request that finds the link dead during a backoff leaves the re-subscribe request set, so the next channel's loss re-subscribes silently (pre-existing, kept and pinned) | P3d |
 | HERDR-04 | Events session liveness | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
 | HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |

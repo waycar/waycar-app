@@ -175,7 +175,13 @@ actor EventsSession {
     /// observability for diagnostics and tests, not a consumer signal.
     private(set) var droppedUpdateCount = 0
 
-    var subscriptions: [EventSubscription]
+    /// The subscription set, whether it is a seed, the live channel and a
+    /// pending re-subscribe (HERDR-03).
+    private var subscription: EventsSubscriptionMachine
+    /// The live channel's stream, under the token the machine kept it with.
+    private(set) var channels: [UInt64: HerdrEventStream] = [:]
+    /// What the next `events.subscribe` asks for.
+    var subscriptions: [EventSubscription] { subscription.requested }
     /// The Host's connection: which pooled connection each Transport rides,
     /// and the holds that keep it across a suspension (#105).
     let sharing: SharedConnection
@@ -260,17 +266,6 @@ actor EventsSession {
     /// answered keepalive. The keepalive loop skips its ping while this is
     /// fresher than its interval (see `KeepalivePolicy.interval`).
     private var lastConnectionActivity: ContinuousClock.Instant?
-    /// Set while `updateSubscriptions` tears the live channel down on
-    /// purpose: the run loop then re-subscribes immediately — same
-    /// connection, no backoff, no `.reconnecting` — instead of treating the
-    /// graceful stream end as a failure.
-    var resubscribeRequested = false
-    /// Whether `subscriptions` is a seed — derived from a cached snapshot
-    /// (#105) rather than a live one on this connection — that no
-    /// subscribe has accepted yet. Any rejection of a seed falls back to the
-    /// global set once, like `pane_not_found` always does.
-    private var subscriptionsAreSeeded = true
-    private var liveStream: HerdrEventStream?
     /// Identifies the current activation so a cancelled connection attempt
     /// cannot install itself after a later resume has already started.
     var activationGeneration: UInt64 = 0
@@ -339,7 +334,7 @@ actor EventsSession {
         clock: LivenessClock = .continuous,
         recordsNetworkTelemetry: Bool = true
     ) {
-        self.subscriptions = subscriptions
+        subscription = EventsSubscriptionMachine(subscriptions: subscriptions)
         sharing = connection
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
@@ -421,7 +416,7 @@ actor EventsSession {
     func revalidate(after trigger: NetworkAnalytics.ConnectTrigger = .foreground) async {
         guard
             phase == .active,
-            let stream = liveStream,
+            let channel = liveChannel,
             let transport = currentTransport
         else { return }
         let connection = currentConnection
@@ -444,21 +439,21 @@ actor EventsSession {
             return
         } catch {
             interval.end(NetworkAnalytics.Failure(error).rawValue)
-            await keepaliveDidFail(Self.transportFailure(error), on: stream)
+            await keepaliveDidFail(Self.transportFailure(error), on: channel)
             return
         }
         switch outcome {
         case .proof(let measured):
             interval.end("kept")
             lastRevalidateLatency = measured.latency
-            guard publishLatency(measured.latency, measuredOn: stream) else { return }
+            guard publishLatency(measured.latency, measuredOn: channel) else { return }
             noteConnectionActivity()
         case .hedge(let replacement):
             let elapsed = interval.end("hedge")
             reportConnect(
                 HostConnectReport(
                     outcome: .success, duration: elapsed, path: .hedge, trigger: trigger))
-            await adopt(replacement, replacing: transport, on: stream)
+            await adopt(replacement, replacing: transport, on: channel)
         }
     }
 
@@ -481,7 +476,7 @@ actor EventsSession {
     func sampleLatency() async -> Bool {
         guard
             phase == .active,
-            let stream = liveStream,
+            let channel = liveChannel,
             let transport = currentTransport
         else { return false }
         do {
@@ -492,13 +487,13 @@ actor EventsSession {
                 try await Self.measure(transport, revalidating: false, now: clock.now)
             }
             lastRoundTrip = measured.latency
-            guard publishLatency(measured.latency, measuredOn: stream) else { return false }
+            guard publishLatency(measured.latency, measuredOn: channel) else { return false }
             noteConnectionActivity()
             return true
         } catch is CancellationError {
         } catch TransportError.cancelled {
         } catch {
-            await keepaliveDidFail(Self.transportFailure(error), on: stream)
+            await keepaliveDidFail(Self.transportFailure(error), on: channel)
         }
         return false
     }
@@ -528,7 +523,7 @@ actor EventsSession {
     /// channel is live (`revalidate()` covers that) and while inactive.
     /// `trigger` labels the connect this sets off.
     func redialNow(trigger: NetworkAnalytics.ConnectTrigger) async {
-        guard phase == .active, !isWindingDown, liveStream == nil else { return }
+        guard phase == .active, !isWindingDown, subscription.liveChannel == nil else { return }
         if dialInFlight?.afterRedial == true { return }
         connectTrigger = trigger
         redialSinceLastDial = true
@@ -560,12 +555,10 @@ actor EventsSession {
     /// so callers must reinstall the set after every `.connected` rather than
     /// assume the last one is still in force.
     func updateSubscriptions(_ subscriptions: [EventSubscription]) async {
-        guard self.subscriptions != subscriptions else { return }
-        self.subscriptions = subscriptions
-        subscriptionsAreSeeded = false
-        guard phase == .active, let stream = liveStream else { return }
-        resubscribeRequested = true
-        await stream.end()
+        for effect in subscriptionStep(.update(subscriptions, active: phase == .active)) {
+            guard case .endChannel(let channel) = effect else { continue }
+            await channels[channel]?.end()
+        }
     }
 
     /// Runs an ordinary RPC against the currently installed Transport.
@@ -631,8 +624,10 @@ actor EventsSession {
                 // installs the replacement this retry rides. A redial that
                 // fails instead releases the waiter through the run loop's
                 // announce with its real cause.
-                resubscribeRequested = true
-                await liveStream?.end()
+                for effect in subscriptionStep(.replace) {
+                    guard case .endChannel(let channel) = effect else { continue }
+                    await channels[channel]?.end()
+                }
             }
             guard retryOnLinkFailure else {
                 throw error
@@ -756,8 +751,7 @@ actor EventsSession {
         connectTrigger = trigger ?? (hasActivated ? .foreground : .launch)
         hasActivated = true
         if let seed {
-            subscriptions = seed
-            subscriptionsAreSeeded = true
+            subscriptionStep(.seed(seed))
         }
         terminalTransportFailure = nil
         redialSinceLastDial = false
@@ -877,7 +871,10 @@ actor EventsSession {
                     let earlyStream = try await early.stream.value
                     // The set changed while the early subscribe was in
                     // flight: replace it on the same connection.
-                    guard early.subscriptions == subscriptions else {
+                    guard
+                        !subscriptionStep(.answered(asked: early.subscriptions))
+                            .contains(.subscribeAgain)
+                    else {
                         await earlyStream.end()
                         continue
                     }
@@ -885,7 +882,9 @@ actor EventsSession {
                 } else {
                     let requested = subscriptions
                     stream = try await Self.subscribe(transport, requested)
-                    guard requested == subscriptions else {
+                    guard
+                        !subscriptionStep(.answered(asked: requested)).contains(.subscribeAgain)
+                    else {
                         await stream.end()
                         continue
                     }
@@ -893,7 +892,9 @@ actor EventsSession {
                 // An RPC may have distrusted this connection while the
                 // subscribe was in flight; its stream cannot make it live again.
                 guard isSameTransport(currentTransport, transport), !transportSuspect else {
-                    if activationIsCurrent(generation) { resubscribeRequested = false }
+                    subscriptionStep(
+                        .answeredOnReplacedTransport(
+                            activationCurrent: activationIsCurrent(generation)))
                     await stream.end()
                     continue
                 }
@@ -919,10 +920,7 @@ actor EventsSession {
                 // seeded from a cached snapshot (#105) may also name an event
                 // kind this server no longer speaks, so any rejection of a
                 // seeded set gets the same one retry.
-                if Self.namesAMissingPane(failure)
-                    || (subscriptionsAreSeeded && Self.isRejection(failure)),
-                    dropSnapshotSubscriptions()
-                {
+                if subscriptionStep(.connectFailed(failure)).contains(.retryAtOnce) {
                     continue
                 }
                 guard failure.isRetryable else {
@@ -934,25 +932,25 @@ actor EventsSession {
                     return
                 }
                 failTransportWaiters(failure)
-                dropSnapshotSubscriptions()
+                subscriptionStep(.disconnected)
                 attempt += 1
                 connectTrigger = .retry
                 await emitReconnectingAndBackOff(
                     attempt: attempt, failure: failure, generation: generation)
                 continue
             }
-            subscriptionsAreSeeded = false
+            subscriptionStep(.accepted)
             if !activationIsCurrent(generation) {
                 await stream.end()
                 break
             }
-            liveStream = stream
+            let channel = goLive(stream)
             redialSinceLastDial = false
             attempt = 0
             pendingKeepaliveFailure = nil
             yieldUpdate(.status(.connected))
             settleLoss(recovered: true)
-            startKeepalive(stream: stream)
+            startKeepalive(channel: channel)
 
             var streamFailure: TransportError?
             do {
@@ -977,17 +975,13 @@ actor EventsSession {
             } catch {
                 streamFailure = Self.transportFailure(error)
             }
-            if liveStream === stream {
-                stopKeepalive()
-                liveStream = nil
-            }
+            subscriptionStep(.channelEnded(channel: channel.id))
             guard activationIsCurrent(generation) else { break }
-            if resubscribeRequested {
+            if subscriptionStep(.streamFinished).contains(.subscribeAgain) {
                 // Deliberate teardown by updateSubscriptions: re-subscribe
                 // right away (the connection is still trusted), even if the
                 // stream happened to die on its own in the same instant —
                 // the subscribe path re-checks the connection anyway.
-                resubscribeRequested = false
                 continue
             }
             let failure =
@@ -1004,7 +998,7 @@ actor EventsSession {
                 return
             }
             failTransportWaiters(failure)
-            dropSnapshotSubscriptions()
+            subscriptionStep(.disconnected)
             attempt += 1
             connectTrigger = .retry
             await emitReconnectingAndBackOff(
@@ -1012,41 +1006,49 @@ actor EventsSession {
         }
     }
 
-    /// Discards snapshot-derived subscriptions, keeping baseline global ones.
-    /// workspace.reordered requires protocol 19; a new connection must prove
-    /// that capability again before it is included alongside its Pane set.
-    /// Returns whether the set actually changed.
-    ///
-    /// Pane-scoped entries are derived from a snapshot, and herdr rejects an
-    /// entire `events.subscribe` when a single one names a pane that has
-    /// exited (verified against 0.7.5). Keeping them across a disconnect
-    /// would let one dead pane wedge the Host offline permanently, because
-    /// the reconnect loop would resend the same doomed set forever and the
-    /// `.connected` that refreshes it would never arrive. Every `.connected`
-    /// already obliges the consumer to re-snapshot, and that resync
-    /// reinstalls the pane set through `updateSubscriptions`.
+    // MARK: Subscriptions (HERDR-03)
+
+    /// A live events channel: its stream, under the token the subscription
+    /// machine kept it with. Work that awaits names the channel it started
+    /// on, and counts only while that channel is still the live one.
+    struct EventsChannel: Sendable {
+        let id: UInt64
+        let stream: HerdrEventStream
+    }
+
+    /// The live events channel, if one is.
+    var liveChannel: EventsChannel? {
+        guard let id = subscription.liveChannel, let stream = channels[id] else { return nil }
+        return EventsChannel(id: id, stream: stream)
+    }
+
+    /// Feeds the subscription machine and keeps its channel bookkeeping;
+    /// `stream` is the stream a subscribe just answered with. Returns the
+    /// effects for the caller, which ends channels and decides what the run
+    /// loop does next.
     @discardableResult
-    private func dropSnapshotSubscriptions() -> Bool {
-        subscriptionsAreSeeded = false
-        let globalsOnly = subscriptions.filter { subscription in
-            switch subscription {
-            case .global(.workspaceReordered), .pane: false
-            case .global: true
+    func subscriptionStep(
+        _ event: EventsSubscriptionMachine.Event, answered stream: HerdrEventStream? = nil
+    ) -> [EventsSubscriptionMachine.Effect] {
+        let effects = subscription.handle(event)
+        for effect in effects {
+            switch effect {
+            case .retain(let channel): channels[channel] = stream
+            case .forget(let channel): channels[channel] = nil
+            case .stopKeepalive: stopKeepalive()
+            case .endChannel, .take, .subscribeAgain, .retryAtOnce: break
             }
         }
-        guard globalsOnly.count != subscriptions.count else { return false }
-        subscriptions = globalsOnly
-        return true
+        return effects
     }
 
-    private static func namesAMissingPane(_ failure: TransportError) -> Bool {
-        guard case .apiRejected(let code, _) = failure else { return false }
-        return code == "pane_not_found"
-    }
-
-    private static func isRejection(_ failure: TransportError) -> Bool {
-        guard case .apiRejected = failure else { return false }
-        return true
+    /// Makes the stream a subscribe accepted the live channel.
+    private func goLive(_ stream: HerdrEventStream) -> EventsChannel {
+        var kept: UInt64 = 0
+        for case .retain(let channel) in subscriptionStep(.goLive, answered: stream) {
+            kept = channel
+        }
+        return EventsChannel(id: kept, stream: stream)
     }
 
     /// The Host's live transport: reuses the current one while its SSH
@@ -1204,8 +1206,11 @@ actor EventsSession {
         let task = runTask
         runTask = nil
         task?.cancel()
-        let stream = liveStream
-        liveStream = nil
+        var taken: HerdrEventStream?
+        for case .take(let channel) in subscriptionStep(.windDownStarted) {
+            taken = channels.removeValue(forKey: channel)
+        }
+        let stream = taken
         let transport = currentTransport
         currentTransport = nil
         currentConnection = nil
@@ -1230,17 +1235,16 @@ actor EventsSession {
         }
         transportSuspect = false
         pendingKeepaliveFailure = nil
-        resubscribeRequested = false
         redialRequested = false
         lastConnectionActivity = nil
         terminalTransportFailure = nil
-        dropSnapshotSubscriptions()
+        subscriptionStep(.woundDown)
         isWindingDown = false
     }
 
     // MARK: Keepalive
 
-    private func startKeepalive(stream: HerdrEventStream) {
+    private func startKeepalive(channel: EventsChannel) {
         guard let keepalive, let transport = currentTransport else { return }
         keepaliveTask = Task {
             while !Task.isCancelled {
@@ -1254,14 +1258,14 @@ actor EventsSession {
                     // session no longer has. It proves liveness either way;
                     // see `KeepalivePolicy.interval` for why it does not
                     // republish the latency badge.
-                    guard self.isLiveStream(stream) else { break }
+                    guard self.isLive(channel) else { break }
                     self.noteConnectionActivity()
                 } catch is CancellationError {
                     break
                 } catch TransportError.cancelled {
                     break
                 } catch {
-                    await self.keepaliveDidFail(Self.transportFailure(error), on: stream)
+                    await self.keepaliveDidFail(Self.transportFailure(error), on: channel)
                     break
                 }
             }
@@ -1277,17 +1281,17 @@ actor EventsSession {
         lastConnectionActivity = .now
     }
 
-    /// Whether `stream` is still this session's live channel — the same
+    /// Whether `channel` is still this session's live channel — the same
     /// staleness check `publishLatency(_:measuredOn:)` gates on, shared so
     /// the keepalive loop can prove liveness and detect a replaced channel
     /// without publishing a value through it (see `KeepalivePolicy.interval`).
-    func isLiveStream(_ stream: HerdrEventStream) -> Bool {
-        phase == .active && liveStream === stream
+    func isLive(_ channel: EventsChannel) -> Bool {
+        phase == .active && subscription.isLive(channel.id)
     }
 
-    /// Publishes a measurement taken on `stream`, unless that channel is no
+    /// Publishes a measurement taken on `channel`, unless that channel is no
     /// longer the session's live one — and reports which it was. The
-    /// keepalive loop proves liveness through `isLiveStream` instead, so
+    /// keepalive loop proves liveness through `isLive` instead, so
     /// `revalidate()` (the foreground re-proof) and `sampleLatency()` (the
     /// Hosts sheet's re-measure) are this overload's only callers.
     ///
@@ -1303,9 +1307,9 @@ actor EventsSession {
     /// write, and any teardown after that clears the value through the status
     /// it publishes.
     private func publishLatency(
-        _ latency: Duration, measuredOn stream: HerdrEventStream
+        _ latency: Duration, measuredOn channel: EventsChannel
     ) -> Bool {
-        guard isLiveStream(stream) else { return false }
+        guard isLive(channel) else { return false }
         publishLatency(latency)
         return true
     }
@@ -1430,14 +1434,14 @@ actor EventsSession {
     /// failure also retires the pooled connection (#105): a liveness
     /// deadline finds it dead before the SSH layer does, and the redial
     /// must not ride it again.
-    private func keepaliveDidFail(_ failure: TransportError, on stream: HerdrEventStream) async {
-        guard phase == .active, liveStream === stream else { return }
+    private func keepaliveDidFail(_ failure: TransportError, on channel: EventsChannel) async {
+        guard phase == .active, subscription.isLive(channel.id) else { return }
         transportSuspect = true
         pendingKeepaliveFailure = failure
         if Self.isTransportLinkFailure(failure), let connection = currentConnection {
             await sharing.retire(connection)
         }
-        await stream.end()
+        await channel.stream.end()
     }
 
     static func transportFailure(_ error: any Error) -> TransportError {
