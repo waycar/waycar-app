@@ -3,6 +3,7 @@
 
     scan.py [--rules FILE] [--allow FILE] [--no-external] DIR
     scan.py --inventory [--rules FILE] [--allow FILE] DIR
+    scan.py --commits REV [--exclude REV ...] [--gitleaks-config FILE] [--no-external]
 
 Checks every text file's content and every file's path in DIR against the
 rules in scan-rules.tsv beside this script (IPv4 ranges, key material and,
@@ -18,6 +19,14 @@ on their findings.
 --inventory prints, per rule and top-level area, how many hits there are and
 how many of them the allowlist covers (a markdown table), and exits 0.
 Binary files (a NUL byte, or not UTF-8) are only name-checked.
+
+--commits scans history instead of a tree, in the current repository: every
+commit reachable from REV and not from an --exclude REV (default
+--remotes=origin, what is already public) gets the files it adds or changes,
+and its message as COMMIT_MSG, checked with the same rules and allowlist, so
+content a later commit removed still fails. gitleaks and trufflehog then run
+once over all of them (gitleaks with --gitleaks-config, the tip's
+.gitleaks.toml). Findings are prefixed with the commit.
 """
 
 from __future__ import annotations
@@ -30,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -210,6 +220,47 @@ def external_tools(root: Path) -> int:
     return failed
 
 
+def git(*args: str, data: bytes | None = None) -> bytes:
+    return subprocess.run(["git", *args], input=data, stdout=subprocess.PIPE, check=True).stdout
+
+
+def write_commits(tip: str, exclude: list[str], out: Path) -> list[str]:
+    """For each commit in tip --not exclude, write the files it adds or changes
+    under out/<sha>/files/ and its message as out/<sha>/message/COMMIT_MSG."""
+    shas = git("rev-list", "--reverse", tip, "--not", *exclude).decode().split()
+    for sha in shas:
+        files, message = out / sha / "files", out / sha / "message"
+        files.mkdir(parents=True)
+        message.mkdir()
+        (message / "COMMIT_MSG").write_bytes(git("log", "-1", "--format=%B", sha))
+        # --cc: a merge contributes only what differs from every parent (its
+        # parents in the range are scanned on their own).
+        changed = set(filter(None, git("diff-tree", "-r", "-z", "--root", "--cc", "--no-commit-id",
+                                       "--name-only", "--diff-filter=AMCRT", sha).split(b"\0")))
+        # The commit's own tree gives each path's type: a submodule (gitlink)
+        # is a commit this repository usually lacks, so only blobs are read.
+        for entry in filter(None, git("ls-tree", "-r", "-z", "--full-tree", sha).split(b"\0")):
+            meta, _, raw = entry.partition(b"\t")
+            _mode, kind, obj = meta.split()
+            if raw in changed and kind == b"blob":
+                target = files / raw.decode("utf-8", "surrogateescape")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(git("cat-file", "blob", obj.decode()))
+    return shas
+
+
+def report(root: Path, rules: list[Rule], entries: list[Allow], by_rule: dict, prefix: str = "") -> int:
+    findings = 0
+    for rule, path, line, hit, ok in scan(root, rules, entries):
+        if ok or rule.severity == "info":
+            continue
+        findings += 1
+        by_rule[rule.id] += 1
+        shown = redact(hit) if rule.severity == "secret" else hit
+        print(f"{prefix}{path}:{line}: [{rule.id}] {shown!r} ({rule.description})")
+    return findings
+
+
 def inventory(root: Path, rules: list[Rule], entries: list[Allow]) -> None:
     counts = defaultdict(lambda: [0, 0])
     for rule, path, _line, _hit, ok in scan(root, rules, entries):
@@ -230,35 +281,44 @@ def inventory(root: Path, rules: list[Rule], entries: list[Allow]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("dir", type=Path)
+    parser.add_argument("dir", type=Path, nargs="?")
+    parser.add_argument("--commits", metavar="REV", help="scan each unpublished commit of REV instead of DIR")
+    parser.add_argument("--exclude", action="append", metavar="REV",
+                        help="with --commits: history already public (default --remotes=origin)")
+    parser.add_argument("--gitleaks-config", type=Path, help="with --commits: gitleaks config for the commits' files")
     parser.add_argument("--rules", type=Path, default=HERE / "scan-rules.tsv")
     parser.add_argument("--allow", type=Path, default=HERE / "scan-allow.tsv")
     parser.add_argument("--inventory", action="store_true")
     parser.add_argument("--no-external", action="store_true", help="skip gitleaks and trufflehog")
     parser.add_argument("--unused-allow", action="store_true", help="also list allow entries nothing matched")
     args = parser.parse_args()
-    if not args.dir.is_dir():
-        parser.error(f"{args.dir} is not a directory")
     rules, entries = load_rules(args.rules), load_allow(args.allow)
-
-    if args.inventory:
-        inventory(args.dir, rules, entries)
-        return 0
-
     findings = 0
     by_rule = defaultdict(int)
-    for rule, path, line, hit, ok in scan(args.dir, rules, entries):
-        if ok or rule.severity == "info":
-            continue
-        findings += 1
-        by_rule[rule.id] += 1
-        shown = redact(hit) if rule.severity == "secret" else hit
-        print(f"{path}:{line}: [{rule.id}] {shown!r} ({rule.description})")
+
+    if args.commits:
+        with tempfile.TemporaryDirectory(prefix="scan-commits.") as temp:
+            out = Path(temp)
+            shas = write_commits(args.commits, args.exclude or ["--remotes=origin"], out)
+            for sha in shas:
+                for part in ("files", "message"):
+                    findings += report(out / sha / part, rules, entries, by_rule, prefix=f"{sha[:12]}:")
+            if args.gitleaks_config:
+                shutil.copy(args.gitleaks_config, out / ".gitleaks.toml")
+            external = 0 if args.no_external or not shas else external_tools(out)
+            print(f"scan: {len(shas)} unpublished commit(s) of {args.commits}", file=sys.stderr)
+    else:
+        if args.dir is None or not args.dir.is_dir():
+            parser.error(f"{args.dir} is not a directory")
+        if args.inventory:
+            inventory(args.dir, rules, entries)
+            return 0
+        findings = report(args.dir, rules, entries, by_rule)
+        external = 0 if args.no_external else external_tools(args.dir)
     if args.unused_allow:
         for entry in entries:
             if entry.used == 0:
                 print(f"scan: unused allow entry: {entry.rule}\t{entry.glob}", file=sys.stderr)
-    external = 0 if args.no_external else external_tools(args.dir)
     if findings:
         summary = ", ".join(f"{rule_id} {count}" for rule_id, count in sorted(by_rule.items()))
         print(f"scan: {findings} finding(s): {summary}")
