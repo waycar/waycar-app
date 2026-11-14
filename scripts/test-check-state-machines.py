@@ -176,6 +176,25 @@ class WholeTree(unittest.TestCase):
         ):
             self.assertIn(expected, errors)
 
+    def test_merge_conflict_markers_fail(self) -> None:
+        status, errors = self.run_check({
+            "Sources/A.swift": "struct FooMachine: StateMachine {}\n",
+            "docs/design/state-machines.md": """
+                ## Index
+
+                <<<<<<< HEAD
+                ### FooMachine
+
+                - **File:** `Sources/A.swift`
+                =======
+                >>>>>>> topic
+            """,
+        })
+        self.assertEqual(status, 1)
+        for marker in (":4: merge conflict marker `<<<<<<<`", ":8: merge conflict marker `=======`",
+                       ":9: merge conflict marker `>>>>>>>`"):
+            self.assertIn(marker, errors)
+
 
 if __name__ == "__main__":
     unittest.main()

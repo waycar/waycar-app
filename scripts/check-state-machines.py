@@ -48,6 +48,9 @@ NOT_NEWLINE = re.compile(r"[^\n]")
 INDEX_HEADING = re.compile(r"^###\s+`?(\w+)`?\s*$")
 INDEX_FILE = re.compile(r"^-\s+\*\*File:\*\*\s+`([^`]+)`")
 CATALOGUE_ROW = re.compile(r"^\|\s*([A-Z]+-\d+)\s*\|(.*)\|\s*$")
+# A merge that leaves markers in the doc still indexes every machine, so the
+# rest of the check would pass on a broken page.
+CONFLICT_MARKER = re.compile(r"^(?:<{7}|={7}|>{7})(?: |$)")
 
 
 def comment_end(text: str, i: int) -> int | None:
@@ -259,7 +262,11 @@ def run(root: pathlib.Path) -> int:
         print(f"error: {DOC} is missing", file=sys.stderr)
         return 1
     lines = doc.read_text(encoding="utf-8").splitlines()
-    errors: list[str] = []
+    errors: list[str] = [
+        f"{DOC}:{number}: merge conflict marker `{line[:7]}`"
+        for number, line in enumerate(lines, start=1)
+        if CONFLICT_MARKER.match(line)
+    ]
 
     index: dict[str, str | None] = {}
     current: str | None = None
