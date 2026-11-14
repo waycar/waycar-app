@@ -40,6 +40,81 @@ struct AgentLastFrameDeferredOwnerTests {
         #expect(store.frame(for: first.id, host: host) != nil)
         await store.settle()
     }
+
+    /// The catalog asked for while the index is unreadable applies to the
+    /// disk's frames once it loads, and their files are swept.
+    @Test func aHostCatalogWhileLockedAppliesWhenTheIndexLoads() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let kept = Host.fixture()
+        let removed = Host.fixture()
+        let writer = AgentLastFrameStore(directory: directory)
+        for host in [kept, removed] {
+            writer.record(
+                AgentLastFrameStoreTests.image(), size: AgentLastFrameStoreTests.size,
+                for: AgentLastFrameStoreTests.agent("w1:p1", host: host), host: host)
+        }
+        await writer.settle()
+        let lock = DeviceLock()
+        let store = AgentLastFrameStore(directory: directory, readIndex: { url in
+            lock.isLocked ? .unreadable : ConsoleInventoryCache.FileAccess.live.read(url)
+        })
+        store.retainHosts([kept])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 2)
+        lock.isLocked = false
+        #expect(store.cachedEntries.map(\.hostID) == [kept.id])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 1)
+        #expect(AgentLastFrameStore(directory: directory).cachedEntries.map(\.hostID) == [kept.id])
+    }
+
+    /// The first load sweeps files no index entry names (a write the app
+    /// did not live to index).
+    @Test func theFirstLoadSweepsFilesNoEntryNames() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Host.fixture()
+        let agent = AgentLastFrameStoreTests.agent("w1:p1", host: host)
+        let writer = AgentLastFrameStore(directory: directory)
+        writer.record(AgentLastFrameStoreTests.image(), size: AgentLastFrameStoreTests.size, for: agent, host: host)
+        await writer.settle()
+        try Data("orphan".utf8).write(to: directory.appending(path: "orphan.jpg"))
+        let store = AgentLastFrameStore(directory: directory)
+        #expect(store.cachedEntries.map(\.agentID) == [agent.id])
+        await store.settle()
+        #expect(try AgentLastFrameStoreTests.images(in: directory).count == 1)
+        #expect(store.frame(for: agent.id, host: host) != nil)
+    }
+
+    /// A capture's JPEG lands on the disk queue after the main actor moved
+    /// on: a frame discarded or recaptured meanwhile does not come back, and
+    /// only the newest capture's file stays.
+    @Test func aQueuedEncodingCannotBringBackADiscardedOrReplacedFrame() async throws {
+        let directory = AgentLastFrameStoreTests.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Host.fixture()
+        let gone = AgentLastFrameStoreTests.agent("w1:p1", host: host)
+        let recaptured = AgentLastFrameStoreTests.agent("w1:p2", host: host)
+        let store = AgentLastFrameStore(directory: directory)
+        let image = AgentLastFrameStoreTests.image()
+        let size = AgentLastFrameStoreTests.size
+        store.record(image, size: size, for: gone, host: host)
+        store.discard(gone.id)
+        store.record(image, size: size, for: recaptured, host: host)
+        let replaced = try #require(store.cachedEntries.first?.file)
+        store.record(image, size: size, for: recaptured, host: host)
+        let newest = try #require(store.cachedEntries.first?.file)
+        #expect(newest != replaced)
+        await store.settle()
+        #expect(store.frame(for: gone.id, host: host) == nil)
+        #expect(store.cachedEntries.map(\.file) == [newest])
+        #expect(try AgentLastFrameStoreTests.images(in: directory) == [newest])
+        let reopened = AgentLastFrameStore(directory: directory)
+        #expect(reopened.cachedEntries.map(\.file) == [newest])
+        #expect(reopened.frame(for: recaptured.id, host: host) != nil)
+        await reopened.settle()
+    }
 }
 
 @MainActor
@@ -120,6 +195,235 @@ struct MessageJumpDeferredOwnerTests {
         try await waitUntil { !wiring.isJumpRunning }
         #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:turn"])
     }
+
+    /// A settle timer whose step already got its frame wakes later (its
+    /// sleep ignores cancellation): the wait id keeps it from timing out
+    /// the next step's wait.
+    @Test func aStaleSettleTimerCannotTimeOutTheNextStep() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        configuration.unchangedFramesBeforeEnd = 1
+        let sleeps = JumpSleepLedger()
+        var steps = 0
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in steps += 1 },
+            visibleMessages: { $0 == "TARGET" ? ["TARGET"] : [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer { sleeps.releaseAll() }
+        controller.frameDidChange("start")
+        let jump = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        controller.frameDidChange("one")
+        try await waitUntil { sleeps.started == 2 }
+        #expect(steps == 2)
+        sleeps.release(0)
+        try await waitUntil { sleeps.finished == 1 }
+        #expect(controller.isRunning)
+        #expect(steps == 2)
+        controller.frameDidChange("TARGET")
+        #expect(await jump.value == .found)
+        #expect(!controller.isRunning)
+    }
+
+    /// The live wait's own timer does time it out.
+    @Test func theLiveSettleTimerTimesOutItsStep() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        configuration.unchangedFramesBeforeEnd = 1
+        let sleeps = JumpSleepLedger()
+        var steps = 0
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in steps += 1 },
+            visibleMessages: { _ in [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer { sleeps.releaseAll() }
+        controller.frameDidChange("start")
+        let jump = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        sleeps.release(0)
+        #expect(await jump.value == .reachedEnd)
+        #expect(steps == 1)
+        #expect(!controller.lastRunMovedViewport)
+    }
+
+    /// An enclosing-task cancel whose handler reaches the main actor only
+    /// after its run ended, with no run in progress, changes nothing: the
+    /// next run walks normally.
+    @Test func aCancelHandlerLandingBetweenRunsDoesNotPoisonTheNext() async throws {
+        var configuration = TerminalMessageJumpController.Configuration()
+        configuration.maxSteps = 3
+        let sleeps = JumpSleepLedger()
+        let barrier = DeferredOwnerGate()
+        var passed = false
+        let controller = TerminalMessageJumpController(
+            configuration: configuration,
+            step: { _, _ in },
+            visibleMessages: { $0 == "TARGET" ? ["TARGET"] : [] },
+            sleep: { @MainActor _ in await sleeps.sleep() })
+        defer {
+            barrier.open()
+            sleeps.releaseAll()
+        }
+        controller.enclosingCancelHandlerBarrier = { await barrier.wait() }
+        controller.enclosingCancelHandlerDidPassPoisonWindow = { passed = true }
+        controller.frameDidChange("start")
+        let first = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 1 }
+        controller.frameDidChange("one")
+        first.cancel()
+        #expect(await first.value == .cancelled)
+        try await waitUntil { barrier.isWaiting }
+        #expect(!controller.isRunning)
+        barrier.open()
+        try await waitUntil { passed }
+        let second = Task { await controller.jump(.older) }
+        try await waitUntil { sleeps.started == 2 }
+        controller.frameDidChange("TARGET")
+        #expect(await second.value == .found)
+    }
+
+    /// A reset drops the transcript read in flight and its pending reread:
+    /// the old read's answer reaches nobody, and a read started after the
+    /// reset is the one a later refresh coalesces behind.
+    @Test func aResetDropsTheReadInFlightAndItsReread() async throws {
+        let gates = [DeferredOwnerGate(), DeferredOwnerGate(), DeferredOwnerGate()]
+        let snapshot = HarnessJumpCaptures.transcript(
+            kind: "pi", messages: [("turn", .user, "Explain the parser changes")])
+        var reads = 0
+        var delivered = 0
+        let wiring = AgentMessageJumpWiring(readTranscript: {
+            reads += 1
+            await gates[min(reads, 3) - 1].wait()
+            return snapshot
+        }, jumpUsesTranscript: true)
+        defer {
+            gates.forEach { $0.open() }
+            wiring.resetSession()
+        }
+        wiring.onTranscript = { _ in delivered += 1 }
+        wiring.refreshTranscript()
+        try await waitUntil { gates[0].isWaiting }
+        wiring.refreshTranscript()
+        wiring.resetSession()
+        wiring.refreshTranscript()
+        try await waitUntil { gates[1].isWaiting }
+        gates[0].open()
+        wiring.refreshTranscript()
+        #expect(reads == 2)
+        #expect(delivered == 0)
+        gates[1].open()
+        try await waitUntil { delivered == 1 && gates[2].isWaiting }
+        #expect(reads == 3)
+        gates[2].open()
+        try await waitUntil { delivered == 2 }
+        #expect(reads == 3)
+    }
+
+    /// A replacement jump keeps holding transcript reads until it enters:
+    /// a read landing in between replaces the held snapshot (it is not
+    /// indexed under the walk), and the replacement's end indexes it, never
+    /// the older one it replaced.
+    @Test func aReadBeforeTheReplacementJumpEntersReplacesTheHeldSnapshot() async throws {
+        let first = DeferredOwnerGate()
+        let second = DeferredOwnerGate()
+        let secondRead = DeferredOwnerGate()
+        let frame = "Explain the parser changes"
+        let older = HarnessJumpCaptures.transcript(kind: "pi", messages: [("a", .user, frame)])
+        let newer = HarnessJumpCaptures.transcript(kind: "pi", messages: [("b", .user, frame)])
+        var reads = 0
+        var delivered = 0
+        var secondEnded = false
+        var replace: (() -> Void)?
+        let wiring = AgentMessageJumpWiring(readTranscript: {
+            reads += 1
+            if reads == 1 { return older }
+            await secondRead.wait()
+            // In the same main-actor turn as this read's answer, so the
+            // replacement is requested and cannot have entered yet.
+            replace?()
+            return newer
+        }, jumpUsesTranscript: true)
+        defer {
+            first.open(); second.open(); secondRead.open()
+            replace = nil
+            wiring.resetSession()
+        }
+        wiring.onTranscript = { _ in delivered += 1 }
+        wiring.runJump(.older) { _ in await first.wait() }
+        try await waitUntil { first.isWaiting && wiring.runningDirection == .older }
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 1 }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "held for the walk")
+        replace = {
+            wiring.runJump(.newer) { _ in
+                await second.wait()
+                secondEnded = true
+            }
+        }
+        wiring.refreshTranscript()
+        try await waitUntil { secondRead.isWaiting }
+        secondRead.open()
+        try await waitUntil { delivered == 2 }
+        #expect(wiring.isJumpRunning)
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty, "still held: a jump runs")
+        try await waitUntil { second.isWaiting && wiring.runningDirection == .newer }
+        second.open()
+        try await waitUntil { secondEnded && !wiring.isJumpRunning }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:b"])
+    }
+
+    /// A snapshot held for a walk belongs to its session: a reset drops it,
+    /// and the old walk ending later applies nothing to the new session.
+    @Test func aSnapshotHeldForAWalkDiesWithItsSession() async throws {
+        let walk = DeferredOwnerGate()
+        let snapshot = HarnessJumpCaptures.transcript(
+            kind: "pi", messages: [("turn", .user, "Explain the parser changes")])
+        var delivered = 0
+        let wiring = AgentMessageJumpWiring(readTranscript: { snapshot }, jumpUsesTranscript: true)
+        defer { walk.open(); wiring.resetSession() }
+        wiring.onTranscript = { _ in delivered += 1 }
+        var walkEnded = false
+        wiring.runJump(.older) { _ in
+            await walk.wait()
+            walkEnded = true
+        }
+        try await waitUntil { walk.isWaiting && wiring.isJumpRunning }
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 1 }
+        let frame = "Explain the parser changes"
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty)
+        wiring.resetSession()
+        #expect(!wiring.isJumpRunning)
+        walk.open()
+        try await waitUntil { walkEnded }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame).isEmpty)
+        #expect(!wiring.isJumpRunning)
+        wiring.refreshTranscript()
+        try await waitUntil { delivered == 2 }
+        #expect(wiring.messageIndex.visibleMessageKeys(frame) == ["transcript:turn"])
+    }
+}
+
+/// Settle-timer sleeps the test wakes one by one; each ignores
+/// cancellation, so a timer whose wait was answered can still wake late.
+@MainActor
+private final class JumpSleepLedger {
+    private var gates: [DeferredOwnerGate] = []
+    private(set) var finished = 0
+    var started: Int { gates.count }
+
+    func sleep() async {
+        let gate = DeferredOwnerGate()
+        gates.append(gate)
+        await gate.wait()
+        finished += 1
+    }
+
+    func release(_ index: Int) { gates[index].open() }
+
+    func releaseAll() { gates.forEach { $0.open() } }
 }
 
 @MainActor
@@ -154,12 +458,102 @@ struct PaneHistoryDeferredOwnerTests {
         #expect(history.position == .live, "a failed leave still releases input, as before")
         #expect(!history.holdsInput)
     }
+
+    /// A leave asked for while a scroll is in flight waits for that scroll
+    /// and drops the rows queued behind it: they never go out.
+    @Test func aLeaveWaitsForTheScrollInFlightAndDropsTheRowsQueuedBehindIt() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var scrolls: [Int] = []
+        var leaves = 0
+        let history = TmuxPaneHistory(scroll: { _, rows in
+            scrolls.append(rows)
+            if scrolls.count == 1 { await gate.wait() }
+            return PaneHistoryScroll(position: .inHistory, enteredHistory: scrolls.count == 1)
+        }, leave: { leaves += 1 })
+        history.scroll(towardOlderContent: true, rows: 3)
+        try await waitUntil { gate.isWaiting }
+        history.scroll(towardOlderContent: true, rows: 5)
+        history.refresh()
+        var leaveCalled = false
+        let leave = Task {
+            leaveCalled = true
+            await history.leave()
+        }
+        try await waitUntil { leaveCalled }
+        history.scroll(towardOlderContent: true, rows: 7)
+        #expect(history.holdsInput)
+        gate.open()
+        await leave.value
+        #expect(scrolls == [3])
+        #expect(leaves == 1)
+        #expect(history.position == .live)
+        #expect(!history.enteredHistory)
+        #expect(!history.holdsInput)
+    }
+
+    /// A departure that arrives while input's leave runs joins it: copy
+    /// mode is left once, and the departure returns with it.
+    @Test func aDepartureJoiningAnInputLeaveLeavesOnce() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var leaves = 0
+        let history = TmuxPaneHistory(scroll: { _, _ in
+            PaneHistoryScroll(position: .inHistory, enteredHistory: true)
+        }, leave: {
+            leaves += 1
+            await gate.wait()
+        })
+        history.scroll(towardOlderContent: true, rows: 4)
+        try await waitUntil { history.enteredHistory && !history.isMoving }
+        let leave = Task { await history.leave() }
+        try await waitUntil { gate.isWaiting }
+        var departed = false
+        let depart = Task {
+            await history.depart()
+            departed = true
+        }
+        gate.open()
+        await leave.value
+        await depart.value
+        #expect(departed)
+        #expect(leaves == 1)
+        #expect(history.position == .live)
+        #expect(!history.holdsInput)
+    }
+
+    /// A failed request drops what piled up behind it, and the pump ends;
+    /// the next scroll starts again with only its own rows.
+    @Test func aFailedScrollDropsWhatQueuedBehindItAndTheNextScrollAsksAgain() async throws {
+        let gate = DeferredOwnerGate()
+        defer { gate.open() }
+        var scrolls: [Int] = []
+        let history = TmuxPaneHistory(scroll: { _, rows in
+            scrolls.append(rows)
+            if scrolls.count == 1 {
+                await gate.wait()
+                throw TransportError.cancelled
+            }
+            return PaneHistoryScroll(position: .inHistory)
+        }, leave: {})
+        history.scroll(towardOlderContent: true, rows: 2)
+        try await waitUntil { gate.isWaiting }
+        history.scroll(towardOlderContent: true, rows: 6)
+        history.refresh()
+        gate.open()
+        try await waitUntil { !history.holdsInput }
+        #expect(scrolls == [2])
+        #expect(history.position == nil)
+        history.scroll(towardOlderContent: false, rows: 1)
+        try await waitUntil { history.position == .inHistory }
+        #expect(scrolls == [2, 1])
+    }
 }
 
 @MainActor
 struct ShellOpeningDeferredOwnerTests {
-    /// The private View's creation/handoff lifecycle is deferred, not replaced
-    /// by this narrower existing-API guard on definitive versus lost replies.
+    /// Definitive versus lost replies; the creation and handoff lifecycle
+    /// itself is `ShellOpeningMachine`, pinned by `ShellOpeningLifecycleTests`.
     @Test func backendRejectionsStayDistinctFromAnUnclearCreationOutcome() {
         let message = AgentDetailView.terminalCreationFailureMessage(
             for: TransportError.apiRejected(code: "gone", message: "Workspace is gone"), backend: .tmux)

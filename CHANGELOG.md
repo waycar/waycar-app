@@ -139,6 +139,8 @@ Entries reference the issue that motivated them.
   reconnects before the new network has settled.
 - **Jump Hosts**: closing a connection through a Jump Host no longer hangs
   past its time limit.
+- **Adding a Host**: a host-key question that appears just as an earlier
+  check is cancelled is no longer declined on its own.
 - **Chats on OpenCode, Kilo and Hermes**: opening a chat no longer hangs past
   its timeout when the export leaves a background process running.
 - **tmux status**: an old session ending no longer clears the session that

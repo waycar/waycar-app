@@ -530,20 +530,14 @@ final class TerminalSessionCallbackBridge {
         _ phase: TerminalGridReportPhase, _ forwarded: TerminalGridSize?
     ) -> Void)?
     nonisolated private let resizeSequence = TerminalResizeSequence()
-    private var pendingResizeReports: [UInt64: InMemoryTerminalViewport] = [:]
-    private var lastProcessedResizeSequence: UInt64 = 0
-    private var discardsResizeReportsThrough: UInt64 = 0
-    private var defersSizeReports = false
-    private var deferredSize: (columns: Int, rows: Int)?
-    private var finishesSizeReportDeferralThrough: UInt64?
-    private var suppressesDuplicateSize: (columns: Int, rows: Int)?
-    private var lastNotifiedGridReportPhase = TerminalGridReportPhase.live
+    /// The report sequence, the freeze and duplicate suppression; see
+    /// ``GridReportMachine``.
+    private var reports = GridReportMachine()
 
-    /// Derived from the deferral bookkeeping rather than tracked alongside it,
-    /// so the phase callers observe cannot drift from the one the reports obey.
+    /// Derived from the machine the reports obey, so the phase callers
+    /// observe cannot drift from it.
     var gridReportPhase: TerminalGridReportPhase {
-        guard defersSizeReports else { return .live }
-        return finishesSizeReportDeferralThrough == nil ? .deferring : .flushing
+        reports.gridReportPhase
     }
 
     init(
@@ -575,7 +569,37 @@ final class TerminalSessionCallbackBridge {
     nonisolated func resize(_ viewport: InMemoryTerminalViewport) {
         let sequence = resizeSequence.next()
         Task { @MainActor [weak self] in
-            self?.receiveResize(viewport, sequence: sequence)
+            self?.send(.reportArrived(sequence: sequence, viewport: viewport))
+        }
+    }
+
+    /// Feeds the machine and performs its effects in order. Each callback is
+    /// the last effect of its step; its continuation is sent once it returns,
+    /// so a callback that re-entered the bridge has already been applied.
+    private func send(_ event: GridReportMachine.Event) {
+        for effect in reports.handle(event) {
+            switch effect {
+            case .checkCurrent(let viewport):
+                let isCurrent = isSizeReportCurrent?(
+                    Int(viewport.columns), Int(viewport.rows)) != false
+                send(.currentnessChecked(viewport, isCurrent: isCurrent))
+            case .deliverViewport(let viewport):
+                onViewport?(viewport)
+                send(.viewportDelivered(viewport))
+            case .reportSize(let size, let then):
+                onSizeChanged?(size.columns, size.rows)
+                send(.sizeReported(then: then))
+            case .forward(let size, let then):
+                guard let onSizeChanged else {
+                    send(.forwarded(size, delivered: false, then: then))
+                    continue
+                }
+                onSizeChanged(size.columns, size.rows)
+                send(.forwarded(size, delivered: true, then: then))
+            case .notifyPhase(let phase, let forwarded, let then):
+                onGridReportPhaseChanged?(phase, forwarded)
+                send(.phaseNotified(then: then))
+            }
         }
     }
 
@@ -584,28 +608,18 @@ final class TerminalSessionCallbackBridge {
         // main-actor delivery is still queued. It describes the layout before
         // this freeze and must not become the deferred result merely because
         // its Task happens to run after the handoff begins.
-        discardsResizeReportsThrough = max(
-            discardsResizeReportsThrough, resizeSequence.current())
-        defersSizeReports = true
-        deferredSize = nil
-        finishesSizeReportDeferralThrough = nil
-        suppressesDuplicateSize = nil
-        notifyGridReportPhase()
+        send(.beginFreeze(latest: resizeSequence.current()))
     }
 
     func finishSizeReportDeferral() {
-        guard defersSizeReports else { return }
         // `resize` crosses onto the main actor asynchronously. Keep the freeze
         // in force until every callback that had already left Ghostty when the
         // thaw was requested has been consumed in sequence.
-        finishesSizeReportDeferralThrough = resizeSequence.current()
-        notifyGridReportPhase()
-        completeSizeReportDeferralIfReady()
+        send(.finishFreeze(latest: resizeSequence.current()))
     }
 
     func provideAuthoritativeDeferredSize(columns: Int, rows: Int) {
-        guard defersSizeReports else { return }
-        deferredSize = (columns, rows)
+        send(.provideAuthoritative(TerminalGridSize(columns: columns, rows: rows)))
     }
 
     /// Tells the Host a grid it may have missed: a cancelled freeze discards
@@ -613,96 +627,11 @@ final class TerminalSessionCallbackBridge {
     /// changes. Held like any other report while a freeze is in force; the
     /// engine's matching callback, if still in flight, is consumed once.
     func reportSettledSize(columns: Int, rows: Int) {
-        guard !defersSizeReports else {
-            deferredSize = (columns, rows)
-            return
-        }
-        onSizeChanged?(columns, rows)
-        suppressesDuplicateSize = (columns, rows)
+        send(.reportSettled(TerminalGridSize(columns: columns, rows: rows)))
     }
 
     func cancelSizeReportDeferral() {
-        discardsResizeReportsThrough = max(
-            discardsResizeReportsThrough, resizeSequence.current())
-        defersSizeReports = false
-        deferredSize = nil
-        finishesSizeReportDeferralThrough = nil
-        suppressesDuplicateSize = nil
-        notifyGridReportPhase()
-    }
-
-    private func receiveResize(
-        _ viewport: InMemoryTerminalViewport,
-        sequence: UInt64
-    ) {
-        pendingResizeReports[sequence] = viewport
-
-        while let viewport = pendingResizeReports.removeValue(
-            forKey: lastProcessedResizeSequence &+ 1)
-        {
-            lastProcessedResizeSequence &+= 1
-            if lastProcessedResizeSequence > discardsResizeReportsThrough {
-                let size = (columns: Int(viewport.columns), rows: Int(viewport.rows))
-                if isSizeReportCurrent?(size.columns, size.rows) != false {
-                    onViewport?(viewport)
-                    if defersSizeReports {
-                        deferredSize = size
-                    } else {
-                        deliverSize(size)
-                    }
-                }
-            }
-            completeSizeReportDeferralIfReady()
-        }
-    }
-
-    private func completeSizeReportDeferralIfReady() {
-        guard let finishSequence = finishesSizeReportDeferralThrough,
-              lastProcessedResizeSequence >= finishSequence
-        else { return }
-        finishesSizeReportDeferralThrough = nil
-        defersSizeReports = false
-        // The Host hears the settled grid first, and the phase says `.live`
-        // only once it has: an observer woken by the thaw must find the
-        // report already delivered, not on its way.
-        let forwarded = forwardDeferredSize()
-        notifyGridReportPhase(forwarded: forwarded)
-    }
-
-    /// Hands the Host the one grid the freeze settled on and returns it, or
-    /// returns `nil` when the freeze never learned a grid to forward — the
-    /// next ordinary report speaks for it then.
-    private func forwardDeferredSize() -> TerminalGridSize? {
-        guard let deferredSize else { return nil }
-        self.deferredSize = nil
-        guard let onSizeChanged else { return nil }
-        onSizeChanged(deferredSize.columns, deferredSize.rows)
-        // The surface delegate supplied the settled grid synchronously. The
-        // equivalent engine callback can still be in Ghostty's IO pipeline;
-        // consume that one duplicate when it arrives. A different current
-        // grid clears the token and is delivered normally.
-        suppressesDuplicateSize = deferredSize
-        return TerminalGridSize(
-            columns: deferredSize.columns, rows: deferredSize.rows)
-    }
-
-    private func notifyGridReportPhase(forwarded: TerminalGridSize? = nil) {
-        let phase = gridReportPhase
-        guard phase != lastNotifiedGridReportPhase else { return }
-        lastNotifiedGridReportPhase = phase
-        onGridReportPhaseChanged?(phase, forwarded)
-    }
-
-    private func deliverSize(_ size: (columns: Int, rows: Int)) {
-        if let suppressedSize = suppressesDuplicateSize {
-            suppressesDuplicateSize = nil
-            if suppressedSize.columns == size.columns,
-               suppressedSize.rows == size.rows
-            {
-                return
-            }
-        }
-        onSizeChanged?(size.columns, size.rows)
+        send(.cancelFreeze(latest: resizeSequence.current()))
     }
 
     func paste(_ text: String, bracketed: Bool) {
@@ -821,7 +750,6 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     /// Completes the app-owned inset freeze for a responder handoff after the
     /// terminal's own keyboard frame has settled.
     var onKeyboardHandoffEnded: ((UUID, TerminalKeyboardHandoffOutcome) -> Void)?
-    private var activeKeyboardHandoffID: UUID?
     /// How many times the input views have been rebuilt. Nothing else observes
     /// the rebuild that republishes the keyboard's settled frame after a
     /// handoff, and a lost rebuild costs the terminal a toolbar's worth of
@@ -831,22 +759,9 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     private var terminalInputView: UIView?
     private var modeTracker = TerminalModeTracker()
     private var lastInputWindowSize: CGSize?
-    private var defersLayoutForKeyboardTransition = false
-    /// What ends the current freeze. A dismissal waits for `keyboardDidHide`;
-    /// an inherited keyboard never leaves, so its settled signal is the frame
-    /// change instead.
-    private var keyboardTransitionEndsOnFrameChange = false
-    /// An inherited keyboard first publishes the frame that still includes
-    /// both responders' accessories. Rebuilding the input views publishes the
-    /// destination-only frame; the handoff cannot settle before that second
-    /// owned frame arrives.
-    private var didReloadInputViewsForKeyboardHandoff = false
-    /// The first owned keyboard frame can arrive synchronously from
-    /// `becomeFirstResponder()`. Defer rebuilding until the responder-handoff
-    /// owner has accepted the request, and coalesce any duplicate first
-    /// frames that arrive in the meantime.
-    private var keyboardHandoffReloadIsScheduled = false
-    private var keyboardTransitionCycleID: UUID?
+    /// The keyboard-transition freeze: its cycle, the handoff that owns it
+    /// and its queued input-view reload; see ``SurfaceKeyboardFreezeMachine``.
+    private var keyboardFreeze = SurfaceKeyboardFreezeMachine()
     private var keyboardTransitionFallbackTask: Task<Void, Never>?
     /// Test seam for process-wide keyboard notification ownership. Production
     /// reads the window-local layout guide directly.
@@ -1410,7 +1325,7 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
         guard raisesKeyboardWhenReady, window != nil else { return }
         raisesKeyboardWhenReady = false
         // A keyboard that never left reports no did-show, only a frame change.
-        beginKeyboardTransitionLayoutDeferral(endsOnFrameChange: true)
+        sendKeyboardFreeze(.inherit)
         raiseKeyboard()
         // Only a first responder is handed the settle signal that ends this
         // freeze (see `notificationSettlesOwnKeyboard`), so a claim UIKit
@@ -1471,9 +1386,7 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     /// Raises the keyboard, and records that the user wants it up.
     func requestKeyboard() {
         guard isLocalInputEnabled else { return }
-        if activeKeyboardHandoffID == nil {
-            finishKeyboardTransitionLayout(handoffOutcome: .cancelled)
-        }
+        sendKeyboardFreeze(.requestKeyboard)
         raiseKeyboard()
     }
 
@@ -1482,8 +1395,7 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     @discardableResult
     func requestKeyboardHandoff(id: UUID) -> Bool {
         guard isLocalInputEnabled, window != nil else { return false }
-        activeKeyboardHandoffID = id
-        beginKeyboardTransitionLayoutDeferral(endsOnFrameChange: true)
+        sendKeyboardFreeze(.requestHandoff(id))
         raiseKeyboard()
         guard isFirstResponder else {
             cancelKeyboardTransitionLayoutDeferral()
@@ -1746,7 +1658,7 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     }
 
     override func layoutSubviews() {
-        guard !defersLayoutForKeyboardTransition else { return }
+        guard !keyboardFreeze.isFrozen else { return }
         // Before Ghostty's layout, so the freeze is in force by the time the
         // pass reports its grid.
         deferGridReportsForWindowResize()
@@ -1910,21 +1822,70 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     /// in one step, because the terminal sizes itself to the keyboard's own
     /// frame rather than through SwiftUI's two-stage avoidance — see
     /// ``TerminalKeyboardInset``.
-    private func beginKeyboardTransitionLayoutDeferral(endsOnFrameChange: Bool = false) {
-        keyboardGridReportTask?.cancel()
-        keyboardGridReportTask = nil
-        defersLayoutForKeyboardTransition = true
-        keyboardTransitionEndsOnFrameChange = endsOnFrameChange
-        didReloadInputViewsForKeyboardHandoff = false
-        keyboardHandoffReloadIsScheduled = false
-        keyboardTransitionCycleID = UUID()
-        callbackBridge.beginSizeReportDeferral()
-        keyboardTransitionFallbackTask?.cancel()
-        let fallbackDelay = keyboardTransitionFallbackDelay
-        keyboardTransitionFallbackTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(fallbackDelay))
-            guard !Task.isCancelled else { return }
-            self?.finishKeyboardTransitionLayout(handoffOutcome: .timedOut)
+    ///
+    /// Feeds the freeze machine and performs its effects in order. The
+    /// machine has already moved when they run, so a `layoutSubviews` or a
+    /// settle that UIKit re-enters synchronously from them sees the new
+    /// state, as it always did.
+    private func sendKeyboardFreeze(_ event: SurfaceKeyboardFreezeMachine.Event) {
+        for effect in keyboardFreeze.handle(event) {
+            switch effect {
+            case .cancelGridReport:
+                keyboardGridReportTask?.cancel()
+                keyboardGridReportTask = nil
+            case .beginBridgeFreeze:
+                callbackBridge.beginSizeReportDeferral()
+            case .cancelBridgeFreeze:
+                callbackBridge.cancelSizeReportDeferral()
+            case .cancelFallback:
+                keyboardTransitionFallbackTask?.cancel()
+                keyboardTransitionFallbackTask = nil
+            case .armFallback(let cycle):
+                let fallbackDelay = keyboardTransitionFallbackDelay
+                keyboardTransitionFallbackTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(fallbackDelay))
+                    guard !Task.isCancelled else { return }
+                    self?.sendKeyboardFreeze(.fallbackElapsed(cycle: cycle))
+                }
+            case .scheduleReload(let cycle):
+                // The first owned frame can arrive synchronously from
+                // `becomeFirstResponder()`: rebuild only once the handoff's
+                // owner has accepted the request.
+                DispatchQueue.main.async { [weak self] in
+                    self?.sendKeyboardFreeze(.queuedReloadFired(cycle: cycle))
+                }
+            case .reloadInputViews:
+                UIView.performWithoutAnimation { reloadInputViews() }
+            case .layoutNow:
+                setNeedsLayout()
+                layoutIfNeeded()
+            case .provideAuthoritativeGrid:
+                guard hasTerminalGridMetrics else { continue }
+                // A fresh surface can publish its first grid just before the
+                // handoff freeze begins. The bridge correctly rejects that
+                // queued pre-freeze callback, and libghostty may suppress an
+                // identical post-layout callback. Seed the deferral from the
+                // surface delegate's synchronous final metrics so Attach
+                // still receives its initial size, without letting the stale
+                // grid escape.
+                callbackBridge.provideAuthoritativeDeferredSize(
+                    columns: terminalGridSize.columns,
+                    rows: terminalGridSize.rows)
+            case .scheduleGridReport:
+                scheduleGridReport(after: Self.gridSettleDelay)
+            case .reportPendingWindowResizeGrid:
+                guard windowResizeGridIsPending else { continue }
+                windowResizeGridIsPending = false
+                guard hasTerminalGridMetrics else { continue }
+                // The cancelled freeze held the grid a window resize settled
+                // on. Without this the Host keeps the pre-resize PTY size
+                // until the grid happens to change again.
+                callbackBridge.reportSettledSize(
+                    columns: terminalGridSize.columns,
+                    rows: terminalGridSize.rows)
+            case .notifyHandoffEnded(let id, let outcome):
+                onKeyboardHandoffEnded?(id, outcome)
+            }
         }
     }
 
@@ -1949,99 +1910,22 @@ final class WaycarTerminalView: UITerminalView, TerminalByteSink {
     /// keyboard covering this terminal's own window may thaw the freeze
     /// (#157).
     func keyboardFrameDidSettle() {
-        guard keyboardTransitionEndsOnFrameChange else { return }
-        guard didReloadInputViewsForKeyboardHandoff else {
-            guard !keyboardHandoffReloadIsScheduled,
-                  let cycleID = keyboardTransitionCycleID
-            else { return }
-            keyboardHandoffReloadIsScheduled = true
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      self.keyboardTransitionCycleID == cycleID,
-                      self.keyboardTransitionEndsOnFrameChange,
-                      self.keyboardHandoffReloadIsScheduled
-                else { return }
-                // Set the phase first because UIKit may synchronously publish
-                // the repopulated frame from inside reloadInputViews().
-                self.keyboardHandoffReloadIsScheduled = false
-                self.didReloadInputViewsForKeyboardHandoff = true
-                UIView.performWithoutAnimation { self.reloadInputViews() }
-            }
-            return
-        }
-        finishKeyboardTransitionLayout(handoffOutcome: .settled)
+        sendKeyboardFreeze(.frameSettled)
     }
 
+    /// Ends the freeze, thawing the grid: the input views are rebuilt for an
+    /// inherited keyboard whose queued rebuild never ran (both terminals'
+    /// accessories were on the frame it published, and UIKit publishes no
+    /// other when the outgoing one leaves), the surface lays out, and the
+    /// settled grid is reported shortly after.
     func finishKeyboardTransitionLayout(
         handoffOutcome: TerminalKeyboardHandoffOutcome = .settled
     ) {
-        guard defersLayoutForKeyboardTransition else { return }
-        let inheritedTheKeyboard = keyboardTransitionEndsOnFrameChange
-        let alreadyReloadedInputViews = didReloadInputViewsForKeyboardHandoff
-        let settledHandoffID = activeKeyboardHandoffID
-        activeKeyboardHandoffID = nil
-        defersLayoutForKeyboardTransition = false
-        keyboardTransitionEndsOnFrameChange = false
-        didReloadInputViewsForKeyboardHandoff = false
-        keyboardHandoffReloadIsScheduled = false
-        keyboardTransitionCycleID = nil
-        keyboardTransitionFallbackTask?.cancel()
-        keyboardTransitionFallbackTask = nil
-        if inheritedTheKeyboard, !alreadyReloadedInputViews {
-            // Both terminals' accessories were on the keyboard while it
-            // changed hands, and that is the frame the keyboard published:
-            // one accessory too tall. UIKit does not publish another when the
-            // outgoing one leaves, so the layout keeps reserving room for an
-            // accessory that is gone. Rebuilding the input views makes it
-            // publish the settled frame.
-            UIView.performWithoutAnimation { reloadInputViews() }
-        }
-        setNeedsLayout()
-        layoutIfNeeded()
-        if hasTerminalGridMetrics {
-            // A fresh surface can publish its first grid just before the
-            // handoff freeze begins. The bridge correctly rejects that queued
-            // pre-freeze callback, and libghostty may suppress an identical
-            // post-layout callback. Seed the deferral from the surface
-            // delegate's synchronous final metrics so Attach still receives
-            // its initial size, without letting the stale grid escape.
-            callbackBridge.provideAuthoritativeDeferredSize(
-                columns: terminalGridSize.columns,
-                rows: terminalGridSize.rows)
-        }
-        scheduleGridReport(after: Self.gridSettleDelay)
-        if inheritedTheKeyboard, let settledHandoffID {
-            onKeyboardHandoffEnded?(settledHandoffID, handoffOutcome)
-        }
+        sendKeyboardFreeze(.finish(handoffOutcome))
     }
 
     private func cancelKeyboardTransitionLayoutDeferral() {
-        let cancelledHandoffID = activeKeyboardHandoffID
-        activeKeyboardHandoffID = nil
-        defersLayoutForKeyboardTransition = false
-        keyboardTransitionEndsOnFrameChange = false
-        didReloadInputViewsForKeyboardHandoff = false
-        keyboardHandoffReloadIsScheduled = false
-        keyboardTransitionCycleID = nil
-        keyboardTransitionFallbackTask?.cancel()
-        keyboardTransitionFallbackTask = nil
-        keyboardGridReportTask?.cancel()
-        keyboardGridReportTask = nil
-        callbackBridge.cancelSizeReportDeferral()
-        if windowResizeGridIsPending {
-            windowResizeGridIsPending = false
-            if hasTerminalGridMetrics {
-                // The cancelled freeze held the grid a window resize settled
-                // on. Without this the Host keeps the pre-resize PTY size
-                // until the grid happens to change again.
-                callbackBridge.reportSettledSize(
-                    columns: terminalGridSize.columns,
-                    rows: terminalGridSize.rows)
-            }
-        }
-        if let cancelledHandoffID {
-            onKeyboardHandoffEnded?(cancelledHandoffID, .cancelled)
-        }
+        sendKeyboardFreeze(.cancel)
     }
 
     var usesApplicationCursorKeys: Bool {

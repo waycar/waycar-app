@@ -3238,9 +3238,10 @@ stateDiagram-v2
 - **Tests:** `TerminalInputOwnershipMachineTests`,
   `TerminalInputOwnershipOwnerTests` (existing controller API, no new seam),
   `TerminalInputControllerTests`, `TmuxPaneHistoryTests`.
-- **Catalogue:** ATTACH-09. ATTACH-11/13/14/15 remain deferred for a Mac pass;
-  `TerminalKeyboardLifecycleOwnerTests` adds existing-API stage, inset-token,
-  queued-reload and resize-fence safety nets without changing UIKit ordering.
+- **Catalogue:** ATTACH-09. `TerminalKeyboardLifecycleOwnerTests` adds
+  existing-API stage, inset-token, queued-reload and resize-fence safety nets
+  for ATTACH-11/13/14/15, since converted (`DirectKeyboardHandoffMachine`,
+  `KeyboardInsetMachine`, `SurfaceKeyboardFreezeMachine`, `GridReportMachine`).
 
 ```mermaid
 stateDiagram-v2
@@ -3317,6 +3318,463 @@ stateDiagram-v2
     ready --> ready: close viewer or gallery
     loading --> loading: close viewer or gallery
     failed --> failed: close viewer or gallery
+```
+
+### KeyboardInsetMachine
+
+- **File:** `Sources/Waycar/Terminal/KeyboardInsetMachine.swift`
+- **Owner:** `TerminalKeyboardInset` keeps the window, the measurement
+  overrides, the coalesce, confirmation and fallback Tasks keyed by token,
+  and the armed handoff's closures; its observed `height`,
+  `lastPresentedHeight`, `isSoftwareKeyboardDismissed` and
+  `activeResponderHandoffID` are assigned only by `publish…` effects, in
+  the order the inset always assigned them.
+- **States:** published heights and dismissal, capture on/off, the missed
+  presentation flag, presentation `none`/`coalescing(token, height)`,
+  dismissal `none`/`confirming(token)`, handoff
+  `none`/`holding(id, fallback, kind, owesDismissal)`.
+- **Events:** will-present and its measurement, coalesce elapsed,
+  will-dismiss, did-show and the window's measurement, expect keyboard,
+  confirmation elapsed, pause/resume capture, begin/end/cancel handoff,
+  fallback elapsed, exit measured.
+- **Effects:** measure, cancel/arm the three timers, forget the fired
+  fallback, publish. Measurements are separate events, so a presentation
+  is measured only while it can land and an exit measures only after its
+  freeze is released; stale timer tokens do nothing.
+- **Tests:** `KeyboardInsetMachineTests`, `TerminalKeyboardInsetLifecycleTests`,
+  the inset tests in `TerminalAttachTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-13.
+
+```mermaid
+stateDiagram-v2
+    state Presentation {
+        [*] --> none
+        none --> coalescing: measured frame covers the window / arm coalesce
+        coalescing --> coalescing: later frame / re-arm
+        coalescing --> none: matching elapsed / publish heights
+        coalescing --> none: hide, pause, handoff, did-show settle
+    }
+    state Dismissal {
+        [*] --> idle
+        idle --> confirming: hide, expect keyboard, zero settle / arm
+        confirming --> idle: matching elapsed at zero / publish dismissed
+        confirming --> idle: presentation, handoff, positive settle
+    }
+    state Handoff {
+        [*] --> free
+        free --> holding: begin / publish id, arm fallback
+        holding --> holding: hide or expiring confirmation / owe dismissal
+        holding --> holding: begin / carry debt
+        holding --> free: end, cancel, matching fallback / publish nil, measure, reconcile
+    }
+```
+
+### GridReportMachine
+
+- **File:** `Sources/Waycar/Terminal/GridReportMachine.swift`
+- **Owner:** `TerminalSessionCallbackBridge` keeps the cross-thread
+  sequence counter (read into the freeze events) and the UI closures. It
+  performs each callback effect and sends the step's continuation once the
+  callback returns, so a callback that re-entered the bridge has already
+  been applied when the step goes on.
+- **States:** phase `live`, `deferring(deferred)`, `flushing(through,
+  deferred)`; reports waiting for their predecessor; last processed and
+  discarded sequence; the duplicate-suppression grid; the last phase
+  notified.
+- **Events:** report arrived, begin/finish/cancel freeze (with the latest
+  sequence), authoritative and settled grids, and the continuations
+  (currentness checked, viewport delivered, size reported, forwarded, phase
+  notified).
+- **Effects:** check currentness, deliver the viewport, report a size,
+  forward the thaw grid, notify the phase; each the last of its step.
+- **Tests:** `GridReportMachineTests`, `TerminalResizeBridgeLifecycleTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`,
+  `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-15.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> live: report in sequence / check, deliver, report (duplicate consumed once)
+    live --> deferring: begin / discard reports that left, notify
+    deferring --> deferring: report or grid / hold newest
+    deferring --> flushing: finish / fence latest sequence, notify
+    flushing --> flushing: report before the fence / hold
+    flushing --> live: fence consumed / forward held grid, notify
+    deferring --> live: cancel / discard, notify
+    flushing --> live: cancel / discard, notify
+    flushing --> deferring: begin
+```
+
+### SurfaceKeyboardFreezeMachine
+
+- **File:** `Sources/Waycar/Terminal/SurfaceKeyboardFreezeMachine.swift`
+- **Owner:** `WaycarTerminalView` keeps the leash Task, the queued
+  main-queue reload, the shared grid-report Task, the window-resize debt and
+  the UIKit calls (`reloadInputViews`, layout, first responder). It feeds
+  the machine before every effect, so `layoutSubviews` and a settle UIKit
+  re-enters from `becomeFirstResponder` or `reloadInputViews` see the new
+  state, as before.
+- **States:** `live`, `frozen(cycle, endsOnFrameChange, reload
+  notYet/scheduled/done, handoff)`.
+- **Events:** inherit, request handoff, frame settled, queued reload fired,
+  leash elapsed, finish, request keyboard, cancel.
+- **Effects:** cancel the grid report, begin/cancel the bridge freeze,
+  cancel/arm the leash, schedule the reload, reload input views, lay out,
+  seed the authoritative grid, schedule the grid report, report the pending
+  window-resize grid, report the handoff's outcome. The queued reload and
+  the leash carry the cycle token; the reload is marked done before it
+  runs.
+- **Tests:** `SurfaceKeyboardFreezeMachineTests`,
+  `TerminalSurfaceFreezeLifecycleTests`, `TerminalKeyboardHandoffTests`,
+  `TerminalKeyboardLifecycleOwnerTests`, `TerminalWindowResizeCoalescingTests`.
+- **Catalogue:** ATTACH-14.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+    live --> frozen: inherit or request handoff / new cycle, freeze bridge, arm leash
+    frozen --> frozen: inherit or request handoff / new cycle
+    frozen --> frozen: first settle / queue reload (cycle)
+    frozen --> frozen: matching queued reload / mark done, reload
+    frozen --> live: settle after reload / thaw, report settled
+    frozen --> live: matching leash / reload if not done, thaw, report timedOut
+    frozen --> live: finish, or request keyboard with no handoff / thaw
+    frozen --> live: cancel / thaw bridge, report cancelled
+```
+
+### DirectKeyboardHandoffMachine
+
+- **File:** `Sources/Waycar/Console/DirectKeyboardHandoffMachine.swift`
+- **Owner:** `AgentTerminalView` (`@State`) begins it inside the same
+  animation-free transaction as before, after the shared inset froze and
+  minted the id; the terminal's update-time claim, its answer and its
+  settle or cancel arrive through the screen's callbacks unchanged, and the
+  owner applies Direct Input, drops the intent and ends or cancels the
+  inset's handoff as effects.
+- **States:** `idle`, `requested(id)`, `settling(id, requestHeld)`.
+- **Events:** begin, destination answered (accepted or refused),
+  destination settled, cancel(id), cancel current, request cleared.
+- **Effects:** enter Direct Input preserving the handoff, drop the keyboard
+  intent, end or cancel the inset's handoff. Ownership is this screen's
+  state, never inferred from the shared inset's active id.
+- **Tests:** `DirectKeyboardHandoffMachineTests`,
+  `ComposerDirectHandoffLifecycleTests`, `AgentDirectInputTests`,
+  `TerminalKeyboardLifecycleOwnerTests`.
+- **Catalogue:** ATTACH-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> requested: begin (inset frozen)
+    requested --> settling: matching acceptance / enter Direct Input
+    requested --> idle: refusal or cancel / drop intent, cancel inset
+    requested --> idle: request cleared
+    settling --> idle: matching settle / end inset
+    settling --> idle: cancel / cancel inset
+    settling --> settling: request cleared
+```
+
+### ShellOpeningMachine
+
+- **File:** `Sources/Waycar/Console/ShellOpeningMachine.swift`
+- **Owner:** `AgentDetailView` (`@State`) keeps the chooser and failure
+  presentations, the shell handoff (`TerminalKeyboardHandoff`) and one Task
+  per attempt, which performs the machine's steps (create or refresh, then
+  wait for the row) in turn and finishes the attempt in its `defer`, after
+  the last step's effects, as before.
+- **States:** the captured handoff token, the terminal this detail created
+  (identity and row), attempt `idle`/`resolving(attempt, handoffToken)`.
+- **Events:** Open Terminal (token, shells, request, sample), shell chosen,
+  chooser cancelled, New Terminal, created, creation failed, refreshed, row
+  awaited (found, visible), attempt finished.
+- **Effects:** present the chooser, open a shell with a token, cancel a
+  token, connect the Sample, start or continue the attempt, present a
+  failure. Every outcome consumes or cancels the token its attempt
+  started with.
+- **Tests:** `ShellOpeningMachineTests`, `ShellOpeningLifecycleTests`,
+  `ShellOpeningDeferredOwnerTests`, `TerminalKeyboardHandoffTests`.
+- **Catalogue:** ATTACH-21.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> idle: one shell / open with token
+    idle --> idle: several shells / chooser
+    idle --> resolving: no shell or a remembered one / create or refresh
+    resolving --> resolving: tap / give its token back
+    resolving --> resolving: created / remember, await row
+    resolving --> resolving: row found and visible / open with token
+    resolving --> resolving: row missing, not visible or failure / cancel token (report)
+    resolving --> idle: attempt finished
+```
+
+### AttachLifecycleMachine
+
+- **File:** `Sources/Waycar/Console/AttachLifecycleMachine.swift`
+- **Owner:** `AgentAttachStore` keeps the pipeline, the recovery latch
+  (`TerminalRecoveryGenerationMachine`), the transition queue's Tasks, the
+  contact-check Task, staging, the indices and the DEBUG traces; it reads
+  the route (`isOnStage`) into the events at the old points and mirrors the
+  observed lifecycle and recovery owner.
+- **States:** the lifecycle (`active`, `rejoinRequired`, `left`), the
+  recovery owner token, whether a foreground return claimed the on-stage
+  lifecycle, the pipeline started at intent and not yet seen, the contact
+  check token, the latest queued transition.
+- **Events:** `intentStarted`, `activated`, `contactAnswered(token)`,
+  `replacementRequested`, `abortOffStage(token)`, `recoveryFinished(token)`,
+  `rejoinRequested`, `rejoinGate(token)`, `leaveRequested`,
+  `transitionEnqueued`, `transitionEnded(token)`.
+- **Effects:** `repaint`, `beginTrace`/`abortTrace`, `beginLatch`/`clearLatch`,
+  `followIntentPipeline`, `checkMosh(token)`, `cancelContactCheck`,
+  `clearContactCheck`, `keepMoshSession`, `recover`, the two `publish…`
+  mirrors, `ownRecovery`, `enqueueRejoin`, `resumeTrayAfterRetention`,
+  `proceed`, `returnPendingTransition`, `tearDown`, `transitionToken`,
+  `clearTransition`. End versus abandon is unchanged: only a recovery after
+  a possible suspension, a newer transport or an unheard mosh server
+  abandons its predecessor; leave and rejoin end it cleanly. The route
+  guards (`isStillWanted`, on stage) stay where they were; only the owning
+  transition publishes, finishes or aborts.
+- **Tests:** `AttachLifecycleMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AgentAttachStoreTests`, `AgentAttachStoreForegroundTests`,
+  `MoshStandbyAttachTests`, `MoshStandbySuspensionTests`.
+- **Catalogue:** ATTACH-01.
+
+```mermaid
+stateDiagram-v2
+    [*] --> active
+    active --> active: activated / repaint, followIntent, checkMosh(token) or recover
+    active --> active: contactAnswered(token) / keep or recover
+    active --> active: replacementRequested / ownRecovery(token)
+    active --> active: recoveryFinished(owner) / clear owner
+    active --> rejoinRequired: abortOffStage(owner), off stage
+    active --> left: leaveRequested / tearDown
+    active --> active: leaveRequested, activation owns the stage / returnPending
+    rejoinRequired --> active: rejoinRequested on stage / enqueueRejoin(full)
+    left --> active: rejoinRequested on stage / enqueueRejoin
+    rejoinRequired --> left: leaveRequested / tearDown
+```
+
+### TerminalRunMachine
+
+- **File:** `Sources/Waycar/Console/TerminalRunMachine.swift`
+- **Owner:** `AttachTerminalStore` keeps the run Task, the session and its
+  input generation, the connectivity and blank-frame Tasks, the geometry,
+  the transport generations and telemetry; it schedules each restart Task
+  the machine asks for and mirrors the observed status, flavor, live and
+  mosh-failure flags, the stop request and the scheduled upgrade.
+- **States:** the status (`waitingForSize`, `connecting`, `live`,
+  `ended(message)`, `stopped`), the run (`idle`, `running(token)`), the
+  session (`none`, `open(token)`), the flavor, the stop request, a scheduled
+  upgrade, and the restart budgets.
+- **Events:** `start`, `transportReady`, `sessionOpened`, `sessionFinished`,
+  `contentShown`, `graceElapsed(session)`, `runFailed(failure)`,
+  `runCompleted`, `runFinished`, `retry`, `retryOverSSH`, `upgrade`,
+  `restartDue`, `upgradeRestartDue`, `stop`, `stopFinished`.
+- **Effects:** the `publish…` mirrors, telemetry, `clearAcquired`,
+  `startRun`, `sessionToken`, `scheduleRestart(invalidating)`,
+  `scheduleUpgradeRestart`, `restart`. A lost mosh link reattaches once per
+  live stretch, the mosh→SSH fallback once per store (a retry or the upgrade
+  gives it back), a transient channel death once per ended episode; a stop
+  silences every later run end and restart check; a scheduled upgrade owns
+  the status; the blank-frame grace goes live only for its own session.
+  Kept as before: a restart that passed its stop check before awaiting the
+  mosh invalidation still starts after a stop that lands meanwhile, and two
+  "Use SSH Instead" taps schedule two restarts (the run's end is not
+  checked against its token, as before).
+- **Tests:** `TerminalRunMachineTests`, `AttachLifecycleCharacterizationTests`,
+  `AttachTerminalStoreTests`, `MoshAttachTerminalTests`, `MoshFastPathEdgeTests`.
+- **Catalogue:** ATTACH-03.
+
+```mermaid
+stateDiagram-v2
+    [*] --> waitingForSize
+    waitingForSize --> connecting: start / startRun(token)
+    connecting --> live: contentShown or own graceElapsed
+    connecting --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: upgrade / scheduleUpgradeRestart
+    live --> connecting: runFailed within budget / scheduleRestart
+    connecting --> connecting: runFailed within budget / scheduleRestart
+    live --> ended: runFailed or runCompleted
+    connecting --> ended: runFailed or runCompleted
+    ended --> connecting: retry / startRun
+    ended --> ended: retryOverSSH / scheduleRestart(userChoseSSH)
+    connecting --> connecting: restartDue, not stopped / restart
+    ended --> connecting: restartDue, not stopped / restart
+    live --> stopped: stop, stopFinished
+    connecting --> stopped: stop, stopFinished
+    ended --> stopped: stop, stopFinished
+```
+
+### AgentLastFrameIndexMachine
+
+- **File:** `Sources/Waycar/Terminal/AgentLastFrameIndexMachine.swift`
+- **Owner:** `AgentLastFrameStore` reads the protected index (`queue.sync`),
+  keeps the pixels (raw captures and JPEGs), and performs every disk effect
+  in order on its serial queue; it reads the clock and hands `now` in.
+- **States:** the load (`pending(discards, retentions)`, `loaded`), beside
+  the entries (most recent first), the last host catalog and the files whose
+  pixels are still raw captures.
+- **Events:** `memoryOnly`, `indexRead(unreadable/entries, now)`,
+  `record(entry, now)`, `remove(agent/hostsOutside/unlisted)`,
+  `deferDiscard`, `deferRetention`, `setRetainedTargets`, `encoded(file)`.
+- **Effects:** `dropPixels`, `persist(index, removedFiles, encode)`,
+  `sweep(keep, index, rewritesIndex)`, `storeEncoded`. Nothing is written
+  or deleted before the index loads; removals meanwhile are remembered for
+  the disk's frames, and the first load merges (recorded frames win, the
+  catalog applies, expired ones drop) and sweeps unnamed files. A queued
+  JPEG is kept only while its file (new per capture, so the token) still
+  holds the raw capture. As before, a frame recorded while locked is never
+  written to disk (its persist was skipped) though the load indexes it.
+- **Tests:** `AgentLastFrameIndexMachineTests`, `AgentLastFrameDeferredOwnerTests`,
+  `AgentLastFrameStoreTests`, `AgentLastFrameEntryTests`.
+- **Catalogue:** ATTACH-08.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> pending: indexRead unreadable
+    pending --> pending: record or remove / dropPixels (no disk)
+    pending --> pending: deferDiscard or deferRetention
+    pending --> loaded: indexRead entries / merge, sweep
+    pending --> loaded: memoryOnly
+    loaded --> loaded: record or remove / dropPixels, persist
+    loaded --> loaded: encoded(raw file) / storeEncoded
+```
+
+### MessageJumpFrameWaitMachine
+
+- **File:** `Sources/Waycar/Terminal/MessageJumpFrameWaitMachine.swift`
+- **Owner:** `TerminalMessageJumpController` keeps the walks (neighbour,
+  sticky prompt, to an end) and the step closure; it holds the one frame
+  continuation under the machine's token, the settle-timer Task and the
+  enclosing-task cancel handler's hop (with its two test seams), and reads
+  `Task.isCancelled` into the events.
+- **States:** whether a run is in progress and asked to stop, whether the
+  step awaits a frame and the frame buffered meanwhile, the latest frame, and
+  the wait (`none`, `active(token, held)`).
+- **Events:** `frameChanged`, `cancel`, `start`, `finish`, `beginAwaiting`,
+  `prepareWait`, `continuationArmed(token)`, `timerFired(token)`,
+  `enclosingCancelled(token)`, `waitReturned(token, result)`.
+- **Effects:** `started`/`refused`, `answer`, `armWait`, `hold`,
+  `cancelTimer`, `armTimer`, `resume(token, result)`. The token is the old
+  wait id: the settle timer and the cancel handler act only while theirs is
+  the active wait (the poison-window guard), a held continuation is resumed
+  at most once, a cancel wins over a frame, and the latest buffered paint
+  decides the step.
+- **Tests:** `MessageJumpFrameWaitMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `TerminalMessageJumpControllerTests`, `MessageJumpControlTests`.
+- **Catalogue:** ATTACH-16.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> running: start / started
+    running --> running: start / refused
+    running --> awaiting: beginAwaiting
+    awaiting --> running: prepareWait, cancel or buffered frame / answer
+    awaiting --> armed: prepareWait / armWait(token)
+    armed --> held: continuationArmed / hold, armTimer
+    armed --> armed: continuationArmed, cancel or frame / answer
+    held --> resumed: frame, cancel, matching timer or handler / resume(token)
+    resumed --> running: waitReturned / answer
+    armed --> running: waitReturned / answer
+    running --> idle: finish / resume a stranded waiter
+    held --> idle: finish / resume(token, cancelled)
+```
+
+### MessageJumpSessionMachine
+
+- **File:** `Sources/Waycar/Console/MessageJumpSessionMachine.swift`
+- **Owner:** `AgentMessageJumpWiring` keeps the jump and read Tasks, the
+  transcript reader, the index, reach and scroll run; it mirrors the observed
+  `liveGeneration` and `runningJump`.
+- **States:** the session generation and jump epoch; the jump (`idle`,
+  `scheduled(epoch, previous)`, `running(epoch, jump)`; until a replacement
+  enters, the jump it replaced stays the running one and keeps holding
+  reads, as the observed `runningJump` shows); the read (`idle`,
+  `reading(token, stale)`); a snapshot held for a walk.
+- **Events:** `jumpRequested`, `jumpEntered(epoch, generation,
+  taskCancelled)`, `jumpEnded(epoch)`, `refreshRequested`,
+  `readFinished(token, snapshot?)`, `reset`.
+- **Effects:** `startJump`, `runBody`, `clearJumpTask`, `cancelJumpTask`,
+  `publishRunning`, `publishGeneration`, `resetSessionState`, `startRead`,
+  `clearRead`, `cancelRead`, `indexTranscript`, `deliverTranscript`,
+  `resetIndex`. A reset fences everything minted before it; a jump body runs
+  only after its entry check and only the latest jump's end clears it and
+  applies a held snapshot; one read at a time, with one reread for refreshes
+  meanwhile; a read during a walk is delivered at once and indexed after.
+- **Tests:** `MessageJumpSessionMachineTests`, `MessageJumpDeferredOwnerTests`,
+  `MessageJumpControlTests`, `MessageJumpTranscriptWalkTests`.
+- **Catalogue:** ATTACH-17.
+
+```mermaid
+stateDiagram-v2
+    state Jump {
+        [*] --> idle
+        idle --> scheduled: jumpRequested / startJump(epoch)
+        scheduled --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> running: entry check passes / runBody
+        running --> scheduled: jumpRequested / startJump(new epoch)
+        scheduled --> idle: latest jumpEnded
+        running --> idle: latest jumpEnded / apply held snapshot
+        running --> idle: reset
+        scheduled --> idle: reset
+    }
+    state Read {
+        [*] --> noRead
+        noRead --> reading: refreshRequested / startRead(token)
+        reading --> reading: refreshRequested / stale
+        reading --> noRead: readFinished(token) / index or hold, deliver
+        reading --> reading: readFinished(token), stale / startRead(next)
+        reading --> noRead: reset / cancelRead
+    }
+```
+
+### PaneHistoryScrollMachine
+
+- **File:** `Sources/Waycar/Terminal/PaneHistoryScrollMachine.swift`
+- **Owner:** `TmuxPaneHistory` runs the pump loop and the leave Task, keeps
+  their handles (a joining leave awaits the running one), calls the scroll
+  and copy-mode-leave actions, and mirrors the observed `position`.
+- **States:** the pump (`idle`, `running(token, none/reading/moving)`) and
+  the leave (`none`, `leaving(token, onlyIfEntered)`), beside the position,
+  this history's own copy-mode entry and the pending rows and read.
+- **Events:** `scroll`, `refresh`, `pumpNext`, `answered(token, answer?)`,
+  `leaveRequested(onlyIfEntered)`, `leaveStarted`, `pumpDrained`,
+  `copyModeLeft`, `leaveEnded`, `joinedLeaveEnded`.
+- **Effects:** `startPump`, `request(rows)`, `pumpEnded`, `startLeave`,
+  `joinLeave`, `leaveCopyMode`, `leaveAgain`, `publishPosition`,
+  `availabilityChanged`. One request at a time takes everything pending; a
+  failed one drops the rest. A leave refuses scrolls at once, drops pending
+  rows in its own first step, waits out the request in flight, then leaves
+  copy mode only from copy mode, and a departure only from copy mode its
+  own scroll entered (AGENTS.md copy-mode facts); a failed leave still
+  reads live. A joining departure never stands in for input's leave.
+- **Tests:** `PaneHistoryScrollMachineTests`, `PaneHistoryDeferredOwnerTests`,
+  `TmuxPaneHistoryTests`, `TerminalInputControllerTests`.
+- **Catalogue:** ATTACH-18.
+
+```mermaid
+stateDiagram-v2
+    state Pump {
+        [*] --> idle
+        idle --> running: scroll or refresh, no leave / startPump(token)
+        running --> requesting: pumpNext, something pending / request
+        requesting --> running: answered
+        requesting --> idle: answered failure / pumpEnded
+        running --> idle: pumpNext, nothing pending / pumpEnded
+    }
+    state Leave {
+        [*] --> none
+        none --> leaving: leaveRequested / startLeave(token)
+        leaving --> leaving: leaveRequested / joinLeave
+        leaving --> leaving: leaveStarted / drop pending
+        leaving --> leaving: pumpDrained, in copy mode it may leave / leaveCopyMode
+        leaving --> leaving: copyModeLeft / position live
+        leaving --> none: leaveEnded
+    }
 ```
 
 **Ultimate, herdr-core, Codex and OpenCode transports**
@@ -5541,27 +5999,27 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 
 | ID | Machine | Where | Kind | V/R | Verdict | Phase |
 |---|---|---|---|---|---|---|
-| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | convert (deferred: overlapping queued recovery, contact-check and leave/rejoin awaits own PTY/input teardown; preserve end versus abandon and route guards with Mac execution first). Safety net: `AttachLifecycleCharacterizationTests`, existing `AgentAttachStoreTests` | P2c |
+| ATTACH-01 | Agent attach lifecycle and recovery | `Sources/Waycar/Console/AgentAttachStore.swift` | partial | H/H | converted → `AttachLifecycleMachine` (the link-open and transcript-read ids stay as they are, ATTACH-22) | P2c |
 | ATTACH-02 | Terminal recovery generation latch | `Sources/Waycar/Console/AttachTerminalStore.swift` | explicit | H/M | converted → `TerminalRecoveryGenerationMachine` | P2c |
-| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | convert (deferred: overlapping stop, upgrade and fallback awaits plus session/input identity and blank-frame grace need Mac execution before consolidation). Safety net: `AttachLifecycleCharacterizationTests`, existing `AttachTerminalStoreTests` | P2c |
+| ATTACH-03 | Terminal session status and restarts | `Sources/Waycar/Console/AttachTerminalStore.swift` | partial | H/H | converted → `TerminalRunMachine`; a stop during the mosh invalidation a restart awaits is still followed by one self-ending run, as before | P2c |
 | ATTACH-04 | Viewed-Done acknowledgement | `Sources/Waycar/Console/AgentFocusCoordinator.swift` | explicit | H/M | converted → `ViewedDoneMachine` | P2c |
 | ATTACH-05 | Terminal cache entry retention | `Sources/Waycar/Console/AgentTerminalCache.swift` | explicit | H/H | converted → `AgentTerminalRetentionMachine` | P2c |
 | ATTACH-06 | Byte feed and surface binding | `Sources/Waycar/Terminal/TerminalByteFeed.swift` | implicit | M/M | leave: one-way latch | — |
 | ATTACH-07 | Last frame | `Sources/Waycar/Terminal/TerminalLastFrame.swift` | explicit | H/M | converted → `TerminalLastFrameMachine` | P2c |
-| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | convert (deferred: protected-disk load/merge/sweep and queued JPEG completion need Mac persistence verification); owner safety net `AgentLastFrameDeferredOwnerTests` | P2c |
+| ATTACH-08 | Last frame store | `Sources/Waycar/Terminal/AgentLastFrameStore.swift` | implicit | H/M | converted → `AgentLastFrameIndexMachine` | P2c |
 | ATTACH-09 | Terminal input ownership | `Sources/Waycar/Terminal/TerminalInputController.swift` | explicit | H/H | converted → `TerminalInputOwnershipMachine` | P2c |
 | ATTACH-10 | Paste review | `Sources/Waycar/Terminal/TerminalInputController.swift` | implicit | M/M | leave: one pending value | — |
-| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | convert (deferred: SwiftUI update-time responder claim, mode mutation and inset handoff acceptance must retain UIKit callback order; needs Mac keyboard suites) | P2c |
+| ATTACH-11 | Input presentation and keyboard handoff | `Sources/Waycar/Console/AgentTerminalView.swift` | implicit | H/H | converted → `DirectKeyboardHandoffMachine` (the Composer-to-Direct handoff); the update-time claim, acceptance and inset release keep their callback order. The tools/system presentation flags stay view state resolved by `AgentDirectInputPresentation`. Pins: `ComposerDirectHandoffLifecycleTests` | P2c |
 | ATTACH-12 | Keyboard handoff token | `Sources/Waycar/Terminal/TerminalKeyboardHandoff.swift` | implicit | M/M | leave: token-scoped one-shot | — |
-| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | convert (deferred: window measurements, transient hide debt, coalescing and destination/owner watchdogs span responder callbacks; needs Mac keyboard suites) | P2c |
-| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | convert (deferred: becomeFirstResponder and reloadInputViews synchronously reenter frame callbacks; queued cycle-token reload and layout/thaw order need Mac verification) | P2c |
-| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | convert (deferred: cross-thread resize fences and reentrant onViewport/onSizeChanged callbacks split state updates around delivery; preserve callback-visible state with Mac verification) | P2c |
-| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | convert (deferred: frame continuation, timeout and delayed enclosing-cancellation handlers overlap; preserve wait-ID poison-window guard until Mac race tests run); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
-| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | convert (deferred: jump epoch/session fencing overlaps transcript reads, dirty rereads and held snapshots; needs Mac interleaving tests); owner safety net `MessageJumpDeferredOwnerTests` | P2c |
-| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | convert (deferred: pump/leave/depart awaits serialize input and shared copy-mode ownership; needs Mac input/departure tests); owner safety net `PaneHistoryDeferredOwnerTests` | P2c |
+| ATTACH-13 | Keyboard inset | `Sources/Waycar/Terminal/TerminalKeyboardInset.swift` | implicit | H/H | converted → `KeyboardInsetMachine`; window measurements stay owner-side as separate events, published values keep their assignment order. Pins: `TerminalKeyboardInsetLifecycleTests` | P2c |
+| ATTACH-14 | Surface keyboard freeze | `Sources/Waycar/Terminal/TerminalScreenView.swift` | implicit | H/H | converted → `SurfaceKeyboardFreezeMachine`; the queued reload and leash carry the cycle token, effects keep the layout/thaw order. Pins: `TerminalSurfaceFreezeLifecycleTests` | P2c |
+| ATTACH-15 | Resize callback bridge | `Sources/Waycar/Terminal/TerminalScreenView.swift` | partial | H/H | converted → `GridReportMachine`; every callback ends its step and the continuation reads the state it left. Pins: `TerminalResizeBridgeLifecycleTests` | P2c |
+| ATTACH-16 | Message jump walk | `Sources/Waycar/Terminal/TerminalMessageJumpController.swift` | implicit | H/H | converted → `MessageJumpFrameWaitMachine` | P2c |
+| ATTACH-17 | Message jump wiring and transcript | `Sources/Waycar/Console/MessageJumpControl.swift` | implicit | H/H | converted → `MessageJumpSessionMachine` | P2c |
+| ATTACH-18 | tmux pane history scroll | `Sources/Waycar/Terminal/TerminalScrollControl.swift` | implicit | H/H | converted → `PaneHistoryScrollMachine` | P2c |
 | ATTACH-19 | Terminal file preview | `Sources/Waycar/Console/TerminalFilePreviewStore.swift` | explicit | H/M | converted → `TerminalFilePreviewMachine` | P2c |
 | ATTACH-20 | Detail mode and terminal access | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | M/H | leave: view-owned, teardown explicit | — |
-| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | convert (deferred: private View creation/inventory state crosses awaits and token-scoped UIKit keyboard handoff; requires hosted Mac visibility/handoff tests); existing-API failure safety net `ShellOpeningDeferredOwnerTests` does not cover that private lifecycle | P2c |
+| ATTACH-21 | Shell opening | `Sources/Waycar/Console/AgentDetailView.swift` | implicit | H/H | converted → `ShellOpeningMachine`; one Task per attempt runs its steps and finishes it after the last effects. Hosted pins: `ShellOpeningLifecycleTests` | P2c |
 | ATTACH-22 | Link interaction | `Sources/Waycar/Console/AgentTerminalView.swift`, `Sources/Waycar/Console/AgentAttachStore.swift` | implicit | M/M | leave: open id guards it | — |
 | ATTACH-23 | Ignition loader | `Sources/Waycar/Console/TerminalIgnitionLifecycle.swift` | explicit | L/L | explicit | — |
 | ATTACH-24 | Link evidence | `Sources/Waycar/Console/AttachLinkIndex.swift` | implicit | M/M | leave: set-based evidence | — |
@@ -5763,10 +6221,14 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | fixed (P4, `cecc0d6b`): on tmux the unset runs inside `if-shell -F` only while the pane records that session or none; core and Zellij keep the read-then-write window |
 | B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | fixed (P4, `3259a4a6`): on tmux both hooks write a conditional status inside `if-shell -F` only while `@waycar_seq` is the one read; core and Zellij keep the read-then-write window |
 | B-36 | NOTIF-13 | An iCloud pass finishing after disable publishes Last Checked and retries connections | fixed (P1, `cbf8e38c`) |
-| B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | open |
+| B-37 | HOST-02 | A first-connect key question cancelled at the same moment a new one appears declines the new one: the cancel carries no token (`HostOnboardingStore` `onCancel`, kept as it was in the HOST-02 conversion) | fixed (P2c, `ee94df49`): the cancel names its question's token in `HostKeyTrustMachine`. The regression test holds the cancel's main-actor hop through a `cancellationHop` test seam, nil in production |
 | B-38 | OPENCODE-04 | After Cancel on an OpenCode approval the card says Done, and can turn Idle after a reconnect | fixed (P3a, `a932d087`): confirmed live on 2.2.7 (a reject's `interrupted` has reason `shutdown` and writes no `time.idle`, now pinned in `opencode-contract.py`); such an end keeps the last result's times |
 | B-39 | OPENCODE-09 | After a desk session is archived, a new `opencode` in the same pane stays hidden and its card has no Show Terminal (tmux, or herdr without the opencode integration; unconfirmed) | open (P3a: not in the transport; needs a live check of what session a reused pane reports on tmux and herdr without the integration) |
 | B-40 | OPENCODE-08 | A Chat Mode OpenCode launch whose Chat Prompt write fails reports failure but leaves the new session listed (endpoint unverified below 2.2.7) | fixed (P3a, `1a6a5d6d`, `9053e09d`): the form's Retry finishes that same session (`LaunchRetryIdentityMachine.retryingOpenCodeSession`); queued and uncertain replays already kept their pinned id |
 | B-41 | OPENCODE-10 | A closed OpenCode connection can get the server password back in memory from an in-flight re-read (not user-visible) | fixed (P3a, `8bcf3edc`): the re-read re-checks `OpenCodeConnectionMachine.keepsPassword` after its exec |
+| B-42 | ATTACH-03 | A stop that lands while a restart awaits its mosh invalidation is followed by one more run, which opens and ends its session at once, and the stopped terminal reads Connecting (automatic fallback and Use SSH Instead) | open: pinned as current behaviour (`aStopDuringTheFallbackInvalidationIsFollowedByOneSelfEndingRun`); the restart checks for a stop only before that await |
+| B-43 | ATTACH-03 | Two taps on Use SSH Instead schedule two restarts: a run's end clears the run handle without checking which run it belongs to | open |
+| B-44 | ATTACH-18 | Rows queued before a tmux history leave are sent or dropped depending on whether the in-flight answer reaches the main actor before the leave's first step | open |
+| B-45 | ATTACH-08 | A last frame captured while the device is locked is indexed on the next load although its JPEG was never written; after a relaunch it misses and is removed | open |
 
 B-02 and B-03 are unused.

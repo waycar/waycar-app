@@ -34,9 +34,13 @@ struct HostKeyTrustMachine: StateMachine {
     enum Event: Equatable, Sendable {
         /// A probe's connect presents a key with no pin.
         case asked(HostKeyCandidate, hostEnabled: Bool)
-        /// The user's verdict, or a decline on their behalf: the run was
-        /// cancelled, the page went away, or the Host turned off.
+        /// The user's verdict, or a decline on their behalf: the page went
+        /// away, or the Host turned off.
         case answered(trusted: Bool)
+        /// The probe holding the question under this token was cancelled:
+        /// declines that question only. The cancel can reach the main actor
+        /// after its question was answered and a new one is up (B-37).
+        case cancelled(UInt64)
         case checksStarted
         case mismatched(HostKeyReplacement)
         /// Trust New Key, confirmed in the dialog.
@@ -79,6 +83,12 @@ struct HostKeyTrustMachine: StateMachine {
             state.question = .none
             return [.resolve(token, trusted: trusted)]
         case (.none, .answered):
+            return []
+        case (.asking(let token, _), .cancelled(let cancelled)):
+            guard cancelled == token else { return [] }
+            state.question = .none
+            return [.resolve(token, trusted: false)]
+        case (.none, .cancelled):
             return []
         case (_, .checksStarted):
             state.replacement = .none

@@ -28,6 +28,8 @@ struct AgentDetailView: View {
     /// A thread's Show Terminal always attaches, even if the pane also has
     /// its own Chat Mode marker.
     private let isLinkedTerminal: Bool
+    /// Tests drive the terminal screen's Toolbar through it; nil in the app.
+    private let interactionProbe: AgentTerminalInteractionProbe?
     @State private var focus = AgentFocusCoordinator()
     @State private var hasAppeared = false
     @Environment(\.scenePhase) private var scenePhase
@@ -61,11 +63,11 @@ struct AgentDetailView: View {
     @State private var inputMode = AgentInputModeState()
     @State private var retentionOwnerID: UUID
     private let permitsRetention: Bool
-    @State private var isResolvingTerminal = false
+    /// Open Terminal's choice or creation and the shell handoff it captured;
+    /// see ``ShellOpeningMachine``.
+    @State private var shellOpening = ShellOpeningMachine()
     @State private var isChoosingTerminal = false
     @State private var terminalOpenFailure: String?
-    @State private var createdTerminal: ShellTerminalIdentity?
-    @State private var shellHandoffToken: UUID?
     /// Which window holds this Host's terminal channel; nil outside a scene
     /// root, where this detail always holds it.
     @Environment(\.agentSceneRouting) private var sceneRouting
@@ -97,7 +99,8 @@ struct AgentDetailView: View {
         onChatPresentationChange: @escaping (Bool) -> Void = { _ in },
         composerStore: AgentComposerStore? = nil,
         attachStore: AgentAttachStore? = nil,
-        isLinkedTerminal: Bool = false
+        isLinkedTerminal: Bool = false,
+        interactionProbe: AgentTerminalInteractionProbe? = nil
     ) {
         self.agent = agent
         self.console = console
@@ -114,6 +117,7 @@ struct AgentDetailView: View {
         self.onMarkedUnread = onMarkedUnread
         self.onChatPresentationChange = onChatPresentationChange
         self.isLinkedTerminal = isLinkedTerminal
+        self.interactionProbe = interactionProbe
         let composer = composerStore ?? console.composerStore(for: agent)
         _composer = State(initialValue: composer)
         let ownerID = UUID()
@@ -509,13 +513,17 @@ struct AgentDetailView: View {
         // arrow pointed into the terminal.
         .alert("Open Terminal", isPresented: $isChoosingTerminal) {
             ForEach(workspaceShells) { shell in
-                Button(shellChoiceTitle(shell)) { openShell(shell.id, handoffToken: shellHandoffToken) }
+                Button(shellChoiceTitle(shell)) { sendShellOpening(.shellChosen(shell.id)) }
             }
             if agent.shellTerminalCreationRequest != nil {
-                Button("New Terminal") { createWorkspaceTerminal() }
+                Button("New Terminal") {
+                    sendShellOpening(.createRequested(
+                        request: agent.shellTerminalCreationRequest,
+                        runsSample: sampleConnect != nil))
+                }
             }
             Button("Cancel", role: .cancel) {
-                keyboardHandoff.cancelShellTerminal(ifOwnedBy: shellHandoffToken)
+                sendShellOpening(.chooserCancelled)
             }
                 .tint(Brand.Colors.quietAction)
         }
@@ -560,7 +568,7 @@ struct AgentDetailView: View {
             onMarkedUnread: onMarkedUnread,
             canOpenTerminal: (!workspaceShells.isEmpty || agent.shellTerminalCreationRequest != nil)
                 && terminalAccess == .holds,
-            isOpeningTerminal: isResolvingTerminal,
+            isOpeningTerminal: shellOpening.isResolving,
             openTerminal: { openWorkspaceTerminal() },
             composer: composer,
             attachStore: attach,
@@ -577,7 +585,8 @@ struct AgentDetailView: View {
             // Retention swaps `attach` on appear and rebuilds this view; the
             // build before that swap is a placeholder and must not spend the
             // keyboard handoff meant for the real one.
-            inheritsKeyboardHandoff: !permitsRetention || retainedAgent != nil)
+            inheritsKeyboardHandoff: !permitsRetention || retainedAgent != nil,
+            interactionProbe: interactionProbe)
         .id(ObjectIdentifier(attach))
     }
 
@@ -605,62 +614,77 @@ struct AgentDetailView: View {
         onSwitch(id)
     }
 
-    private func openWorkspaceTerminal() {
-        shellHandoffToken = keyboardHandoff.shellTerminalToken
-        if createdTerminal != nil { createWorkspaceTerminal(); return }
-        switch workspaceShells.count {
-        case 0: createWorkspaceTerminal()
-        case 1: openShell(workspaceShells[0].id, handoffToken: shellHandoffToken)
-        default: isChoosingTerminal = true
-        }
-    }
-
     /// Open Terminal routes back to the tab this detail already created,
     /// so a creation that has not reached the Console yet is retried rather
     /// than duplicated.
-    private func createWorkspaceTerminal() {
-        let handoffToken = shellHandoffToken
-        if let sampleConnect {
-            keyboardHandoff.cancelShellTerminal(ifOwnedBy: handoffToken)
-            sampleConnect()
-            return
-        }
-        guard !isResolvingTerminal, let request = agent.shellTerminalCreationRequest else {
-            keyboardHandoff.cancelShellTerminal(ifOwnedBy: handoffToken)
-            return
-        }
-        isResolvingTerminal = true
-        Task { @MainActor in
-            defer { isResolvingTerminal = false }
-            do {
-                let created: ShellTerminalIdentity
-                if let createdTerminal {
-                    created = createdTerminal
-                    await console.refreshTerminalInventory(on: agent.hostID)
-                } else {
-                    // The new tab joins this row's Workspace, so it runs
-                    // on the row's backend.
-                    created = try await console.createShellTerminal(
-                        request, on: agent.hostID, backend: agent.backend)
-                    createdTerminal = created
-                }
-                let id = ConsoleAgent.ID(hostID: agent.hostID, paneID: created.paneID)
-                await console.waitForAgent(id)
-                guard console.agents.contains(where: { $0.id == id }) else {
-                    keyboardHandoff.cancelShellTerminal(ifOwnedBy: handoffToken)
-                    terminalOpenFailure = "The terminal was created, but its Workspace hasn't refreshed yet. Try Open Terminal again to refresh it."
-                    return
-                }
-                if isVisible() {
-                    openShell(id, handoffToken: handoffToken)
-                } else {
-                    keyboardHandoff.cancelShellTerminal(ifOwnedBy: handoffToken)
-                }
-            } catch {
+    private func openWorkspaceTerminal() {
+        sendShellOpening(.openTapped(
+            handoffToken: keyboardHandoff.shellTerminalToken,
+            shells: workspaceShells.map(\.id),
+            request: agent.shellTerminalCreationRequest,
+            runsSample: sampleConnect != nil))
+    }
+
+    /// Feeds the shell-opening machine and performs its effects in order.
+    /// Returns the step a running attempt goes on with, if any.
+    @discardableResult
+    private func sendShellOpening(
+        _ event: ShellOpeningMachine.Event
+    ) -> ShellOpeningMachine.Step? {
+        var next: ShellOpeningMachine.Step?
+        for effect in shellOpening.handle(event) {
+            switch effect {
+            case .presentChooser:
+                isChoosingTerminal = true
+            case .openShell(let id, let handoffToken):
+                openShell(id, handoffToken: handoffToken)
+            case .cancelShellHandoff(let handoffToken):
                 keyboardHandoff.cancelShellTerminal(ifOwnedBy: handoffToken)
-                terminalOpenFailure = Self.terminalCreationFailureMessage(
-                    for: error, backend: agent.backend)
+            case .connectSample:
+                sampleConnect?()
+            case .startAttempt(let attempt, let step):
+                Task { @MainActor in
+                    defer { sendShellOpening(.attemptFinished(attempt: attempt)) }
+                    var pending: ShellOpeningMachine.Step? = step
+                    while let current = pending {
+                        pending = sendShellOpening(await performShellOpening(current))
+                    }
+                }
+            case .continueAttempt(let step):
+                next = step
+            case .presentFailure(let message):
+                terminalOpenFailure = message
             }
+        }
+        return next
+    }
+
+    /// One await of a creation attempt, answered as the machine's event.
+    private func performShellOpening(
+        _ step: ShellOpeningMachine.Step
+    ) async -> ShellOpeningMachine.Event {
+        switch step {
+        case .create(let attempt, let request):
+            do {
+                // The new tab joins this row's Workspace, so it runs on the
+                // row's backend.
+                let created = try await console.createShellTerminal(
+                    request, on: agent.hostID, backend: agent.backend)
+                return .created(
+                    attempt: attempt, created,
+                    row: ConsoleAgent.ID(hostID: agent.hostID, paneID: created.paneID))
+            } catch {
+                return .creationFailed(
+                    attempt: attempt,
+                    message: Self.terminalCreationFailureMessage(for: error, backend: agent.backend))
+            }
+        case .refresh(let attempt):
+            await console.refreshTerminalInventory(on: agent.hostID)
+            return .refreshed(attempt: attempt)
+        case .awaitRow(let attempt, let id):
+            await console.waitForAgent(id)
+            let found = console.agents.contains(where: { $0.id == id })
+            return .rowAwaited(attempt: attempt, found: found, visible: found && isVisible())
         }
     }
 

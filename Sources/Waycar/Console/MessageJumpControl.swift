@@ -289,8 +289,11 @@ final class AgentMessageJumpWiring {
     /// reset-before-start race.
     private(set) var jumpInvocationCount = 0
 
-    private var nextGeneration: UInt64 = 0
-    private var jumpEpoch: UInt64 = 0
+    /// The session generation, jump epoch, transcript read and held
+    /// snapshot. Whether the jump index learns user turns from each read
+    /// (``AgentMessageJumpProfile/jumpUsesTranscript``) is fixed in it.
+    @ObservationIgnored private var sessionMachine: MessageJumpSessionMachine
+    /// The Task of the machine's latest jump epoch.
     private var jumpTask: Task<Void, Never>?
     /// Every scrolled row lands here, so it stays out of observation.
     @ObservationIgnored private var scrollRun = ScrollJumpRun()
@@ -298,14 +301,8 @@ final class AgentMessageJumpWiring {
     /// Reads the Agent's transcript; nil for a kind the Host's reader does
     /// not understand (``AgentMessageJumpProfile/readsTranscript``).
     private let readTranscript: TranscriptReader?
-    /// Whether the jump index learns user turns from each read
-    /// (``AgentMessageJumpProfile/jumpUsesTranscript``).
-    private let jumpUsesTranscript: Bool
+    /// The machine's read in flight.
     @ObservationIgnored private var transcriptRead: Task<Void, Never>?
-    /// A refresh was asked for while a read ran; its answer may predate it.
-    @ObservationIgnored private var transcriptReadIsStale = false
-    /// A read that landed during a walk, applied once the walk ends.
-    @ObservationIgnored private var heldTranscript: ChatTranscriptSnapshot?
     /// Called with every transcript read that answers, whatever its
     /// status, on the main actor, in the order the reads landed. One read
     /// serves the jump index and every other consumer of the Attach.
@@ -333,7 +330,7 @@ final class AgentMessageJumpWiring {
         self.scrollControl = scrollControl
         self.messageIndex = messageIndex
         self.readTranscript = readTranscript
-        self.jumpUsesTranscript = jumpUsesTranscript
+        sessionMachine = MessageJumpSessionMachine(jumpUsesTranscript: jumpUsesTranscript)
         self.now = now
         self.sleep = sleep
         self.controller = TerminalMessageJumpController(
@@ -372,46 +369,59 @@ final class AgentMessageJumpWiring {
     /// nothing. A call while a read runs is answered by one more read after
     /// it.
     func refreshTranscript() {
+        guard readTranscript != nil else { return }
+        perform(sessionMachine.handle(.refreshRequested))
+    }
+
+    /// One read of the Agent's transcript under `token`. A walk decides by
+    /// which messages come into view that it had not seen on the press, so
+    /// the index must not learn new ones under it: a turn already on screen
+    /// would read as newly arrived and stop the walk where it stands. The
+    /// machine holds such a read until the walk ends.
+    private func startTranscriptRead(_ token: UInt64) {
         guard let readTranscript else { return }
-        guard transcriptRead == nil else {
-            transcriptReadIsStale = true
-            return
-        }
-        let session = liveGeneration
         transcriptRead = Task { @MainActor [weak self] in
             let snapshot = try? await readTranscript()
             // A reset has dropped this read and may have started another.
-            guard let self, self.isLive(session) else { return }
-            self.transcriptRead = nil
-            if let snapshot {
-                self.receiveTranscript(snapshot)
-            }
-            if self.transcriptReadIsStale {
-                self.transcriptReadIsStale = false
-                self.refreshTranscript()
-            }
+            guard let self else { return }
+            self.perform(self.sessionMachine.handle(.readFinished(token, snapshot)))
         }
     }
 
-    /// A walk decides by which messages come into view that it had not seen
-    /// on the press, so the index must not learn new ones under it: a turn
-    /// already on screen would read as newly arrived and stop the walk where
-    /// it stands.
-    private func receiveTranscript(_ snapshot: ChatTranscriptSnapshot) {
-        if jumpUsesTranscript {
-            if runningJump == nil {
+    private func perform(_ effects: [MessageJumpSessionMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .clearJumpTask:
+                jumpTask = nil
+            case .cancelJumpTask:
+                jumpTask?.cancel()
+                jumpTask = nil
+            case .publishRunning(let jump):
+                runningJump = jump
+            case .publishGeneration(let generation):
+                liveGeneration = SessionGeneration(value: generation)
+            case .resetSessionState:
+                reach = MessageJumpReach()
+                endScrollRun()
+                controller.cancel()
+            case .startRead(let token):
+                startTranscriptRead(token)
+            case .clearRead:
+                transcriptRead = nil
+            case .cancelRead:
+                transcriptRead?.cancel()
+                transcriptRead = nil
+            case .indexTranscript(let snapshot):
                 messageIndex.receiveTranscript(snapshot)
-            } else {
-                heldTranscript = snapshot
+            case .deliverTranscript(let snapshot):
+                onTranscript?(snapshot)
+            case .resetIndex:
+                messageIndex.reset()
+                lastViewportFrame = nil
+            case .startJump, .runBody:
+                break // `runJump` starts and enters its own Task.
             }
         }
-        onTranscript?(snapshot)
-    }
-
-    private func applyHeldTranscript() {
-        guard let snapshot = heldTranscript else { return }
-        heldTranscript = nil
-        messageIndex.receiveTranscript(snapshot)
     }
 
     /// Feeds the jump controller from `TerminalScreenView.onViewportTextChanged`.
@@ -441,23 +451,19 @@ final class AgentMessageJumpWiring {
         // on this chrome never reaches the terminal's own tap-to-halt.
         // `refs #58`.
         scrollControl.haltMomentum()
-        jumpEpoch &+= 1
-        let epoch = jumpEpoch
-        let session = liveGeneration
+        guard case .startJump(let epoch, let generation)? = sessionMachine.handle(.jumpRequested).first
+        else { return }
+        let session = SessionGeneration(value: generation)
         jumpTask?.cancel()
         jumpTask = Task { @MainActor in
-            defer {
-                if epoch == self.jumpEpoch {
-                    self.jumpTask = nil
-                    self.runningJump = nil
-                    self.applyHeldTranscript()
-                }
-            }
-            guard !Task.isCancelled, self.isLive(session), epoch == self.jumpEpoch else {
-                return
-            }
+            defer { self.perform(self.sessionMachine.handle(.jumpEnded(epoch: epoch))) }
+            let jump = AttachRunningJump(kind: kind, direction: direction)
+            guard self.sessionMachine.handle(.jumpEntered(
+                epoch: epoch, generation: generation, taskCancelled: Task.isCancelled, jump))
+                == [.publishRunning(jump), .runBody]
+            else { return }
             self.jumpInvocationCount &+= 1
-            self.runningJump = AttachRunningJump(kind: kind, direction: direction)
+            self.runningJump = jump
             await body(session)
         }
     }
@@ -639,21 +645,7 @@ final class AgentMessageJumpWiring {
     /// read, and advances the session generation. Entries describe one
     /// session's scrollback and must not outlive it.
     func resetSession() {
-        jumpTask?.cancel()
-        jumpTask = nil
-        jumpEpoch &+= 1
-        nextGeneration &+= 1
-        liveGeneration = SessionGeneration(value: nextGeneration)
-        runningJump = nil
-        reach = MessageJumpReach()
-        endScrollRun()
-        controller.cancel()
-        transcriptRead?.cancel()
-        transcriptRead = nil
-        transcriptReadIsStale = false
-        heldTranscript = nil
-        messageIndex.reset()
-        lastViewportFrame = nil
+        perform(sessionMachine.handle(.reset))
     }
 }
 
