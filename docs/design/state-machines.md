@@ -5360,6 +5360,51 @@ stateDiagram-v2
     awaitingMarker --> ready: paneClosed, paneGone, closed
 ```
 
+### AttachOwnershipMachine
+
+- **File:** `Sources/Waycar/Transport/AttachOwnershipMachine.swift`
+- **Owner:** `WaycarSSHTransport`: `attachTerminal` asks it before
+  anything opens and reports the open or its failure, the session's
+  `onChannelEnded` reports a channel's end, and `close()` reports its
+  start and end. The owner keeps the live `TerminalAttachSession`s by
+  reader (`liveAttaches`), takes them where `close()` always did and ends
+  them after its session hold is released, when the session lives on.
+  Its `isClosed` is the Transport's `closed`, which requests, the events
+  channel, `isConnected` and `deinit` read.
+- **States:** the owner (`open`, `closing`, `closed`); per target
+  `opening(reader, endedEarly)`, `live(reader)`, `closing(reader)`, or
+  absent (free).
+- **Events:** `attachRequested(target)`, `opened(target, reader)`,
+  `openFailed(target, reader)`, `channelEnded(target, reader)`,
+  `closeRequested`, `closeFinished`.
+- **Effects:** `refuse(error)`, `open(reader)`, `keep(reader)`,
+  `forget(reader)`, `takeLiveAttaches`. One owner per target
+  (`terminalChannelAlreadyOpen` otherwise); a channel that ends before its
+  open is recorded frees the target at the open, with nothing recorded; a
+  closed or closing Transport refuses with the closed error every request
+  gets, before the socket path resolves or a channel opens (B-32). An
+  opening that completes after the close is still recorded live, as
+  before: only its own channel's end frees it.
+- **Tests:** `AttachOwnershipMachineTests`; owner coverage is real-SSH
+  (`WaycarSSHTransportBehaviorE2ETests` in `SharedFixtureE2ETests`: one
+  owner per target, clean and failed exits free it, an Attach that exits
+  at once frees it, close ends live Attaches on a session another holder
+  keeps, a closed Transport refuses an Attach there).
+- **Catalogue:** HERDR-08.
+
+```mermaid
+stateDiagram-v2
+    [*] --> opening: attachRequested, owner open / open(reader)
+    [*] --> [*]: attachRequested, owner closing or closed / refuse
+    opening --> live: opened / keep
+    opening --> endedEarly: channelEnded / forget
+    endedEarly --> [*]: opened
+    opening --> [*]: openFailed
+    live --> [*]: channelEnded / forget
+    live --> closing: closeRequested / takeLiveAttaches
+    closing --> [*]: channelEnded / forget
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6171,7 +6216,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-05 | RPC recovery and replay | `Sources/Waycar/Transport/EventsSession.swift` | implicit | H/H | convert | P3d |
 | HERDR-06 | Terminal admission | `Sources/Waycar/Transport/EventsSession.swift` | implicit | M/H | leave: UUID and generation guarded | — |
 | HERDR-07 | herdr events channel | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | M/H | leave: reader identity guarded | — |
-| HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | convert; bug B-32 | P3d |
+| HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | converted → `AttachOwnershipMachine`; bug B-32 fixed; an opening that completes during the close is still recorded and left to its own end, as before | P3d |
 | HERDR-09 | Shell readiness retry | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | M/M | leave: operation-local loop | — |
 | HERDR-10 | Launch settle (`scheduleLaunchSettle`) | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `LaunchSettleMachine` | P3d |
 | HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `AgentInputGateMachine`; a refused close still drops the gate (HCT-03) and a listed kind still keeps it (HCT-04), as before | P3d |
@@ -6243,7 +6288,7 @@ time. Each is proven with a test that fails on the old code before its fix.
 | B-29 | CODEX-03 | A failed thread resume can clear the retry that replaced it | fixed (P3a, `c9ec71ff`): a resume failure clears only its own token in `CodexSubscriptionMachine` |
 | B-30 | CODEX-05 | A late active-turn lookup can bring back a finished turn, so Stop targets it | fixed (P3a, `397f5a55`): a read answered after the turn ended is stale by its token in `CodexActiveTurnMachine` |
 | B-31 | CODEX-11 | Host detail says the Codex server is not running while it starts | fixed (P2a, `1a8157ea`): stopped text only in `.stopped`, not `.starting` |
-| B-32 | HERDR-08 | An Agent attach can open after its transport closed, while another holder keeps SSH up | open |
+| B-32 | HERDR-08 | An Agent attach can open after its transport closed, while another holder keeps SSH up | fixed (P3d, `2385ba65`): a closed Transport refuses an Attach with the closed error every request gets, before anything opens |
 | B-33 | HT-14 | A chat read can hang past its timeout when the exporter leaves a child behind | fixed (P4, `51159d3b`): the deadline and the abort signal bound the pipe wait after the exporter exits |
 | B-34 | HT-03 | An old SessionEnd hook can clear the session that replaced it | fixed (P4, `cecc0d6b`): on tmux the unset runs inside `if-shell -F` only while the pane records that session or none; core and Zellij keep the read-then-write window |
 | B-35 | HT-04 | A late conditional hook can turn a finished Agent back to Working | fixed (P4, `3259a4a6`): on tmux both hooks write a conditional status inside `if-shell -F` only while `@waycar_seq` is the one read; core and Zellij keep the read-then-write window |

@@ -49,8 +49,9 @@ actor WaycarSSHTransport: Transport {
     private let codexHelpCommand: String
     private let notificationPlugin = SharedAsyncOperation<NotificationPlugin>(cachesSuccess: true)
     private let codexNoDaemon = SharedAsyncOperation<Bool>(cachesSuccess: true)
-    /// True once `close()` has released this Transport's hold on the session.
-    private var closed = false
+    /// True from the start of `close()`, which releases this Transport's
+    /// hold on the session.
+    private var closed: Bool { attachOwnership.isClosed }
 
     private enum EventsChannelState: Equatable {
         case idle
@@ -65,17 +66,11 @@ actor WaycarSSHTransport: Transport {
     /// outlives this Transport.
     private var eventsReaders: [UInt64: Task<Void, Never>] = [:]
 
-    private enum TerminalChannelState: Equatable {
-        case opening
-        case streaming(readerID: UInt64)
-    }
-
-    private var terminalChannelStates: [TerminalAttachTarget: TerminalChannelState] = [:]
-    private var nextTerminalReaderID: UInt64 = 0
-    /// Attach channels that ended before `attachTerminal` recorded them.
-    private var endedTerminalReaders: Set<UInt64> = []
-    /// Live Attaches, so `close()` can end them when the session outlives
-    /// this Transport.
+    /// Whether this Transport takes Attaches (and is open at all), and who
+    /// owns each Attach target.
+    private var attachOwnership = AttachOwnershipMachine()
+    /// Live Attaches by reader, so `close()` can end them when the session
+    /// outlives this Transport.
     private var liveAttaches: [UInt64: TerminalAttachSession] = [:]
     /// The post-start settle per launched pane (`scheduleLaunchSettle`).
     private var launchSettle: LaunchSettleMachine
@@ -164,7 +159,7 @@ actor WaycarSSHTransport: Transport {
     deinit {
         // A Transport dropped without `close()` still returns its hold, so a
         // shared connection is not kept open for it.
-        guard !closed else { return }
+        guard !attachOwnership.isClosed else { return }
         let session = session
         Task { await session.release() }
     }
@@ -2155,13 +2150,14 @@ actor WaycarSSHTransport: Transport {
     /// on for another backend keeps its connection, so this Transport ends
     /// its own events and Attach channels itself (design §4.1).
     func close() async throws {
-        guard !closed else { return }
-        closed = true
+        guard attachOwnership.handle(.closeRequested) == [.takeLiveAttaches] else { return }
+        defer { _ = attachOwnership.handle(.closeFinished) }
         performLaunchSettle(launchSettle.handle(.closed))
         _ = inputGate.handle(.closed)
         agentKinds.removeAll()
         let readers = Array(eventsReaders.values)
         eventsReaders.removeAll()
+        // `takeLiveAttaches`, where close always took them.
         let attaches = Array(liveAttaches.values)
         liveAttaches.removeAll()
         try await session.releaseReportingTeardown()
@@ -2711,21 +2707,20 @@ actor WaycarSSHTransport: Transport {
     }
 
     /// A closed Transport opens no Attach, before anything opens (B-32):
-    /// its session may live on for another holder, and nothing would ever
-    /// end an Attach recorded after `close()`.
+    /// its session may live on for another holder, and its close, already
+    /// done, would never end an Attach recorded after it.
     func attachTerminal(
         _ request: TerminalAttachRequest
     ) async throws -> TerminalAttachSession {
-        guard !closed else {
-            throw TransportError.sshUnreachable(detail: "the SSH connection is closed")
-        }
-        guard terminalChannelStates[request.target] == nil else {
+        let target = request.target
+        let readerID: UInt64
+        switch performAttachOwnership(attachOwnership.handle(.attachRequested(target))) {
+        case .open(let reader)?: readerID = reader
+        case .refuse(let error)?: throw error
+        // `attachRequested` always opens or refuses.
+        case .keep?, .forget?, .takeLiveAttaches?, nil:
             throw TransportError.terminalChannelAlreadyOpen
         }
-        let target = request.target
-        terminalChannelStates[target] = .opening
-        nextTerminalReaderID &+= 1
-        let readerID = nextTerminalReaderID
 
         do {
             let socketPath = try await resolvedSocketPath()
@@ -2745,17 +2740,38 @@ actor WaycarSSHTransport: Transport {
                 onChannelEnded: { [weak self] in
                     await self?.attachChannelDidEnd(target: target, readerID: readerID)
                 })
-            if endedTerminalReaders.remove(readerID) != nil {
-                terminalChannelStates.removeValue(forKey: target)
-            } else {
-                terminalChannelStates[target] = .streaming(readerID: readerID)
-                liveAttaches[readerID] = attach
-            }
+            performAttachOwnership(
+                attachOwnership.handle(.opened(target, reader: readerID)), attach: attach)
             return attach
         } catch {
-            terminalChannelStates.removeValue(forKey: target)
+            performAttachOwnership(attachOwnership.handle(.openFailed(target, reader: readerID)))
             throw error
         }
+    }
+
+    /// Performs `AttachOwnershipMachine`'s effects on the recorded
+    /// Attaches (`attach` is the one an `opened` event names), and returns
+    /// the admission effect, `open` or `refuse`, for `attachTerminal`.
+    @discardableResult
+    private func performAttachOwnership(
+        _ effects: [AttachOwnershipMachine.Effect],
+        attach: TerminalAttachSession? = nil
+    ) -> AttachOwnershipMachine.Effect? {
+        var admission: AttachOwnershipMachine.Effect?
+        for effect in effects {
+            switch effect {
+            case .open, .refuse:
+                admission = effect
+            case .keep(let reader):
+                liveAttaches[reader] = attach
+            case .forget(let reader):
+                liveAttaches[reader] = nil
+            case .takeLiveAttaches:
+                // `close()` takes them at the point it always did.
+                break
+            }
+        }
+        return admission
     }
 
     /// Builds the PTY-less exec that bootstraps one mosh session. Mirrors
@@ -2916,11 +2932,7 @@ actor WaycarSSHTransport: Transport {
     /// again. A channel that ends before `attachTerminal` has recorded it is
     /// remembered, so that call does not record a dead channel.
     private func attachChannelDidEnd(target: TerminalAttachTarget, readerID: UInt64) {
-        liveAttaches[readerID] = nil
-        if terminalChannelStates[target] == .streaming(readerID: readerID) {
-            terminalChannelStates.removeValue(forKey: target)
-        } else {
-            endedTerminalReaders.insert(readerID)
-        }
+        performAttachOwnership(
+            attachOwnership.handle(.channelEnded(target, reader: readerID)))
     }
 }

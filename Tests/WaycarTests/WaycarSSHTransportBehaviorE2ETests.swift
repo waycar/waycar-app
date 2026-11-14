@@ -387,10 +387,11 @@ struct WaycarSSHTransportBehaviorE2ETests {
     }
 
     /// B-32: a closed Transport opens no Attach, even while another holder
-    /// keeps its session open. Nothing would ever end one: its close is
-    /// done, a repeated close returns at once, and the Attach would hold
-    /// herdr's resize lock on the pane. It is refused as every request on a
-    /// closed Transport is, before anything opens, so the target stays free.
+    /// keeps its session open. The Transport would never end one (its close
+    /// is done, and a repeated close returns at once), and while it runs it
+    /// holds herdr's resize lock on the pane. It is refused as every request
+    /// on a closed Transport is, before anything opens, so the target stays
+    /// free for the next holder.
     @Test("a closed Transport refuses an Attach while another holder keeps the session")
     func closedTransportRefusesAttachOnASharedSession() async throws {
         let environment = try #require(WaycarSSHTransportBehaviorEnvironment.current)
