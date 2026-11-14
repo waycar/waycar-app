@@ -127,7 +127,15 @@ struct LivenessRaceTests {
         await #expect(throws: hedgeLink) { try await running.value }
     }
 
-    @Test func aHedgeThatFailsFirstLeavesTheRaceToTheProof() async throws {
+    // Resolving a `Pending` only releases its waiter: it does not show that
+    // the race recorded the outcome. So these owner pins assert only what
+    // every order of the two releases yields; the order-dependent rules
+    // (a hedge failure recorded first outranks a later link failure of the
+    // proof, but not a later server answer) are `LivenessRaceMachineTests`'.
+
+    /// A failed hedge does not decide the race: a proof that answers wins,
+    /// in whichever order the two land.
+    @Test func aFailedHedgeLeavesTheRaceToAProofThatAnswers() async throws {
         let race = Race()
         let running = race.start()
         try await race.startHedgeByTimer()
@@ -136,7 +144,9 @@ struct LivenessRaceTests {
         #expect(proven(try await running.value) == "proof")
     }
 
-    @Test func aHedgeFailureOutranksAProofThatThenFailsOnTheLink() async throws {
+    /// Both fail on the link while both are out: the hedge's failure is
+    /// thrown, in whichever order the two land.
+    @Test func whenBothFailOnTheLinkWhileRacingTheHedgesFailureIsThrown() async throws {
         let race = Race()
         let running = race.start()
         try await race.startHedgeByTimer()
@@ -146,13 +156,16 @@ struct LivenessRaceTests {
         #expect(await race.hedge.entries == 1)
     }
 
-    @Test func aProofThatThenFailsOnTheServerThrowsItsOwnFailure() async throws {
+    /// A proof the server answers while the hedge still dials decides the
+    /// race with that answer; the hedge failing afterwards changes nothing.
+    /// The hedge stays blocked until the race is decided.
+    @Test func aProofTheServerAnswersWhileTheHedgeDialsThrowsItsOwnFailure() async throws {
         let race = Race()
         let running = race.start()
         try await race.startHedgeByTimer()
-        await race.hedge.resolve(.failure(hedgeLink))
         await race.proof.resolve(.failure(answer))
         await #expect(throws: answer) { try await running.value }
+        await race.hedge.resolve(.failure(hedgeLink))
     }
 
     @Test func theDeadlineFailsTheProofOnTheLinkAndStartsTheHedge() async throws {
