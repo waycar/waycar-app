@@ -38,7 +38,6 @@ actor WaycarSSHTransport: Transport {
     private let requestTimeout: Duration
     private let shellReadinessBudget: Duration
     private let shellReadinessRetryDelay: Duration
-    private let inputReadyTimeout: Duration
     private let worktreeCreateTimeout: Duration
     private let worktreeReconcileBudget: Duration
     private let worktreeReconcileInterval: Duration
@@ -83,21 +82,9 @@ actor WaycarSSHTransport: Transport {
     /// Its running Tasks, per pane.
     private var launchSettles: [String: Task<Void, Never>] = [:]
 
-    /// A launch this Transport started whose prompts wait until the Agent
-    /// takes input (`awaitAgentInput`), per its kind's
-    /// `AgentScreen.InputReadiness`.
-    private struct InputGate: Equatable {
-        let kind: String
-        let readiness: AgentScreen.InputReadiness
-        /// Until then nothing goes out (`InputReadiness.minimumDelay`).
-        let readyAt: ContinuousClock.Instant
-        /// The input hold ends here: with a marker, `inputReadyTimeout`
-        /// after the launch; without, at ``readyAt``.
-        let opensAt: ContinuousClock.Instant
-    }
-
-    /// Open input gates by pane id (`gateAgentInput`).
-    private var inputGates: [String: InputGate] = [:]
+    /// The input gates of launches this Transport started, whose prompts
+    /// wait until the Agent takes input (`awaitAgentInput`).
+    private var inputGate: AgentInputGateMachine
 
     /// Agent kinds by prompt target (pane id, or the name an `agent.get`
     /// was asked for), as launched here or as herdr last listed them
@@ -135,7 +122,8 @@ actor WaycarSSHTransport: Transport {
                 delay: SSHTransportSettings.defaultLaunchSettleDelay,
                 interval: SSHTransportSettings.defaultLaunchSettleInterval,
                 window: SSHTransportSettings.defaultLaunchSettleWindow))
-        inputReadyTimeout = SSHTransportSettings.defaultInputReadyTimeout
+        inputGate = AgentInputGateMachine(
+            inputReadyTimeout: SSHTransportSettings.defaultInputReadyTimeout)
         worktreeCreateTimeout = SSHTransportSettings.defaultWorktreeCreateTimeout
         worktreeReconcileBudget = SSHTransportSettings.defaultWorktreeReconcileBudget
         worktreeReconcileInterval = SSHTransportSettings.defaultWorktreeReconcileInterval
@@ -161,7 +149,7 @@ actor WaycarSSHTransport: Transport {
                 delay: settings.launchSettleDelay,
                 interval: settings.launchSettleInterval,
                 window: settings.launchSettleWindow))
-        inputReadyTimeout = settings.inputReadyTimeout
+        inputGate = AgentInputGateMachine(inputReadyTimeout: settings.inputReadyTimeout)
         worktreeCreateTimeout = settings.worktreeCreateTimeout
         worktreeReconcileBudget = settings.worktreeReconcileBudget
         worktreeReconcileInterval = settings.worktreeReconcileInterval
@@ -366,35 +354,42 @@ actor WaycarSSHTransport: Transport {
     /// fails `AgentFolderTrustRequiredError`, since the prompt's text or
     /// Enter would answer it.
     private func awaitAgentInput(target: String) async throws {
-        let now = ContinuousClock.now
-        inputGates = inputGates.filter { now < $0.value.opensAt }
-        let gate = inputGates[target]
-        if let gate, now < gate.readyAt {
-            throw AgentInputNotReadyError(kind: gate.kind, target: target, opensAt: gate.readyAt)
-        }
-        // A gate past its `readyAt` that is still open waits for a marker.
-        let marker = gate?.readiness.marker
+        guard
+            case .resolveKind(let check)? = try performInputGate(
+                inputGate.handle(.promptArrived(target: target, now: .now)))
+        else { return }
         let kind = try await agentKind(of: target)
-        let readiness = kind.map(AgentScreen.readiness(kind:))
-        let readsScreen = readiness.map { $0.hasSignInScreen || $0.hasTrustDialog } ?? false
-        guard marker != nil || readsScreen else { return }
+        guard
+            case .readScreen? = try performInputGate(
+                inputGate.handle(.kindResolved(check, kind: kind)))
+        else { return }
         let screen: PaneReadResult
         do {
             screen = try await readPane(PaneReadParams(paneID: target, source: .visible))
         } catch let error as HerdrAPIError where error.code == "pane_not_found" {
             // The pane closed: nothing will take input there any more.
-            if let gate { forgetInputGate(gate, paneID: target) }
+            _ = inputGate.handle(.paneGone(check))
             agentKinds[target] = nil
             throw error
         }
-        if let kind { try Self.refuseInputScreen(kind: kind, target: target, screen: screen.text) }
-        if let gate, let marker {
-            guard AgentScreen.inputIsOnScreen(marker, screen: screen.text) else {
-                throw AgentInputNotReadyError(
-                    kind: gate.kind, target: target, opensAt: gate.opensAt)
+        _ = try performInputGate(
+            inputGate.handle(.screenRead(check, kind: kind, screen: screen.text)))
+    }
+
+    /// Throws the refusal `AgentInputGateMachine` answered, else returns
+    /// the step it asks for next (nil: none).
+    private func performInputGate(
+        _ effects: [AgentInputGateMachine.Effect]
+    ) throws -> AgentInputGateMachine.Effect? {
+        for effect in effects {
+            switch effect {
+            case .hold(let error): throw error
+            case .refuseSignIn(let error): throw error
+            case .refuseFolderTrust(let error): throw error
+            case .resolveKind, .readScreen, .admit: return effect
             }
-            forgetInputGate(gate, paneID: target)
         }
+        return nil
     }
 
     /// The screen check ``awaitAgentInput(target:)`` runs, for the kind of
@@ -412,12 +407,10 @@ actor WaycarSSHTransport: Transport {
     /// screen, `AgentFolderTrustRequiredError` while it shows its
     /// folder-trust dialog.
     private static func refuseInputScreen(kind: String, target: String, screen: String) throws {
-        let readiness = AgentScreen.readiness(kind: kind)
-        if readiness.hasSignInScreen, AgentScreen.signInRequired(kind: kind, screen: screen) {
-            throw AgentSignInRequiredError(kind: kind, target: target)
-        }
-        if readiness.hasTrustDialog, AgentScreen.trustDialogShown(kind: kind, screen: screen) {
-            throw AgentFolderTrustRequiredError(kind: kind, target: target)
+        switch AgentInputGateMachine.screenRefusal(kind: kind, target: target, screen: screen) {
+        case .refuseSignIn(let error)?: throw error
+        case .refuseFolderTrust(let error)?: throw error
+        case .hold, .resolveKind, .readScreen, .admit, nil: return
         }
     }
 
@@ -449,21 +442,8 @@ actor WaycarSSHTransport: Transport {
         kind: String, paneID: String, launchedAt: ContinuousClock.Instant
     ) {
         agentKinds[paneID] = kind
-        let readiness = AgentScreen.readiness(kind: kind)
-        guard readiness.gatesLaunch else {
-            inputGates[paneID] = nil
-            return
-        }
-        let readyAt = launchedAt + readiness.minimumDelay
-        inputGates[paneID] = InputGate(
-            kind: kind, readiness: readiness, readyAt: readyAt,
-            opensAt: readiness.marker == nil ? readyAt : launchedAt + inputReadyTimeout)
-    }
-
-    /// Drops `gate`, unless a later launch in `paneID` replaced it while
-    /// its screen was being read.
-    private func forgetInputGate(_ gate: InputGate, paneID: String) {
-        if inputGates[paneID] == gate { inputGates[paneID] = nil }
+        // A launch answers no effect: it only sets or clears the gate.
+        _ = inputGate.handle(.launched(pane: paneID, kind: kind, at: launchedAt))
     }
 
     func sendAgentKeys(_ params: AgentSendKeysParams) async throws {
@@ -1487,7 +1467,7 @@ actor WaycarSSHTransport: Transport {
     /// so the group closes (`closeWorktreeGroup`); any other close keeps
     /// the refusal.
     func closePane(_ params: PaneTarget, closesWorktreeGroup: Bool) async throws {
-        inputGates[params.paneID] = nil
+        _ = inputGate.handle(.paneClosed(pane: params.paneID))
         agentKinds[params.paneID] = nil
         do {
             _ = try await request(
@@ -2178,7 +2158,7 @@ actor WaycarSSHTransport: Transport {
         guard !closed else { return }
         closed = true
         performLaunchSettle(launchSettle.handle(.closed))
-        inputGates.removeAll()
+        _ = inputGate.handle(.closed)
         agentKinds.removeAll()
         let readers = Array(eventsReaders.values)
         eventsReaders.removeAll()

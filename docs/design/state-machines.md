@@ -5306,6 +5306,60 @@ stateDiagram-v2
     delayed --> delayed: scheduled again / cancelTask, startTask(new token)
 ```
 
+### AgentInputGateMachine
+
+- **File:** `Sources/Waycar/Transport/AgentInputGateMachine.swift`
+- **Owner:** `WaycarSSHTransport`: `gateAgentInput` (every `agent.start`
+  ack and every recovery that finds the launch's Agent) sends `launched`;
+  `awaitAgentInput`, which `promptAgent` runs before any byte goes out,
+  sends `promptArrived`, resolves the kind (`agentKinds`, else one
+  `agent.get`), reads the visible screen when asked and throws the
+  machine's refusal; `closePane` (before herdr answers, HCT-03 as it
+  was) and `close()` drop gates. `checkAgentInputScreen` uses its
+  `screenRefusal`. The kind cache `agentKinds` stays in the owner.
+- **States:** per pane id, the launch's gate: token, kind, readiness
+  (`AgentScreen.readiness(kind:)`), `readyAt` (launch + minimum delay),
+  `opensAt` (marker kinds: launch + `inputReadyTimeout`, 60 s; others
+  `readyAt`). At a moment a pane is `delayHeld`, `awaitingMarker`,
+  `expired` or `ready` (no gate); `signInRequired` and `trustRequired` are
+  verdicts of one screen read, for any Agent of such a kind.
+- **Events:** `launched(pane, kind, at)`, `promptArrived(target, now)`,
+  `kindResolved(check, kind)`, `screenRead(check, kind, screen)`,
+  `paneGone(check)`, `paneClosed(pane)`, `closed`.
+- **Effects:** `hold(AgentInputNotReadyError)`, `refuseSignIn`,
+  `refuseFolderTrust`, `resolveKind(check)`, `readScreen(check)`,
+  `admit`. Every arrival first drops every gate past its `opensAt` (the
+  fail-open timeout); inside the delay the prompt is held unread until
+  `readyAt`; a marker gate, or a kind with a sign-in screen or trust
+  dialog, reads the screen once; a sign-in screen, then a trust dialog,
+  is refused before the marker is looked at; a blank screen holds until
+  `opensAt`; the marker opens the gate for good. A check carries the gate
+  it found: its marker opens only that gate, by token, never a gate a
+  later launch put there meanwhile (that read still admits its own
+  prompt). A kind herdr lists later replaces `agentKinds` but not the gate
+  (HCT-04, kept).
+- **Tests:** `AgentInputGateMachineTests`; owner coverage is real-SSH
+  (`WaycarSSHTransportBehaviorE2ETests` in `SharedFixtureE2ETests`: the
+  opencode, kilo and cline markers, the timeout, the copilot delay, the
+  sign-in and trust refusals over a new Transport too, other kinds
+  unread, a refused close, a listed kind, a gate replaced during a read).
+- **Catalogue:** HERDR-11.
+
+```mermaid
+stateDiagram-v2
+    [*] --> delayHeld: launched, kind with a delay
+    [*] --> awaitingMarker: launched, marker kind
+    delayHeld --> delayHeld: promptArrived before readyAt / hold
+    delayHeld --> ready: past readyAt, no marker (expired, dropped)
+    awaitingMarker --> awaitingMarker: screenRead blank / hold until opensAt
+    awaitingMarker --> ready: screenRead marker, same token / admit
+    awaitingMarker --> expired: past opensAt
+    expired --> ready: promptArrived drops it / resolveKind
+    ready --> ready: screenRead sign-in or trust / refuse
+    delayHeld --> ready: paneClosed, paneGone, closed
+    awaitingMarker --> ready: paneClosed, paneGone, closed
+```
+
 **Host Tools plugin**
 
 ### ExportRunMachine
@@ -6120,7 +6174,7 @@ audit's IDs (CS-01, ES-04 and so on) appear only in notes.
 | HERDR-08 | herdr attach ownership | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | partial | H/H | convert; bug B-32 | P3d |
 | HERDR-09 | Shell readiness retry | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | M/M | leave: operation-local loop | — |
 | HERDR-10 | Launch settle (`scheduleLaunchSettle`) | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `LaunchSettleMachine` | P3d |
-| HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | convert | P3d |
+| HERDR-11 | Agent input gate | `Sources/Waycar/Transport/WaycarSSHTransport.swift` | implicit | H/H | converted → `AgentInputGateMachine`; a refused close still drops the gate (HCT-03) and a listed kind still keeps it (HCT-04), as before | P3d |
 | HERDR-12 | Shared async operation | `Sources/Waycar/Transport/SharedAsyncOperation.swift` | implicit | M/M | leave: actor-serialized single flight | — |
 | HERDR-13 | Async deadline | `Sources/Waycar/Transport/AsyncDeadline.swift` | implicit | M/M | leave: single-winner primitive | — |
 | HERDR-14 | Liveness race | `Sources/Waycar/Transport/ConnectionLiveness.swift` | implicit | H/H | convert | P3d |
