@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Exercise scripts/ci/ci-evidence.py: its log parsing on saved snippets of real public CI job logs
-(scripts/testdata/ci-evidence/, named <run id>-<job id>, lines cut from the full logs and left as they were), and its
-report on stubbed gh answers. No network."""
+"""Exercise scripts/ci/ci-evidence.py: its log parsing on saved snippets of real job logs (scripts/testdata/ci-evidence/:
+public CI runs named <run id>-<job id>, and one Mac `make test-swiftmosh` without SWIFTMOSH_REAL_E2E, whose skips CI
+never has; lines cut from the full logs and left as they were, local paths left out), and its report on stubbed gh
+answers. No network."""
 
 from __future__ import annotations
 
@@ -104,9 +105,16 @@ class LogParsingTests(unittest.TestCase):
         # SwiftMosh's swift test: XCTest totals, then an empty Swift Testing run that says nothing.
         parsed = ce.parse_log(fixture("swiftmosh-pass-43491553084-132113744867.log"))
         self.assertEqual(parsed["lanes"], [])
-        self.assertEqual(parsed["tests"]["xctest"], {"executed": 189, "failures": 0, "unexpected": 0})
+        self.assertEqual(parsed["tests"]["xctest"], {"executed": 189, "skipped": 0, "failures": 0, "unexpected": 0})
         self.assertNotIn("swift", parsed["tests"])
         self.assertEqual(ce.lane_counts(parsed["tests"]), "XCTest 189 executed, 0 failures, 0 skipped")
+
+    def test_xctest_totals_with_skips(self) -> None:
+        # XCTest's summary gains "with N tests skipped and" once a test skips.
+        parsed = ce.parse_log(fixture("swiftmosh-skips-mac-8f20288.log"))
+        self.assertEqual(parsed["tests"]["xctest"], {"executed": 189, "skipped": 9, "failures": 0, "unexpected": 0})
+        self.assertNotIn("swift", parsed["tests"])
+        self.assertEqual(ce.lane_counts(parsed["tests"]), "XCTest 189 executed, 0 failures, 9 skipped")
 
     def test_pinned_counts_come_from_the_gates_own_echo(self) -> None:
         # A green lane says what run_suite held it to; the line is rendered by the shipped echo statements.
@@ -228,14 +236,26 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "PENDING")
         self.assertIn("… Build & test · in_progress", ce.render(report))
 
-    def test_wait_returns_once_every_run_finished_on_two_polls(self) -> None:
-        polls = [[run(1, "CI", "in_progress", None)], [run(1, "CI", "completed", "success")],
-                 [run(1, "CI", "completed", "success")]]
-        calls = []
+    def test_a_log_gh_cannot_read_leaves_a_green_report_incomplete(self) -> None:
+        self.stub([run(1, "CI", "completed", "success")], {1: [job(11, "Build & test", "success", ("Build and test",))]})
+
+        def refused(repo, job_id):
+            raise ce.GhError("HTTP 403: Resource not accessible")
+
+        ce.job_log = refused
+        report = self.report()
+        self.assertEqual(report["verdict"], "INCOMPLETE")
+        self.assertIn("log unavailable: HTTP 403", ce.render(report))
+
+    def wait(self, polls: list) -> tuple[list[dict], list[str]]:
+        calls: list[str] = []
 
         def gh_json(path: str):
             calls.append(path)
-            return {"workflow_runs": polls[min(len(calls), len(polls)) - 1]}
+            answer = polls[min(len(calls), len(polls)) - 1]
+            if isinstance(answer, Exception):
+                raise answer
+            return {"workflow_runs": answer}
 
         clock = [0.0]
         originals = (ce.gh_json, ce.time.sleep, ce.time.monotonic)
@@ -245,9 +265,17 @@ class ReportTests(unittest.TestCase):
         self.addCleanup(lambda: (setattr(ce, "gh_json", originals[0]), setattr(ce.time, "sleep", originals[1]),
                                  setattr(ce.time, "monotonic", originals[2])))
         args = type("Args", (), {"repo": "o/r", "event": None, "include_schedule": False, "deadline": 7200})
-        runs = ce.wait_for_runs(args, {"sha": "a" * 40})
-        self.assertEqual([r["conclusion"] for r in runs], ["success"])
-        self.assertEqual(len(calls), 3)  # pending, done, done again
+        return ce.wait_for_runs(args, {"sha": "a" * 40}), calls
+
+    def test_wait_returns_once_the_same_finished_runs_show_twice(self) -> None:
+        a, b = run(1, "CI", "completed", "success"), run(2, "Web", "completed", "success", workflow=2)
+        runs, calls = self.wait([[run(1, "CI", "in_progress", None)], [a], [a, b], [a, b]])
+        self.assertEqual([r["name"] for r in runs], ["CI", "Web"])
+        self.assertEqual(len(calls), 4)  # pending; done; a late run appeared; the same again
+
+    def test_wait_gives_up_when_gh_keeps_failing(self) -> None:
+        with self.assertRaises(ce.GhError):
+            self.wait([ce.GhError("HTTP 401: Bad credentials")])
 
 
 if __name__ == "__main__":

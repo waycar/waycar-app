@@ -16,8 +16,9 @@ counts has finished, then prints the report once. Use it, or an automation, inst
 `automation ask` script, --fire prints one `FIRE <verdict>` line and `DONE` instead of the report (exit 0); read the
 report afterwards with the same command without --wait.
 
-Exit status: 0 every run that counts succeeded; 1 one failed or was cancelled; 2 gh failed or the arguments are
-wrong; 3 runs are still going (no --wait, or the deadline passed) or there are none.
+Exit status: 0 every run that counts succeeded; 1 one failed or was cancelled; 2 gh failed (a job log it could
+not read included: the report says INCOMPLETE) or the arguments are wrong; 3 runs are still going (no --wait, or the
+deadline passed) or there are none.
 
 Logs are read only for finished jobs that did not succeed and for successful jobs with a test step (a step whose
 name says test or e2e). Needs gh, logged in; it only reads from GitHub. Scheduled runs (they also carry main's sha)
@@ -52,7 +53,10 @@ SWIFT_RUN = re.compile(
     r"(?: with (?P<issues>\d+) issues?)?"
 )
 XCTEST_ALL = re.compile(r"Test Suite 'All tests' (?:passed|failed)")
-XCTEST_EXECUTED = re.compile(r"Executed (?P<executed>\d+) tests?, with (?P<failures>\d+) failures? \((?P<unexpected>\d+) unexpected\)")
+XCTEST_EXECUTED = re.compile(
+    r"Executed (?P<executed>\d+) tests?, with (?:(?P<skipped>\d+) tests? skipped and (?:with )?)?"
+    r"(?P<failures>\d+) failures? \((?P<unexpected>\d+) unexpected\)"
+)
 # A Swift Testing skip record ("➜ Test "x" skipped: "why"", "Test x() skipped.") or an XCTest one; never a name
 # that merely holds the word ("Test "a skipped read …" started.").
 SKIPPED = re.compile(r"(?:^|\s)Test (?!run )\S.* skipped(?::|\.?$)|Test Case '.+' skipped \(")
@@ -89,7 +93,7 @@ def test_totals(lines: list[str]) -> dict:
         if XCTEST_ALL.search(line):
             following = next((m for m in map(XCTEST_EXECUTED.search, lines[i + 1 : i + 3]) if m), None)
             if following:
-                totals["xctest"] = {k: int(v) for k, v in following.groupdict().items()}
+                totals["xctest"] = {k: int(v or 0) for k, v in following.groupdict().items()}
     swift = [m for m in map(SWIFT_RUN.search, lines) if m]
     # swift test prints an empty Swift Testing run after its XCTest bundle, which says nothing; alone, an empty run
     # is a filter that matched nothing.
@@ -317,10 +321,13 @@ def collect(repo: str, target: dict, runs: list[dict]) -> dict:
             if job.get("conclusion") == "cancelled" and entry["superseded_by"] is None:
                 item["cancel_reason"] = cancel_reason(repo, job["id"])
             if wants_log(job) and entry["superseded_by"] is None:
-                try:
-                    item.update(parse_log(job_log(repo, job["id"])))
-                except GhError as error:
-                    item["log_error"] = str(error)
+                for _ in range(2):
+                    try:
+                        item.update(parse_log(job_log(repo, job["id"])))
+                        item.pop("log_error", None)
+                        break
+                    except GhError as error:
+                        item["log_error"] = str(error)
             entry["jobs"].append(item)
         reasons = [j["cancel_reason"] for j in entry["jobs"] if j.get("cancel_reason")]
         if entry["conclusion"] == "cancelled" and reasons:
@@ -331,7 +338,9 @@ def collect(repo: str, target: dict, runs: list[dict]) -> dict:
     counted = [r for r in report_runs if not r["superseded_by"]]
     pending = [r for r in counted if r["status"] != "completed"]
     red = [r for r in counted if r["status"] == "completed" and r["conclusion"] not in ("success", "neutral", "skipped")]
-    verdict = "RED" if red else "PENDING" if pending or not counted else "GREEN"
+    unread = [j for r in counted for j in r["jobs"] if j.get("log_error")]
+    # Green needs its evidence: a job log gh could not read leaves the report incomplete (exit 2), not green.
+    verdict = "RED" if red else "PENDING" if pending or not counted else "INCOMPLETE" if unread else "GREEN"
     return {"repo": repo, **target, "verdict": verdict, "runs": report_runs}
 
 
@@ -475,17 +484,24 @@ def sha_prefix(text: str) -> str:
 
 
 def wait_for_runs(args, target: dict) -> list[dict]:
-    """Poll until every run that counts has finished, twice in a row (a late workflow can still appear), the deadline
-    passes, or no run has appeared after 10 minutes."""
+    """Poll until the same finished runs show on two polls in a row (a late workflow can still appear), the deadline
+    passes, or no run has appeared after 10 minutes. gh failing five times in a row, or on every poll until the
+    deadline, raises GhError."""
     started = time.monotonic()
-    interval, done, settled, first = 20.0, set(), False, True
+    interval, done, first = 20.0, set(), True
+    last_runs, previous, failures, last_error = None, None, 0, GhError("no answer from gh")
     while True:
         try:
             runs = list_runs(args.repo, target["sha"], args.event, args.include_schedule)
+            failures = 0
         except GhError as error:
+            failures += 1
+            if failures >= 5:
+                raise
             print(f"ci-evidence: gh failed ({error}); retrying", file=sys.stderr, flush=True)
-            runs = None
+            last_error, runs = error, None
         if runs is not None:
+            last_runs = runs
             counted = [r for r in runs if not r["_superseded_by"]]
             finished = [r for r in counted if r.get("status") == "completed"]
             if first:
@@ -498,19 +514,20 @@ def wait_for_runs(args, target: dict) -> list[dict]:
                     done.add(run["id"])
                     print(f"ci-evidence: {run.get('name')} {run.get('conclusion')} ({len(finished)} of {len(counted)} done)",
                           file=sys.stderr, flush=True)
-            if counted and all(r.get("status") == "completed" for r in counted):
-                if settled:
+            snapshot = sorted((r["id"], r.get("run_attempt"), r.get("status")) for r in counted)
+            if counted and len(finished) == len(counted):
+                if snapshot == previous:
                     return runs
-                settled, interval = True, 20.0
-            else:
-                settled = False
-            elapsed = time.monotonic() - started
-            if not counted and elapsed > 600:
+                interval = 20.0  # look once more soon: a workflow that starts late must not be missed
+            previous = snapshot
+            if not counted and time.monotonic() - started > 600:
                 return runs
         elapsed = time.monotonic() - started
         if elapsed >= args.deadline:
             print("ci-evidence: deadline passed", file=sys.stderr, flush=True)
-            return runs or []
+            if last_runs is None:
+                raise last_error
+            return last_runs
         time.sleep(min(interval, max(1.0, args.deadline - elapsed)))
         interval = min(interval * 1.5, 180.0)
 
@@ -545,7 +562,7 @@ def main() -> int:
         print("DONE", flush=True)
         return 0
     print(json.dumps(report, indent=1) if args.json else render(report))
-    return {"GREEN": 0, "RED": 1}.get(report["verdict"], 3)
+    return {"GREEN": 0, "RED": 1, "INCOMPLETE": 2}.get(report["verdict"], 3)
 
 
 if __name__ == "__main__":
