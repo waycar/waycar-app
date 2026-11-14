@@ -182,6 +182,10 @@ final class AgentVoiceService {
     /// The Blocked question each Agent's driver last heard in full; Allow
     /// acts only on that one: never before the read-back.
     private var heardApprovals: [ConsoleAgent.ID: HeardApprovalMachine] = [:]
+    /// What `introduction` draws its ask line from; tests pass a fixed one.
+    private var random: any RandomNumberGenerator
+    /// The ask line the last introduction ended on, never drawn next.
+    private var lastAskLine: String?
 
     /// The service over the app's Console, acting through `actions`, the
     /// instance the app's other surfaces share.
@@ -221,7 +225,8 @@ final class AgentVoiceService {
         // English for every user; the preferred language is what they speak.
         locale: @escaping @MainActor () -> Locale = {
             Locale.preferredLanguages.first.map(Locale.init(identifier:)) ?? .current
-        }
+        },
+        random: any RandomNumberGenerator = SystemRandomNumberGenerator()
     ) {
         self.dependencies = dependencies
         self.actions =
@@ -237,6 +242,7 @@ final class AgentVoiceService {
         self.speaker = speaker
         self.timing = timing
         self.locale = locale
+        self.random = random
     }
 
     // MARK: Speech
@@ -271,7 +277,8 @@ final class AgentVoiceService {
         CarVoiceScript.spokenIdentity(AgentGlanceList.title(for: agent))
     }
 
-    /// What a row tap says before listening: status, and a fresh summary.
+    /// What a row tap says before listening: status, a fresh summary, and
+    /// an ask line other than the one the last introduction ended on.
     func introduction(for agentID: ConsoleAgent.ID, now: Date = Date()) -> String? {
         guard let agent = dependencies.agent(agentID) else { return nil }
         let word = AgentActivityStatusVocabulary.word(for: agent.agent.status.rawValue)
@@ -279,8 +286,11 @@ final class AgentVoiceService {
         if case .summary(let text, _, let isStale) = agent.summaryLine(at: now), !isStale {
             summary = text
         }
+        let askLine = CarVoiceScript.askLine(after: lastAskLine, using: &random)
+        lastAskLine = askLine
         return CarVoiceScript.introduction(
-            identity: Self.spokenIdentity(of: agent), statusWord: word, summary: summary)
+            identity: Self.spokenIdentity(of: agent), statusWord: word, summary: summary,
+            askLine: askLine)
     }
 
     // MARK: Listening

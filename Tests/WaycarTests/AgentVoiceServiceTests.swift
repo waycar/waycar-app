@@ -134,6 +134,24 @@ struct AgentVoiceServiceTests {
         ChatTranscriptMessage(id: id, role: role, text: text, timestamp: nil)
     }
 
+    // MARK: Introduction
+
+    /// A draw that always picks the first line still never ends two
+    /// introductions in a row on the same one.
+    @Test func introductionsNeverEndOnTheSameAskLineTwiceInARow() {
+        let row = agent(.idle)
+        let voice = AgentVoiceService(
+            dependencies: FakeConsole([row]).dependencies, dictation: nil, speaker: FakeSpeaker(),
+            random: ConstantRandomNumberGenerator(value: 0))
+        let lines = CarVoiceScript.askLines
+        let endings = (0..<4).map { _ in
+            voice.introduction(for: row.id).flatMap { line in
+                lines.first { line.hasSuffix(" " + $0) }
+            }
+        }
+        #expect(endings == [lines[0], lines[1], lines[0], lines[1]])
+    }
+
     // MARK: Asking
 
     @Test func aQuestionCarriesTheSpokenReplySuffixOnOneSafeLine() async {

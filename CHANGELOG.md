@@ -47,6 +47,11 @@ Entries reference the issue that motivated them.
 - **Waiting agents**: tap a waiting agent in the Console to queue more
   messages, images and files offline. They go out in order once it starts.
 
+### Changed
+
+- **CarPlay**: after it introduces an agent, CarPlay asks for your question
+  in a few different ways instead of the same line every time.
+
 ### Fixed
 
 - **Commands that finished but looked stuck**: a short command Waycar runs
