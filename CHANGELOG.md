@@ -60,6 +60,9 @@ Entries reference the issue that motivated them.
 
 ### Changed
 
+- **Shorter agent cards**: no line above an agent's details, tighter
+  spacing, and the AI summary is one smaller line, so more agents fit on
+  screen.
 - **CarPlay**: after it introduces an agent, CarPlay asks for your question
   in a few different ways instead of the same line every time.
 
