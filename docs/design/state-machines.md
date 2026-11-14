@@ -132,7 +132,7 @@ boundary, into the new state, never inside `handle`.
 The AGENTS.md "Load-bearing" facts name guards that took live debugging to
 find: `WaycarSSHTransport.scheduleLaunchSettle`,
 `AgentComposerStore.promptWaitingOutLaunch`,
-`EventsSession.subscriptionsAreSeeded` and `dropSnapshotSubscriptions`,
+`EventsSubscriptionMachine`'s `seeded` stage and `dropSnapshotSubscriptions`,
 `MoshClientSession.abandon()`, the input gates, T24's no-replay rule, and the
 rule that nothing starts a runtime without the user's tap. A conversion turns
 each into a state or a transition and keeps its behaviour exactly; it never
