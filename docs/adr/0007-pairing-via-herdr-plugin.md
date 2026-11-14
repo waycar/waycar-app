@@ -1,5 +1,14 @@
 # Pair new devices through a herdr plugin with a one-time Bootstrap Key
 
+_2026-11-14:_ Pairing can also update a saved Host. Started from a
+keys-only Host's page, the ceremony runs only at that Host's own address
+and port, so the Pairing Code's host key must answer there before the
+Bootstrap Key is used; success switches that Host to the Device Key and the
+code's user under the same id, keeping its Notification Key, Live Activity
+and other per-Host state, and pins the key at its endpoint. No matching of a
+plain scan against saved Hosts: one machine may be two Hosts on purpose.
+The Pairing Code is unchanged.
+
 _2026-10-29:_ ADR 0031 amends the plugin's implementation. From plugin 2.0.0
 the Host Tools, Enrollment's accept entrypoint included, are one static native
 binary (`bin/waycar pair-accept`), not Node scripts, so the "Plugin: Node ≥ 20"

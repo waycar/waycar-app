@@ -34,7 +34,22 @@ struct FoundComputer: Identifiable, Hashable, Sendable {
     /// Whether a Pairing Code can add the key: the installer that shows one
     /// runs on macOS and Linux, and a Windows OpenSSH server names itself in
     /// its banner.
-    var canPair: Bool { software?.contains("Windows") != true }
+    var canPair: Bool { Self.showsPairingCodes(software: software) }
+
+    /// Whether a server whose banner names `software` can show a Pairing
+    /// Code: anything but Windows OpenSSH, including a server that sent none.
+    static func showsPairingCodes(software: String?) -> Bool {
+        software?.contains("Windows") != true
+    }
+
+    /// The saved Host this computer already is: a direct Host at the same
+    /// address and port.
+    func savedHost(in hosts: [Host]) -> Host? {
+        hosts.first { host in
+            !host.usesJumpHost && host.port == port
+                && host.address.trimmingCharacters(in: .whitespaces) == address
+        }
+    }
 
     /// The SSH software the banner names, from `SSH-2.0-OpenSSH_9.6p1 Ubuntu`
     /// to `OpenSSH_9.6p1 Ubuntu`. Nil unless the line is an SSH banner.

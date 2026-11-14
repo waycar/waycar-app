@@ -24,6 +24,9 @@ enum PairingCeremonyError: Error, Sendable, Equatable {
     /// key within the per-address timeout. Carries one line per attempted
     /// address for diagnostics.
     case hostUnreachable(detail: String)
+    /// Every candidate address answered with a host key other than the
+    /// pinned one: another computer, so nothing was sent to any of them.
+    case hostKeyMismatch(detail: String)
     /// The Host is there — its key matched the pinned fingerprint — but it
     /// rejected the Bootstrap Key: the code was already used, its line
     /// expired and was swept, or the popup was closed.
@@ -41,7 +44,7 @@ enum PairingCeremonyError: Error, Sendable, Equatable {
     /// The Pairing step this failure is attributed to.
     var step: PairingStep {
         switch self {
-        case .hostUnreachable: .reach
+        case .hostUnreachable, .hostKeyMismatch: .reach
         case .bootstrapRejected: .authenticate
         case .enrollmentRefused, .enrollmentFailed: .enroll
         case .verificationFailed: .verify

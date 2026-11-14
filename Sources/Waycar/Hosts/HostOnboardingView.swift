@@ -26,6 +26,10 @@ struct HostOnboardingView: View {
     /// The Console, for a Host running both backends: Show tmux sessions and
     /// the New Agent default. nil hides those controls.
     let console: ConsoleStore?
+    /// Scans a Pairing Code for this Host from the presenter, whose sheet
+    /// outlives this page: pairing updates the Host, which re-keys it. nil
+    /// offers only the key command on a keys-only Host.
+    let pairWithCode: (() -> Void)?
     @State private var store: HostOnboardingStore
     @State private var isEditing = false
     @State private var isConfirmingHostKeyReplacement = false
@@ -59,10 +63,12 @@ struct HostOnboardingView: View {
         reprobeLiveMosh: (() -> Void)? = nil,
         aiUsage: AIUsageStore? = nil,
         console: ConsoleStore? = nil,
+        pairWithCode: (() -> Void)? = nil,
         store: HostOnboardingStore? = nil
     ) {
         self.aiUsage = aiUsage
         self.console = console
+        self.pairWithCode = pairWithCode
         self.liveMoshState = liveMoshState
         self.reprobeLiveMosh = reprobeLiveMosh
         self.catalog = catalog
@@ -245,6 +251,16 @@ struct HostOnboardingView: View {
                 HostDeviceKeyRecoverySection(
                     hostName: host.displayName,
                     isChecking: store.phase == .running,
+                    usesJumpHost: host.usesJumpHost,
+                    // Pairing reaches only the Host's own address.
+                    pairWithCode: host.usesJumpHost ? nil : pairWithCode,
+                    serverSoftware: { [address = host.address, port = host.port] in
+                        guard
+                            case .ssh(let banner) = await NetworkSSHProbe(timeout: .seconds(3))
+                                .probe(host: address, port: port)
+                        else { return nil }
+                        return FoundComputer.software(fromBanner: banner)
+                    },
                     command: store.deviceKeyInstallCommand,
                     checkAgain: { try store.useDeviceKey(in: catalog) },
                     edit: { isEditing = true })
@@ -883,10 +899,19 @@ struct HostOnboardingConnectionPresentation: Equatable {
     }
 }
 
-/// A keys-only Host gets a concrete fix, rather than another password retry.
+/// A keys-only Host gets a concrete fix, rather than another password retry:
+/// pairing with a code, as a found computer offers, and adding the key by
+/// hand one tap below. A Host behind a Jump Host, or a Windows OpenSSH
+/// server, which can't show a Pairing Code, gets only the key command.
 struct HostDeviceKeyRecoverySection: View {
     let hostName: String
     let isChecking: Bool
+    /// The key goes on the Jump Host too: both hops sign in with it.
+    let usesJumpHost: Bool
+    /// Scans a Pairing Code for this Host; nil where pairing can't reach it.
+    let pairWithCode: (() -> Void)?
+    /// The software the Host's SSH banner names, nil when unknown.
+    let serverSoftware: () async -> String?
     let command: () throws -> String
     let checkAgain: () throws -> Void
     let edit: () -> Void
@@ -898,55 +923,127 @@ struct HostDeviceKeyRecoverySection: View {
         case unavailable
     }
 
+    private enum PairingOffer {
+        case checking
+        case offered
+        case unavailable
+    }
+
     @State private var key: KeyState = .loading
+    @State private var pairing: PairingOffer = .checking
+    @State private var addsKeyYourself = false
     @State private var didCopy = false
     @State private var saveError: String?
 
     var body: some View {
-        Section {
-            Text("\(hostName) accepts only keys")
-                .font(.headline)
-            switch key {
-            case .loading:
-                ProgressView()
-            case .ready(let command):
-                Text("Run this in Terminal on \(hostName), then tap Check Again.")
-                    .foregroundStyle(.secondary)
-                Text(command)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                Button {
-                    UIPasteboard.general.string = command
-                    didCopy = true
-                } label: {
-                    Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+        Group {
+            switch pairing {
+            case .checking:
+                Section {
+                    headline
+                    ProgressView()
                 }
-                Button("Check Again", systemImage: "arrow.clockwise") {
-                    do {
-                        try checkAgain()
-                    } catch DeviceKeyStoreError.storedKeyCorrupt {
-                        key = .corrupt
-                    } catch {
-                        saveError = "Could not save the Host. Open Edit Host and try again."
+            case .offered:
+                Section {
+                    headline
+                    Text("Run this in Terminal on \(hostName), then scan the Pairing Code it shows.")
+                        .foregroundStyle(.secondary)
+                    HostSetupCommand(command: WaycarPluginRequirement.installCommand)
+                    Button("Scan Pairing Code", systemImage: "qrcode.viewfinder") {
+                        pairWithCode?()
+                    }
+                    if !addsKeyYourself {
+                        Button("Add the Key Yourself") { addsKeyYourself = true }
                     }
                 }
-                .disabled(isChecking)
-            case .corrupt:
-                Label("Device key is corrupted", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Text(TransportError.deviceKeyCorrupt.presentation.message)
-                    .foregroundStyle(.secondary)
-                Button("Edit Host", action: edit)
+                if addsKeyYourself {
+                    Section {
+                        keyRows
+                    } header: {
+                        Text("Add the Key Yourself")
+                    } footer: {
+                        saveErrorFooter
+                    }
+                }
             case .unavailable:
-                Label("Device key unavailable", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button("Try Again", action: loadCommand)
-                Button("Edit Host", action: edit)
+                Section {
+                    headline
+                    keyRows
+                } footer: {
+                    saveErrorFooter
+                }
             }
-        } footer: {
-            if let saveError { Text(saveError).foregroundStyle(.red) }
         }
         .task { loadCommand() }
+        .task { await decidePairing() }
+    }
+
+    private var headline: some View {
+        Text("\(hostName) accepts only keys")
+            .font(.headline)
+    }
+
+    @ViewBuilder
+    private var saveErrorFooter: some View {
+        if let saveError { Text(saveError).foregroundStyle(.red) }
+    }
+
+    private var keyInstruction: String {
+        usesJumpHost
+            ? "Run this in Terminal on \(hostName) and on its Jump Host, then tap Check Again."
+            : "Run this in Terminal on \(hostName), then tap Check Again."
+    }
+
+    /// The Host just answered SSH, so a banner that can't be read keeps the
+    /// offer; only one naming Windows withdraws it.
+    private func decidePairing() async {
+        guard pairWithCode != nil else {
+            pairing = .unavailable
+            return
+        }
+        let software = await serverSoftware()
+        pairing = FoundComputer.showsPairingCodes(software: software) ? .offered : .unavailable
+    }
+
+    @ViewBuilder
+    private var keyRows: some View {
+        switch key {
+        case .loading:
+            ProgressView()
+        case .ready(let command):
+            Text(keyInstruction)
+                .foregroundStyle(.secondary)
+            Text(command)
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+            Button {
+                UIPasteboard.general.string = command
+                didCopy = true
+            } label: {
+                Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+            }
+            Button("Check Again", systemImage: "arrow.clockwise") {
+                do {
+                    try checkAgain()
+                } catch DeviceKeyStoreError.storedKeyCorrupt {
+                    key = .corrupt
+                } catch {
+                    saveError = "Could not save the Host. Open Edit Host and try again."
+                }
+            }
+            .disabled(isChecking)
+        case .corrupt:
+            Label("Device key is corrupted", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+            Text(TransportError.deviceKeyCorrupt.presentation.message)
+                .foregroundStyle(.secondary)
+            Button("Edit Host", action: edit)
+        case .unavailable:
+            Label("Device key unavailable", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+            Button("Try Again", action: loadCommand)
+            Button("Edit Host", action: edit)
+        }
     }
 
     private func loadCommand() {

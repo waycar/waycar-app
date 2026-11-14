@@ -34,7 +34,10 @@ struct PairingScanStoreTests {
         outcomes: [FakePairingConnector.Outcome] = [.succeeds(pairedResult)],
         now: Date = insideTTL,
         credentials: HostCredentialsProvider? = nil,
-        corruptCatalog: Bool = false
+        corruptCatalog: Bool = false,
+        saved: Host? = nil,
+        savedPassword: String? = nil,
+        target: PairingTarget = .newHost
     ) throws -> Env {
         let suiteName = "hm-pairing-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -42,10 +45,14 @@ struct PairingScanStoreTests {
             defaults.set(Data("not a catalog".utf8), forKey: "hosts")
         }
         let catalog = HostStore(defaults: defaults, secrets: InMemorySecretStore())
+        if let saved {
+            try catalog.add(saved, password: savedPassword)
+        }
         let connector = FakePairingConnector(outcomes: outcomes)
         let knownHosts = InMemoryKnownHostsStore()
         let store = PairingScanStore(
             catalog: catalog,
+            target: target,
             connector: connector,
             knownHosts: knownHosts,
             credentials: credentials
@@ -227,6 +234,90 @@ struct PairingScanStoreTests {
         #expect(env.store.failure == nil)
         #expect(env.store.isPairing == false)
         #expect(env.store.step == nil)
+    }
+
+    // MARK: Pairing a saved Host from its page
+
+    /// A keys-only Host added with a password, saved under a name the code
+    /// does not carry, at a port the code does not know.
+    private static let keysOnlyHost = Host(
+        name: "Studio", address: "studio.local", port: 2222, username: "admin",
+        authMethod: .password)
+
+    @Test func pairingASavedHostUpdatesItInPlace() async throws {
+        let fingerprint = Self.pairedResult.hostKeyFingerprint
+        let env = try makeEnv(
+            outcomes: [.succeeds(PairingResult(
+                address: "studio.local", port: 2222, username: "lin",
+                hostKeyFingerprint: fingerprint))],
+            saved: Self.keysOnlyHost, savedPassword: "hunter2",
+            target: .existing(Self.keysOnlyHost))
+        defer { env.cleanup() }
+        env.store.submit(scannedCode: Self.bootstrapVector.code)
+
+        await env.store.pair()
+
+        // Only the Host's own endpoint is tried, never the code's addresses.
+        let attempted = try #require(await env.connector.capturedCodes.first)
+        #expect(attempted.addresses == ["studio.local"])
+        #expect(attempted.port == 2222)
+        #expect(attempted.bootstrap != nil)
+        // The same Host, now on the Device Key as the code's user.
+        let paired = try #require(env.store.pairedHost)
+        #expect(env.catalog.hosts == [paired])
+        #expect(paired.id == Self.keysOnlyHost.id)
+        #expect(paired.name == "Studio")
+        #expect(paired.address == "studio.local")
+        #expect(paired.port == 2222)
+        #expect(paired.username == "lin")
+        #expect(paired.authMethod == .deviceKey)
+        #expect(try env.catalog.password(for: paired) == nil)
+        #expect(await env.knownHosts.fingerprint(host: "studio.local", port: 2222) == fingerprint)
+    }
+
+    @Test func aCodeFromAnotherComputerLeavesTheSavedHostAlone() async throws {
+        let env = try makeEnv(
+            outcomes: [.fails(.hostKeyMismatch(detail: "studio.local: presented another key"))],
+            saved: Self.keysOnlyHost, savedPassword: "hunter2",
+            target: .existing(Self.keysOnlyHost))
+        defer { env.cleanup() }
+        env.store.submit(scannedCode: Self.bootstrapVector.code)
+
+        await env.store.pair()
+
+        let failure = try #require(env.store.failure)
+        #expect(failure.step == .reach)
+        #expect(failure.canRetry == false)
+        #expect(
+            failure.message
+                == "This Pairing Code is from another computer. Run the command on Studio.")
+        #expect(env.store.pairedHost == nil)
+        #expect(env.catalog.hosts == [Self.keysOnlyHost])
+        #expect(try env.catalog.password(for: Self.keysOnlyHost) == "hunter2")
+        #expect(await env.knownHosts.fingerprint(host: "studio.local", port: 2222) == nil)
+    }
+
+    @Test func aFoundComputerKeepsItsNameAndAddress() async throws {
+        let found = FoundComputer(
+            address: "192.168.1.30", port: 22, serviceName: "Lin's Box", software: nil,
+            source: .bonjour)
+        let env = try makeEnv(
+            outcomes: [.succeeds(PairingResult(
+                address: "192.168.1.30", port: 22, username: "lin",
+                hostKeyFingerprint: Self.pairedResult.hostKeyFingerprint))],
+            target: .found(found))
+        defer { env.cleanup() }
+        env.store.submit(scannedCode: Self.bootstrapVector.code)
+
+        await env.store.pair()
+
+        // The address Find Computers saw goes first, the code's after it.
+        let attempted = try #require(await env.connector.capturedCodes.first)
+        #expect(attempted.addresses == ["192.168.1.30", "10.0.0.7"])
+        let paired = try #require(env.store.pairedHost)
+        #expect(env.catalog.hosts == [paired])
+        #expect(paired.name == "Lin's Box")
+        #expect(paired.address == "192.168.1.30")
     }
 
     @Test func pairingAgainAfterSuccessIsIgnored() async throws {

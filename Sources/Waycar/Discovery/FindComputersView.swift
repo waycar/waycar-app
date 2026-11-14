@@ -39,7 +39,7 @@ struct FindComputersView: View {
                         },
                         onScanPairingCode: {
                             dismiss()
-                            onFollowUp(.scan)
+                            onFollowUp(.pair(.found(computer)))
                         },
                         onAdded: { host in
                             dismiss()
@@ -88,10 +88,17 @@ struct FindComputersView: View {
         List {
             Section {
                 ForEach(store.computers) { computer in
+                    let saved = computer.savedHost(in: catalog.hosts)
                     Button {
-                        path.append(computer)
+                        // Already a Host: open it rather than add it again.
+                        if let saved {
+                            dismiss()
+                            onAdded(saved)
+                        } else {
+                            path.append(computer)
+                        }
                     } label: {
-                        FoundComputerRow(computer: computer)
+                        FoundComputerRow(computer: computer, isAdded: saved != nil)
                     }
                     .buttonStyle(.plain)
                 }
@@ -153,6 +160,7 @@ struct FindComputersView: View {
 
 private struct FoundComputerRow: View {
     let computer: FoundComputer
+    let isAdded: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -172,6 +180,11 @@ private struct FoundComputerRow: View {
                 }
             }
             Spacer(minLength: 8)
+            if isAdded {
+                Text("Added")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.tertiary)
@@ -303,7 +316,8 @@ struct FindComputerSignInView: View {
 /// A key with nothing to copy: the Host Tools installer, run on the found
 /// computer, ends with a Pairing Code, and scanning it adds this device's
 /// Device Key there (ADR 0007). Pairing creates the Host, so the found row
-/// never becomes a second one. Adding the key by hand stays one tap away.
+/// never becomes a second one; it keeps the row's name and address when the
+/// code is that computer's. Adding the key by hand stays one tap away.
 struct FindComputerPairingView: View {
     let computer: FoundComputer
     let scan: () -> Void

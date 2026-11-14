@@ -570,8 +570,7 @@ struct PreflightReport: Equatable, Sendable {
             backend: backend,
             failure: Failure(
                 check: .connection,
-                hint: "\(hostName) accepts only keys. Run the command below in Terminal on "
-                    + "\(hostName), then tap Check Again.",
+                hint: "\(hostName) accepts only keys, so this device's key has to be added there.",
                 needsDeviceKey: true))
     }
 

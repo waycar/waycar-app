@@ -15,6 +15,7 @@ From top to bottom:
 
 - **Enabled switch.** "Waycar never connects to a disabled Host. Its settings stay saved." A disabled Host's page shows only the switch and the rows below it.
 - **Address**, **Session** and **Auth.** How Waycar reaches the Host. **Session** shows the herdr session name, or "default". Tap **Edit** at the top to change any of them.
+- **Accepts only keys.** When the Host doesn't take your password: **Scan Pairing Code** switches this Host to your key, and **Add the Key Yourself** shows one command to run there. See [Pair a Host you already added](/help/pairing#pair-a-host-you-already-added).
 - **Reconnect.** Connects the Host again. It reads **Connecting…** while it works, and the connection error shows in red underneath.
 - **Preflight.** The checklist, described below.
 - **Status Hooks.** On a tmux Host, whether each agent's status hooks are **Installed** or **Not installed**, with **Install Status Hooks** when some are missing. See [Waycar hooks for tmux](/help/tmux-hooks).

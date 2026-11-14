@@ -36,6 +36,10 @@ Closing the pairing screen cancels the code, so keep it open until Waycar finish
 
 Can't scan? Press `c` on the Host. On a Mac that copies the code; on Linux it shows the code so you can select and copy it. Then tap **Paste Pairing Code** in Waycar.
 
+## Pair a Host you already added
+
+When a Host you added with a password accepts only keys, its page says so. Run the command it shows in Terminal on that computer, then tap **Scan Pairing Code** and scan the code. Waycar pairs at the Host's own address and port, so the same Host switches to this device's key and keeps its name and settings, and its saved password is removed. A code from another computer is refused before anything is sent to it. To add the key by hand instead, tap **Add the Key Yourself**. A Host behind a [Jump Host](/help/jump-host), or a Windows computer, shows only that command, to run on both machines when there is a Jump Host.
+
 ## What happens on the Host?
 
 When your device enrolls, the Host shows **Device paired** with the key's fingerprint. If that wasn't you, press `r` to revoke the device.
@@ -66,6 +70,8 @@ Otherwise it uses the full path to `waycar`, so copy the printed line.
 | Message | What to do |
 | --- | --- |
 | "The Host did not answer at any of its addresses." | Join the Host's network or VPN, then try again with the same code. See [Can't connect to a Host](/help/cant-connect). |
+| "Another computer answered at this code's addresses." | Scan the Pairing Code on the computer you want to add. |
+| "This Pairing Code is from another computer." | You scanned another computer's code from a Host's page. Run the command on that Host and scan its code. |
 | "The Host rejected this Pairing Code." | Codes work once and stop when they expire or the pairing screen closes. Show and scan a new code. |
 | "The Host has no pairing in progress for this code." | Show a new code and scan it. |
 | "That QR code is not a herdr Pairing Code." | Scan the code the Host's pairing screen shows. |

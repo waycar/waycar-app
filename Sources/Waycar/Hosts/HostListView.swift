@@ -228,7 +228,8 @@ struct HostListView: View {
                         liveMoshState: moshStates[id],
                         reprobeLiveMosh: reprobeMosh.map { reprobe in { reprobe(id) } },
                         aiUsage: aiUsage,
-                        console: console)
+                        console: console,
+                        pairWithCode: { addition = .pair(.existing(host.recordForm)) })
                         .id(host.recordForm)
                 } else {
                     ContentUnavailableView("Host removed", systemImage: "server.rack")
