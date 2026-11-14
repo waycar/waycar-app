@@ -149,7 +149,10 @@ enum ServerSessionLinks {
             linkedByFolder.insert(session.id)
         }
         // An Archive pin alone in a folder no other pane joins takes the one
-        // desk session there, if it is newer than the pin.
+        // desk session there, if it is newer than the pin. The pin's time is
+        // the phone's clock and `created` the Host's: both are network time,
+        // and a skew of seconds is far shorter than a relaunch and a prompt;
+        // a Host far behind only keeps the pane hidden, as before the fix.
         let yieldingByFolder = Dictionary(grouping: orderedPanes.filter {
             yielding[$0.id] != nil && !$0.agent.cwd.isEmpty
         }, by: { canonicalDirectory($0.agent.cwd) })
