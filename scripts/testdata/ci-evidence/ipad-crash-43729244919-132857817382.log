@@ -1,0 +1,42 @@
+﻿2026-11-15T15:19:41.2731130Z Current runner version: '2.338.2'
+2026-11-15T15:20:02.2916750Z ##[group]Run set -o pipefail
+2026-11-15T15:20:02.2960120Z ##[endgroup]
+2026-11-15T15:20:05.5130710Z Destination: iPad Pro 13-inch (M5), iOS 27.2
+2026-11-15T15:20:06.5010370Z /Applications/Xcode_27.2.app/Contents/Developer/usr/bin/make test SIM='iPad Pro 13-inch (M5)'
+2026-11-15T15:57:00.5957620Z ✔ Test aMouseGrabbingTUIStillOffersTheInputRow() passed after 0.183 seconds.
+2026-11-15T15:57:00.5958030Z ◇ Test aTUITapAnywhereRaisesTheKeyboard() started.
+2026-11-15T15:57:01.2079460Z *** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'Modifications to the layout engine must not be performed from a background thread after it has been accessed from the main thread.'
+2026-11-15T15:58:05.5712470Z Restarting after unexpected exit, crash, or test timeout; summary will include totals from previous launches.
+2026-11-15T15:58:05.5729150Z 
+2026-11-15T15:58:10.7168060Z Test Suite 'Selected tests' started at 2026-11-15 15:58:10.699.
+2026-11-15T15:58:10.7297590Z Test Suite 'Selected tests' passed at 2026-11-15 15:58:10.701.
+2026-11-15T15:58:10.7617990Z 	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+2026-11-15T15:58:11.0739280Z ◇ Test run started.
+2026-11-15T15:58:11.0779090Z ↳ Testing Library Version: 2403
+2026-11-15T15:58:11.0785310Z ↳ Target Platform: arm64-apple-ios17.0-simulator
+2026-11-15T16:01:20.7990650Z ◇ Test emptySessionListPassesPing() started.
+2026-11-15T16:01:20.8098350Z ✔ Test emptySessionListPassesPing() passed after 0.001 seconds.
+2026-11-15T16:01:20.8193610Z ✔ Suite "Zellij Transport" passed after 1.140 seconds.
+2026-11-15T16:01:20.8295860Z ✔ Test run with 1687 tests in 146 suites passed after 189.277 seconds.
+2026-11-15T16:01:22.4734370Z 2026-11-15 16:01:22.472 xcodebuild[46309:121163] [MT] IDETestOperationsObserverDebug: 818.742 elapsed -- Testing started completed.
+2026-11-15T16:01:22.4735930Z 2026-11-15 16:01:22.472 xcodebuild[46309:121163] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-15T16:01:22.4736700Z 2026-11-15 16:01:22.472 xcodebuild[46309:121163] [MT] IDETestOperationsObserverDebug: 818.742 sec, +818.742 sec -- end
+2026-11-15T16:01:24.4359330Z 
+2026-11-15T16:01:24.4359800Z Test session results, code coverage, and logs:
+2026-11-15T16:01:24.4360990Z 	/Users/runner/work/waycar-app/waycar-app/build/DerivedData/Logs/Test/Test-Waycar-2026.11.15_15-45-28-+0000.xcresult
+2026-11-15T16:01:24.4361440Z 
+2026-11-15T16:01:24.4361530Z Failing tests:
+2026-11-15T16:01:24.4421350Z 	TerminalAttachTests.aTUITapAnywhereRaisesTheKeyboard()
+2026-11-15T16:01:24.4421970Z 
+2026-11-15T16:01:24.4422780Z ** TEST FAILED **
+2026-11-15T16:01:24.4423070Z 
+2026-11-15T16:01:25.6160820Z Testing started
+2026-11-15T16:01:32.7002580Z error: 1 Waycar crash report(s) from this run in /Users/runner/Library/Logs/DiagnosticReports, 1 distinct cause(s):
+2026-11-15T16:01:32.7099180Z [1] 1x EXC_BREAKPOINT (SIGTRAP)
+2026-11-15T16:01:32.7100210Z     frame:   (no Waycar frame)
+2026-11-15T16:01:32.7100710Z     test:    (no test frame)
+2026-11-15T16:01:32.7101060Z     reports: Waycar-2026-11-15-155734.ips
+2026-11-15T16:01:32.7101540Z Investigate every crash above before calling the work done.
+2026-11-15T16:01:32.7725720Z make[1]: *** [test-app] Error 65
+2026-11-15T16:01:32.7834770Z make: *** [test-ipad] Error 2
+2026-11-15T16:01:32.8533540Z ##[error]Process completed with exit code 2.

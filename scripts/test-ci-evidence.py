@@ -109,6 +109,18 @@ class LogParsingTests(unittest.TestCase):
         self.assertNotIn("swift", parsed["tests"])
         self.assertEqual(ce.lane_counts(parsed["tests"]), "XCTest 189 executed, 0 failures, 0 skipped")
 
+    def test_a_crashed_test_host_counts_only_the_last_launch(self) -> None:
+        # Run 43729244919 (weekly iPad, main bf195ec): the host crashed in aTUITapAnywhereRaisesTheKeyboard after
+        # about 5,900 tests and xcodebuild relaunched it for the remaining 1,687, the only ones the summary counts.
+        parsed = ce.parse_log(fixture("ipad-crash-43729244919-132857817382.log"))
+        self.assertEqual(parsed["lanes"], [])
+        tests = parsed["tests"]
+        self.assertEqual(tests["swift"], {"tests": 1687, "suites": 146, "passed": True, "issues": 0})
+        self.assertEqual((tests["relaunches"], tests["crashes"]), (1, 1))
+        self.assertEqual(tests["failing"], ["TerminalAttachTests.aTUITapAnywhereRaisesTheKeyboard()"])
+        self.assertEqual(ce.lane_counts(tests),
+                         "1687 tests in 146 suites passed in the last of 2 launches, 0 skipped, 1 crash report")
+
     def test_xctest_totals_with_skips(self) -> None:
         # XCTest's summary gains "with N tests skipped and" once a test skips.
         parsed = ce.parse_log(fixture("swiftmosh-skips-mac-8f20288.log"))

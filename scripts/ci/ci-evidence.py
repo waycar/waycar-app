@@ -52,6 +52,10 @@ SWIFT_RUN = re.compile(
     r"Test run with (?P<tests>\d+) tests? in (?P<suites>\d+) suites? (?P<result>passed|failed) after [\d.]+ seconds"
     r"(?: with (?P<issues>\d+) issues?)?"
 )
+# xcodebuild relaunching a test host that crashed or hung; Swift Testing's summary then counts the last launch only.
+RELAUNCH = re.compile(r"^Restarting after unexpected exit, crash, or test timeout")
+# scripts/check-crash-reports.py after an app test run.
+CRASH_REPORTS = re.compile(r"^error: (?P<count>\d+) Waycar crash report\(s\) from this run")
 XCTEST_ALL = re.compile(r"Test Suite 'All tests' (?:passed|failed)")
 XCTEST_EXECUTED = re.compile(
     r"Executed (?P<executed>\d+) tests?, with (?:(?P<skipped>\d+) tests? skipped and (?:with )?)?"
@@ -87,7 +91,8 @@ def clean(line: str) -> str:
 
 
 def test_totals(lines: list[str]) -> dict:
-    """Swift Testing's last run summary, XCTest's 'All tests' totals, the skip records and the failing tests."""
+    """Swift Testing's last run summary, XCTest's 'All tests' totals, the skip records, the failing tests, and the
+    test host relaunches and crash reports that make the last summary only part of the run."""
     totals: dict = {}
     for i, line in enumerate(lines):
         if XCTEST_ALL.search(line):
@@ -107,6 +112,10 @@ def test_totals(lines: list[str]) -> dict:
             "issues": int(m["issues"] or 0),
         }
     totals["skipped"] = sum(1 for line in lines if SKIPPED.search(line))
+    if relaunches := sum(1 for line in lines if RELAUNCH.match(line)):
+        totals["relaunches"] = relaunches
+    if crashes := next((int(m["count"]) for m in map(CRASH_REPORTS.match, lines) if m), 0):
+        totals["crashes"] = crashes
     failing = failing_block(lines)
     if not failing:
         failing = [m["name"] for m in map(SWIFT_FAILED.search, lines) if m]
@@ -376,12 +385,15 @@ def lane_counts(lane: dict) -> str:
     parts = []
     if swift:
         issues = f", {plural(swift['issues'], 'issue')}" if swift["issues"] else ""
+        launches = f" in the last of {lane['relaunches'] + 1} launches" if lane.get("relaunches") else ""
         parts.append(f"{plural(swift['tests'], 'test')} in {plural(swift['suites'], 'suite')} "
-                     f"{'passed' if swift['passed'] else 'failed'}{issues}")
+                     f"{'passed' if swift['passed'] else 'failed'}{launches}{issues}")
     if xc and (xc["executed"] or not swift):
         parts.append(f"XCTest {xc['executed']} executed, {plural(xc['failures'], 'failure')}")
     if parts:
         parts.append(f"{lane.get('skipped', 0)} skipped")
+    if lane.get("crashes"):
+        parts.append(plural(lane["crashes"], "crash report"))
     return ", ".join(parts)
 
 

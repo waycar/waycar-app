@@ -234,6 +234,24 @@
    - On the iPadOS 27 iPad #80 was verified on, none of this fires: hardware
      keys reach the view only as `insertText`, with no press and no command.
      The app handles that path (`WaycarTerminalView.insertText`).
+7. **The renderer thread's display mark moves to the main thread**
+   (`GhosttyContentLayerMarks.swift`, installed by
+   `TerminalController.initializeRuntimeIfNeeded`). libghostty-spm's
+   `0005-ios-metal-rendering.sh` kicks the first frame with `setNeedsDisplay`
+   from `Metal.loopEnter`, assuming the render loop runs on the main thread;
+   it runs on the renderer thread. That mark opened an implicit CATransaction
+   on the renderer thread, which Core Animation committed only as the thread
+   exited inside `ghostty_surface_free`, laying out UIKit there: on iPadOS a
+   navigation controller, where Auto Layout threw
+   NSInternalInconsistencyException and the app died (weekly iPad run,
+   2026-11-15). `CA_DEBUG_TRANSACTIONS=1` named that mark as the creator of
+   every such transaction. The patch replaces `-[CALayer
+   setNeedsDisplayInRect:]` with one that sends a mark on ghostty's
+   `IOSurfaceLayer` off the main thread to `setNeedsDisplay` on the main
+   thread and passes every other call straight through. Drop it once the core
+   no longer marks the layer off the main thread; until then
+   `TerminalSurfaceOrphanLayerTests.freeingASurfaceLeavesNoTransactionOnItsRendererThread`
+   fails without it.
 
 The patches are exercised against the live surface by the app suite's
 `TerminalTouchInteractionTests` (word and link selection, handle drags, taps

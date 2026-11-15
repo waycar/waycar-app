@@ -71,6 +71,9 @@ Entries reference the issue that motivated them.
 
 ### Fixed
 
+- **Terminal crash**: opening, closing or restyling a terminal no longer
+  risks crashing Waycar while the screen around it is still updating (seen
+  on iPad).
 - **Commands that finished but looked stuck**: a short command Waycar runs
   on a Host (checks, tmux and Codex actions) no longer waits out its whole
   timeout when its output and its end arrive at the same moment.
