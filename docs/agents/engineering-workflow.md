@@ -114,6 +114,12 @@ the branch touched. Each item below once turned `main` red because a branch
 ran only its own tests. On the Mac, run the make targets through `mac_run`
 where your agent host has it ([Mac workflow](mac-workflow.md)).
 
+- **Every branch:** run `python3 scripts/secret-scan/scan.py --no-external .`
+  and expect `scan: clean`. The lander never runs it, so a hit shows up only
+  as a red Secret scan after the push: example LAN addresses in the Find
+  Computers tests failed every push to `main` for a day. A made-up address
+  gets a scoped line in `scripts/secret-scan/scan-allow.tsv` (that file, the
+  exact values, a reason); a real one comes out of the change.
 - **Launch arguments, the `agent.start` wire, or any Transport:** run the
   full CI app lane, `make test-ci-app`, not only the suites you changed. The
   real-SSH suites pin exact wire payloads: a change to herdr launch
