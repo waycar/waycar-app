@@ -485,17 +485,19 @@ final class HostLiveActivityCoordinator {
         sendLifecycle(.begin(handle, awaitingSnapshot: awaitingFirstSnapshot))
     }
 
+    /// Subscribes as the session begins, not when the tasks first run: the
+    /// state stream reports changes only, so one made in between is lost.
     private func watch(_ handle: LiveActivityHandle) {
+        let tokens = controller.pushTokenUpdates(for: handle)
+        let states = controller.stateUpdates(for: handle)
         let tokenTask = Task { [weak self] in
-            guard let self else { return }
-            for await token in self.controller.pushTokenUpdates(for: handle) {
-                self.considerToken(token, hostID: handle.hostID)
+            for await token in tokens {
+                self?.considerToken(token, hostID: handle.hostID)
             }
         }
         let stateTask = Task { [weak self] in
-            guard let self else { return }
-            for await state in self.controller.stateUpdates(for: handle) {
-                self.considerState(state, of: handle)
+            for await state in states {
+                self?.considerState(state, of: handle)
             }
         }
         watchers[handle.id] = ActivityWatchers(tokenTask: tokenTask, stateTask: stateTask)
