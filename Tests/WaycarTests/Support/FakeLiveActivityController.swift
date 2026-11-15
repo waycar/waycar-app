@@ -10,9 +10,10 @@ import Foundation
 final class FakeLiveActivityController: LiveActivityControlling {
     var areEnabled = true
     var requestError: (any Error)?
-    /// Runs once, as the next `request` returns its handle. A task it starts
-    /// reaches the main actor ahead of any the caller starts after the
-    /// request: the order a busy main thread gives a test polling for it.
+    /// Runs once, as the next `request` returns its handle. A main-actor task
+    /// it starts runs ahead of any the caller starts after the request (the
+    /// main queue runs them in order): the order a busy main thread once
+    /// gave a test polling for the request.
     var onNextRequest: (@MainActor (LiveActivityHandle) -> Void)?
 
     private(set) var requested: [AgentActivityAttributes.ContentState] = []
