@@ -98,6 +98,7 @@ func waitForInitialConsoleSync(
 
 /// One snapshot when the first subscription already carries the set, else
 /// the replacement's second one.
+@MainActor
 private func initialSyncRevision(paneIDs: [String], protocolVersion: Int) -> UInt64 {
     let expected = HostConsoleProjection.subscriptions(
         paneIDs: paneIDs, protocolVersion: protocolVersion)
