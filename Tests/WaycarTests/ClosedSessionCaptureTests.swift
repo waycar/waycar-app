@@ -55,9 +55,9 @@ struct ClosedSessionCaptureTests {
         }
     }
 
-    /// Starts `store` on `host` and waits for `snapshot`'s rows.
+    /// Starts `store` on `host` and waits for its rows and events channel to settle.
     private func connect(
-        _ store: ConsoleStore, host: Host, until paneID: String
+        _ store: ConsoleStore, transport: ScriptedTransport, host: Host, until paneID: String
     ) async throws {
         store.setHosts([host])
         await store.resume()
@@ -65,6 +65,8 @@ struct ClosedSessionCaptureTests {
             store.agents.contains { $0.id == ConsoleAgent.ID(hostID: host.id, paneID: paneID) }
                 && !store.hostsAwaitingSnapshot.contains(host.id)
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
     }
 
     /// Serves `snapshot` on the next resync and triggers one.
@@ -97,10 +99,13 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
         try await waitUntil { closed.sessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
         let recorded = try #require(closed.sessions.first)
         // Later snapshots of the same shell add nothing, and move nothing.
         clock.advance(by: 60)
@@ -122,7 +127,7 @@ struct ClosedSessionCaptureTests {
                 panes: [pane("p1"), pane("p2")], agents: [agent("p1", kind: "codex")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         await resync(transport, to: snapshot(panes: [pane("p2")]), with: .paneClosed)
 
@@ -140,12 +145,14 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
         let initialFetches = await transport.snapshotFetchCount
 
+        let beforeMetadata = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")], agents: [agent("p1")]))
         try await waitUntil { await transport.snapshotFetchCount > initialFetches }
-        try await Task.sleep(for: .milliseconds(30))
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeMetadata)
         #expect(closed.sessions.isEmpty)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
 
@@ -162,7 +169,7 @@ struct ClosedSessionCaptureTests {
                 agents: [agent("p1", terminal: "T1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         // The shell's pane closes, and `pane.move` re-keys the Agent's pane:
         // the same terminal keeps running it under a new pane id.
@@ -190,9 +197,12 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
         try await waitUntil { closed.sessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
         let recorded = try #require(closed.sessions.first)
         let resumed = ConsoleAgent.ID(hostID: host.id, paneID: "p9")
         closed.beginPendingResume(recorded.id, agent: resumed, terminal: "terminal_p9")
@@ -203,6 +213,7 @@ struct ClosedSessionCaptureTests {
         ]
         for (kind, session) in launch {
             clock.advance(by: 1)
+            let beforeLaunch = consoleSyncMark(store, hostID: host.id, backend: .herdr)
             await resync(
                 transport,
                 to: snapshot(
@@ -215,6 +226,8 @@ struct ClosedSessionCaptureTests {
                         && $0.agent.agentSession?.value == session
                 }
             }
+            try await waitForConsoleResync(
+                store, transport: transport, hostID: host.id, backend: .herdr, after: beforeLaunch)
         }
 
         #expect(closed.pendingResumes[resumed]?.record == recorded.id)
@@ -237,12 +250,16 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
         try await waitUntil { closed.sessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
         let recorded = try #require(closed.sessions.first)
         let resumed = ConsoleAgent.ID(hostID: host.id, paneID: "p9")
         closed.beginPendingResume(recorded.id, agent: resumed, terminal: "terminal_p9")
+        let beforeLaunch = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(
             transport,
             to: snapshot(panes: [pane("p1"), pane("p9")], agents: [agent("p9", kind: nil)]),
@@ -250,6 +267,8 @@ struct ClosedSessionCaptureTests {
         try await waitUntil {
             store.agents.contains { $0.id == resumed && $0.agent.kind == Agent.unidentifiedKind }
         }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeLaunch)
 
         await resync(transport, to: snapshot(panes: [pane("p1"), pane("p9")]))
 
@@ -268,7 +287,7 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         await store.suspend()
         try await waitUntil { store.hostsAwaitingSnapshot.contains(host.id) }
@@ -294,7 +313,7 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
         let lastAnswered = clock.now
 
         try await reconnect(
@@ -318,7 +337,7 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         try await reconnect(
             store, host: host, transport: transport, clock: clock,
@@ -393,7 +412,7 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         try await reconnect(
             store, host: host, transport: transport, clock: clock, after: 60,
@@ -413,14 +432,17 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
+        let beforeMetadata = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(
             transport, to: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-2")]),
             with: .paneAgentDetected)
         try await waitUntil {
             store.agents.contains { $0.agent.agentSession?.value == "s-2" }
         }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeMetadata)
         #expect(closed.sessions.isEmpty)
 
         await resync(transport, to: snapshot(panes: [pane("p1")]))
@@ -440,7 +462,7 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
 
         try await reconnect(
             store, host: host, transport: transport, clock: clock, after: 60,
@@ -461,19 +483,28 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
         try await waitUntil { closed.listedSessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
 
+        let beforeLaunch = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(
             transport,
             to: snapshot(panes: [pane("p1"), pane("p2")], agents: [agent("p2", session: "s-1")]),
             with: .paneAgentDetected)
         try await waitUntil { closed.listedSessions.isEmpty }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeLaunch)
         #expect(closed.sessions.count == 1)
 
+        let beforeExit = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1"), pane("p2")]))
         try await waitUntil { closed.listedSessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeExit)
         #expect(closed.listedSessions.first?.session?.value == "s-1")
     }
 
@@ -487,9 +518,12 @@ struct ClosedSessionCaptureTests {
             snapshot: snapshot(panes: [pane("p1")], agents: [agent("p1", session: "s-1")]))
         let store = makeStore(transport, closed: closed)
         defer { store.setHosts([]) }
-        try await connect(store, host: host, until: "p1")
+        try await connect(store, transport: transport, host: host, until: "p1")
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: snapshot(panes: [pane("p1")]))
         try await waitUntil { closed.sessions.count == 1 }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
         let recorded = try #require(closed.sessions.first)
         let resumed = ConsoleAgent.ID(hostID: host.id, paneID: "p9")
         closed.beginPendingResume(recorded.id, agent: resumed, terminal: "terminal_p9")
