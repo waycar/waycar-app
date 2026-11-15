@@ -19,6 +19,11 @@
 - **Broke:** three probes (dirty layers beside the terminal, above it, a
   navigation controller over it) never got laid out by the exit commit,
   which spent four Mac runs: find who creates the transaction first.
+- **Broke:** the hosted rerun then failed in OpenCodeFlowsTests on the
+  same events-channel gap #230222 fixed in three tests. A sweep of every
+  Console `emit` and count baseline found it in about 60 more tests; holding the
+  replacement subscribe showed the old emit dropped and the new wait
+  closing the gap. Folded into Known traps.
 - **Watch out:** one Core Animation call off the main thread, even
   `setNeedsDisplay`, leaves an implicit transaction that commits only when
   the thread exits, and that commit can lay out UIKit on that thread.

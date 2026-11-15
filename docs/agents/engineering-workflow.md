@@ -297,6 +297,15 @@ When a coordinator splits one change across workers:
   runs before a `workflow_dispatch`. A dispatch needs the workflow on the
   default branch.
 - `apt-get update` exits 0 when its fetches fail: read its `W:` lines.
+- Console rows show before the events channel carries their panes: the
+  Console replaces its subscription after the snapshot that changed the
+  Agent pane set, then snapshots again, and `ScriptedTransport.emit`
+  returns false in between. After a fixture's first rows call
+  `waitForInitialConsoleSync`; around a later change take
+  `consoleSyncMark` before it and `waitForConsoleResync` after its effect,
+  before the next `setSnapshot`, emit or count baseline. A step that only
+  needs a fresh snapshot can `await store.refreshSidebarLayouts()`, which
+  waits for every resync. Hosted iPad and iPhone runs hit this four times.
 - `actions/cache` saves only when the whole job passes, so a lane that never
   goes green rebuilds its cache every run: save a costly cache in its own
   `actions/cache/save` step.
