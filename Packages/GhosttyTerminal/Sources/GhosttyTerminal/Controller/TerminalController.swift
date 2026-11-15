@@ -326,6 +326,10 @@ public final class TerminalController {
         guard !runtimeInitialized else { return }
         runtimeInitialized = true
         GhosttyRuntimeResources.configureEnvironment()
+        #if canImport(UIKit)
+            // (Waycar patch) Before the first surface's renderer thread starts.
+            _ = GhosttyContentLayerMarks.install
+        #endif
         ghostty_init(0, nil)
     }
 
