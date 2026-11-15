@@ -336,6 +336,17 @@ When a coordinator splits one change across workers:
   scripts through `test_support::write_script`.
 - Tests never find machine-wide programs (`/usr/local/bin`,
   `/opt/homebrew/bin`): such lookups are dead ends under `cfg(test)`.
+- `Command::spawn` returns before the kernel sets the child's new command
+  line: `/proc/<pid>/cmdline` read right after it was empty 289 times in
+  300. A test that reads a child's arguments starts it with
+  `test_support::spawn_shell`, which waits for the shell's first line. A
+  verdict that needs a subprocess to exit within 300 ms flaked on a loaded
+  runner too: give it seconds.
+- `rust/` ships, test modules included: a test-only change there bumps the
+  plugin patch version like any other.
+- A value placed in a tmux format (`#{==:…,value}`) must hold no `#`, `,`,
+  `}` or control character; anything else takes the unconditional path
+  instead of a format it could break.
 - A Dependabot cargo PR changes `Cargo.lock` but never regenerates
   `plugin/THIRD-PARTY-LICENSES` or bumps the plugin version, so it fails
   `plugin-licenses.py --check`. Land it as its own branch: cherry-pick
