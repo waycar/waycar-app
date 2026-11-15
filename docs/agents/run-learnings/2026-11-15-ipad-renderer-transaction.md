@@ -4,8 +4,10 @@
   had run: the test host crashed, xcodebuild relaunched it for the rest, and
   Swift Testing's summary counts only the last launch. `ci-evidence.py` now
   says "in the last of 2 launches, 1 crash report".
-- **Broke:** `ipad-weekly.yml` keeps no crash report, so the crashing
-  thread's name was lost; the stack in the log had to do.
+- **Broke:** `ipad-weekly.yml` kept no crash report, so the crashing
+  thread's name was lost; the stack in the log had to do. Both app lanes
+  (`ipad-weekly.yml`, `ci.yml`'s `build-test`) now upload `Waycar*.ips`
+  when they fail.
 - **Worked:** `CA_DEBUG_TRANSACTIONS=1` in the scheme's test environment (a
   throwaway commit) printed who created each "deleted thread with
   uncommitted CATransaction": libghostty-spm's `setNeedsDisplay` on the

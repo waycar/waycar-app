@@ -278,6 +278,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # The app's crash reports, which name the crashing thread and its
+      # frames; check-crash-reports.py only summarizes them in the log.
+      - name: Upload Waycar crash reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-crash-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ~/Library/Logs/DiagnosticReports/Waycar*.ips
+          if-no-files-found: ignore
+          retention-days: 7
+
   waycarssh-package-e2e:
     name: WaycarSSH package E2E (iOS Simulator)
     runs-on: xcode-27

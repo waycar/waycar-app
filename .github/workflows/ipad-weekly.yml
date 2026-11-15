@@ -97,9 +97,20 @@ jobs:
             echo '```'
             grep -E 'Test run with [0-9]+ tests?|Executed [0-9]+ tests?, with' "$log" | tail -6 || true
             awk '/^Failing tests:/ { on = 1; print; next } on && /^\t/ { print; next } { on = 0 }' "$log" | head -60
-            grep -E 'Waycar crash report|Crash report check|error:|make: \*\*\*' "$log" | head -20 || true
+            grep -E 'Restarting after unexpected exit|Waycar crash report|Crash report check|error:|make: \*\*\*' "$log" | head -20 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The reports name the crashing thread and its frames, which the log's
+      # stack may not; check-crash-reports.py only summarizes them.
+      - name: Upload Waycar crash reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ipad-crash-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ~/Library/Logs/DiagnosticReports/Waycar*.ips
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Frees the iPad slot whatever happened, and the 3-4 GB of build trees.
       - name: Release the simulator

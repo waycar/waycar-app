@@ -249,7 +249,8 @@
    setNeedsDisplayInRect:]` with one that sends a mark on ghostty's
    `IOSurfaceLayer` off the main thread to `setNeedsDisplay` on the main
    thread and passes every other call straight through. Drop it once the core
-   no longer marks the layer off the main thread; until then
+   no longer marks the layer off the main thread (#14, which needs a core
+   rebuild); until then
    `TerminalSurfaceOrphanLayerTests.freeingASurfaceLeavesNoTransactionOnItsRendererThread`
    fails without it.
 
