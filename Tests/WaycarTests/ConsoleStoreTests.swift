@@ -664,15 +664,19 @@ struct ConsoleStoreTests {
         let transport = ScriptedTransport(
             snapshot: .fixture(agents: [.fixture(paneID: "w1:p1", status: .idle)]))
         let store = makeStore(transports: [host.id: transport])
+        // Only snapshot reads may satisfy the baseline below, not the
+        // independent refresh timer the Blocked status would otherwise arm.
+        store.setAgentSummaryForeground(false)
 
         store.setHosts([host])
         await store.resume()
-        try await waitUntil("the pane subscription should settle") {
-            let summaryReads = await transport.agentSummaryReads
-            let subscriptions = await transport.capturedSubscriptions
-            return summaryReads >= 1
-                && subscriptions.last?.contains(
-                    .pane(.agentStatusChanged, paneID: "w1:p1")) == true
+        try await waitUntil("the initial Agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
+        // The initial and replacement snapshots each request a read. Even
+        // when coalesced, both are counted before taking the race baseline.
+        try await waitUntil("both startup snapshots should read summaries") {
+            await transport.agentSummaryReads == 2
         }
 
         let snapshotGate = ScriptedTransportCallGate()
@@ -864,6 +868,8 @@ struct ConsoleStoreTests {
             await transport.capturedSubscriptions.last?.contains(
                 .pane(.agentStatusChanged, paneID: "w1:p1")) == true
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
 
         await transport.setSnapshot(.fixture())
         #expect(
@@ -943,6 +949,8 @@ struct ConsoleStoreTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("initial agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
 
         await transport.setSnapshot(
             .fixture(agents: [.fixture(paneID: "w1:p1"), .fixture(paneID: "w1:p2")]))
@@ -1217,11 +1225,8 @@ struct ConsoleStoreTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(
             snapshot: .fixture(agents: [.fixture(paneID: "w1:p1", status: .working)]))
-        await transport.setAgentSummaries([
-            AgentSummary(
-                paneID: "w1:p1", status: .working, text: "adding upload retries",
-                timestamp: Self.writtenAgo(10), declaresProgress: true)
-        ])
+        let refreshGate = ScriptedTransportCallGate()
+        await transport.gateNextAgentSummaryRefresh(using: refreshGate)
         let store = makeStore(
             transports: [host.id: transport],
             summaryRefreshTiming: AgentSummaryRefreshTiming(
@@ -1229,6 +1234,21 @@ struct ConsoleStoreTests {
 
         store.setHosts([host])
         await store.resume()
+        try await waitUntil("the initial Agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
+        // Hold the refresh until both startup snapshots have read the empty
+        // store; only the refresh's later read can publish this summary.
+        try await waitUntil("both startup snapshots should read summaries") {
+            await transport.agentSummaryReads == 2
+        }
+        await refreshGate.waitForEntry()
+        await transport.setAgentSummaries([
+            AgentSummary(
+                paneID: "w1:p1", status: .working, text: "adding upload retries",
+                timestamp: Self.writtenAgo(10), declaresProgress: true)
+        ])
+        await refreshGate.open()
         try await waitUntil("a store declaring progress should show the pending rail") {
             store.agents.first?.summary != nil && store.agents.first?.progressDisplay(at: Date()) == .pending
         }
@@ -1322,6 +1342,8 @@ struct ConsoleStoreTests {
         let transport = ScriptedTransport(
             snapshot: .fixture(agents: [.fixture(paneID: "w1:p1", status: .working)]))
         await transport.setAgentSummaryRefreshFailure(AgentSummaryRefreshError.actionUnavailable)
+        let refreshGate = ScriptedTransportCallGate()
+        await transport.gateNextAgentSummaryRefresh(using: refreshGate)
         let store = makeStore(
             transports: [host.id: transport],
             summaryRefreshTiming: AgentSummaryRefreshTiming(
@@ -1330,13 +1352,19 @@ struct ConsoleStoreTests {
 
         store.setHosts([host])
         await store.resume()
+        try await waitUntil("the initial Agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
+        try await waitUntil("both startup snapshots should read summaries") {
+            await transport.agentSummaryReads == 2
+        }
+        await refreshGate.waitForEntry()
+        await refreshGate.open()
+        // The unsupported refresh drains the summary reads before covering
+        // the pane, so no startup read can stand in for the Done read below.
         try await waitUntil("the first trigger should find no action") {
             await transport.agentSummaryRefreshes == 1
                 && store.agents.first?.isSummaryPending == false
-        }
-        try await waitUntil("the pane subscription should be live") {
-            await transport.capturedSubscriptions.last?
-                .contains(.pane(.agentStatusChanged, paneID: "w1:p1")) == true
         }
 
         await transport.setSnapshot(.fixture(agents: [.fixture(paneID: "w1:p1", status: .done)]))
@@ -1443,6 +1471,8 @@ struct ConsoleStoreTests {
             await transport.agentSummaryReads == 1
                 && store.agents.map(\.agent.paneID) == ["w1:p1"]
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let snapshotsBefore = await transport.snapshotFetchCount
         #expect(
             await transport.emit(
@@ -1512,6 +1542,8 @@ struct ConsoleStoreTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(
             snapshot: .fixture(agents: [.fixture(paneID: "w1:p1", status: .working)]))
+        let refreshGate = ScriptedTransportCallGate()
+        await transport.gateNextAgentSummaryRefresh(using: refreshGate)
         let store = makeStore(
             transports: [host.id: transport],
             summaryRefreshTiming: AgentSummaryRefreshTiming(
@@ -1519,6 +1551,16 @@ struct ConsoleStoreTests {
 
         store.setHosts([host])
         await store.resume()
+        try await waitUntil("the initial Agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
+        try await waitUntil("both startup snapshots should read summaries") {
+            await transport.agentSummaryReads == 2
+        }
+        await refreshGate.waitForEntry()
+        await refreshGate.open()
+        // A finished refresh has drained both snapshot reads as well as its
+        // own before it covers this otherwise unsummarized pane.
         try await waitUntil("the first refresh should end the loading state") {
             let refreshed = await transport.agentSummaryRefreshes == 1
             return refreshed && store.agents.first?.isSummaryPending == false
@@ -1791,6 +1833,8 @@ struct ConsoleStoreTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("the initial agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let snapshotsBefore = await transport.snapshotFetchCount
 
         // The started pane joins the next snapshot the server would report.
@@ -2072,6 +2116,8 @@ struct ConsoleStoreTests {
         try await waitUntil("the initial Agent should arrive") {
             store.agents.map(\.agent.paneID) == ["w1:p1"]
         }
+        try await waitForInitialConsoleSync(
+            store, transport: first, hostID: host.id, backend: .herdr)
 
         // The launched pane's membership change forces the reinstall, and
         // the degraded link makes it a silent redial held closed by the gate.
@@ -2328,6 +2374,8 @@ struct ConsoleStoreTests {
                 .pane(.agentStatusChanged, paneID: "w1:p1")) == true
                 && store.agents.count == 2
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let movedID = ConsoleAgent.ID(hostID: host.id, paneID: "w1:p1")
         let newID = ConsoleAgent.ID(hostID: host.id, paneID: "w2:moved")
         let victim = try #require(store.agents.first { $0.id == movedID })
@@ -2529,6 +2577,8 @@ struct ConsoleStoreTests {
         defer { store.setHosts([]) }
         await store.resume()
         try await waitUntil("both Hosts should be ready") { store.agents.count == 4 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         // Drain subscription-triggered startup snapshots before counting calls.
         await store.refreshSidebarLayouts()
         let before = await transport.snapshotFetchCount
@@ -2557,6 +2607,8 @@ struct ConsoleStoreTests {
         defer { store.setHosts([]) }
         await store.resume()
         try await waitUntil("the Done Agent should arrive") { store.agents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         await store.refreshSidebarLayouts()
         let before = await transport.snapshotFetchCount
         await transport.setFocusFailure(.timedOut)
@@ -3123,6 +3175,8 @@ struct ConsoleStoreTests {
         try await waitUntil("the linked-worktree Agent should arrive") {
             store.agents.first?.isLinkedWorktree == true
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let agent = try #require(store.agents.first)
         let checkout = try #require(agent.repositoryCheckout)
         let request = WorktreeRemovalRequest(
@@ -3195,12 +3249,15 @@ struct ConsoleStoreTests {
                 hostID: host.id,
                 workspaceID: "w1",
                 checkout: try #require(agent.repositoryCheckout)))
+        let beforeRemoval = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await transport.setSnapshot(.fixture())
 
         _ = try await store.removeWorktree(request, on: host.id)
         try await waitUntil("the absent snapshot should retain the removal receipt") {
             store.agents.isEmpty && store.removedWorktreesByAgent[agent.id]?.request == request
         }
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeRemoval)
 
         await transport.setSnapshot(linked)
         #expect(

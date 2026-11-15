@@ -78,14 +78,21 @@ struct ConsoleLastKnownInventoryTests {
         store.agents.map(\.agent.paneID).sorted()
     }
 
-    /// herdr lists `snapshot` from now on, and says so.
-    private func resync(_ transport: ScriptedTransport, to snapshot: SessionSnapshot) async {
+    /// herdr lists `snapshot` from now on, and says so. Waits for the
+    /// resulting pane-subscription replacement and its snapshot as well.
+    private func resync(
+        _ transport: ScriptedTransport, to snapshot: SessionSnapshot,
+        in store: ConsoleStore, hostID: Host.ID
+    ) async throws {
+        let beforeSnapshot = consoleSyncMark(store, hostID: hostID, backend: .herdr)
         await transport.setSnapshot(snapshot)
         #expect(
             await transport.emit(
                 HerdrEvent(
                     kind: GlobalEventKind.workspaceMetadataUpdated.kind,
                     data: .object([:]))) == true)
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: hostID, backend: .herdr, after: beforeSnapshot)
     }
 
     /// Swipes `row` closed and runs out its undo window; once its
@@ -96,13 +103,21 @@ struct ConsoleLastKnownInventoryTests {
         of row: ConsoleAgent, listed listing: [AgentInfo], in store: ConsoleStore,
         transport: ScriptedTransport, undo: ManualGraceClock
     ) async throws -> [AgentInfo] {
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: row.hostID, backend: .herdr)
         let sent = await transport.closedTabs.count
+        let beforeClose = consoleSyncMark(store, hostID: row.hostID, backend: .herdr)
         store.scheduleTabClose(row)
         try await waitUntil("undo window running") { await undo.waiting == 1 }
         await undo.elapse()
         try await waitUntil("tab closed") { await transport.closedTabs.count == sent + 1 }
+        // Closing requests its own snapshot while the fixture still lists
+        // the tab. Drain it before scripting the tab's disappearance.
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: row.hostID, backend: .herdr, after: beforeClose)
         let remaining = listing.filter { $0.tabID != row.agent.tabID }
-        await resync(transport, to: .fixture(agents: remaining))
+        try await resync(
+            transport, to: .fixture(agents: remaining), in: store, hostID: row.hostID)
         try await waitUntil("closed row gone") { !store.agents.contains { $0.id == row.id } }
         return remaining
     }
@@ -388,12 +403,19 @@ struct ConsoleLastKnownInventoryTests {
         try await Task.sleep(for: .milliseconds(20))
         #expect(await transport.closedTabs.isEmpty)
 
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
+        // Keep the cached-row swipe above; mark the actual close, which
+        // starts when this manually held undo window runs out.
+        let beforeClose = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await clock.elapse()
         try await waitUntil("tab closed") { await !transport.closedTabs.isEmpty }
         #expect(await transport.closedTabs == [TabTarget(tabID: "w1:t1")])
         // Still listed until the resync drops it, the row stays `.closing`.
         try await Task.sleep(for: .milliseconds(20))
         #expect(store.pendingTabCloses[cachedRow.id]?.phase == .closing)
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeClose)
 
         await transport.setSnapshot(.fixture())
         #expect(
@@ -421,11 +443,14 @@ struct ConsoleLastKnownInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("row verified") { !store.verifiedAgents.isEmpty }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let row = try #require(store.agents.first)
 
         store.scheduleTabClose(row)
         try await Task.sleep(for: .milliseconds(20))
         // Closed elsewhere while the undo countdown runs.
+        let beforeDisappearance = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await transport.setSnapshot(.fixture())
         #expect(
             await transport.emit(
@@ -435,6 +460,9 @@ struct ConsoleLastKnownInventoryTests {
         try await waitUntil("pending dropped with the row") { store.pendingTabCloses.isEmpty }
         // Nothing was sent, so nothing lifts away: the row is not held.
         #expect(store.indexAgents(holding: nil).isEmpty)
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            after: beforeDisappearance)
         // The same row coming back must not revive the dropped countdown.
         await transport.setSnapshot(
             .fixture(
@@ -533,6 +561,8 @@ struct ConsoleLastKnownInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("rows verified") { store.verifiedAgents.count == 3 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let rows = store.agents
 
         for row in rows { store.scheduleTabClose(row) }
@@ -556,7 +586,10 @@ struct ConsoleLastKnownInventoryTests {
         try await waitUntil("every tab closed") { await transport.closedTabs.count == 3 }
         #expect(
             Set(await transport.closedTabs.map(\.tabID)) == ["w1:t1", "w2:t1", "w3:t1"])
-        await resync(transport, to: .fixture())
+        // Recovery and all three closes can still be resyncing. This step
+        // needs a fresh snapshot, not an event through a replacing channel.
+        await transport.setSnapshot(.fixture())
+        await store.refreshSidebarLayouts()
         try await waitUntil("rows gone") { store.agents.isEmpty && store.pendingTabCloses.isEmpty }
         #expect(store.tabCloseFailure == nil)
     }
@@ -619,6 +652,8 @@ struct ConsoleLastKnownInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("rows verified") { store.verifiedAgents.count == 2 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let row = try #require(store.agents.first { $0.agent.paneID == "w1:p1" })
         store.pins.addPin(hostID: host.id, paneID: row.agent.paneID)
 
@@ -633,7 +668,10 @@ struct ConsoleLastKnownInventoryTests {
         #expect(store.pendingTabCloses[row.id]?.phase == .closing)
         #expect(store.tabCloseFailure == nil)
 
-        await resync(transport, to: .fixture(agents: [listing[1]]))
+        // As in the bulk-close case, the dropped connection's recovery and
+        // the close each request snapshots; explicitly drain a fresh one.
+        await transport.setSnapshot(.fixture(agents: [listing[1]]))
+        await store.refreshSidebarLayouts()
         try await waitUntil("closed row gone") { !store.agents.contains { $0.id == row.id } }
         #expect(store.pendingTabCloses.isEmpty)
         #expect(store.tabCloseFailure == nil)
@@ -799,6 +837,8 @@ struct ConsoleLastKnownInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("rows verified") { store.verifiedAgents.count == 2 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let first = try #require(store.agents.first { $0.agent.paneID == "w1:p1" })
         let second = try #require(store.agents.first { $0.agent.paneID == "w1:p2" })
 
@@ -816,8 +856,9 @@ struct ConsoleLastKnownInventoryTests {
         #expect(store.pendingTabCloses.values.allSatisfy { $0.phase == .closing })
 
         // herdr moves the second row onto the first's tab; the first fails.
-        await resync(
-            transport, to: .fixture(agents: [.fixture(paneID: "w1:p1"), .fixture(paneID: "w1:p2")]))
+        try await resync(
+            transport, to: .fixture(agents: [.fixture(paneID: "w1:p1"), .fixture(paneID: "w1:p2")]),
+            in: store, hostID: host.id)
         try await waitUntil("the second row on the first's tab") {
             store.agents.first { $0.id == second.id }?.agent.tabID == "w1:t1"
         }
@@ -859,6 +900,8 @@ struct ConsoleLastKnownInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("rows verified") { store.verifiedAgents.count == 2 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         for row in store.agents { store.scheduleTabClose(row) }
         try await waitUntil("both undo windows running") { await clock.waiting == 2 }
 
@@ -866,7 +909,9 @@ struct ConsoleLastKnownInventoryTests {
             agentStatus: .idle, focused: false, paneID: "w1:p2", revision: 1,
             tabID: "w1:t2", terminalID: "term_w1:p2", workspaceID: "w1",
             agent: "claude", cwd: "/work/w1", name: nil, terminalTitleStripped: "Task")
-        await resync(transport, to: .fixture(agents: [.fixture(paneID: "w1:p1"), moved]))
+        try await resync(
+            transport, to: .fixture(agents: [.fixture(paneID: "w1:p1"), moved]),
+            in: store, hostID: host.id)
         try await waitUntil("the sibling's row on its new tab") {
             store.agents.first { $0.agent.paneID == "w1:p2" }?.agent.tabID == "w1:t2"
         }
@@ -1028,8 +1073,9 @@ struct ConsoleLastKnownInventoryTests {
         #expect(store.departingRow(swiped.id) != nil)
 
         // herdr reuses the closed pane's id while its row is still departing.
-        await resync(
-            transport, to: .fixture(agents: remaining + [agent("w1:p1", terminal: "term_new")]))
+        try await resync(
+            transport, to: .fixture(agents: remaining + [agent("w1:p1", terminal: "term_new")]),
+            in: store, hostID: host.id)
         try await waitUntil("pane id listed again") {
             store.agents.contains { $0.id == swiped.id }
         }
