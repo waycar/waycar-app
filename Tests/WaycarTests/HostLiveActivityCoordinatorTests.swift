@@ -577,7 +577,10 @@ struct HostLiveActivityCoordinatorTests {
 
     /// The duplicate seen on a Lock Screen: last night's activity, ended by
     /// iOS at its 8-hour limit, stayed beside the one the app started on
-    /// its return.
+    /// its return. The end arrives in the first main-actor turn after the
+    /// request, before any task the coordinator started then (where hosted
+    /// CI's busy main thread once resumed this test), so the coordinator
+    /// must watch an activity from the moment its session begins.
     @Test func anExpiredActivityIsDismissedNotLeftBesideItsReplacement() async throws {
         let (defaults, cleanup) = try makeDefaults()
         defer { cleanup() }
@@ -585,11 +588,13 @@ struct HostLiveActivityCoordinatorTests {
         armWorld()
         let coordinator = makeCoordinator(defaults: defaults)
         coordinator.start()
+        controller.onNextRequest = { [controller] handle in
+            Task { @MainActor in controller.emitState(id: handle.id, .ended) }
+        }
         coordinator.agentsDidChange([agent(observedPaneID, .working)])
         try await waitUntil("the activity should start") { !controller.requestedHandles.isEmpty }
         let expired = try #require(controller.requestedHandles.first?.id)
 
-        controller.emitState(id: expired, .ended)
         coordinator.agentsDidChange([agent(observedPaneID, .done)])
         try await waitUntil("a fresh activity should replace the expired one") {
             controller.requestedHandles.count == 2

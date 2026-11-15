@@ -10,6 +10,10 @@ import Foundation
 final class FakeLiveActivityController: LiveActivityControlling {
     var areEnabled = true
     var requestError: (any Error)?
+    /// Runs once, as the next `request` returns its handle. A task it starts
+    /// reaches the main actor ahead of any the caller starts after the
+    /// request: the order a busy main thread gives a test polling for it.
+    var onNextRequest: (@MainActor (LiveActivityHandle) -> Void)?
 
     private(set) var requested: [AgentActivityAttributes.ContentState] = []
     private(set) var requestedHandles: [LiveActivityHandle] = []
@@ -107,6 +111,10 @@ final class FakeLiveActivityController: LiveActivityControlling {
         requestedHandles.append(handle)
         records[id] = Record(id: id, hostID: hostID, content: content)
         order.append(id)
+        if let onNextRequest {
+            self.onNextRequest = nil
+            onNextRequest(handle)
+        }
         return handle
     }
 
