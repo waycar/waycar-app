@@ -1,4 +1,5 @@
 import GhosttyTerminal
+import OSLog
 import Testing
 import UIKit
 
@@ -103,5 +104,40 @@ struct TerminalSurfaceOrphanLayerTests {
         try await waitForGhosttyContentLayer(in: preview)
 
         #expect(ghosttyContentLayers(of: preview).count == 1)
+    }
+
+    /// Ghostty's renderer thread marks its content layer for display as its
+    /// loop starts (libghostty-spm's iOS first-frame kick). Off the main
+    /// thread that mark opens an implicit CATransaction nothing commits until
+    /// the thread exits, inside the free's join, and that commit lays out
+    /// UIKit there: on the iPad it laid out a navigation controller, and Auto
+    /// Layout threw NSInternalInconsistencyException (weekly iPad run,
+    /// 2026-11-15). Core Animation logs every such transaction.
+    @Test func freeingASurfaceLeavesNoTransactionOnItsRendererThread() async throws {
+        let terminal = TerminalScreenView.makeConfiguredTerminal()
+        terminal.frame = CGRect(x: 0, y: 0, width: 390, height: 720)
+        let controller = UIViewController()
+        controller.view.addSubview(terminal)
+        let window = try await makeTestWindow(
+            frame: terminal.bounds,
+            rootViewController: controller)
+        defer { window.isHidden = true }
+        try await waitForGhosttyContentLayer(in: terminal)
+
+        let log = try OSLogStore(scope: .currentProcessIdentifier)
+        let start = log.position(date: Date())
+        // A controller swap frees the surface, joining its renderer thread.
+        terminal.controller = TerminalController(theme: .default)
+        let marker = "surface freed \(UUID().uuidString)"
+        Logger(subsystem: "com.otreva.waycar.tests", category: "terminal")
+            .log("\(marker, privacy: .public)")
+
+        var messages: [String] = []
+        try await waitUntil("the marker should reach the log") {
+            messages = try log.getEntries(at: start)
+                .compactMap { ($0 as? OSLogEntryLog)?.composedMessage }
+            return messages.contains(marker)
+        }
+        #expect(!messages.contains { $0.contains("uncommitted CATransaction") })
     }
 }
