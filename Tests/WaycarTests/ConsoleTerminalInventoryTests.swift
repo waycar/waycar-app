@@ -45,6 +45,9 @@ struct ConsoleTerminalInventoryTests {
         await store.resume()
         let id = ConsoleAgent.ID(hostID: host.id, paneID: "shell")
         try await waitUntil { store.agents.contains { $0.id == id } }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
 
         let shell = try #require(store.agents.first { $0.id == id })
         #expect(shell.isShell)
@@ -66,6 +69,9 @@ struct ConsoleTerminalInventoryTests {
         #expect(agent.agent.kind == "claude")
         #expect(agent.attachTarget == .agentPane("shell"))
         #expect(store.agents.count { $0.id == id } == 1)
+        // The Agent's pane-scoped entry replaces the events channel first.
+        try await transport.waitForLiveSubscription(
+            containing: [.pane(.agentStatusChanged, paneID: "shell")])
 
         // And the Agent exiting back to its shell makes it a shell row again.
         await transport.setSnapshot(snapshot(panes: [pane("shell")]))
@@ -84,6 +90,9 @@ struct ConsoleTerminalInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { shellPaneIDs(store) == ["shell"] }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         #expect(
             await transport.capturedSubscriptions.first?.contains(.global(.paneCreated)) == true)
         await transport.setSnapshot(snapshot(panes: [pane("shell"), pane("split")]))
