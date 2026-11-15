@@ -1,8 +1,8 @@
 // Content loaders for the changelog (README "Changelog"). Both render through
 // the site's Markdown pipeline (the loader context's `renderMarkdown`) after
 // stripping issue and pull request references from the body
-// (src/lib/changelog.mjs), which point into the private repository; the
-// source files keep them.
+// (src/lib/changelog.mjs); those from before the open-source cut point into
+// the archived repository. The source files keep them.
 //
 // - `releasesLoader`: one entry per src/content/changelog/<X.Y.Z>.md, id the
 //   version. The front matter goes through the collection schema; a file

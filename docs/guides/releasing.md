@@ -59,7 +59,8 @@ waycar.dev/changelog (rebuilt on every push to `main` that touches
 Changelog (bundled at build time) both show `[Unreleased]` first when it has an
 entry, titled Unreleased, then every release newest first. Both strip
 issue and PR references such as `(#105, refs #27)` when they render,
-because they point into the private repository; the files keep them.
+because those from before the open-source cut point into the archived
+repository; the files keep them.
 
 ## Declared and derived
 

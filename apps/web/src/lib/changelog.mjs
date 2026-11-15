@@ -6,9 +6,10 @@
 // Releases are src/content/changelog/<X.Y.Z>.md; the coming release is the
 // `## [Unreleased]` section of the repo-root CHANGELOG.md. Display order is
 // Unreleased (only when it has a bullet), then releases by version, newest
-// first. Issue and pull request references point into the private repository,
-// so they are stripped before the Markdown is rendered (the iOS app strips the
-// same pattern); the source files keep them.
+// first. Issue and pull request references are stripped before the Markdown
+// is rendered (the iOS app strips the same pattern), since those from before
+// the open-source cut point into the archived repository; the source files
+// keep them.
 
 /**
  * Issue and pull request references in parentheses, with the space before

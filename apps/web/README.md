@@ -281,10 +281,11 @@ version, compared numerically (`1.10.0` before `1.9.0`). The loaders are in
 `src/lib/changelog.mjs`, which `scripts/changelog.test.mjs` tests along with
 the real release files and `CHANGELOG.md`.
 
-**References stay private.** Issue and pull request references in parentheses,
-such as `(#161)`, `(#95, refs #90)`, or `(#151, #164; PR #174)`, point into the
-private repository, so they are removed from the body before the Markdown is
-rendered (the app removes the same pattern). The files keep them. A test fails
+**References stay in the files.** Issue and pull request references in
+parentheses, such as `(#161)`, `(#95, refs #90)`, or `(#151, #164; PR #174)`,
+are removed from the body before the Markdown is rendered (the app removes the
+same pattern): numbers from before the open-source cut point into the archived
+repository, not this one (ADR 0033). The files keep them. A test fails
 when a reference in another shape would survive, so a new format gets added to
 the pattern (here and in the app) rather than published. Never link GitHub
 issues, pull requests, or commits from a changelog entry.

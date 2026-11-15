@@ -32,11 +32,9 @@ crash reports, durations and the Mac's load before and after.
   checks HEAD.
 - One run at a time on the whole Mac, first come first served; a waiting run
   says who is ahead.
-- It waits while a CI job runs (except for `test-ci-app` and
-  `test-ci-package`) or while the Mac is
-  already overloaded. It runs make at `nice -n 19`, and caps the app-test
-  build of `test-app`, `test` and `test-ipad`, and `build-sim`, at half the
-  cores.
+- It waits while the Mac is busy with another job or already overloaded.
+  It runs make at `nice -n 19`, and caps the app-test build of `test-app`,
+  `test` and `test-ipad`, and `build-sim`, at half the cores.
 - Simulators come only through the make targets' queue, on the runtime that
   holds the pool (it pins `SIM_DESTINATION` to that runtime's OS: a
   name-only destination resolves to the newest runtime, and since iOS 27.2
@@ -100,8 +98,8 @@ user first.
   DRIVE_DELIVERABLES="$HOME/Library/CloudStorage/GoogleDrive-<account>/My Drive/Waycar/Deliverables/<slug>"
   ```
 
-  Never put these files in the repo: it is public, and App Review material
-  stays private. Name both paths in the report.
+  Never put these files in the repo: it is public. Name both paths in the
+  report.
 - Limit deliberate load: stress tests, parallel builds and load generators
   such as `yes`:
   - Use at most half the cores (`sysctl -n hw.ncpu`), at `nice -n 19`, for
@@ -109,13 +107,11 @@ user first.
     The 10 minutes are for load you add on purpose: an ordinary build or
     test run (one `mac_run`, one make target) may take longer, and follows
     the queue and the `nice` rules here.
-  - Never run it while a CI job runs on this Mac's runner. Check first:
-    `pgrep -fl Runner.Worker` must print nothing. A job runs exactly while
-    `Runner.Worker` exists; `Runner.Listener` is always there.
   - Use a `trap` on exit that kills only the processes you started. Afterwards,
     `pgrep -x yes` (or the tool's own name) must print nothing.
-  - CI jobs run at nice 15. Agent work at normal priority (nice 0) starves CI.
-    Keep one simulator test run at a time per worktree.
+  - Keep one simulator test run at a time per worktree.
+  - Maintainers: how to share the Mac with its own CI jobs is in the ops
+    checkout's `AGENTS.md` ([`AGENTS.md`](../../AGENTS.md) › Maintainers).
 - A non-interactive SSH shell has neither Homebrew nor `~/.local/bin` on
   `PATH`. Begin every remote command that runs `make`, `herdr`, `gh` or `omp`
   with `export PATH=/opt/homebrew/bin:$HOME/.local/bin:$PATH`. Homebrew holds

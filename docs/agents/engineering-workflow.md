@@ -323,6 +323,9 @@ When a coordinator splits one change across workers:
   hosted-runner question in one run.
 - A new `node --test` file under `plugin/` needs its own step in
   `ci-node.yml`.
+- A scratch Codex config sets `check_for_update_on_startup = false`: once a
+  newer Codex ships, a pinned TUI opens on an "Update available" menu and
+  never shows the reply.
 
 **Shell**
 

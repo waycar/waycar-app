@@ -793,7 +793,8 @@ From local refs on 2026-09-30 (`git rev-list origin/main..<branch>`, `git status
 - `CHANGELOG.md`, `README.md`, `README-zh.md`, `PRIVACY.md` (the hooks send
   nothing off the Host except encrypted push), `plugin/README.md`; ADR 0026 to
   accepted; ADR 0008 amended, since its trust story says "the relay is open
-  source" and the relay is not public (decision 7).
+  source" and the relay was not public then (decision 7; ADR 0033 has since
+  opened it).
 
 ## 11. Open questions
 

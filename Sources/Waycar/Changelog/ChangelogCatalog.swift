@@ -156,8 +156,8 @@ struct ChangelogCatalog: Sendable {
     /// `markdown` without its issue and PR references: each parenthetical
     /// of `#n`, `refs #n` or `PR #n` items joined by `,` or `;` (`(#105,
     /// refs #27)`, `(#320; PR #321)`), and the whitespace before it, even
-    /// across a line break. They point into a private repository. The same
-    /// rule as waycar.dev/changelog's.
+    /// across a line break. Those from before the open-source cut point into
+    /// the archived repository. The same rule as waycar.dev/changelog's.
     static func strippingReferences(_ markdown: String) -> String {
         markdown.replacing(
             #/\s*\((?:(?:refs|PR)\s+)?#\d+(?:\s*[,;]\s*(?:(?:refs|PR)\s+)?#\d+)*\)/#, with: "")
