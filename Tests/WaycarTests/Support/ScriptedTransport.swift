@@ -1,7 +1,29 @@
 import Foundation
+import Testing
 import WaycarSSH
 
 @testable import Waycar
+
+/// Waits for a fresh, unseeded Console fixture's initial snapshot/subscription
+/// cycle, with unchanged inventory. Its first snapshot publishes rows *before*
+/// updating subscriptions; a changed set then requires another acknowledged
+/// stream and applied snapshot. Row counts alone prove neither has finished.
+@MainActor
+func waitForInitialConsoleSync(
+    _ store: ConsoleStore, transport: ScriptedTransport, hostID: Host.ID,
+    backend: HostBackend, paneIDs: [String], protocolVersion: Int = 17,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let expected = HostConsoleProjection.subscriptions(
+        paneIDs: paneIDs, protocolVersion: protocolVersion)
+    let initial = HostConsoleProjection.subscriptions(paneIDs: [String]())
+    let snapshots: UInt64 = expected == initial ? 1 : 2
+    try await waitUntil(sourceLocation: sourceLocation) {
+        let live = await transport.liveSubscriptions
+        let projection = store.projections[ConsoleScope(hostID: hostID, backend: backend)]
+        return live == expected && (projection?.liveSnapshotRevision ?? 0) >= snapshots
+    }
+}
 
 /// Scripted `Transport` for Console and EventsSession protocol-level tests:
 /// the test scripts the snapshot and pane text, and drives the event stream
@@ -416,6 +438,11 @@ final actor ScriptedTransport: Transport {
 
     func gateNextSubscription(using gate: ScriptedTransportCallGate) {
         nextSubscriptionGate = gate
+    }
+
+    /// The installed stream's set, not a request still awaiting its gate.
+    var liveSubscriptions: [EventSubscription]? {
+        liveStreamID == nil ? nil : capturedSubscriptions.last
     }
 
     /// Wait for actual stream installation, not merely a captured request.

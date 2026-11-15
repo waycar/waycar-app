@@ -189,6 +189,9 @@ struct CodexConsoleChatTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { store.verifiedAgents.count == 2 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .codex,
+            paneIDs: ["codex:empty", "codex:used"])
         await transport.setSnapshot(.fixture())
         #expect(await transport.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
         try await waitUntil { store.verifiedAgents.isEmpty && store.closedSessions.sessions.count == 1 }
@@ -201,6 +204,9 @@ struct CodexConsoleChatTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { store.verifiedAgents.count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .codex,
+            paneIDs: ["codex:closed-id"])
         await transport.setSnapshot(.fixture())
         #expect(await transport.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
         try await waitUntil { store.closedSessions.sessions.count == 1 }

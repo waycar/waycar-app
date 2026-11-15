@@ -108,6 +108,9 @@ struct ConsoleTerminalInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { shells(store).count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         let count = await transport.snapshotFetchCount
         for index in 0..<20 {
             let changed = pane("shell", title: "Build \(index)", foregroundCwd: "/work/\(index)")

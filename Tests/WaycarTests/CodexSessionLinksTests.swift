@@ -214,6 +214,10 @@ struct CodexSessionLinksTests {
         try await waitUntil {
             store.verifiedAgents.count == 1 && store.agents.first?.linkedTerminal != nil
         }
+        try await waitForInitialConsoleSync(
+            store, transport: codex, hostID: host.id, backend: .codex, paneIDs: ["codex:t"])
+        try await waitForInitialConsoleSync(
+            store, transport: terminal, hostID: host.id, backend: .tmux, paneIDs: [pane.paneID])
         let thread = try #require(store.agents.first)
         #expect(thread.canShowTerminal)
         let resolved = try #require(store.linkedTerminalAgent(for: thread))
