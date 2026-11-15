@@ -158,7 +158,8 @@ struct ConsoleDualBackendTests {
         await fixture.store.resume()
     }
 
-    /// Both projections verified their rows.
+    /// Both projections verified their rows, and each events channel carries
+    /// its rows' panes.
     private func waitForBothVerified(_ fixture: Fixture) async throws {
         try await waitUntil {
             fixture.row(herdrAgent.paneID) != nil && fixture.row(tmuxAgent.paneID) != nil
@@ -166,6 +167,10 @@ struct ConsoleDualBackendTests {
                 && fixture.store.scopeStatuses[fixture.tmuxScope] == .connected
                 && fixture.store.scopesAwaitingSnapshot.isEmpty
         }
+        try await waitForInitialConsoleSync(
+            fixture.store, transport: fixture.herdr, hostID: fixture.host.id, backend: .herdr)
+        try await waitForInitialConsoleSync(
+            fixture.store, transport: fixture.tmux, hostID: fixture.host.id, backend: .tmux)
     }
 
     /// Serves `snapshot` on the transport's next resync and triggers one.

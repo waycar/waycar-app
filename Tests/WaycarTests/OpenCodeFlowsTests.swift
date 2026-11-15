@@ -649,23 +649,26 @@ struct OpenCodeFlowsTests {
         try await waitUntil { store.agents.count == 1 && store.agents.first?.linkedTerminal?.id == paneID }
         try await waitForInitialConsoleSync(
             store, transport: opencode, hostID: host.id, backend: .opencode, paneIDs: ["opencode:ses_a"])
+        let beforeClose = consoleSyncMark(store, hostID: host.id, backend: .opencode)
         let row = try #require(store.agents.first)
         store.scheduleTabClose(row)
         try await waitUntil { await opencode.closedTabs == [TabTarget(tabID: "opencode:ses_a")] }
         let pin = try #require(store.chatMode.marker(for: paneID))
         try await waitUntil { await terminal.chatModeMarkerWrites.contains { $0.session == pin.session } }
+        // The archive's own resync lands before the server's answer is scripted.
+        try await waitForConsoleResync(
+            store, transport: opencode, hostID: host.id, backend: .opencode, after: beforeClose)
         await opencode.setSnapshot(.fixture(workspaces: [.fixture(workspaceID: "opencode:cwd:/work/app", label: "app")]))
         await opencode.setArchivedServerSessions([ArchivedServerSession(
             sessionID: "ses_a", title: "Task", directory: "/work/app",
             workspaceID: "opencode:cwd:/work/app", archivedAt: Date())])
-        let beforeArchive = consoleSnapshotRevision(store, hostID: host.id, backend: .opencode)
+        let beforeArchive = consoleSyncMark(store, hostID: host.id, backend: .opencode)
         #expect(await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
         try await waitUntil { !store.closedSessions.listedSessions.isEmpty }
         #expect(!store.agents.contains { $0.id == paneID }, "the pinned pane hides with the archived session")
         // That snapshot dropped the only session, so the channel is replaced.
-        try await waitForConsoleSync(
-            store, transport: opencode, hostID: host.id, backend: .opencode, paneIDs: [],
-            snapshotRevision: beforeArchive + 2)
+        try await waitForConsoleResync(
+            store, transport: opencode, hostID: host.id, backend: .opencode, after: beforeArchive)
 
         await opencode.setServerSessionLinkFacts(.init(
             sessionOrigins: ["ses_b": "user"],
@@ -679,49 +682,6 @@ struct OpenCodeFlowsTests {
         #expect(store.agents.count == 1)
         #expect(store.chatMode.marker(for: paneID) == nil)
         try await waitUntil { await terminal.chatModeMarkerDeletes.contains("tmux:%1") }
-    }
-
-    // THROWAWAY red proof: hold the replacement the archive snapshot starts.
-    @Test func throwawayTheArchiveSnapshotLeavesAGapTheNewWaitCloses() async throws {
-        let (store, terminal, opencode) = linkedPaneFixture()
-        defer { store.setHosts([]) }
-        let paneID = ConsoleAgent.ID(hostID: host.id, paneID: "tmux:%1")
-        await terminal.setServerSessionLinkFacts(.init(commandLines: ["tmux:%1": "opencode"]))
-        await opencode.setServerSessionLinkFacts(.init(sessionOrigins: ["ses_a": "user"]))
-        store.setHosts([host])
-        await store.resume()
-        try await waitUntil { store.agents.count == 1 && store.agents.first?.linkedTerminal?.id == paneID }
-        try await waitForInitialConsoleSync(
-            store, transport: opencode, hostID: host.id, backend: .opencode, paneIDs: ["opencode:ses_a"])
-        let row = try #require(store.agents.first)
-        store.scheduleTabClose(row)
-        try await waitUntil { await opencode.closedTabs == [TabTarget(tabID: "opencode:ses_a")] }
-        let pin = try #require(store.chatMode.marker(for: paneID))
-        try await waitUntil { await terminal.chatModeMarkerWrites.contains { $0.session == pin.session } }
-        await opencode.setSnapshot(.fixture(workspaces: [.fixture(workspaceID: "opencode:cwd:/work/app", label: "app")]))
-        await opencode.setArchivedServerSessions([ArchivedServerSession(
-            sessionID: "ses_a", title: "Task", directory: "/work/app",
-            workspaceID: "opencode:cwd:/work/app", archivedAt: Date())])
-        let beforeArchive = consoleSnapshotRevision(store, hostID: host.id, backend: .opencode)
-        let replacement = ScriptedTransportCallGate()
-        await opencode.gateNextSubscription(using: replacement)
-        #expect(await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:]))))
-        try await waitUntil { !store.closedSessions.listedSessions.isEmpty }
-        await replacement.waitForEntry()
-        // Where the old test emitted: the rows are in, the channel is not.
-        let inTheGap = await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:])))
-        print("THROWAWAY emit in the gap delivered: \(inTheGap)")
-        #expect(!inTheGap)
-        Task {
-            try? await Task.sleep(for: .milliseconds(300))
-            await replacement.open()
-        }
-        try await waitForConsoleSync(
-            store, transport: opencode, hostID: host.id, backend: .opencode, paneIDs: [],
-            snapshotRevision: beforeArchive + 2)
-        let afterTheWait = await opencode.emit(HerdrEvent(kind: GlobalEventKind.paneExited.kind, data: .object([:])))
-        print("THROWAWAY emit after the wait delivered: \(afterTheWait)")
-        #expect(afterTheWait)
     }
 
     /// The pane names the session on its command line, or (`byFolder`) is
@@ -745,6 +705,10 @@ struct OpenCodeFlowsTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { store.agents.count == 1 && store.agents.first?.linkedTerminal?.id == paneID }
+        try await waitForInitialConsoleSync(
+            store, transport: opencode, hostID: host.id, backend: .opencode, paneIDs: ["opencode:ses_a"])
+        try await waitForInitialConsoleSync(store, transport: terminal, hostID: host.id, backend: .tmux)
+        let beforeClose = consoleSyncMark(store, hostID: host.id, backend: .opencode)
         let row = try #require(store.agents.first)
         store.scheduleTabClose(row)
         try await waitUntil { await opencode.closedTabs == [TabTarget(tabID: "opencode:ses_a")] }
@@ -768,6 +732,8 @@ struct OpenCodeFlowsTests {
         }
         #expect(await terminal.closedPanes.isEmpty)
         #expect(await terminal.closedTabs.isEmpty)
+        try await waitForConsoleResync(
+            store, transport: opencode, hostID: host.id, backend: .opencode, after: beforeClose)
         // The server archived it; its TUI runs on.
         await opencode.setSnapshot(.fixture(workspaces: [.fixture(workspaceID: "opencode:cwd:/work/app", label: "app")]))
         await opencode.setArchivedServerSessions([ArchivedServerSession(

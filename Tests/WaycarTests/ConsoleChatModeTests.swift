@@ -36,13 +36,18 @@ struct ConsoleChatModeTests {
         return (directory, { try? FileManager.default.removeItem(at: directory) })
     }
 
-    /// Connects `host` and waits for its rows to be verified.
-    private func connect(_ store: ConsoleStore, _ host: Host, agents: Int) async throws {
+    /// Connects `host` and waits for its rows to be verified and for the
+    /// events channel their panes are added to.
+    private func connect(
+        _ store: ConsoleStore, _ transport: ScriptedTransport, _ host: Host, agents: Int
+    ) async throws {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("the snapshot should verify the rows") {
             store.agents.count == agents && !store.hostsAwaitingSnapshot.contains(host.id)
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
     }
 
     /// Connects `host` and waits for the Chat Marker read connecting starts
@@ -55,7 +60,7 @@ struct ConsoleChatModeTests {
     ) async throws {
         let probe = marker("w9:gone")
         await transport.setChatModeMarkers([probe])
-        try await connect(store, host, agents: agents)
+        try await connect(store, transport, host, agents: agents)
         try await waitUntil("connecting should read the Host's markers") {
             store.chatMode.marker(for: ConsoleAgent.ID(hostID: host.id, paneID: probe.paneID))
                 == probe
@@ -189,7 +194,7 @@ struct ConsoleChatModeTests {
         store.chatMode.replaceMarkers([stale], for: host.id)
         store.chatMode.replaceMarkers([elsewhere], for: otherHostID)
 
-        try await connect(store, host, agents: 2)
+        try await connect(store, transport, host, agents: 2)
         defer { store.setHosts([]) }
         let p2 = ConsoleAgent.ID(hostID: host.id, paneID: "w1:p2")
         try await waitUntil("connecting should read the Host's markers") {
@@ -242,7 +247,7 @@ struct ConsoleChatModeTests {
         let read = ScriptedTransportCallGate()
         await transport.gateNextChatModeMarkerRead(using: read)
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         await read.waitForEntry()
         await transport.setChatModeMarkers([after])
@@ -274,7 +279,7 @@ struct ConsoleChatModeTests {
         store.chatMode.record(recorded, hostID: host.id)
         let write = ScriptedTransportCallGate()
         await transport.gateNextChatModeMarkerWrite(using: write)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         await write.waitForEntry()
         #expect(await transport.chatModeMarkerWrites == [recorded])
@@ -323,7 +328,7 @@ struct ConsoleChatModeTests {
             ])
         await transport.setChatTranscriptResponder { _ in reply }
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 2)
+        try await connect(store, transport, host, agents: 2)
         defer { store.setHosts([]) }
         let launchedAt = Date(timeIntervalSince1970: 1_790_000_000)
         store.chatMode.record(
@@ -378,7 +383,7 @@ struct ConsoleChatModeTests {
             chatMode.updateSession(.init(kind: "path", value: "/t/p4.jsonl"), for: p4))
         await transport.setChatModeMarkers([written, launch])
 
-        try await connect(store, host, agents: 4)
+        try await connect(store, transport, host, agents: 4)
         defer { store.setHosts([]) }
         try await waitUntil("the refresh should write the missing markers again") {
             await transport.chatModeMarkerWrites.count == 2
@@ -658,6 +663,7 @@ struct ConsoleChatModeTests {
         let launched = marker("w1:p1", session: "s-1")
         store.chatMode.record(launched, hostID: host.id)
 
+        let beforeShell = consoleSyncMark(store, hostID: host.id, backend: .herdr)
         await resync(transport, to: paneSnapshot(claude: nil, shellTerminalID: "term_restored"))
         try await waitUntil("the old terminal's Agent should be recorded as closed") {
             store.closedSessions.sessions.count == 1
@@ -666,6 +672,9 @@ struct ConsoleChatModeTests {
         let shell = try #require(store.agents.first { $0.id == id })
         #expect(shell.isShell)
         #expect(!store.isChatMode(shell))
+        // The pane left the channel with its Agent.
+        try await waitForConsoleResync(
+            store, transport: transport, hostID: host.id, backend: .herdr, after: beforeShell)
 
         await resync(
             transport, to: paneSnapshot(claude: claudeInfo(terminalID: "term_restored", session: "s-1")))
@@ -694,7 +703,7 @@ struct ConsoleChatModeTests {
         let transport = ScriptedTransport(snapshot: paneSnapshot(claudeSession: "s-1"))
         await transport.setChatModeMarkers([probe, cached])
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         try await waitUntil("connecting should adopt the Host's marker") {
             store.chatMode.marker(for: id) == cached
@@ -746,7 +755,7 @@ struct ConsoleChatModeTests {
         let transport = ScriptedTransport(snapshot: paneSnapshot(claudeSession: "s-1"))
         await transport.setChatModeMarkers([launched])
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         try await waitUntil("connecting should adopt the Host's marker") {
             store.chatMode.marker(for: id)?.launchedAt == launched.launchedAt
@@ -765,7 +774,7 @@ struct ConsoleChatModeTests {
         let relaunched = ScriptedTransport(snapshot: paneSnapshot(claudeSession: "s-3"))
         await relaunched.setChatModeMarkers([launched])
         let next = makeConsole(relaunched, defaults: defaults)
-        try await connect(next, host, agents: 1)
+        try await connect(next, relaunched, host, agents: 1)
         defer { next.setHosts([]) }
         try await waitUntil("the refresh should delete the Host's copy again") {
             await relaunched.chatModeMarkerDeletes == ["w1:p1"]
@@ -795,7 +804,7 @@ struct ConsoleChatModeTests {
         await transport.setChatTranscriptResponder { _ in reply }
         let firstCache = ChatTranscriptCache(directory: directory)
         let store = makeConsole(transport, defaults: defaults, chatTranscriptCache: firstCache)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         // Removing the Host would drop what it kept, so it stays set.
         defer { store.setHosts([]) }
         store.chatMode.record(launched, hostID: host.id)
@@ -813,7 +822,7 @@ struct ConsoleChatModeTests {
         let relaunched = ScriptedTransport(snapshot: paneSnapshot(claudeSession: "s-1"))
         let nextCache = ChatTranscriptCache(directory: directory)
         let next = makeConsole(relaunched, defaults: defaults, chatTranscriptCache: nextCache)
-        try await connect(next, host, agents: 1)
+        try await connect(next, relaunched, host, agents: 1)
         defer { next.setHosts([]) }
         next.chatMode.record(launched, hostID: host.id)
         let row = try #require(next.agents.first)
@@ -920,7 +929,7 @@ struct ConsoleChatModeTests {
             snapshot: .fixture(agents: [.fixture(paneID: "w1:p1", status: .blocked)]))
         await transport.setPaneReadText("Allow edit?\n1. Yes\n2. No")
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
 
@@ -961,7 +970,7 @@ struct ConsoleChatModeTests {
             homeLookups += 1
             return "/home/me"
         }
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
 
@@ -998,7 +1007,7 @@ struct ConsoleChatModeTests {
             throw RemoteFilePreviewError.tooLarge(size: UInt64(maxBytes) + 1, limit: maxBytes)
         }
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
 
@@ -1017,7 +1026,7 @@ struct ConsoleChatModeTests {
         let transport = ScriptedTransport(snapshot: .fixture(agents: [.fixture(paneID: "w1:p1")]))
         await transport.setChatMediaResponder { _ in Self.png }
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         let inline = image(.inline(transcript: "/t/s.jsonl", offset: 418, pointer: "/message/content/0"), mime: nil)
@@ -1051,7 +1060,7 @@ struct ConsoleChatModeTests {
         let transport = ScriptedTransport(snapshot: .fixture(agents: [.fixture(paneID: "w1:p1")]))
         await transport.setChatMediaResponder { _ in Self.png }
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         let inline = ChatMedia(
@@ -1077,7 +1086,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [.fixture(paneID: "w1:p1")]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         let url = try #require(URL(string: "http://example.com/a.png"))
@@ -1097,7 +1106,7 @@ struct ConsoleChatModeTests {
         await transport.setMediaReadGate(gate)
         // No cache: a second read could only be avoided by sharing the first.
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         // An inline item reaches the shared load without suspending, so a
@@ -1130,7 +1139,7 @@ struct ConsoleChatModeTests {
         await transport.setPreviewFileResponder { _, _ in Self.png }
         let store = makeConsole(
             transport, defaults: defaults, chatMediaCache: ChatMediaCache(directory: directory))
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         let agent = try #require(store.agents.first)
         let url = try await store.chatMediaFile(for: media, agent: agent)
         #expect(try await store.chatMediaFile(for: media, agent: agent) == url)
@@ -1140,7 +1149,7 @@ struct ConsoleChatModeTests {
         let relaunched = ScriptedTransport(snapshot: .fixture(agents: [.fixture(paneID: "w1:p1")]))
         let next = makeConsole(
             relaunched, defaults: defaults, chatMediaCache: ChatMediaCache(directory: directory))
-        try await connect(next, host, agents: 1)
+        try await connect(next, relaunched, host, agents: 1)
         defer { next.setHosts([]) }
         let row = try #require(next.agents.first)
         let cached = try await next.chatMediaFile(for: media, agent: row)
@@ -1162,7 +1171,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [mediaAgentInfo(cwd: "/work/listed")]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         store.chatMode.record(marker("w1:p1", cwd: "/work/marker"), hostID: host.id)
@@ -1176,7 +1185,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [mediaAgentInfo(cwd: nil)]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
         #expect(agent.agent.cwd.isEmpty)
@@ -1191,7 +1200,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [mediaAgentInfo(cwd: "")]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let agent = try #require(store.agents.first)
 
@@ -1210,7 +1219,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [mediaAgentInfo(cwd: nil)]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         let stale = try #require(store.agents.first)
 
@@ -1234,7 +1243,7 @@ struct ConsoleChatModeTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: .fixture(agents: [.fixture(paneID: "w1:p1")]))
         let store = makeConsole(transport, defaults: defaults)
-        try await connect(store, host, agents: 1)
+        try await connect(store, transport, host, agents: 1)
         defer { store.setHosts([]) }
         #expect(store.launchPromptHost(for: UUID()) == nil, "an unknown Host has none")
         let promptHost = try #require(store.launchPromptHost(for: host.id))

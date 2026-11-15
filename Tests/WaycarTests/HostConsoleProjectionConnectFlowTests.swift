@@ -117,6 +117,8 @@ struct HostConsoleProjectionConnectFlowTests {
         }
         projection.start(isActive: true)
         try await waitUntilVerified(projection)
+        try await waitForInitialConsoleSync(
+            projection, transport: transport, paneIDs: ["w1:p1", "w1:p2"], protocolVersion: 22)
 
         // A snapshot already in flight when the close is confirmed.
         let older = ScriptedTransportCallGate()

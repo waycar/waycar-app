@@ -138,6 +138,9 @@ struct ConsoleTerminalInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { shells(store).count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         let gate = ScriptedTransportCallGate()
         await transport.setSnapshot(snapshot(panes: [pane("shell")], workspaceLabel: "Renamed"))
         await transport.gateNextSnapshot(using: gate)
@@ -166,6 +169,9 @@ struct ConsoleTerminalInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { shells(store).count == 1 }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         let gate = ScriptedTransportCallGate()
         await transport.gateNextSnapshot(using: gate)
         await transport.setSnapshot(snapshot(panes: [pane("shell"), pane("stale")]))
@@ -246,6 +252,9 @@ struct ConsoleTerminalInventoryTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil { shells(store).first?.shellActivity == .running(command: "top") }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         // From here every sweep fails without a link failure, which keeps
         // what the rows show: only the projection itself can keep it.
         await transport.setShellActivityFailure(
@@ -280,6 +289,9 @@ struct ConsoleTerminalInventoryTests {
         try await waitUntil {
             shells(store).first?.shellActivity == .running(command: "vim notes.txt")
         }
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: [], protocolVersion: 22)
         await transport.setShellActivityFailure(
             TransportError.channelFailed(detail: "scripted"))
 
@@ -360,6 +372,8 @@ struct ConsoleTerminalInventoryTests {
         try await waitUntil {
             projection.agentsByPane["shell"]?.shellActivity == .running(command: "make")
         }
+        try await waitForInitialConsoleSync(
+            projection, transport: transport, paneIDs: [], protocolVersion: 22)
 
         // Fifteen intervals, each of which a timer would have swept. tmux
         // answers from the cache a live snapshot fills, so it sweeps once
@@ -390,6 +404,8 @@ struct ConsoleTerminalInventoryTests {
         try await waitUntil {
             projection.agentsByPane["shell"]?.shellActivity == .running(command: "make")
         }
+        try await waitForInitialConsoleSync(
+            projection, transport: transport, paneIDs: [], protocolVersion: 22)
 
         // Every Agent Status change brings a resync: here five, back to back.
         let start = ContinuousClock.now

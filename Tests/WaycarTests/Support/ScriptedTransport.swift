@@ -14,13 +14,94 @@ func waitForInitialConsoleSync(
     backend: HostBackend, paneIDs: [String], protocolVersion: Int = 17,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
-    let expected = HostConsoleProjection.subscriptions(
-        paneIDs: paneIDs, protocolVersion: protocolVersion)
-    let initial = HostConsoleProjection.subscriptions(paneIDs: [String]())
     try await waitForConsoleSync(
         store, transport: transport, hostID: hostID, backend: backend,
         paneIDs: paneIDs, protocolVersion: protocolVersion,
-        snapshotRevision: expected == initial ? 1 : 2, sourceLocation: sourceLocation)
+        snapshotRevision: initialSyncRevision(paneIDs: paneIDs, protocolVersion: protocolVersion),
+        sourceLocation: sourceLocation)
+}
+
+/// The same for the set the scope's own rows ask for (their Agent panes and
+/// the snapshot's protocol), for helpers that connect many fixtures. A first
+/// subscribe seeded from last-known rows may already carry it, and then one
+/// snapshot is the whole cycle.
+@MainActor
+func waitForInitialConsoleSync(
+    _ store: ConsoleStore, transport: ScriptedTransport, hostID: Host.ID,
+    backend: HostBackend, sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    try await waitUntil(sourceLocation: sourceLocation) {
+        guard let projection = store.projections[ConsoleScope(hostID: hostID, backend: backend)],
+            let expected = rowSubscriptions(projection)
+        else { return false }
+        let first = await transport.capturedSubscriptions.first
+        return await transport.liveSubscriptions == expected
+            && projection.liveSnapshotRevision >= (first == expected ? 1 : 2)
+    }
+}
+
+/// A Console scope's applied snapshots and the set its rows ask for, taken
+/// before a change so a test can wait for that change to settle.
+struct ConsoleSyncMark {
+    let revision: UInt64
+    let subscriptions: [EventSubscription]?
+}
+
+@MainActor
+func consoleSyncMark(_ store: ConsoleStore, hostID: Host.ID, backend: HostBackend) -> ConsoleSyncMark {
+    let projection = store.projections[ConsoleScope(hostID: hostID, backend: backend)]
+    return ConsoleSyncMark(
+        revision: projection?.liveSnapshotRevision ?? 0,
+        subscriptions: projection.flatMap(rowSubscriptions))
+}
+
+/// Waits for the snapshot a change after `mark` brought to settle: the set
+/// its rows ask for live on the channel, and, when that set changed, the
+/// snapshot the replacement takes too. Rows show the change before either.
+@MainActor
+func waitForConsoleResync(
+    _ store: ConsoleStore, transport: ScriptedTransport, hostID: Host.ID,
+    backend: HostBackend, after mark: ConsoleSyncMark,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    try await waitUntil(sourceLocation: sourceLocation) {
+        guard let projection = store.projections[ConsoleScope(hostID: hostID, backend: backend)],
+            let expected = rowSubscriptions(projection)
+        else { return false }
+        let snapshots: UInt64 = expected == mark.subscriptions ? 1 : 2
+        return await transport.liveSubscriptions == expected
+            && projection.liveSnapshotRevision >= mark.revision + snapshots
+    }
+}
+
+/// The set a projection's rows ask for: their Agent panes, at the protocol
+/// of the snapshot they came from.
+@MainActor
+private func rowSubscriptions(_ projection: HostConsoleProjection) -> [EventSubscription]? {
+    guard let protocolVersion = projection.inventorySnapshot?.protocolVersion else { return nil }
+    let paneIDs = projection.agentsByPane.values.filter { !$0.isShell }.map(\.agent.paneID)
+    return HostConsoleProjection.subscriptions(paneIDs: paneIDs, protocolVersion: protocolVersion)
+}
+
+/// The same for a projection a test drives without a `ConsoleStore`.
+@MainActor
+func waitForInitialConsoleSync(
+    _ projection: HostConsoleProjection, transport: ScriptedTransport,
+    paneIDs: [String], protocolVersion: Int = 17,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    try await waitForChannel(
+        transport, paneIDs: paneIDs, protocolVersion: protocolVersion,
+        snapshotRevision: initialSyncRevision(paneIDs: paneIDs, protocolVersion: protocolVersion),
+        appliedRevision: { projection.liveSnapshotRevision }, sourceLocation: sourceLocation)
+}
+
+/// One snapshot when the first subscription already carries the set, else
+/// the replacement's second one.
+private func initialSyncRevision(paneIDs: [String], protocolVersion: Int) -> UInt64 {
+    let expected = HostConsoleProjection.subscriptions(
+        paneIDs: paneIDs, protocolVersion: protocolVersion)
+    return expected == HostConsoleProjection.subscriptions(paneIDs: [String]()) ? 1 : 2
 }
 
 /// Waits for a Console scope's events channel to carry `paneIDs`' set and
@@ -34,12 +115,23 @@ func waitForConsoleSync(
     backend: HostBackend, paneIDs: [String], protocolVersion: Int = 17,
     snapshotRevision: UInt64, sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
+    try await waitForChannel(
+        transport, paneIDs: paneIDs, protocolVersion: protocolVersion,
+        snapshotRevision: snapshotRevision,
+        appliedRevision: { consoleSnapshotRevision(store, hostID: hostID, backend: backend) },
+        sourceLocation: sourceLocation)
+}
+
+@MainActor
+private func waitForChannel(
+    _ transport: ScriptedTransport, paneIDs: [String], protocolVersion: Int,
+    snapshotRevision: UInt64, appliedRevision: () -> UInt64, sourceLocation: SourceLocation
+) async throws {
     let expected = HostConsoleProjection.subscriptions(
         paneIDs: paneIDs, protocolVersion: protocolVersion)
     try await waitUntil(sourceLocation: sourceLocation) {
         let live = await transport.liveSubscriptions
-        return live == expected
-            && consoleSnapshotRevision(store, hostID: hostID, backend: backend) >= snapshotRevision
+        return live == expected && appliedRevision() >= snapshotRevision
     }
 }
 

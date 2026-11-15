@@ -78,12 +78,18 @@ struct ConsoleSavedTranscriptTests {
         }
     }
 
-    private func connect(_ store: ConsoleStore, _ host: Host) async throws {
+    private func connect(
+        _ store: ConsoleStore, _ host: Host, _ transport: ScriptedTransport
+    ) async throws {
         store.setHosts([host])
         await store.resume()
         try await waitUntilTrue("the snapshot should verify the row") {
             store.agents.count == 1 && !store.hostsAwaitingSnapshot.contains(host.id)
         }
+        // Events emitted next need the channel the row's pane is added to.
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: ["w1:p1"], protocolVersion: 22)
     }
 
     /// The Host lists a marker for a pane it does not run: the marker read
@@ -107,7 +113,7 @@ struct ConsoleSavedTranscriptTests {
         let messages = transcriptMessages(0..<4)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: messages) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
         #expect(store.savedTranscript(for: row) == nil)
@@ -130,7 +136,7 @@ struct ConsoleSavedTranscriptTests {
         let cut = transcriptMessages(4..<10)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: long) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
         _ = try await store.readChatTranscriptSaving(for: row)
@@ -153,7 +159,7 @@ struct ConsoleSavedTranscriptTests {
         let transport = ScriptedTransport(snapshot: savedTestSnapshot())
         await transport.setChatTranscriptResponder { _ in transcriptReply(.notFound, messages: []) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
 
@@ -175,7 +181,7 @@ struct ConsoleSavedTranscriptTests {
         await transport.setChatTranscriptReadGate(gate)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: stale) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
         let oldKey = store.chatTranscriptKey(for: row)
@@ -215,7 +221,7 @@ struct ConsoleSavedTranscriptTests {
         await transport.setChatTranscriptReadGate(gate)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<3)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
 
@@ -250,7 +256,7 @@ struct ConsoleSavedTranscriptTests {
         let transport = ScriptedTransport(snapshot: savedTestSnapshot(session: "s-1"))
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<4)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         _ = try await store.readChatTranscriptSaving(for: try #require(store.agents.first))
 
@@ -284,7 +290,7 @@ struct ConsoleSavedTranscriptTests {
         await transport.setChatTranscriptReadGate(gate)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<3)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
         #expect(store.transcriptIdentity(for: row) == nil)
@@ -327,7 +333,7 @@ struct ConsoleSavedTranscriptTests {
         let host = Host.fixture()
         let transport = ScriptedTransport(snapshot: savedTestSnapshot(session: "s-1", kind: "claude"))
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         store.chatMode.record(
             ChatModeMarker(
@@ -373,7 +379,7 @@ struct ConsoleSavedTranscriptTests {
         let transport = ScriptedTransport(snapshot: savedTestSnapshot(session: "s-1"))
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<4)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         store.chatMode.record(
             ChatModeMarker(
@@ -410,7 +416,7 @@ struct ConsoleSavedTranscriptTests {
         let transport = ScriptedTransport(snapshot: savedTestSnapshot())
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<3)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
         let key = store.chatTranscriptKey(for: row)
@@ -440,7 +446,7 @@ struct ConsoleSavedTranscriptTests {
         await listAMarker(on: transport)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: messages) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         let row = try #require(store.agents.first)
 
@@ -464,7 +470,7 @@ struct ConsoleSavedTranscriptTests {
         await listAMarker(on: transport)
         await transport.setChatTranscriptResponder { _ in transcriptReply(messages: transcriptMessages(0..<3)) }
         let store = makeConsole(transport, defaults: defaults, cache: cache)
-        try await connect(store, host)
+        try await connect(store, host, transport)
         defer { store.setHosts([]) }
         try await waitUntilTrue("the Host's markers should land") {
             store.chatMode.marker(for: ConsoleAgent.ID(hostID: host.id, paneID: "w9:gone")) != nil
