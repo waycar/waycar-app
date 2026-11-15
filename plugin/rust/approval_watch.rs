@@ -1201,15 +1201,7 @@ mod tests {
 
     #[test]
     fn only_this_panes_running_watch_counts_as_live() {
-        use std::process::{Command, Stdio};
-        let spawn_with = |args: &[&str]| {
-            Command::new("sh")
-                .args(["-c", "sleep 10; :", "sh"])
-                .args(args)
-                .stdin(Stdio::null())
-                .spawn()
-                .unwrap()
-        };
+        let spawn_with = |args: &[&str]| crate::test_support::spawn_shell("sleep 10; :", args);
         let mut own = spawn_with(&["watch-approval", "--pane", "tmux:%3", "--agent", "agy"]);
         let mut hook = spawn_with(&["/p/bin/waycar-hook", "agy", "watch-approval"]);
         let mut other = spawn_with(&["watch-approval", "--pane", "tmux:%31", "--agent", "agy"]);

@@ -2348,7 +2348,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_process_readers_match_ps() {
-        use std::process::{Command, Stdio};
+        use std::process::Command;
         let ps = |args: &[&str]| {
             Command::new("ps")
                 .args(args)
@@ -2358,23 +2358,11 @@ mod tests {
         };
         let env = Env::from_process();
         let me = std::process::id().to_string();
-        let mut child = Command::new("sh")
-            .args([
-                "-c",
-                "sleep 30; :",
-                "sh",
-                "watch-approval",
-                "--pane",
-                "tmux:%3",
-                "--agent",
-                "agy",
-            ])
-            .stdin(Stdio::null())
-            .spawn()
-            .unwrap();
+        let mut child = crate::test_support::spawn_shell(
+            "sleep 30; :",
+            &["watch-approval", "--pane", "tmux:%3", "--agent", "agy"],
+        );
         let pid = child.id().to_string();
-        // The shell takes a moment to be a shell.
-        std::thread::sleep(Duration::from_millis(100));
         for target in [me.as_str(), pid.as_str(), "1"] {
             if let Some(out) = ps(&["-o", "tty=", "-p", target]) {
                 assert_eq!(
@@ -2402,7 +2390,7 @@ mod tests {
         assert_eq!(process_ppid(&pid, &env), me);
         assert_eq!(
             process_args(child.id().into(), &env).as_deref(),
-            Some("sh -c sleep 30; : sh watch-approval --pane tmux:%3 --agent agy")
+            Some("sh -c echo; sleep 30; : sh watch-approval --pane tmux:%3 --agent agy")
         );
         child.kill().unwrap();
         child.wait().unwrap();

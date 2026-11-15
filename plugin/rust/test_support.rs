@@ -66,6 +66,32 @@ pub fn write_script(path: &Path, body: &str, mode: u32) {
     }
 }
 
+/// `sh -c '<script>' sh <args>`, returned once the shell runs. `spawn` returns
+/// as soon as the child's exec is past its point of no return, before the
+/// kernel has set the new command line, so `/proc/<pid>/cmdline` and `ps` read
+/// it empty for a moment (most reads right after `spawn`, measured on Linux).
+/// The script's first command echoes a line, which this reads first.
+pub fn spawn_shell(script: &str, args: &[&str]) -> std::process::Child {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new("sh")
+        .args(["-c", &format!("echo; {script}"), "sh"])
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("start sh");
+    let mut line = [0u8; 1];
+    child
+        .stdout
+        .take()
+        .expect("the shell's stdout")
+        .read_exact(&mut line)
+        .expect("the shell's first line");
+    child
+}
+
 /// An executable stub (mode 0755) from `content`, which may begin with its own
 /// `#!/bin/sh` line. See [`write_script`] for why a stub is never written any
 /// other way.
