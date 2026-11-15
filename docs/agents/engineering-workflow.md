@@ -297,6 +297,15 @@ When a coordinator splits one change across workers:
   runs before a `workflow_dispatch`. A dispatch needs the workflow on the
   default branch.
 - `apt-get update` exits 0 when its fetches fail: read its `W:` lines.
+- `actions/cache` saves only when the whole job passes, so a lane that never
+  goes green rebuilds its cache every run: save a costly cache in its own
+  `actions/cache/save` step.
+- Hosted iOS lanes keep `host-load.log` in their diagnostics artifact
+  (one-minute load against cores, free memory, top processes); a gap of
+  minutes between samples means the runner itself stalled. A new iOS 27
+  simulator's first boot saturates the 3-core `xcode-27` runner for about
+  15 minutes. A throwaway probe workflow on a scratch branch settles a
+  hosted-runner question in one run.
 - A new `node --test` file under `plugin/` needs its own step in
   `ci-node.yml`.
 
