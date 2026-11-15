@@ -17,12 +17,36 @@ func waitForInitialConsoleSync(
     let expected = HostConsoleProjection.subscriptions(
         paneIDs: paneIDs, protocolVersion: protocolVersion)
     let initial = HostConsoleProjection.subscriptions(paneIDs: [String]())
-    let snapshots: UInt64 = expected == initial ? 1 : 2
+    try await waitForConsoleSync(
+        store, transport: transport, hostID: hostID, backend: backend,
+        paneIDs: paneIDs, protocolVersion: protocolVersion,
+        snapshotRevision: expected == initial ? 1 : 2, sourceLocation: sourceLocation)
+}
+
+/// Waits for a Console scope's events channel to carry `paneIDs`' set and
+/// its `liveSnapshotRevision` to reach `snapshotRevision`. A snapshot that
+/// changes the pane set publishes its rows before the Console replaces the
+/// channel, and the replacement brings one more snapshot: after one, wait for
+/// the revision read before it plus two.
+@MainActor
+func waitForConsoleSync(
+    _ store: ConsoleStore, transport: ScriptedTransport, hostID: Host.ID,
+    backend: HostBackend, paneIDs: [String], protocolVersion: Int = 17,
+    snapshotRevision: UInt64, sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let expected = HostConsoleProjection.subscriptions(
+        paneIDs: paneIDs, protocolVersion: protocolVersion)
     try await waitUntil(sourceLocation: sourceLocation) {
         let live = await transport.liveSubscriptions
-        let projection = store.projections[ConsoleScope(hostID: hostID, backend: backend)]
-        return live == expected && (projection?.liveSnapshotRevision ?? 0) >= snapshots
+        return live == expected
+            && consoleSnapshotRevision(store, hostID: hostID, backend: backend) >= snapshotRevision
     }
+}
+
+/// How many live snapshots a Console scope has applied.
+@MainActor
+func consoleSnapshotRevision(_ store: ConsoleStore, hostID: Host.ID, backend: HostBackend) -> UInt64 {
+    store.projections[ConsoleScope(hostID: hostID, backend: backend)]?.liveSnapshotRevision ?? 0
 }
 
 /// Scripted `Transport` for Console and EventsSession protocol-level tests:
