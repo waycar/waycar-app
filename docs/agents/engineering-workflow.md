@@ -95,8 +95,10 @@ project). No PR, no GitHub review comments, no Paperclip review child.
    local `main`. A failure comes back to the coordinator, which fixes the
    cause and submits again.
 4. **Push.** `@ultimate` pushes `origin main` after a landing whose branch
-   was reviewed and whose checks passed (standing permission from the user).
-   Coordinators and their subagents never push.
+   was reviewed and whose checks passed (standing permission from the user),
+   after `git log origin/main..HEAD` shows only reviewed commits: a shared
+   checkout's `main` can hold another run's unpushed ones. Coordinators and
+   their subagents never push.
 5. **CI.** `@ultimate` watches the pushed commit with
    `scripts/ci/watch-main.py --sha <sha>` (an `automation ask` script). A red
    run is fixed forward on a new branch through this lane.
@@ -266,6 +268,10 @@ When a coordinator splits one change across workers:
   behaviour flag down as a parameter instead.
 - Check for cancellation after every `await` that comes before a side
   effect. Separate `Task`s keep no order: serialize ordered work on one.
+- A stream made inside `Task {}` subscribes only when the task first runs,
+  and a stream that reports changes only (an activity's state) loses what
+  came before: make it before the `Task` and iterate it inside. A test's
+  poll can resume first on a busy main thread (hosted CI did).
 - `#expect` on an `await` prints `<not evaluated>`, and a failed `waitUntil`
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
