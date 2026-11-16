@@ -3,7 +3,7 @@ title: What connection messages mean
 description: What each Host connection message in the Console and over an open agent means, from Connecting and Paused to Host Unavailable and Detached.
 category: troubleshooting
 order: 15
-keywords: [paused, disabled, unavailable, connecting, reconnecting, loading agents, detached, session ended, reattach, connection dot, not running, start herdr core, hide]
+keywords: [paused, disabled, unavailable, connecting, reconnecting, detached, session ended, not running, start herdr core, hide]
 related: [cant-connect, reconnecting, hosts, host-page]
 ---
 
