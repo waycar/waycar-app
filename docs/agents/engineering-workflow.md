@@ -289,6 +289,11 @@ When a coordinator splits one change across workers:
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
 - `Process` is not in the iOS SDK; `posix_spawn` works in the simulator.
+- An `inout` generic parameter does not open an existential: a stored
+  `any RandomNumberGenerator` cannot be passed as `&random`, so inject a
+  closure. A test generator that always returns 0 hangs
+  `Int.random(in:using:)` for any range that is not a power of two (its
+  rejection sampling refuses 0 forever); one that returns 1 draws index 0.
 
 **Xcode and the project**
 
@@ -327,7 +332,11 @@ When a coordinator splits one change across workers:
   action that checks identity (worktree removal, move) finds its target
   already gone (`.staleIdentity`). A step that only needs a fresh snapshot
   can `await store.refreshSidebarLayouts()`, which waits for every resync.
-  Hosted iPad and iPhone runs hit this five times.
+  A reconnect is such a change: the new connection subscribes without the
+  panes, snapshots, then resubscribes and snapshots again, and a
+  `refreshSidebarMetadata()` barrier can return before that resubscribe;
+  wait for the live pane set and the revision read before the drop plus
+  two. Hosted iPad and iPhone runs hit this six times.
 - `actions/cache` saves only when the whole job passes, so a lane that never
   goes green rebuilds its cache every run: save a costly cache in its own
   `actions/cache/save` step.

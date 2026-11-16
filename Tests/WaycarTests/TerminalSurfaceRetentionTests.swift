@@ -76,7 +76,9 @@ struct TerminalSurfaceRetentionTests {
     }
 
     /// A surface retired and re-enabled within the same turn (a return to
-    /// the same feed) keeps its keyboard: the deferred release is skipped.
+    /// the same feed) keeps its keyboard: the deferred release is skipped,
+    /// so the intent it would clear survives the turn (first responder
+    /// across a turn is UIKit's; see the keeping-the-keyboard test below).
     @Test func reEnablingBeforeTheDeferredReleaseKeepsTheKeyboard() async throws {
         let host = UIViewController()
         let window = try await makeTestWindow(
@@ -91,8 +93,8 @@ struct TerminalSurfaceRetentionTests {
 
         surface.retireLocalInput()
         surface.setLocalInputEnabled(true)
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(surface.isFirstResponder)
+        await Self.mainQueueTurn()
+        #expect(surface.wantsKeyboard)
         surface.dismissKeyboard()
     }
 
@@ -136,6 +138,12 @@ struct TerminalSurfaceRetentionTests {
     /// responder: resigning would start UIKit's hide before the destination
     /// exists, and its claim could then only bring the keyboard back up
     /// after it had dropped. Input still stops at once.
+    ///
+    /// After the retire, first responder is UIKit's to keep or take: on a
+    /// stalled hosted runner (30338ef) the simulator's keyboard service
+    /// dropped the app's connection and the retired surface lost first
+    /// responder with its intent still set, which its own release clears.
+    /// So the turn a deferred release would run on is checked by the intent.
     @Test func retiringWhileKeepingTheKeyboardStopsInputWithoutResigning() async throws {
         let host = UIViewController()
         let window = try await makeTestWindow(
@@ -153,8 +161,9 @@ struct TerminalSurfaceRetentionTests {
 
         retention.detachCallbacks(keepingKeyboard: true)
         #expect(!surface.isLocalInputEnabled)
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(surface.isFirstResponder, "the destination's claim ends the responder, not this")
+        #expect(surface.isFirstResponder, "retiring does not resign on the spot")
+        await Self.mainQueueTurn()
+        #expect(surface.wantsKeyboard, "the destination's claim ends the responder, not a release")
 
         // The next screen's claim takes it over without a dismissal.
         let next = TerminalScreenView.makeConfiguredTerminal(notificationCenter: NotificationCenter())
@@ -163,7 +172,15 @@ struct TerminalSurfaceRetentionTests {
         next.requestKeyboard()
         #expect(next.isFirstResponder)
         #expect(!surface.isFirstResponder)
+        #expect(surface.wantsKeyboard)
         next.dismissKeyboard()
         retention.clear()
+    }
+
+    /// FIFO barrier for a `DispatchQueue.main.async` the surface scheduled.
+    private static func mainQueueTurn() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 }
