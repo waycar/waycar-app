@@ -1,0 +1,120 @@
+# Flake hunt: the full app test lane, run several times on hosted runners, to
+# find timing-sensitive tests before they turn a main run red. Every hosted
+# CI run on the small `xcode-27` runners turned up a different one; this
+# repeats the lane (scripts/ci/flake-hunt.sh) on one job as CI runs it and on
+# one with busy loops beside it, and lists every failing test with how often
+# it failed (scripts/ci/flake-hunt-report.py) in each job's summary.
+#
+# It reports and never fails: a failing scheduled or dispatched run on main
+# would show as a red check on main's latest commit, so the scripts exit 0
+# and the failures live only in the summary and the uploaded logs.
+#
+# Nightly on weekdays until the open-source launch (2026-11-30), weekly on
+# Mondays after it, and by hand with
+# `gh workflow run flake-hunt.yml --ref main [-f passes=N]`. Two macOS jobs at
+# most, so a push's three CI jobs still fit in the org's five, and its own
+# concurrency group, so it never cancels a pending CI run.
+
+name: Flake hunt
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      passes:
+        description: Full app lane passes per job
+        default: "4"
+
+concurrency:
+  group: flake-hunt
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Weekly after the launch: a scheduled start on any day but Monday (UTC)
+  # skips without taking a macOS runner. A dispatch always runs.
+  gate:
+    name: Schedule gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          run=true
+          if [ "$EVENT" = schedule ] && [ "$(date -u +%Y%m%d)" -gt 20261130 ] \
+              && [ "$(date -u +%u)" != 1 ]; then
+            run=false
+            echo "Weekly since the launch: this scheduled start is not a Monday (UTC)."
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  hunt:
+    name: Flake hunt (${{ matrix.label }})
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: xcode-27
+    # A cold build (~17 min), the first-boot settle (~15), and four passes of
+    # 13-20 min each.
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - label: quiet
+            hogs: 0
+          # Two busy loops on the 3-core runner, for the stalls that expose
+          # these races (load above 100 in a failing run's host-load.log).
+          - label: loaded
+            hogs: 2
+    steps:
+      # As in ci.yml: a fresh VM spends about one and a half of its 3 cores
+      # on Spotlight indexing.
+      - name: Turn Spotlight indexing off
+        run: sudo mdutil -a -i off || echo "::warning::could not turn Spotlight indexing off"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select the newest Xcode 27
+        run: |
+          # shellcheck disable=SC2012 # sort -V needs the plain list
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # The script creates and deletes its own simulator and exits 0 whatever
+      # the tests did; a nonzero exit is the script itself breaking.
+      - name: Hunt
+        env:
+          FLAKE_HUNT_LABEL: ${{ matrix.label }}
+          FLAKE_HUNT_CPU_HOGS: ${{ matrix.hogs }}
+          FLAKE_HUNT_PASSES: ${{ inputs.passes || '4' }}
+          FLAKE_HUNT_OUT: ${{ runner.temp }}/flake-hunt-${{ matrix.label }}
+        run: scripts/ci/flake-hunt.sh || echo "::warning title=Flake hunt::flake-hunt.sh exited $?"
+
+      - name: Report
+        if: always()
+        env:
+          FLAKE_HUNT_OUT: ${{ runner.temp }}/flake-hunt-${{ matrix.label }}
+        run: python3 scripts/ci/flake-hunt-report.py "$FLAKE_HUNT_OUT" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the hunt's logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flake-hunt-${{ matrix.label }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/flake-hunt-${{ matrix.label }}
+            ~/Library/Logs/DiagnosticReports/Waycar*.ips
+          if-no-files-found: ignore
+          retention-days: 7

@@ -337,6 +337,14 @@ When a coordinator splits one change across workers:
   `refreshSidebarMetadata()` barrier can return before that resubscribe;
   wait for the live pane set and the revision read before the drop plus
   two. Hosted iPad and iPhone runs hit this six times.
+- The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the full app
+  lane 4 times on two hosted runners, one with busy loops beside it
+  (weeknights until 2026-11-30, then Mondays; by hand,
+  `gh workflow run flake-hunt.yml --ref main -f passes=N`). Each job's
+  summary lists every failing test and how many passes it failed in; the
+  run itself never fails. Treat a test it names like a hosted CI failure:
+  fix it at its cause, red-first. `scripts/ci/flake-hunt-report.py <folder>…`
+  reads its downloaded artifacts.
 - `actions/cache` saves only when the whole job passes, so a lane that never
   goes green rebuilds its cache every run: save a costly cache in its own
   `actions/cache/save` step.

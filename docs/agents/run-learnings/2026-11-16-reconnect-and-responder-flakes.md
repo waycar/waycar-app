@@ -26,3 +26,11 @@
   decided (`wantsKeyboard`) behind a `mainQueueTurn()` barrier.
 - **Watch out:** grep the failing job's log for `_UIRemoteKeyboards` and
   read `host-load.log` before blaming the app for a keyboard flake.
+- **Worked:** Mike's go on a report-only flake hunt (`flake-hunt.yml`): it
+  repeats the full lane on hosted runners instead of loading the Mac. A
+  failing scheduled or dispatched run on `main` would show as a red check on
+  `main`'s latest commit, so its scripts exit 0 and failures live in the
+  job summaries. It builds the committed project on a simulator it creates,
+  as CI does, so it refuses to run outside GitHub Actions.
+- **Watch out:** a `workflow_dispatch` workflow runs only once it is on the
+  default branch, so a new one gets its first real run after the push.

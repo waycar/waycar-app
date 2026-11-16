@@ -190,6 +190,11 @@ jobs:
       - name: Test CI evidence report
         run: python3 scripts/test-ci-evidence.py
 
+      # The flake hunt's report (flake-hunt.yml), on hunt folders built from
+      # the same saved job logs.
+      - name: Test flake hunt report
+        run: python3 scripts/test-flake-hunt-report.py
+
       # The Pairing ceremony e2e runs the native `waycar pair-accept` as the
       # sshd forced command; the Node accept script was removed in WAY-443.
       - name: Build native waycar
