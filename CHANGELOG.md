@@ -21,7 +21,7 @@ Entries reference the issue that motivated them.
   says so and opens Settings.
 - A computer you already added opens its Host. Pairing a found computer keeps
   its name.
-- The first screen now puts Scan Computers on My Network in the middle. Try
+- Add Your First Host now puts Scan Computers on My Network in the middle. Try
   the Sample is under it, and Set up by hand is folded at the bottom. Find
   Computers is also in Hosts › + › Find Computers.
 - Some computers don't take a password. The Host page now says so and offers
@@ -82,12 +82,13 @@ Entries reference the issue that motivated them.
 - Opening, closing or restyling a terminal no longer risks a crash while the
   screen around it is still updating. This was seen on iPad.
 - Waycar no longer starts Herdr TUI or Herdr Core on its own. If one is installed
-  but not running, after a Mac restart for example, the Host's row and page
-  say so. Tap Start Herdr TUI or Start Herdr Core. (refs #389)
+  but not running, after a Mac restart for example, the Host's row in the
+  Console and its Host page say so. Tap Start Herdr TUI or Start Herdr Core. (refs #389)
 - On a Mac, Herdr TUI and Herdr Core start in your login session, so agents
   keep Keychain access.
 - A herdr session that doesn't exist on the Host now says so. Checks and
-  errors name Herdr TUI or Herdr Core, so you can tell which one is down.
+  errors name Herdr TUI or Herdr Core, so you can tell which one is down and
+  which is still connected.
 - A short command Waycar runs on a Host, such as a check or a tmux or Codex
   action, no longer waits out its whole time limit. This happened when its
   output and its end came at the same moment.
@@ -98,7 +99,8 @@ Entries reference the issue that motivated them.
 - Turning Herdr Core, tmux or Zellij back on for a Host turns its notifications
   back on too, even when that restarts the Host's connection.
 - A notification you tapped before its agent showed up no longer opens that
-  agent later, after you have opened another one.
+  agent later, once you have opened another agent and come back to the
+  Console.
 - A Done notification is no longer skipped when the agent starts its next turn while
   the last one is still being sent. Update Host Tools to 2.3.1 to get this.
 - A Live Activity update can no longer undo turning notifications off. The switches
@@ -134,9 +136,9 @@ Entries reference the issue that motivated them.
 - After you install Herdr Core, New Agent says it found herdr-core, not tmux.
 - New Agent no longer stays on Starting when the agent you picked goes away
   from the Host while Waycar looks up its home folder.
-- While Waycar checks for a worktree it asked for, the banner says "Checking
-  for the worktree the Host made." It no longer names herdr on Hosts that
-  don't use it.
+- In New Agent, while Waycar checks for a worktree it asked for, the banner
+  says "Checking for the worktree the Host made". It no longer names herdr on
+  Hosts that don't use it.
 - An agent you name in New Agent keeps that name on a Herdr Core Host. It no
   longer shows its kind.
 - On Herdr Core, an agent you had already seen finish shows its next turn
@@ -152,8 +154,8 @@ Entries reference the issue that motivated them.
   status.
 - On tmux, an old session that ends no longer clears the new session in the
   same pane. A late tool event no longer turns a finished agent back to
-  Working, and a Done is no longer lost to a tool event. This needs Host Tools
-  2.6.1.
+  Working. A turn's Done is no longer lost when a tool event arrives at the
+  same time. This needs Host Tools 2.6.1.
 - A Host's agent list on tmux no longer jumps back to an older state when two
   refreshes overlap.
 - Two quick messages to a gemini, cline or hermes agent on tmux now go out as
@@ -161,18 +163,19 @@ Entries reference the issue that motivated them.
 - Status Hooks no longer show as missing when another tool, such as
   agent-deck, adds its own hooks next to Waycar's. Updating Waycar's hooks
   leaves the other tool's hooks alone.
-- Codex and OpenCode no longer show as not running while their server starts.
+- Host details and New Agent no longer say the Codex or OpenCode server is not
+  running while it starts.
 - Stop in a Codex chat no longer goes to a turn that had just ended.
 - Cancelling an approval in an OpenCode chat no longer marks the session Done.
-- Retrying an OpenCode chat whose setup failed finishes that chat. It no
-  longer makes a second one.
+- In New Agent, retrying an OpenCode chat whose setup failed finishes that
+  chat. It no longer makes a second one.
 - With Host Tools 2.4.1, an OpenCode 2 chat shows its history, images
   included. Reading it never starts a stopped OpenCode server.
 - When the desk terminal of an archived OpenCode chat starts a new session,
   that session's card now opens the terminal with Show Terminal. The terminal
   no longer stays hidden.
 - Opening a chat on OpenCode, Kilo or Hermes no longer hangs past its time
-  limit when a program keeps running in the background.
+  limit when the chat export leaves a program running in the background.
 - A question card in Chat says Sent only once your answer arrives. If the
   answer fails, you can send it again.
 - A chat refresh that gets cut off no longer pauses the offline copies of a
@@ -219,10 +222,10 @@ Entries reference the issue that motivated them.
 - After you change a Host's address, a late answer from the old address no
   longer replaces what Waycar knows about the new one.
 - When two checks of a Host overlap, the install panel keeps the newer one.
-- A host key question that shows up just as an earlier check is cancelled is
-  no longer turned down on its own.
-- Backing out of an earlier resume no longer closes the session you resumed
-  after it.
+- When you add a Host, a host key question that shows up just as an earlier
+  check is cancelled is no longer turned down on its own.
+- In Closed Sessions, backing out of an earlier resume no longer closes the
+  session you resumed after it.
 - After a quick network blip, Waycar waits for the new network to settle
   before it reconnects.
 - Closing a connection through a Jump Host no longer hangs past its time
@@ -234,20 +237,20 @@ Entries reference the issue that motivated them.
   other drop.
 - Leaving an agent while its terminal switches from mosh to SSH no longer
   opens the terminal once more on the Host later.
-- Use SSH Instead says Connecting as soon as you tap it. A second tap no
-  longer connects twice.
+- The terminal says Connecting as soon as you tap Use SSH Instead. A second
+  tap no longer reconnects it twice.
 - After Waycar falls back to SSH, Retest and Upgrade Sessions tests mosh again.
   If mosh works, it moves the Host's sessions to it.
 - An agent's last screen saved while your iPhone was locked now still shows
   after Waycar restarts.
 - AI Usage on a Mac with the Keychain Fix now waits for the CodexBar helper
   when one provider is slow to read, such as Claude. It no longer shows that
-  provider as "Couldn't refresh." Fix it for me also gives the helper enough
+  provider as "Couldn't refresh". Fix it for me also gives the helper enough
   time for Claude.
 - When an existing Keychain Fix helper gives up on Claude too soon, AI Usage
   says so and offers Fix it for me. It updates the helper to wait longer.
 - On a Mac without the helper, newer CodexBar versions get the Fix it for me
-  offer again, instead of "Couldn't refresh."
+  offer again, instead of "Couldn't refresh".
 - Settings › About › Acknowledgements now credits FreeType, libpng, stb, herdr
   and the other open-source code in Waycar.
 - Acknowledgements now has the full NeMo text-processing credits, and a libintl
