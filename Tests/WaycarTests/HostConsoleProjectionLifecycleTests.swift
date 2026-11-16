@@ -44,6 +44,21 @@ struct HostConsoleProjectionLifecycleTests {
         }
     }
 
+    /// A replacement connection subscribes without the snapshot's panes, so
+    /// its first snapshot is followed by a resubscribe and a second one;
+    /// waits for both, counted from the revision read before the drop.
+    private func waitForReconnectedPaneSubscription(
+        _ transport: ScriptedTransport, _ projection: HostConsoleProjection,
+        after revision: UInt64
+    ) async throws {
+        try await waitUntil {
+            let live = await transport.liveSubscriptions?
+                .contains(.pane(.agentStatusChanged, paneID: "w1:p1")) == true
+            return live && projection.liveSnapshotRevision >= revision + 2
+                && !projection.isAwaitingSnapshot
+        }
+    }
+
     @Test func cachedRowsStayVisibleUntilTheSubscribedLiveSnapshotVerifiesThem() async throws {
         let live = SessionSnapshot.fixture(
             agents: [.fixture(paneID: "w1:p2")],
@@ -142,14 +157,17 @@ struct HostConsoleProjectionLifecycleTests {
             AgentSummary(paneID: "w1:p1", status: .working, text: "current", timestamp: 2)
         ])
         await transport.failEventStream(.channelFailed(detail: "dropped during summary read"))
-        try await waitUntil {
-            projection.liveSnapshotRevision > revision && !projection.isAwaitingSnapshot
-        }
-        // Wait for the new resync's summary request, which follows subscription work.
+        // The new connection snapshots without the pane, then resubscribes
+        // with it and snapshots again. Each snapshot asks for summaries, so
+        // both must ask while the old read still holds the slot; a second
+        // snapshot landing after the follow-up read would add a third.
+        try await waitForReconnectedPaneSubscription(transport, projection, after: revision)
+        // Barrier: the resyncs' own summary requests coalesce behind it.
         await projection.refreshSidebarMetadata()
         await oldRead.open()
         try await waitUntil { projection.agentsByPane["w1:p1"]?.summary?.text == "current" }
-        #expect(await transport.agentSummaryReads == 2)
+        let reads = await transport.agentSummaryReads
+        #expect(reads == 2)
     }
 
     /// CONSOLE-05 safety net: a successful no-summary refresh covers its pane
