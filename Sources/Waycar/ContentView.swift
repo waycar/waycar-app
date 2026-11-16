@@ -70,6 +70,7 @@ struct ContentView: View {
         // Chat (#209).
         .environment(\.waycarPluginUpdateActivity, app.pluginUpdateActivity)
         .environment(\.hostToolsOffer, app.hostToolsOffer)
+        .environment(\.stoppedRuntimeNotices, app.stoppedRuntimeNotices)
         .environment(\.backendInstallCenter, app.backendInstall)
         .environment(
             \.agentSceneRouting,

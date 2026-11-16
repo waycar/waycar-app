@@ -69,6 +69,8 @@ struct ConsoleView: View {
     @Environment(\.waycarPluginUpdateActivity) private var pluginUpdateActivity
     /// Per-Host answers to the Install Waycar Host Tools offer (WAY-341).
     @Environment(\.hostToolsOffer) private var hostToolsOffer
+    /// Per-Host stopped-runtime rows the user hid.
+    @Environment(\.stoppedRuntimeNotices) private var stoppedRuntimeNotices
     @Environment(\.analytics) private var analytics
     /// Accessibility sizes stack a Host row's buttons under its text.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -1197,11 +1199,47 @@ struct ConsoleView: View {
                 .accessibilityHint(
                     issue.opensBackendInstall
                         ? "Opens setup for this Host." : "Opens this Host's settings.")
+            } else if issue.startsRuntime != nil {
+                // A stopped runtime's row: Hide keeps it off the Console
+                // until the Host page starts that runtime.
+                hostIssueRow(issue, showsChevron: false)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if let runtime = hidableRuntime(issue) {
+                            Button("Hide", systemImage: "eye.slash") {
+                                hideStoppedRuntime(runtime, on: issue.hostID)
+                            }
+                        }
+                    }
+                    .contextMenu {
+                        if let runtime = hidableRuntime(issue) {
+                            Button(runtime.startActionTitle, systemImage: "power") {
+                                Task { await console.startRuntime(runtime, on: issue.hostID) }
+                            }
+                            Button("Hide", systemImage: "eye.slash") {
+                                hideStoppedRuntime(runtime, on: issue.hostID)
+                            }
+                        }
+                    }
             } else {
                 hostIssueRow(issue, showsChevron: false)
             }
         }
         .modifier(ConsoleCardRow())
+    }
+
+    /// The stopped runtime a row can hide: none while its start runs, in
+    /// Selection Mode, or with no record to keep the hide (previews).
+    private func hidableRuntime(_ issue: ConsoleHostStatusPresentation) -> HostBackend? {
+        guard let runtime = issue.startsRuntime, stoppedRuntimeNotices != nil,
+            multiSelection == nil, !console.isStarting(runtime, on: issue.hostID)
+        else { return nil }
+        return runtime
+    }
+
+    private func hideStoppedRuntime(_ runtime: HostBackend, on hostID: Host.ID) {
+        withAnimation(reduceMotion ? nil : .snappy) {
+            stoppedRuntimeNotices?.hide(runtime, on: hostID)
+        }
     }
 
     private func noAgentsOnHostState(_ hostName: String) -> some View {
@@ -2209,6 +2247,7 @@ struct ConsoleView: View {
             return ConsoleHostStatusPresentation.hostRows(
                 condition: hostIssue,
                 backendFailures: backendIssues,
+                hiddenRuntimes: stoppedRuntimeNotices?.hiddenRuntimes(on: host.id) ?? [],
                 pluginNotice: pluginRow(for: host))
         }
     }
@@ -2281,6 +2320,12 @@ struct ConsoleView: View {
                     .font(.footnote)
                     .foregroundStyle(issue.isCritical ? Color.red : Color.secondary)
                     .lineLimit(lineLimit)
+                    // The swipe's Hide, on the words VoiceOver reads.
+                    .accessibilityActions {
+                        if let runtime = hidableRuntime(issue) {
+                            Button("Hide") { hideStoppedRuntime(runtime, on: issue.hostID) }
+                        }
+                    }
                 if let detail = issue.detail {
                     // A failed start's words are what the user tapped for:
                     // a step brighter than a plain hint, and room for
@@ -2312,6 +2357,7 @@ struct ConsoleView: View {
             Color(uiColor: .secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     /// A Host row's Retry or Start, or the plugin row's Update and Not now.

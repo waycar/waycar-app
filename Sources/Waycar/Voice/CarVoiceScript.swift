@@ -68,6 +68,8 @@ enum CarVoiceScript {
     /// line every time sounded robotic, so each introduction draws one
     /// (`askLine(after:randomIndex:)`). None is a yes/no question: "yes"
     /// would go to the Agent as the question, and "no" ends the conversation.
+    /// The site quotes "What should I ask?" (`apps/web/src/pages/carplay.astro`,
+    /// the car article), so it stays in the pool.
     static let askLines = [
         "What should I ask?",
         "What's your question?",

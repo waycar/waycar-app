@@ -51,6 +51,7 @@ struct HostOnboardingView: View {
     @Environment(\.waycarPluginUpdateActivity) private var pluginUpdateActivity
     @Environment(\.pluginUpdateRunningChange) private var pluginUpdateRunningChange
     @Environment(\.hostToolsOffer) private var hostToolsOffer
+    @Environment(\.stoppedRuntimeNotices) private var stoppedRuntimeNotices
 
     init(
         host: Host,
@@ -454,9 +455,12 @@ struct HostOnboardingView: View {
 
     /// Starts the runtime through the Console, the only place that starts
     /// one, then runs this page's checks again so they show it running.
+    /// The tap also brings back the Console row the user hid for it, so the
+    /// next stop shows there again.
     private func start(_ runtime: HostBackend) {
         guard let console else { return }
         let hostID = host.id
+        stoppedRuntimeNotices?.show(runtime, on: hostID)
         Task { @MainActor in
             if await console.startRuntime(runtime, on: hostID) {
                 await store.runChecks()
