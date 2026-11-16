@@ -71,6 +71,86 @@ struct ConsoleListProjectionTests {
         #expect(ConsoleListProjection.statusCounts(heldOrder, held: opened)[.done] == 1)
     }
 
+    // MARK: Status headings
+
+    /// Headings as `# <title> <count>`, cards as their pane ids.
+    private func outline(_ rows: [ConsoleAgentListRow]) -> [String] {
+        rows.map { row in
+            switch row {
+            case .heading(let heading): "# \(heading.kind.title) \(heading.count)"
+            case .agent(let agent): agent.agent.paneID
+            }
+        }
+    }
+
+    @Test func headingsNameEachSortedGroupWithItsCount() {
+        let alpha = Host.fixture(name: "alpha")
+        let beta = Host.fixture(name: "beta")
+        let agents = [
+            consoleAgent(host: alpha, paneID: "shell", status: .shellTerminal),
+            consoleAgent(host: beta, paneID: "done-b", status: .done),
+            consoleAgent(host: alpha, paneID: "working", status: .working),
+            consoleAgent(host: alpha, paneID: "pinned", status: .working),
+            consoleAgent(host: alpha, paneID: "unknown", status: .unknown),
+            consoleAgent(host: alpha, paneID: "done-a", status: .done),
+            consoleAgent(host: beta, paneID: "blocked", status: .blocked),
+        ]
+        let isPinned: (ConsoleAgent) -> Bool = { $0.agent.paneID == "pinned" }
+        let sorted = agents.consoleSorted(pinRank: { isPinned($0) ? 0 : nil })
+
+        // No Idle Agent, so no Idle heading.
+        #expect(
+            outline(ConsoleListProjection.agentRows(sorted, headings: true, isPinned: isPinned)) == [
+                "# Pinned 1", "pinned",
+                "# Blocked 1", "blocked",
+                "# Done 2", "done-a", "done-b",
+                "# Working 1", "working",
+                "# Other 2", "shell", "unknown",
+            ])
+        #expect(
+            outline(ConsoleListProjection.agentRows(sorted, headings: false, isPinned: isPinned))
+                == sorted.map(\.agent.paneID))
+    }
+
+    /// The open Agent keeps its place, so it stays under the heading it was
+    /// listed under when opened, and a row the sort put apart from its group
+    /// (an Ultimate lead, a departing row) gets a heading of its own, never
+    /// one whose id repeats.
+    @Test func headingsFollowTheListAsPlaced() {
+        let host = Host.fixture(name: "alpha")
+        let opened = consoleAgent(host: host, paneID: "opened", status: .done)
+        let nowIdle = consoleAgent(host: host, paneID: "opened", status: .idle)
+        let live = [
+            consoleAgent(host: host, paneID: "working", status: .working),
+            nowIdle,
+            consoleAgent(host: host, paneID: "idle", status: .idle),
+        ]
+        let heldOrder = live.consoleSorted(sortAs: { $0.id == opened.id ? opened : $0 })
+        #expect(
+            outline(ConsoleListProjection.agentRows(
+                heldOrder, headings: true, held: opened, isPinned: { _ in false })) == [
+                "# Done 1", "opened", "# Working 1", "working", "# Idle 1", "idle",
+            ])
+
+        let apart = [
+            consoleAgent(host: host, paneID: "w1", status: .working),
+            consoleAgent(host: host, paneID: "d1", status: .done),
+            consoleAgent(host: host, paneID: "w2", status: .working),
+        ]
+        let rows = ConsoleListProjection.agentRows(apart, headings: true, isPinned: { _ in false })
+        #expect(outline(rows) == ["# Working 1", "w1", "# Done 1", "d1", "# Working 1", "w2"])
+        #expect(Set(rows.map(\.id)).count == rows.count)
+    }
+
+    @Test func headingsShowOnlyWhereThePillListsSeveralGroups() {
+        let shown = ConsoleStatusFilter.allCases.filter {
+            ConsoleListProjection.showsStatusHeadings(status: $0, searchQuery: "")
+        }
+        #expect(shown == [.all, .chat, .attention])
+        #expect(!ConsoleListProjection.showsStatusHeadings(status: .all, searchQuery: "app"))
+        #expect(ConsoleListProjection.showsStatusHeadings(status: .all, searchQuery: "  "))
+    }
+
     // MARK: Host scope
 
     @Test func effectiveHostIDHonorsOnlyAKnownChoice() {

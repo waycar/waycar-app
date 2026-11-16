@@ -17,12 +17,15 @@ From top to bottom:
 
 - **Search and Status pills.** Search finds agents by folder or title. The pills (**All**, **Chat**, **Needs Attention**, **Blocked**, **Done**, **Working**) and the **Closed** chip narrow the list. See [Filter, search, and pin](/help/filter-search-pin).
 - **AI Usage row.** When a Host has CodexBar, an **AI USAGE** row sits on top of the list and scrolls away with it. See [AI Usage with CodexBar](/help/ai-usage).
+- **Group headings.** A small heading such as **BLOCKED 1** sits above each group of cards and shows how many are in it.
 - **Agent cards.** Each card shows the agent's kind, its status badge, and up to three rows of fields you can change per Host. See [Agent card fields](/help/agent-card-fields).
 - **Bottom bar.** A Host menu, a Workspace menu, the **New Agent** button, **Hosts**, and **Settings**.
 
 ## In what order are agents listed?
 
-Agents from every Host and Workspace are grouped by status: Blocked, Done, Working, Idle, then the rest (Unknown and plain shells). Pinned agents always come first. Inside each status group, agents are ordered by Host, newest change first. See [Agent status](/help/agent-status).
+Agents from every Host and Workspace are grouped by status: Blocked, Done, Working, Idle, then Other (Unknown and plain shells). Pinned agents always come first. Inside each status group, agents are ordered by Host, newest change first. See [Agent status](/help/agent-status).
+
+Under **All**, **Chat**, and **Needs Attention**, each group has a heading with its count, like an inbox. A group with no agents gets no heading. The **Blocked**, **Done**, and **Working** pills and search results show a plain list.
 
 ## Narrow the list to one Host or Workspace
 

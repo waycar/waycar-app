@@ -114,6 +114,65 @@ enum ConsoleStatusFilter: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The small heading over one group of the Console's Agent cards, as in an
+/// inbox: the pinned Agents, then each status group in the order the list
+/// already sorts them (`consoleSortBucket`), with how many cards it heads.
+struct ConsoleStatusHeading: Equatable {
+    enum Kind: String, CaseIterable {
+        case pinned, blocked, done, working, idle, other
+
+        /// The words the cards and pills use. Other holds Unknown, plain
+        /// shells and any status this build does not know.
+        var title: String {
+            switch self {
+            case .pinned: "Pinned"
+            case .blocked: "Blocked"
+            case .done: "Done"
+            case .working: "Working"
+            case .idle: "Idle"
+            case .other: "Other"
+            }
+        }
+
+        /// The group an unpinned row sorted into: read from its sort bucket,
+        /// so a heading always names the bucket that placed its rows.
+        init(sortedAs status: AgentStatus) {
+            switch status.consoleSortBucket {
+            case AgentStatus.blocked.consoleSortBucket: self = .blocked
+            case AgentStatus.done.consoleSortBucket: self = .done
+            case AgentStatus.working.consoleSortBucket: self = .working
+            case AgentStatus.idle.consoleSortBucket: self = .idle
+            default: self = .other
+            }
+        }
+    }
+
+    /// The kind, plus the run number for a later run of the same kind.
+    let id: String
+    let kind: Kind
+    let count: Int
+}
+
+/// One row of the Console's Agent list: a status group's heading or a card.
+/// One flat list, so a card whose status changes moves between groups
+/// rather than leaving one and arriving in another.
+enum ConsoleAgentListRow: Identifiable, Equatable {
+    case heading(ConsoleStatusHeading)
+    case agent(ConsoleAgent)
+
+    enum ID: Hashable {
+        case heading(String)
+        case agent(ConsoleAgent.ID)
+    }
+
+    var id: ID {
+        switch self {
+        case .heading(let heading): .heading(heading.id)
+        case .agent(let agent): .agent(agent.id)
+        }
+    }
+}
+
 /// Projects the Console list: Host scope, then Workspace, then Status (or a
 /// search in place of Status), then the visible Agent cards, and the Closed
 /// Sessions after them. It never reorders Agents — ConsoleStore owns sort
@@ -223,6 +282,56 @@ enum ConsoleListProjection {
         }
         return workspaceAgents.filter {
             status.matches(filterAs($0, held: held), chatAgentIDs: chatAgentIDs)
+        }
+    }
+
+    /// Whether the cards list under status headings: only where the pill
+    /// can list more than one group (All, Chat, Needs Attention). A single
+    /// status pill already names its group, and a search lists its matches
+    /// flat, as the Closed pill lists its sessions.
+    static func showsStatusHeadings(status: ConsoleStatusFilter, searchQuery: String) -> Bool {
+        guard searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        switch status {
+        case .all, .chat, .attention: return true
+        case .blocked, .done, .working, .closed: return false
+        }
+    }
+
+    /// The visible cards in their order, each group of them under its
+    /// heading when `headings` is on. A row groups by what placed it: its
+    /// pin, else the status it sorted as (`held`, for the open Agent that
+    /// keeps its place). Groups are runs of the list as sorted, never a
+    /// reorder: a row the sort placed apart from its group (an Ultimate
+    /// lead moved up to its project's first row, a departing row beside its
+    /// anchor) starts a run of its own, whose heading gets its own id.
+    static func agentRows(
+        _ visible: [ConsoleAgent],
+        headings: Bool,
+        held: ConsoleAgent? = nil,
+        isPinned: (ConsoleAgent) -> Bool
+    ) -> [ConsoleAgentListRow] {
+        guard headings else { return visible.map(ConsoleAgentListRow.agent) }
+        var runs: [(kind: ConsoleStatusHeading.Kind, agents: [ConsoleAgent])] = []
+        for agent in visible {
+            let kind: ConsoleStatusHeading.Kind =
+                isPinned(agent)
+                ? .pinned : .init(sortedAs: filterAs(agent, held: held).agent.status)
+            if runs.last?.kind == kind {
+                runs[runs.count - 1].agents.append(agent)
+            } else {
+                runs.append((kind, [agent]))
+            }
+        }
+        var seen: [ConsoleStatusHeading.Kind: Int] = [:]
+        return runs.flatMap { run -> [ConsoleAgentListRow] in
+            let earlier = seen[run.kind, default: 0]
+            seen[run.kind] = earlier + 1
+            let heading = ConsoleStatusHeading(
+                id: earlier == 0 ? run.kind.rawValue : "\(run.kind.rawValue)-\(earlier)",
+                kind: run.kind, count: run.agents.count)
+            return [.heading(heading)] + run.agents.map(ConsoleAgentListRow.agent)
         }
     }
 

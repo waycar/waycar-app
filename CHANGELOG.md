@@ -13,6 +13,8 @@ Entries reference the issue that motivated them.
 
 ### Added
 
+- The Console now shows a small heading over each group of agents, such as
+  Blocked or Done, with a count. It reads like an inbox.
 - Find Computers lists the computers on your Wi-Fi that have SSH on, such as
   a Mac with Remote Login. Tap one, sign in with its user name and password
   (or pair with a code to use a key), then check its host key.

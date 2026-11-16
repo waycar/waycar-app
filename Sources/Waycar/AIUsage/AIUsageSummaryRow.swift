@@ -34,7 +34,9 @@ struct AIUsageSummaryRow: View {
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                .frame(maxWidth: .infinity, minHeight: minHeight)
+                // The Console's List lets rows under 44 pt (its status
+                // headings), so the button keeps a full tap target itself.
+                .frame(maxWidth: .infinity, minHeight: max(minHeight, 44))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

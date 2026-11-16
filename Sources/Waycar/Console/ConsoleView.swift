@@ -934,6 +934,9 @@ struct ConsoleView: View {
                     .contentMargins(.bottom, 0, for: .scrollContent)
             }
             .listStyle(.plain)
+            // A status heading is only as tall as its caption; every other
+            // row is taller than the plain List's 44 pt minimum anyway.
+            .environment(\.defaultMinListRowHeight, 0)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
             // A live snapshot replacing last-known rows removes the panes
@@ -1070,8 +1073,14 @@ struct ConsoleView: View {
         switch surface {
         case .noHosts, .rows:
             hostIssueAndQueuedLaunchRows
-            ForEach(visibleAgents) { agent in
-                agentRow(agent)
+            let rows = agentListRows
+            ForEach(rows) { row in
+                switch row {
+                case .heading(let heading):
+                    statusHeadingRow(heading, isFirst: row.id == rows.first?.id)
+                case .agent(let agent):
+                    agentRow(agent)
+                }
             }
             // Alone (the Closed pill) they need no header; beside Agents (a
             // search) they follow every Agent in their own section.
@@ -2048,6 +2057,30 @@ struct ConsoleView: View {
         Set(workspaceAgents.filter { console.isChatMode($0) }.map(\.id))
     }
 
+    /// The visible cards, under status headings where the pill can list
+    /// more than one group.
+    private var agentListRows: [ConsoleAgentListRow] {
+        ConsoleListProjection.agentRows(
+            visibleAgents,
+            headings: ConsoleListProjection.showsStatusHeadings(
+                status: statusFilter, searchQuery: searchText),
+            held: heldAgent,
+            isPinned: { console.pins.isPinned(hostID: $0.hostID, paneID: $0.agent.paneID) })
+    }
+
+    /// A status group's heading: inset like the AI USAGE caption, close
+    /// above its first card, with room above it to part it from the group
+    /// before. Never selectable; VoiceOver lists it among the headings.
+    private func statusHeadingRow(_ heading: ConsoleStatusHeading, isFirst: Bool) -> some View {
+        ConsoleStatusHeadingLabel(heading: heading)
+            .padding(.top, isFirst ? 4 : 14)
+            .padding(.bottom, 2)
+            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .selectionDisabled()
+    }
+
     private var visibleAgents: [ConsoleAgent] {
         ConsoleListProjection.visibleAgents(
             workspaceAgents: workspaceAgents,
@@ -2996,6 +3029,30 @@ private struct DepartingRowLift: ViewModifier {
             .offset(y: rising ? -36 : 0)
             .opacity(isLifted ? 0 : 1)
             .allowsHitTesting(!isDeparting)
+    }
+}
+
+/// A status heading's caption: the group's word in small caps, like the
+/// AI USAGE caption, then a quieter count of its cards.
+private struct ConsoleStatusHeadingLabel: View {
+    let heading: ConsoleStatusHeading
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(heading.kind.title)
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
+            Text(heading.count, format: .number)
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+        }
+        .font(.footnote.weight(.semibold))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(heading.kind.title), \(heading.count) \(heading.count == 1 ? "agent" : "agents")")
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
