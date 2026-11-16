@@ -91,6 +91,33 @@ class FlakeHuntReportTests(unittest.TestCase):
         self.assertIn("| quiet | 2 | 7560 tests, 2 failing |", text)
         self.assertIn("| quiet | 3 | 7560 tests |", text)
 
+    def test_never_gives_one_test_another_tests_issue(self) -> None:
+        tmux_issue = (
+            '✘ Test "without no-detach-on-destroy the control channel reattaches after %exit" '
+            "recorded an issue at TmuxTransportE2ETests.swift:711:6: Caught error: .timedOut\n")
+        quiet = write_job(self.root, "quiet", {
+            "label": "quiet\n", "passes": "1\n", "pass-1.status": "65\n",
+            "pass-1.log": tmux_issue + CONSOLE_ISSUE + RUN_FAILED + (
+                "Failing tests:\n"
+                "\tTmuxTransportE2ETests.attachSurvivesACrashedHost()\n"
+                "\tTmuxTransportE2ETests.controlChannelReattachesAfterTmuxExits()\n"
+                "\tHostConsoleProjectionLifecycleTests.aCrashedNeighbour()\n"
+                "\tHostConsoleProjectionLifecycleTests.aStaleMissingPluginReadStillDrainsTheNewConnectionsFollowUp()\n"),
+        })
+        rows = self.rows(fhr.report([quiet]))
+        self.assertEqual(len(rows), 4)
+
+        def row(name: str) -> str:
+            return next(line for line in rows if name in line)
+
+        # Two tmux tests left without a named issue: the display-named issue
+        # could be either's, so neither gets it.
+        for name in ("attachSurvivesACrashedHost", "controlChannelReattachesAfterTmuxExits"):
+            self.assertNotIn(".timedOut", row(name))
+            self.assertIn("no test name matched", row(name))
+        self.assertIn("Expectation failed", row("aStaleMissingPluginRead"))
+        self.assertIn("no issue recorded", row("aCrashedNeighbour"))
+
     def test_a_pass_with_no_failing_list_names_tests_from_their_issues(self) -> None:
         quiet = write_job(self.root, "quiet", {
             "label": "quiet\n", "passes": "1\n",

@@ -108,17 +108,40 @@ def test_identity(entry: str) -> str:
     return entry
 
 
-def first_issue_for(test: str, issues: list[Issue], used: set[int]) -> str | None:
-    """The first issue that names the test's function, else the first unused
-    one from its suite's file (a display-named test prints its display name)."""
-    suite, _, name = test.partition(".")
-    for matches in (lambda issue: issue.name == name,
-                    lambda issue: issue.suite == suite):
-        for index, issue in enumerate(issues):
-            if index not in used and matches(issue):
-                used.add(index)
-                return f"{issue.where}: {issue.message}"
-    return None
+NO_ISSUE = "no issue recorded (a crash or a timeout ended it)"
+UNMATCHED = "its suite recorded an issue no test name matched; see the pass log"
+
+
+def attribute(failing: list[str], issues: list[Issue]) -> dict[str, str]:
+    """Each failing test's first issue. An issue names its test's function,
+    and its file the suite: both match first, then the function alone when
+    only one failing test has it. A display-named test's issue names neither;
+    it goes to the one failing test of its suite left without an issue, and
+    to none when several are left: never a guess."""
+    def detail(issue: Issue) -> str:
+        return f"{issue.where}: {issue.message}"
+
+    split = {test: test.partition(".")[::2] for test in failing}
+    names = [name for _, name in split.values()]
+    found: dict[str, str] = {}
+    claimed: set[int] = set()
+    for test, (suite, name) in split.items():
+        mine = [index for index, issue in enumerate(issues) if issue.name == name
+                and (issue.suite == suite or names.count(name) == 1)]
+        claimed.update(mine)
+        if mine:
+            found[test] = detail(issues[mine[0]])
+    left = [test for test in failing if test not in found]
+    for test in left:
+        suite = split[test][0]
+        loose = [index for index, issue in enumerate(issues)
+                 if index not in claimed and issue.suite == suite]
+        alone = sum(1 for other in left if split[other][0] == suite) == 1
+        if loose and alone:
+            found[test] = detail(issues[loose[0]])
+        else:
+            found[test] = UNMATCHED if loose else NO_ISSUE
+    return found
 
 
 def parse_pass(job: str, number: int, status: int | None, log: str,
@@ -148,8 +171,7 @@ def parse_pass(job: str, number: int, status: int | None, log: str,
             result.relaunches += 1
         elif match := CRASH_REPORTS.search(line):
             result.crash_reports += int(match["count"])
-    used: set[int] = set()
-    found = [(test, first_issue_for(test, issues, used)) for test in failing]
+    found = list(attribute(failing, issues).items())
     if not failing:
         # A pass xcodebuild never finished (a timeout) lists no failing tests:
         # name each from its issue, `Suite.test` after the suite's file.
@@ -159,7 +181,7 @@ def parse_pass(job: str, number: int, status: int | None, log: str,
                 found.append((test, f"{issue.where}: {issue.message}"))
     for test, detail in found:
         failure = failures.setdefault(test, Failure(test=test, first_issue=detail))
-        if failure.first_issue is None:
+        if failure.first_issue in (NO_ISSUE, UNMATCHED) and detail not in (NO_ISSUE, UNMATCHED):
             failure.first_issue = detail
         failure.passes.add((job, number))
     result.failing = len(found)
@@ -196,7 +218,7 @@ def report(folders: list[Path]) -> str:
         lines += ["| Test | Failed in | First issue |", "|---|---|---|"]
         for failure in sorted(failures.values(), key=lambda item: (-len(item.passes), item.test)):
             spots = ", ".join(f"{job} #{number}" for job, number in sorted(failure.passes))
-            issue = failure.first_issue or "no issue recorded (a crash or a timeout ended it)"
+            issue = failure.first_issue or NO_ISSUE
             lines.append(
                 f"| `{cell(failure.test)}` | {len(failure.passes)} of {ran} ({spots}) | {cell(issue)} |")
         lines.append("")
