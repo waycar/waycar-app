@@ -166,7 +166,10 @@ goes to Mike as a screenshot first, and a conversion never adds one on its own.
 declares the same protocol under the same name (internal in WaycarSSH,
 `package` in SwiftMosh, whose modules share one declaration); the check finds
 their machines the same way. `Packages/SwiftMosh` is vendored: a conversion
-there is a Waycar patch listed in its `PROVENANCE.md`. The Host Tools in
+there is a Waycar patch listed in its `PROVENANCE.md`. Deferring a row in a
+vendored package is right when its ordering protects something no owner test
+sees (a nonce, a native pointer freed under a mutex): write the reason into
+the catalogue row. The Host Tools in
 `plugin/rust` declare a `StateMachine` trait with the same shape; a change
 there ships in a plugin release (AGENTS.md, plugin version rule).
 

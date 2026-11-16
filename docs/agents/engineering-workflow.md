@@ -164,6 +164,11 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   `make test-ci-package` (through `mac_run`), not a hosted draft-PR round
   trip: it runs the fixture-backed `SessionDriver*E2ETests` with the lane's
   pinned count.
+- **`Packages/SwiftMosh`:** run its real-server suites,
+  `SWIFTMOSH_REAL_E2E=1 swift test --package-path Packages/SwiftMosh`, which
+  need a local `mosh-server`; without one, prove CI's SwiftMosh job on a
+  draft PR (`gh pr create --draft`; the PR sweeper skips drafts) and close
+  it and delete its branch at submit.
 - **Waiting for hosted CI** (a PR, a dispatch, a pushed commit): make one
   call, `python3 scripts/ci/ci-evidence.py --pr <n> --wait` (or
   `--sha <sha>`), or hand the wait to an automation (an `automation ask`
@@ -317,9 +322,12 @@ When a coordinator splits one change across workers:
   returns false in between. After a fixture's first rows call
   `waitForInitialConsoleSync`; around a later change take
   `consoleSyncMark` before it and `waitForConsoleResync` after its effect,
-  before the next `setSnapshot`, emit or count baseline. A step that only
-  needs a fresh snapshot can `await store.refreshSidebarLayouts()`, which
-  waits for every resync. Hosted iPad and iPhone runs hit this four times.
+  before the next `setSnapshot`, emit or count baseline. That second
+  snapshot reads a `setSnapshot` staged for after an action too, so an
+  action that checks identity (worktree removal, move) finds its target
+  already gone (`.staleIdentity`). A step that only needs a fresh snapshot
+  can `await store.refreshSidebarLayouts()`, which waits for every resync.
+  Hosted iPad and iPhone runs hit this five times.
 - `actions/cache` saves only when the whole job passes, so a lane that never
   goes green rebuilds its cache every run: save a costly cache in its own
   `actions/cache/save` step.

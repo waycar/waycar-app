@@ -2300,6 +2300,10 @@ struct ConsoleStoreTests {
         defer { store.setHosts([]) }
         await store.resume()
         try await waitUntil("all agents should arrive") { store.agents.count == 3 }
+        // The initial sync's second snapshot must land first: it would read
+        // the post-move state set below and drop w1:p1 before the move.
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         store.togglePin(hostID: host.id, paneID: "w1:p1")
         store.togglePin(hostID: host.id, paneID: "w2:p1")
         let movedID = ConsoleAgent.ID(hostID: host.id, paneID: "w1:p1")
@@ -3142,6 +3146,10 @@ struct ConsoleStoreTests {
         try await waitUntil("both linked-worktree Agents should arrive") {
             store.agents.count == 2
         }
+        // The initial sync's second snapshot must land first: it would read
+        // the post-removal state set below and refuse w1 as stale.
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let first = try #require(store.agents.first { $0.agent.workspaceID == "w1" })
         let checkout = try #require(first.repositoryCheckout)
         let request = WorktreeRemovalRequest(
@@ -3243,6 +3251,10 @@ struct ConsoleStoreTests {
         try await waitUntil("the original linked-worktree Agent should arrive") {
             store.agents.first?.isLinkedWorktree == true
         }
+        // The initial sync's second snapshot must land first: it would read
+        // the empty state set below and refuse w1 as stale.
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let agent = try #require(store.agents.first)
         let request = WorktreeRemovalRequest(
             identity: WorktreeIdentity(
@@ -3385,6 +3397,10 @@ struct ConsoleStoreTests {
         store.setHosts([host])
         await store.resume()
         try await waitUntil("the Agent should arrive") { store.agents.count == 1 }
+        // The initial sync's second snapshot must land first: it would read
+        // the empty state set below and refuse w1 as stale.
+        try await waitForInitialConsoleSync(
+            store, transport: transport, hostID: host.id, backend: .herdr)
         let agent = try #require(store.agents.first)
         let checkout = try #require(agent.repositoryCheckout)
 
