@@ -163,8 +163,8 @@ targets:
         # Brand violet for Color.accentColor and prominent buttons: the
         # Sources/Waycar/Design/Brand.xcassets colorset scripts/generate-brand-tokens.py writes.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        MARKETING_VERSION: "1.3.0"
-        CURRENT_PROJECT_VERSION: "167"
+        MARKETING_VERSION: "1.4.0"
+        CURRENT_PROJECT_VERSION: "168"
         # Scan to Pair (#62) reads the Pairing Code QR from the computer screen.
         INFOPLIST_KEY_NSCameraUsageDescription: "Waycar uses the camera to scan the Pairing Code shown on your computer, so you can add that machine without typing anything."
         # Composer Dictation captures the microphone and transcribes on device
@@ -299,8 +299,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).NotificationService
-        MARKETING_VERSION: "1.3.0"
-        CURRENT_PROJECT_VERSION: "167"
+        MARKETING_VERSION: "1.4.0"
+        CURRENT_PROJECT_VERSION: "168"
         # Match the containing app's iPhone and iPad device family.
         TARGETED_DEVICE_FAMILY: "1,2"
 
@@ -351,8 +351,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).Widgets
-        MARKETING_VERSION: "1.3.0"
-        CURRENT_PROJECT_VERSION: "167"
+        MARKETING_VERSION: "1.4.0"
+        CURRENT_PROJECT_VERSION: "168"
         # Match the containing app's iPhone and iPad device family.
         TARGETED_DEVICE_FAMILY: "1,2"
 
@@ -414,8 +414,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WAYCAR_BUNDLE_ID).watchkitapp
-        MARKETING_VERSION: "1.3.0"
-        CURRENT_PROJECT_VERSION: "167"
+        MARKETING_VERSION: "1.4.0"
+        CURRENT_PROJECT_VERSION: "168"
         TARGETED_DEVICE_FAMILY: "4"
         # Sources/WaycarWatch/Resources/Assets.xcassets: the single-size icon,
         # and the AccentColor colorset scripts/generate-brand-tokens.py writes.
