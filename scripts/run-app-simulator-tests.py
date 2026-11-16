@@ -32,6 +32,12 @@ PREFERENCES = {
     # keyboard tests fail on it alone. A fresh simulator has neither key.
     ("com.apple.keyboard.preferences", "AutomaticMinimizationEnabled"): False,
 }
+# make screenshots wants the reverse: an iPad opening an Agent focuses its
+# terminal, and the shown software keyboard would cover half of the shot. With
+# both keys on, the simulator minimizes it as with an attached keyboard.
+if os.environ.get("WAYCAR_SIM_HARDWARE_KEYBOARD") == "1":
+    PREFERENCES[("com.apple.keyboard.preferences", "AutomaticMinimizationEnabled")] = True
+    PREFERENCES[("com.apple.keyboard.preferences", "HardwareKeyboardLastSeen")] = True
 DOMAINS = sorted({domain for domain, _ in PREFERENCES})
 TEST_ACTIONS = {"test", "test-without-building"}
 # After a failure xcodebuild otherwise runs `simctl diagnose`, which can hang for

@@ -53,7 +53,8 @@ done
 rm -rf "$output_dir/iphone" "$output_dir/ipad"
 mkdir -p "$derived"
 test_status=0
-WAYCAR_SCREENSHOT_DIR="$output_dir" python3 "$repo_root/scripts/run-app-simulator-tests.py" test \
+WAYCAR_SCREENSHOT_DIR="$output_dir" WAYCAR_SIM_HARDWARE_KEYBOARD=1 \
+    python3 "$repo_root/scripts/run-app-simulator-tests.py" test \
     -project "$repo_root/Waycar.xcodeproj" -scheme WaycarScreenshots \
     -only-testing:WaycarScreenshots/ReadmeScreenshots \
     -destination "platform=iOS Simulator,id=$iphone" \
