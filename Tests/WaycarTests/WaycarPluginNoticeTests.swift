@@ -261,6 +261,90 @@ struct WaycarPluginNoticeTests {
                 condition: nil, backendFailures: [], pluginNotice: nil).isEmpty)
     }
 
+    // MARK: Hidden stopped-runtime rows
+
+    @Test func hideHoldsPerHostAndRuntimeUntilTheHostPageStartsIt() throws {
+        let suiteName = "waycar-stopped-runtime-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let host = Host.fixture()
+        let other = Host.fixture()
+        let notices = StoppedRuntimeNoticeDismissals(defaults: defaults)
+        #expect(notices.hiddenRuntimes(on: host.id).isEmpty, "shown by default")
+
+        notices.hide(.core, on: host.id)
+
+        #expect(notices.hiddenRuntimes(on: host.id) == [.core])
+        #expect(notices.hiddenRuntimes(on: other.id).isEmpty, "per Host")
+        let relaunched = StoppedRuntimeNoticeDismissals(defaults: defaults)
+        #expect(relaunched.hiddenRuntimes(on: host.id) == [.core], "for good")
+
+        relaunched.hide(.herdr, on: host.id)
+        relaunched.show(.core, on: host.id)
+        #expect(relaunched.hiddenRuntimes(on: host.id) == [.herdr], "per runtime")
+        notices.reload()
+        #expect(notices.hiddenRuntimes(on: host.id) == [.herdr])
+        #expect(StoppedRuntimeNoticeDismissals(defaults: defaults).hiddenRuntimes(on: host.id) == [.herdr])
+    }
+
+    @Test func aHiddenStoppedRowLeavesTheHostsRowsAndLetsThePluginRowShow() throws {
+        let host = Host.fixture()
+        let stoppedCore = try #require(
+            ConsoleHostStatusPresentation(host: host, status: .failed(.coreNotRunning), syncError: nil))
+        let stoppedTUI = ConsoleHostStatusPresentation(
+            host: host, failedScope: ConsoleScope(hostID: host.id, backend: .herdr),
+            failure: .herdrNotRunning(path: "/s"))
+        let tmuxFailure = ConsoleHostStatusPresentation(
+            host: host, failedScope: ConsoleScope(hostID: host.id, backend: .tmux),
+            failure: .authenticationFailed)
+        let plugin = try #require(
+            ConsoleHostStatusPresentation(host: host, pluginStatus: Self.outdated, isDismissed: false))
+
+        #expect(
+            ConsoleHostStatusPresentation.hostRows(
+                condition: stoppedCore, backendFailures: [stoppedTUI, tmuxFailure],
+                hiddenRuntimes: [.core], pluginNotice: plugin) == [stoppedTUI, tmuxFailure])
+        #expect(
+            ConsoleHostStatusPresentation.hostRows(
+                condition: stoppedCore, backendFailures: [stoppedTUI],
+                hiddenRuntimes: [.core, .herdr], pluginNotice: plugin) == [plugin],
+            "nothing left to act on, so the plugin row speaks")
+        #expect(
+            ConsoleHostStatusPresentation.hostRows(
+                condition: stoppedCore, backendFailures: [],
+                hiddenRuntimes: [.herdr], pluginNotice: plugin) == [stoppedCore],
+            "only the runtime hidden")
+    }
+
+    /// A hide reaches the user's other devices, and a reinstall, through
+    /// iCloud Sync, like the plugin rows' answers.
+    @Test func hiddenStoppedRowsComeBackThroughICloudSync() throws {
+        let firstSuite = "waycar-stopped-runtime-\(UUID().uuidString)"
+        let first = try #require(UserDefaults(suiteName: firstSuite))
+        defer { first.removePersistentDomain(forName: firstSuite) }
+        let otherSuite = "waycar-stopped-runtime-\(UUID().uuidString)"
+        let other = try #require(UserDefaults(suiteName: otherSuite))
+        defer { other.removePersistentDomain(forName: otherSuite) }
+        let iCloud = InMemorySecretStore()
+        let keys = [StoppedRuntimeNoticeDismissals.defaultsKey]
+        let canRead: (String, Any) -> Bool = { _, value in
+            StoppedRuntimeNoticeDismissals.canRead(value)
+        }
+        let host = Host.fixture()
+        StoppedRuntimeNoticeDismissals(defaults: first).hide(.core, on: host.id)
+        _ = PreferenceSync(defaults: first, keys: keys)
+            .reconcile(items: try iCloud.readAll(), shared: iCloud, canRead: canRead)
+
+        let notices = StoppedRuntimeNoticeDismissals(defaults: other)
+        let outcome = PreferenceSync(defaults: other, keys: keys)
+            .reconcile(items: try iCloud.readAll(), shared: iCloud, canRead: canRead)
+        notices.reload()
+
+        #expect(outcome.changedKeys == [StoppedRuntimeNoticeDismissals.defaultsKey])
+        #expect(notices.hiddenRuntimes(on: host.id) == [.core])
+        #expect(!StoppedRuntimeNoticeDismissals.canRead(["id": "core"]), "not this build's shape")
+    }
+
     // MARK: Move off Node (WAY-451)
 
     private func pluginRow(

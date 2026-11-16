@@ -211,6 +211,77 @@ final class HostToolsOffer {
     }
 }
 
+/// The Console's stopped-runtime rows ("Herdr Core is not running on this
+/// Host." with Start; #389) the user hid with **Hide**, per Host and runtime.
+///
+/// A hide holds for good. Only the user's Start of that runtime on the Host
+/// page (`show`) brings the row back, for the next time the runtime stops.
+/// The Host page and the Hosts sheet still say it is stopped either way.
+///
+/// A synced preference (ADR 0019, `PreferenceSync`), like the plugin rows'
+/// answers: a hide reaches the user's other devices and survives a
+/// reinstall; `reload()` re-reads it after iCloud Sync replaced it. One
+/// instance lives on the app model and reaches every window through
+/// `\.stoppedRuntimeNotices`, so every window agrees.
+@MainActor
+@Observable
+final class StoppedRuntimeNoticeDismissals {
+    static let defaultsKey = "waycar-stopped-runtime-notice-dismissals"
+
+    /// Host id (`uuidString`) → the hidden runtimes' `HostBackend` raw values.
+    private(set) var hidden: [String: [String]]
+
+    @ObservationIgnored private nonisolated(unsafe) let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        hidden = Self.stored(in: defaults)
+    }
+
+    /// Whether this build can read a synced value (`SyncedPreference.canRead`).
+    nonisolated static func canRead(_ value: Any) -> Bool {
+        value is [String: [String]]
+    }
+
+    /// Re-reads the hides after iCloud Sync replaced them.
+    func reload() {
+        let stored = Self.stored(in: defaults)
+        if stored != hidden { hidden = stored }
+    }
+
+    /// The runtimes whose stopped row stays hidden on `hostID`.
+    func hiddenRuntimes(on hostID: Host.ID) -> Set<HostBackend> {
+        Set((hidden[hostID.uuidString] ?? []).compactMap(HostBackend.init(rawValue:)))
+    }
+
+    /// **Hide** on the stopped row of `runtime` on `hostID`.
+    func hide(_ runtime: HostBackend, on hostID: Host.ID) {
+        update(hostID) { $0.insert(runtime.rawValue) }
+    }
+
+    /// The user started `runtime` on `hostID` from the Host page: its row
+    /// shows again the next time it stops.
+    func show(_ runtime: HostBackend, on hostID: Host.ID) {
+        update(hostID) { $0.remove(runtime.rawValue) }
+    }
+
+    /// Re-reads the stored hides first, so a write from elsewhere on this
+    /// device is kept, not overwritten; writes only on a change.
+    private func update(_ hostID: Host.ID, _ change: (inout Set<String>) -> Void) {
+        let before = Self.stored(in: defaults)
+        var runtimes = Set(before[hostID.uuidString] ?? [])
+        change(&runtimes)
+        var stored = before
+        stored[hostID.uuidString] = runtimes.isEmpty ? nil : runtimes.sorted()
+        if stored != before { defaults.set(stored, forKey: Self.defaultsKey) }
+        if stored != hidden { hidden = stored }
+    }
+
+    private static func stored(in defaults: UserDefaults) -> [String: [String]] {
+        defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:]
+    }
+}
+
 /// The Hosts with an "Update Waycar on this Host" run in flight (#209).
 /// One instance lives on the app model and reaches every window through
 /// `\.waycarPluginUpdateActivity`, so a second window, Host detail or Chat
@@ -259,4 +330,8 @@ extension EnvironmentValues {
     /// The app's one Host Tools offer record, injected at each window's
     /// root; nil in previews, where no Host is offered an install.
     @Entry var hostToolsOffer: HostToolsOffer? = nil
+    /// The app's one record of hidden stopped-runtime rows, injected at each
+    /// window's root; nil in previews, the sample and the demo, where no row
+    /// offers Hide.
+    @Entry var stoppedRuntimeNotices: StoppedRuntimeNoticeDismissals? = nil
 }

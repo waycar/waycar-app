@@ -10,3 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Entries reference the issue that motivated them.
 
 ## [Unreleased]
+
+### Added
+
+- You can now hide the "Herdr Core is not running" row in the Console. Swipe
+  left and tap Hide, or long-press it. It stays hidden on that Host until you
+  start it from the Host's page. The same works for Herdr TUI.
