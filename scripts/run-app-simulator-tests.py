@@ -4,7 +4,8 @@
 make test-app, make screenshots, and the CI app lane use this entrypoint; every
 simulator -destination is prepared: the accessibility tree is enabled, and the
 software keyboard is shown even on a simulator that once saw a hardware
-keyboard. These simulator preferences are test infrastructure, not app APIs;
+keyboard (make screenshots asks for the opposite, WAYCAR_SIM_HARDWARE_KEYBOARD
+below). These simulator preferences are test infrastructure, not app APIs;
 recheck them on SDK upgrades. Only the owned keys are restored, including
 their original absence/type. After a test action, pass or fail, the Waycar
 crash reports those simulators left are printed and fail the run.

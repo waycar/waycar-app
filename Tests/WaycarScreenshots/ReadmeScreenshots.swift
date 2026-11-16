@@ -27,16 +27,48 @@ final class ReadmeScreenshots: XCTestCase {
     /// simulators within a second ("Failed to get list of active
     /// applications: Accessibility error … -25218"), a test started 0.1 s
     /// later failed the same way, and tests started seconds later passed. Such
-    /// a failure ends the test even when expected, so this test expects it
-    /// and its teardown waits it out before the first capture starts.
+    /// a failure ends the test or teardown block it happens in, even when
+    /// expected, so the retries are teardown blocks: each runs on its own,
+    /// half a second after the last, until one sets the orientation without
+    /// an issue, and the first capture starts only then.
     @MainActor
     func test0AccessibilityWarmUp() {
-        addTeardownBlock { Thread.sleep(forTimeInterval: 3) }
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = false
-        XCTExpectFailure("Accessibility is still starting.", options: options) {
-            XCUIDevice.shared.orientation = isPad ? .landscapeLeft : .portrait
+        final class Probe: @unchecked Sendable {
+            var answered = false
+            var issue = false
         }
+        let probe = Probe()
+        let orientation: UIDeviceOrientation = isPad ? .landscapeLeft : .portrait
+        let attempt: @Sendable () -> Void = {
+            MainActor.assumeIsolated {
+                probe.issue = false
+                let options = XCTExpectedFailure.Options()
+                options.isStrict = false
+                options.issueMatcher = { _ in
+                    probe.issue = true
+                    return true
+                }
+                XCTExpectFailure("Accessibility is still starting.", options: options) {
+                    XCUIDevice.shared.orientation = orientation
+                }
+                // Not reached when the failure ended the block.
+                probe.answered = !probe.issue
+            }
+        }
+        // Teardown blocks run last added first.
+        addTeardownBlock {
+            if !probe.answered {
+                XCTFail("Accessibility never answered the device orientation.")
+            }
+        }
+        for _ in 0..<20 {
+            addTeardownBlock {
+                guard !probe.answered else { return }
+                Thread.sleep(forTimeInterval: 0.5)
+                attempt()
+            }
+        }
+        attempt()
     }
 
     /// iPhone: the Agent list. iPad: the list beside the open Agent.
