@@ -294,11 +294,6 @@ When a coordinator splits one change across workers:
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
 - `Process` is not in the iOS SDK; `posix_spawn` works in the simulator.
-- An `inout` generic parameter does not open an existential: a stored
-  `any RandomNumberGenerator` cannot be passed as `&random`, so inject a
-  closure. A test generator that always returns 0 hangs
-  `Int.random(in:using:)` for any range that is not a power of two (its
-  rejection sampling refuses 0 forever); one that returns 1 draws index 0.
 
 **Xcode and the project**
 
@@ -320,7 +315,10 @@ When a coordinator splits one change across workers:
   each finished job's log. By hand, `gh run view --log` refuses a run still
   in progress, and `gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`
   returns a finished job's log only with `--allow-escape-sequences` (gh
-  2.103 refuses a body with terminal escapes, and CI logs have them).
+  2.103 refuses a body with terminal escapes, and CI logs have them). A
+  pinned lane prints `==> <lane>: ran all N pinned tests, S skipped (A
+  allowed)`, which `ci-evidence.py`'s `PINNED` pattern reads: change them
+  together (`scripts/test-ci-evidence.py` runs the shipped echo).
 - In one concurrency group a newly queued run cancels the run already
   pending, even with `cancel-in-progress: false`; check for queued `main`
   runs before a `workflow_dispatch`. A dispatch needs the workflow on the

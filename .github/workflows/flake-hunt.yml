@@ -92,8 +92,9 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      # The script creates and deletes its own simulator and exits 0 whatever
-      # the tests did; a nonzero exit is the script itself breaking.
+      # The script creates its own simulator, keeps every step inside one
+      # budget, and exits 0 whatever the tests did; a nonzero exit is the
+      # script itself breaking.
       - name: Hunt
         env:
           FLAKE_HUNT_LABEL: ${{ matrix.label }}

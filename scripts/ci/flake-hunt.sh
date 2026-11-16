@@ -9,10 +9,12 @@
 # for the stalls of a loaded runner, which is when these races show.
 #
 # It reports and never fails: every outcome, a failed build included, lands in
-# FLAKE_HUNT_OUT for scripts/ci/flake-hunt-report.py, and the script exits 0,
-# so a failing test never shows as a red check on main. It creates and deletes
-# a simulator, so it runs only on a GitHub-hosted runner, never on the shared
-# Mac (see AGENTS.md, Simulators).
+# FLAKE_HUNT_OUT for scripts/ci/flake-hunt-report.py, every step runs under a
+# deadline inside one budget that ends before the job's timeout, and the script
+# exits 0, so a failing test never shows as a red check on main. It creates a
+# simulator and leaves it to the hosted VM, which is discarded after the job,
+# so it runs only in GitHub Actions, never on the shared Mac (see AGENTS.md,
+# Simulators).
 
 set -uo pipefail
 
@@ -31,16 +33,10 @@ if [[ ! "$passes" =~ ^[1-9]$|^1[0-9]$ ]]; then
     passes=4
 fi
 hogs="${FLAKE_HUNT_CPU_HOGS:-0}"
-build_timeout_seconds=2400
-settle_limit_seconds=1200
-# The CI lane allows the full lane 900 s on this runner; a pass beside busy
-# loops is slower.
-pass_timeout_seconds=1800
-# Inside the job's 150 minutes, with room left to report and upload.
+# Every step's deadline is capped by this budget, which ends inside the job's
+# 150 minutes with room left to report and upload.
 deadline=$((SECONDS + ${FLAKE_HUNT_BUDGET_SECONDS:-8100}))
 derived="$repo_root/build/DerivedData"
-simulator_name="Waycar Flake Hunt"
-udid=""
 hog_pids=()
 
 mkdir -p "$out"
@@ -48,16 +44,21 @@ printf '%s\n' "${FLAKE_HUNT_LABEL:-hunt}" > "$out/label"
 printf '%s\n' "$passes" > "$out/passes"
 
 # shellcheck disable=SC2329 # run by the EXIT trap
-cleanup() {
+stop_hogs() {
     if ((${#hog_pids[@]} > 0)); then
         kill "${hog_pids[@]}" 2>/dev/null
     fi
-    if [[ -n "$udid" ]]; then
-        xcrun simctl shutdown "$udid" >/dev/null 2>&1
-        xcrun simctl delete "$udid" >/dev/null 2>&1
-    fi
 }
-trap cleanup EXIT
+trap stop_hogs EXIT
+
+# The smaller of a step's own cap and what is left of the budget.
+within() {
+    local left=$((deadline - SECONDS))
+    if ((left < 1)); then
+        left=1
+    fi
+    echo $(($1 < left ? $1 : left))
+}
 
 # One step under a deadline; its status goes beside its log.
 run_step() {
@@ -75,16 +76,22 @@ run_step() {
     return "$status"
 }
 
-# A fresh simulator, as CI's own Waycar CI is the first time.
-if ! udid=$(xcrun simctl create "$simulator_name" \
-    com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max 2>"$out/build.log"); then
-    udid=""
-    printf '%s\n' 1 > "$out/build.status"
-    echo "==> could not create the $simulator_name simulator"
+# Ends the hunt at a setup step that failed; the report names it.
+stop_at() {
+    printf '%s\n' "$1" > "$out/stopped"
     exit 0
+}
+
+# A fresh simulator, as CI's own Waycar CI is the first time.
+run_step create "$(within 120)" \
+    xcrun simctl create "Waycar Flake Hunt" \
+    com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max || stop_at create
+udid=$(tail -n 1 "$out/create.log")
+if [[ ! "$udid" =~ ^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$ ]]; then
+    stop_at create
 fi
 destination="platform=iOS Simulator,id=$udid"
-echo "==> $simulator_name $udid; $passes passes, $hogs CPU hogs"
+echo "==> Simulator $udid; $passes passes, $hogs CPU hogs"
 
 # The full lane runs as run-ci-ios-tests.sh runs it: under the merge gate with
 # no fixture (the scheme forwards this variable), so the fixture-backed suites
@@ -93,16 +100,16 @@ export WAYCAR_SSH_E2E_REQUIRED=0
 
 # The committed project, as CI builds it (no xcodegen), before the boot: a
 # first boot beside the build saturates this runner.
-run_step build "$build_timeout_seconds" \
+run_step build "$(within 2400)" \
     xcodebuild build-for-testing \
     -project Waycar.xcodeproj -scheme Waycar \
     -destination "$destination" -derivedDataPath "$derived" \
-    -collect-test-diagnostics never || exit 0
+    -collect-test-diagnostics never || stop_at build
 
-xcrun simctl boot "$udid" >/dev/null 2>&1
-xcrun simctl bootstatus "$udid" -b > "$out/boot.log" 2>&1
+run_step boot "$(within 300)" xcrun simctl boot "$udid"
+run_step bootstatus "$(within 900)" xcrun simctl bootstatus "$udid" -b || stop_at bootstatus
 cores=$(sysctl -n hw.ncpu)
-settle_deadline=$((SECONDS + settle_limit_seconds))
+settle_deadline=$((SECONDS + $(within 1200)))
 while :; do
     load=$(sysctl -n vm.loadavg | awk '{ print $2 }')
     if awk -v load="$load" -v cores="$cores" 'BEGIN { exit !(load < 10 * cores) }' \
@@ -118,18 +125,19 @@ for ((hog = 0; hog < hogs; hog += 1)); do
     hog_pids+=($!)
 done
 
-# The harness lab is left out by name, as in the CI lane.
+# The harness lab is left out by name, as in the CI lane. The CI lane allows
+# the full lane 900 s on this runner; a pass beside busy loops is slower.
 for ((pass = 1; pass <= passes; pass += 1)); do
-    remaining=$((deadline - SECONDS))
-    if ((remaining < 600)); then
+    if ((deadline - SECONDS < 600)); then
         echo "==> out of time: passes $pass to $passes do not run"
         break
     fi
-    run_step "pass-$pass" "$((remaining < pass_timeout_seconds ? remaining : pass_timeout_seconds))" \
+    run_step "pass-$pass" "$(within 1800)" \
         python3 scripts/run-app-simulator-tests.py \
         -project Waycar.xcodeproj -scheme Waycar \
         -destination "$destination" \
         -derivedDataPath "$derived" \
+        -disableAutomaticPackageResolution \
         -parallel-testing-enabled NO \
         -skip-testing:WaycarTests/HarnessLabE2ETests \
         test-without-building

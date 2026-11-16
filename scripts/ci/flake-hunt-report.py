@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """One Markdown report for a flake hunt (.github/workflows/flake-hunt.yml).
 
-Each argument is one job's folder from scripts/ci/flake-hunt.sh: `label`,
-`passes`, `build.status` and `build.log`, then `pass-N.status` and
-`pass-N.log` per pass. The report lists every test that recorded an issue,
-with how many passes it failed in and its first message, then what each pass
-ended with (a test host relaunch, crash reports, a timeout). Missing folders
-and files are reported, never raised: the hunt never fails a run.
+Each argument is one job's folder from scripts/ci/flake-hunt.sh: `label` and
+`passes`, a `<step>.status` and `<step>.log` per step (`pass-N` for each pass
+of the full lane), and `stopped`, naming the setup step that ended the hunt
+early. The report lists every failing test, grouped by test (the xcodebuild
+`Failing tests:` list, so a test a crash ended counts too), with how many
+passes it failed in and its first recorded issue, then what each pass ended
+with. Missing folders and files are reported, never raised: the hunt never
+fails a run.
 """
 
 from __future__ import annotations
@@ -23,7 +25,9 @@ SWIFT_ISSUE = re.compile(
     r"✘ Test (?P<name>.+?) recorded an issue(?: with .+?)? at "
     r"(?P<file>[^\s:]+\.swift):(?P<line>\d+):\d+: (?P<message>.*)$")
 XCTEST_ISSUE = re.compile(
-    r"(?P<path>\S+\.swift):(?P<line>\d+): error: -\[\S+ (?P<name>[^\]]+)\] : (?P<message>.*)$")
+    r"(?P<path>\S+\.swift):(?P<line>\d+): error: -\[(?P<suite>\S+) (?P<name>[^\]]+)\] : (?P<message>.*)$")
+FAILING_HEADER = "Failing tests:"
+OBJC_NAME = re.compile(r"^-\[(?P<suite>\S+) (?P<name>.+)\]$")
 RUN_SUMMARY = re.compile(r"Test run with (?P<tests>\d+) tests? in \d+ suites? (?P<result>passed|failed)")
 RELAUNCH = re.compile(r"^Restarting after unexpected exit, crash, or test timeout")
 CRASH_REPORTS = re.compile(r"^error: (?P<count>\d+) Waycar crash report\(s\) from this run")
@@ -32,10 +36,17 @@ MESSAGE_LIMIT = 160
 
 
 @dataclass
-class Failure:
+class Issue:
+    suite: str
     name: str
     where: str
     message: str
+
+
+@dataclass
+class Failure:
+    test: str
+    first_issue: str | None
     passes: set[tuple[str, int]] = field(default_factory=set)
 
 
@@ -44,35 +55,34 @@ class Pass:
     number: int
     status: int | None
     tests: int | None = None
-    issues: int = 0
+    failing: int = 0
     relaunches: int = 0
     crash_reports: int = 0
 
     def outcome(self) -> str:
         if self.status is None:
             return "did not run"
-        if self.status == TIMEOUT_STATUS:
-            return "timed out"
-        parts = []
+        parts = ["timed out"] if self.status == TIMEOUT_STATUS else []
         if self.tests is not None:
             parts.append(f"{self.tests} tests")
-        if self.issues:
-            parts.append(f"{self.issues} issue(s)")
+        if self.failing:
+            parts.append(f"{self.failing} failing")
         if self.relaunches:
             parts.append(f"{self.relaunches} test host relaunch(es)")
         if self.crash_reports:
             parts.append(f"{self.crash_reports} crash report(s)")
-        if self.status != 0 and not (self.issues or self.relaunches or self.crash_reports):
-            parts.append(f"exit {self.status} with no test issue")
+        if self.status not in (0, TIMEOUT_STATUS) and not (
+                self.failing or self.relaunches or self.crash_reports):
+            parts.append(f"exit {self.status} with no failing test")
         return ", ".join(parts) or "passed"
 
 
 @dataclass
 class Job:
     label: str
-    planned: int | None
-    build_status: int | None
-    build_tail: list[str]
+    stopped: str | None
+    stopped_status: int | None
+    stopped_tail: list[str]
     passes: list[Pass]
 
 
@@ -91,43 +101,84 @@ def read_int(path: Path) -> int | None:
         return None
 
 
+def test_identity(entry: str) -> str:
+    """`Suite.test()` for both forms xcodebuild lists (`-[Suite test]` too)."""
+    if match := OBJC_NAME.match(entry):
+        return f"{match['suite']}.{match['name']}"
+    return entry
+
+
+def first_issue_for(test: str, issues: list[Issue], used: set[int]) -> str | None:
+    """The first issue that names the test's function, else the first unused
+    one from its suite's file (a display-named test prints its display name)."""
+    suite, _, name = test.partition(".")
+    for matches in (lambda issue: issue.name == name,
+                    lambda issue: issue.suite == suite):
+        for index, issue in enumerate(issues):
+            if index not in used and matches(issue):
+                used.add(index)
+                return f"{issue.where}: {issue.message}"
+    return None
+
+
 def parse_pass(job: str, number: int, status: int | None, log: str,
-               failures: dict[tuple[str, str], Failure]) -> Pass:
+               failures: dict[str, Failure]) -> Pass:
     result = Pass(number=number, status=status)
+    issues: list[Issue] = []
+    failing: list[str] = []
+    in_failing = False
     for raw in log.splitlines():
-        line = TIMESTAMP.sub("", ANSI.sub("", raw)).strip()
-        if match := SWIFT_ISSUE.search(line):
-            where = f"{match['file']}:{match['line']}"
-        elif match := XCTEST_ISSUE.search(line):
-            where = f"{Path(match['path']).name}:{match['line']}"
-        else:
-            if match := RUN_SUMMARY.search(line):
-                result.tests = int(match["tests"])
-            elif RELAUNCH.search(line):
-                result.relaunches += 1
-            elif match := CRASH_REPORTS.search(line):
-                result.crash_reports += int(match["count"])
+        line = TIMESTAMP.sub("", ANSI.sub("", raw)).rstrip()
+        if in_failing and line.startswith("\t") and line.strip():
+            test = test_identity(line.strip())
+            if test not in failing:
+                failing.append(test)
             continue
-        result.issues += 1
-        key = (match["name"], where)
-        failure = failures.setdefault(
-            key, Failure(name=match["name"], where=where, message=match["message"]))
+        in_failing = line.strip() == FAILING_HEADER
+        line = line.strip()
+        if match := SWIFT_ISSUE.search(line):
+            suite = Path(match["file"]).stem
+            issues.append(Issue(suite, match["name"], f"{match['file']}:{match['line']}", match["message"]))
+        elif match := XCTEST_ISSUE.search(line):
+            file = Path(match["path"]).name
+            issues.append(Issue(match["suite"], match["name"], f"{file}:{match['line']}", match["message"]))
+        elif match := RUN_SUMMARY.search(line):
+            result.tests = int(match["tests"])
+        elif RELAUNCH.search(line):
+            result.relaunches += 1
+        elif match := CRASH_REPORTS.search(line):
+            result.crash_reports += int(match["count"])
+    used: set[int] = set()
+    found = [(test, first_issue_for(test, issues, used)) for test in failing]
+    if not failing:
+        # A pass xcodebuild never finished (a timeout) lists no failing tests:
+        # name each from its issue, `Suite.test` after the suite's file.
+        for issue in issues:
+            test = f"{issue.suite}.{issue.name}"
+            if all(test != seen for seen, _ in found):
+                found.append((test, f"{issue.where}: {issue.message}"))
+    for test, detail in found:
+        failure = failures.setdefault(test, Failure(test=test, first_issue=detail))
+        if failure.first_issue is None:
+            failure.first_issue = detail
         failure.passes.add((job, number))
+    result.failing = len(found)
     return result
 
 
-def read_job(folder: Path, failures: dict[tuple[str, str], Failure]) -> Job:
+def read_job(folder: Path, failures: dict[str, Failure]) -> Job:
     label = (read_text(folder / "label") or folder.name).strip() or folder.name
-    planned = read_int(folder / "passes")
-    build_status = read_int(folder / "build.status")
-    build_log = read_text(folder / "build.log") or ""
+    stopped = (read_text(folder / "stopped") or "").strip() or None
+    if stopped:
+        log = (read_text(folder / f"{stopped}.log") or "").splitlines()
+        tail = [line for line in log if "error" in line.lower()][-3:] or log[-3:]
+        return Job(label, stopped, read_int(folder / f"{stopped}.status"), tail, [])
     passes = []
-    for number in range(1, (planned or 0) + 1):
+    for number in range(1, (read_int(folder / "passes") or 0) + 1):
         status = read_int(folder / f"pass-{number}.status")
         log = read_text(folder / f"pass-{number}.log") or ""
         passes.append(parse_pass(label, number, status, log, failures))
-    tail = [line for line in build_log.splitlines() if "error:" in line][-5:]
-    return Job(label, planned, build_status, tail, passes)
+    return Job(label, None, None, [], passes)
 
 
 def cell(text: str) -> str:
@@ -136,26 +187,25 @@ def cell(text: str) -> str:
 
 
 def report(folders: list[Path]) -> str:
-    failures: dict[tuple[str, str], Failure] = {}
+    failures: dict[str, Failure] = {}
     jobs = [read_job(folder, failures) for folder in folders if folder.is_dir()]
     missing = [folder for folder in folders if not folder.is_dir()]
     ran = sum(1 for job in jobs for item in job.passes if item.status is not None)
     lines = [f"## Flake hunt: {len(failures)} failing test(s) in {ran} pass(es)", ""]
     if failures:
-        lines += ["| Test | Where | Failed in | First issue |", "|---|---|---|---|"]
-        ordered = sorted(failures.values(), key=lambda item: (-len(item.passes), item.where))
-        for failure in ordered:
+        lines += ["| Test | Failed in | First issue |", "|---|---|---|"]
+        for failure in sorted(failures.values(), key=lambda item: (-len(item.passes), item.test)):
             spots = ", ".join(f"{job} #{number}" for job, number in sorted(failure.passes))
+            issue = failure.first_issue or "no issue recorded (a crash or a timeout ended it)"
             lines.append(
-                f"| `{cell(failure.name)}` | `{failure.where}` | {len(failure.passes)} of {ran} "
-                f"({spots}) | {cell(failure.message)} |")
+                f"| `{cell(failure.test)}` | {len(failure.passes)} of {ran} ({spots}) | {cell(issue)} |")
         lines.append("")
     lines += ["| Job | Pass | Outcome |", "|---|---|---|"]
     for job in jobs:
-        if job.build_status != 0:
-            detail = "; ".join(cell(line) for line in job.build_tail) or "see build.log"
-            state = "did not run" if job.build_status is None else f"exit {job.build_status}"
-            lines.append(f"| {job.label} | build | {state}: {detail} |")
+        if job.stopped:
+            state = "did not finish" if job.stopped_status is None else f"exit {job.stopped_status}"
+            detail = "; ".join(cell(line.strip()) for line in job.stopped_tail) or f"see {job.stopped}.log"
+            lines.append(f"| {job.label} | {job.stopped} | {state}: {detail} |")
             continue
         for item in job.passes:
             lines.append(f"| {job.label} | {item.number} | {item.outcome()} |")
