@@ -169,8 +169,8 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   need a local `mosh-server`; without one, prove CI's SwiftMosh job on a
   draft PR (`gh pr create --draft`; the PR sweeper skips drafts) and close
   it and delete its branch at submit.
-- **Help pages** (`apps/web/src/content/help/`): in `apps/web`, run
-  `npm run build`, and run `make test-app
+- **Help pages** (`apps/web/src/content/help/`): run `npm run build` in
+  `apps/web`, then, from the repository root, `make test-app
   TEST_FLAGS='-only-testing:WaycarTests/HelpCatalogTests'`. Both check the
   front matter bounds (3-10 keywords, title and description lengths): a page
   that grew to 13 keywords stopped waycar.dev's deploy and failed iOS CI.
