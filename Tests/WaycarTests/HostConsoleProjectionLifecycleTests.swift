@@ -192,10 +192,8 @@ struct HostConsoleProjectionLifecycleTests {
         let read = ScriptedTransportCallGate()
         await transport.gateNextAgentSummaryRead(using: read)
         await transport.failEventStream(.channelFailed(detail: "reconnect after refresh"))
-        try await waitUntil {
-            let held = await read.entryCount == 1
-            return held && projection.liveSnapshotRevision > revision && !projection.isAwaitingSnapshot
-        }
+        try await waitForReconnectedPaneSubscription(transport, projection, after: revision)
+        try await waitUntil { await read.entryCount == 1 }
         #expect(projection.agentsByPane["w1:p1"]?.isSummaryPending == false)
         await read.open()
         try await waitUntil { projection.agentsByPane["w1:p1"]?.hostReportsProgress == true }
@@ -219,10 +217,8 @@ struct HostConsoleProjectionLifecycleTests {
         try await waitForPaneSubscription(transport, projection)
         let revision = projection.liveSnapshotRevision
         await transport.failEventStream(.channelFailed(detail: "dropped during the trigger"))
-        try await waitUntil {
-            projection.liveSnapshotRevision > revision && !projection.isAwaitingSnapshot
-                && projection.agentsByPane["w1:p1"]?.isSummaryPending == true
-        }
+        try await waitForReconnectedPaneSubscription(transport, projection, after: revision)
+        try await waitUntil { projection.agentsByPane["w1:p1"]?.isSummaryPending == true }
         // The new connection's refresh waits for the cancelled one's slot.
         try await Task.sleep(for: .milliseconds(100))
         #expect(await transport.agentSummaryRefreshes == 1)
@@ -263,19 +259,16 @@ struct HostConsoleProjectionLifecycleTests {
 
         let revision = projection.liveSnapshotRevision
         await transport.failEventStream(.channelFailed(detail: "dropped during the read"))
-        try await waitUntil {
-            projection.liveSnapshotRevision > revision && !projection.isAwaitingSnapshot
-        }
-        // Barrier: the new connection's summary request follows its
-        // subscription work; this resync's own request coalesces with it.
+        try await waitForReconnectedPaneSubscription(transport, projection, after: revision)
+        // Barrier: the resyncs' own summary requests coalesce behind the read.
         await projection.refreshSidebarMetadata()
         let next = ScriptedTransportCallGate()
         await transport.gateNextAgentSummaryRefresh(using: next)
         await refreshRead.open()
         try await waitUntil { await next.entryCount == 1 }
-        // The old read and the new connection's coalesced follow-up (its
-        // resubscribe's resync may add one more).
-        #expect(await transport.agentSummaryReads >= readsBefore + 2)
+        // The old read and the new connection's one coalesced follow-up.
+        let reads = await transport.agentSummaryReads
+        #expect(reads == readsBefore + 2)
         #expect(projection.agentsByPane["w1:p1"]?.isSummaryPending == true)
         await next.open()
         try await waitUntil { projection.agentsByPane["w1:p1"]?.isSummaryPending == false }

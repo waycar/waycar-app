@@ -128,7 +128,9 @@ struct TerminalSurfaceRetentionTests {
         #expect(!first.dismissKeyboard(), "not the owner: nothing to release")
         #expect(!first.wantsKeyboard, "the intent is still recorded")
 
-        try await Task.sleep(for: .milliseconds(100))
+        // Only the turn the deferred release runs on: across a longer wait,
+        // first responder is UIKit's (see the keeping-the-keyboard test).
+        await Self.mainQueueTurn()
         #expect(next.isFirstResponder, "the deferred release left the new owner alone")
         next.dismissKeyboard()
         retention.clear()

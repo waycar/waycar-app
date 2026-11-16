@@ -199,15 +199,19 @@ struct WaycarSSHJumpHostGateE2ETests {
     @Test("outer and inner handshake deadlines terminate promptly")
     func handshakeDeadlinesTerminatePromptly() async throws {
         let environment = try #require(WaycarSSHJumpHostTestEnvironment.current)
+        // The stalled handshake would never end, so any bound well short of
+        // the settings' default timeout proves the deadline; a fixed 1 s
+        // bound measured the runner (a hosted one stalled for a minute).
+        let outerTimeout = Duration.milliseconds(150)
         let startedOuter = ContinuousClock.now
         let outerError = await #expect(throws: TransportError.self) {
             _ = try await WaycarSSHTransport.connect(
                 settings: environment.settings(
                     jumpPort: environment.outerStallPort,
-                    timeout: .milliseconds(150)))
+                    timeout: outerTimeout))
         }
         #expect(outerError == .jumpHostFailed(.timedOut))
-        #expect(ContinuousClock.now - startedOuter < .seconds(1))
+        #expect(ContinuousClock.now - startedOuter < outerTimeout + .sshdBudget(1))
 
         // The inner deadline must outlast the Jump Host's forwarding open,
         // an sshd round trip, so it is an sshd budget: one that runs out in

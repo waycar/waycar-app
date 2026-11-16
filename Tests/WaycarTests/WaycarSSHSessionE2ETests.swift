@@ -325,14 +325,15 @@ struct WaycarSSHSessionE2ETests {
     func handshakeDeadlineCompletesPromptly() async throws {
         let environment = try #require(WaycarSSHTestEnvironment.current)
         let stallEndpoint = try #require(environment.stallEndpoint)
+        // The stall never answers, so the deadline is the only way out: a
+        // bound of one sshd budget proves it without measuring the runner.
+        let timeout = Duration.milliseconds(150)
         let started = ContinuousClock.now
 
         await #expect(throws: SSHError.timedOut) {
-            _ = try await SSHConnection.connect(
-                to: stallEndpoint,
-                timeout: .milliseconds(150))
+            _ = try await SSHConnection.connect(to: stallEndpoint, timeout: timeout)
         }
-        #expect(ContinuousClock.now - started < .seconds(1))
+        #expect(ContinuousClock.now - started < timeout + .sshdBudget(1))
     }
 
     @Test(
