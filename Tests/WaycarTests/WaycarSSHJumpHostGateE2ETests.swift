@@ -209,14 +209,20 @@ struct WaycarSSHJumpHostGateE2ETests {
         #expect(outerError == .jumpHostFailed(.timedOut))
         #expect(ContinuousClock.now - startedOuter < .seconds(1))
 
+        // The inner deadline must outlast the Jump Host's forwarding open,
+        // an sshd round trip, so it is an sshd budget: one that runs out in
+        // the open keeps the Jump Host (the forwarding-deadline test below),
+        // and a loaded hosted runner took 151 ms to open. The stall then
+        // makes the handshake the phase that times out.
+        let innerTimeout = Duration.sshdBudget(1)
         let jump = try await environment.connectJump()
         let startedInner = ContinuousClock.now
         await #expect(throws: SSHError.timedOut) {
             _ = try await jump.connectThrough(
                 to: environment.innerStallEndpoint,
-                timeout: .milliseconds(150))
+                timeout: innerTimeout)
         }
-        #expect(ContinuousClock.now - startedInner < .seconds(1))
+        #expect(ContinuousClock.now - startedInner < innerTimeout + .sshdBudget(1))
         await #expect(throws: SSHError.connectionInvalidated) {
             _ = try await jump.execute("printf poisoned", timeout: .sshdBudget(1))
         }

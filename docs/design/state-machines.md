@@ -104,6 +104,12 @@ private func send(_ event: ComposerDrainMachine.Event) {
   state.
 - Observation: a machine stored in an `@Observable` class is observed like
   any other stored property; views read derived values through the owner.
+- An owner that keeps an observed mirror of machine state: check every
+  transition where the machine clears that state against the point where the
+  owner clears its mirror. One that clears early changes behaviour without
+  failing any owner pin (a replacement message jump once stopped holding the
+  transcript early), and a pin for that race must make the racing step
+  happen inside the awaited call, not beside it.
 
 ### Tokens across `await`
 
