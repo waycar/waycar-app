@@ -21,6 +21,56 @@ final class ReadmeScreenshots: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// Runs first (XCTest runs a class's tests by name) and takes no capture.
+    /// In five runs on 2026-11-16 (iOS 27) the run's first call that lists
+    /// the running applications, the device orientation, failed on both
+    /// simulators within a second ("Failed to get list of active
+    /// applications: Accessibility error … -25218"), a test started 0.1 s
+    /// later failed the same way, and tests started seconds later passed. Such
+    /// a failure ends the test or teardown block it happens in, even when
+    /// expected, so the retries are teardown blocks: each runs on its own,
+    /// half a second after the last, until one sets the orientation without
+    /// an issue, and the first capture starts only then.
+    @MainActor
+    func test0AccessibilityWarmUp() {
+        final class Probe: @unchecked Sendable {
+            var answered = false
+            var issue = false
+        }
+        let probe = Probe()
+        let orientation: UIDeviceOrientation = isPad ? .landscapeLeft : .portrait
+        let attempt: @Sendable () -> Void = {
+            MainActor.assumeIsolated {
+                probe.issue = false
+                let options = XCTExpectedFailure.Options()
+                options.isStrict = false
+                options.issueMatcher = { _ in
+                    probe.issue = true
+                    return true
+                }
+                XCTExpectFailure("Accessibility is still starting.", options: options) {
+                    XCUIDevice.shared.orientation = orientation
+                }
+                // Not reached when the failure ended the block.
+                probe.answered = !probe.issue
+            }
+        }
+        // Teardown blocks run last added first.
+        addTeardownBlock {
+            if !probe.answered {
+                XCTFail("Accessibility never answered the device orientation.")
+            }
+        }
+        for _ in 0..<20 {
+            addTeardownBlock {
+                guard !probe.answered else { return }
+                Thread.sleep(forTimeInterval: 0.5)
+                attempt()
+            }
+        }
+        attempt()
+    }
+
     /// iPhone: the Agent list. iPad: the list beside the open Agent.
     @MainActor
     func testConsole() throws {
@@ -63,11 +113,21 @@ final class ReadmeScreenshots: XCTestCase {
         let studioMac = app.buttons["Studio Mac"].firstMatch
         XCTAssertTrue(studioMac.waitForExistence(timeout: 30), "The Host menu never opened.")
         studioMac.tap()
-        let chatMode = app.switches["Chat Mode"].firstMatch
+        // The picker lists Claude Code only once Agent detection is done.
+        let agentPicker = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH %@", "Agent, Claude Code")).firstMatch
         XCTAssertTrue(
-            chatMode.waitForExistence(timeout: 30),
-            "Agent detection never offered a Chat Mode Agent.")
-        XCTAssertEqual(chatMode.value as? String, "1", "Chat Mode was not pinned on.")
+            agentPicker.waitForExistence(timeout: 30),
+            "Agent detection never offered Claude Code.")
+        // The iPad's sheet ends above the Chat Mode row (below First Message),
+        // and a List row off screen is not in the element tree.
+        if !isPad {
+            let chatMode = app.switches["Chat Mode"].firstMatch
+            XCTAssertTrue(
+                chatMode.waitForExistence(timeout: 30),
+                "Agent detection never offered a Chat Mode Agent.")
+            XCTAssertEqual(chatMode.value as? String, "1", "Chat Mode was not pinned on.")
+        }
         try capture("new-agent")
     }
 

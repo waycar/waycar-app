@@ -4,7 +4,8 @@
 make test-app, make screenshots, and the CI app lane use this entrypoint; every
 simulator -destination is prepared: the accessibility tree is enabled, and the
 software keyboard is shown even on a simulator that once saw a hardware
-keyboard. These simulator preferences are test infrastructure, not app APIs;
+keyboard (make screenshots asks for the opposite, WAYCAR_SIM_HARDWARE_KEYBOARD
+below). These simulator preferences are test infrastructure, not app APIs;
 recheck them on SDK upgrades. Only the owned keys are restored, including
 their original absence/type. After a test action, pass or fail, the Waycar
 crash reports those simulators left are printed and fail the run.
@@ -32,6 +33,12 @@ PREFERENCES = {
     # keyboard tests fail on it alone. A fresh simulator has neither key.
     ("com.apple.keyboard.preferences", "AutomaticMinimizationEnabled"): False,
 }
+# make screenshots wants the reverse: an iPad opening an Agent focuses its
+# terminal, and the shown software keyboard would cover half of the shot. With
+# both keys on, the simulator minimizes it as with an attached keyboard.
+if os.environ.get("WAYCAR_SIM_HARDWARE_KEYBOARD") == "1":
+    PREFERENCES[("com.apple.keyboard.preferences", "AutomaticMinimizationEnabled")] = True
+    PREFERENCES[("com.apple.keyboard.preferences", "HardwareKeyboardLastSeen")] = True
 DOMAINS = sorted({domain for domain, _ in PREFERENCES})
 TEST_ACTIONS = {"test", "test-without-building"}
 # After a failure xcodebuild otherwise runs `simctl diagnose`, which can hang for
