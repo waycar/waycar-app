@@ -21,7 +21,7 @@ With **Sync with iCloud** on, these go to your other devices:
 - Pins. See [Filter, search, and pin](/help/filter-search-pin).
 - Disabled Hosts, and each Host's New Agent backend and **Show tmux sessions** choice
 - Your answers to each Host's Waycar plugin rows in the Console (**Not now**, **✕**, and **Remind me to install Host Tools**). They also come back with your Hosts if you delete and reinstall Waycar.
-- "Not running" rows you hid in the Console with **Hide**. These come back with your Hosts too.
+- "Not running" rows you hid in the Console with **Hide**. They stay hidden after you delete and reinstall Waycar too.
 
 These settings sync too:
 
