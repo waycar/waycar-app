@@ -787,6 +787,11 @@ section.
 "Free on the App Store" (`.cta-note` in `global.css`) sits beside a download
 button and nowhere else, and only while `ON_APP_STORE`. Setup's "What the
 command does" list repeats `/help/install`: change both together.
+An animated WebP on the first screen costs every phone visitor its whole
+size: give `sizes` a width smaller than the picture draws on phones, so a 3x
+screen takes the 660px file, and compare first-load bytes per viewport before
+and after. A label goes beside a screenshot, never over it; check 390, 768
+and 1024 px wide.
 
 ## Home page A/B test (ended)
 
@@ -823,6 +828,9 @@ Rust toolchain, zig and cargo-zigbuild into `~/.cache/waycar-build` on first use
 (slow once, then cached; Linux only: on another OS the script stops unless zig
 0.17.0 is already on `PATH`). To reuse binaries you already built, run
 `WAYCAR_PLUGIN_BINARIES=<dir> npm run build` with `<dir>/<target>/waycar`.
+`npx astro build` checks the site without them. For screenshots, serve
+`dist/` with `python3 -m http.server`: PostHog tags any host but waycar.dev
+as `debug`, so local views stay out of the release numbers.
 
 `wrangler dev` runs the Worker too. It rewrites local requests to
 `waycar.dev`, so they take the canonical branch (no redirect) and get the
@@ -878,7 +886,9 @@ The share cards are `public/og.png` (every page's default) and
 `public/og-ipad.png` (`/ipad`), 1200x630. Their sources are the HTML pages in
 `og/`, which use the site's fonts, the screenshots in `src/assets/screens/`,
 and `docs/images/waycar-icon.svg`. After changing any of those, run
-`og/render.sh` (needs Google Chrome) and commit the PNGs. A page picks its card
+`og/render.sh` (needs Google Chrome; on Linux point `CHROME` at a wrapper,
+kept outside the repository, that execs `/usr/bin/chromium --no-sandbox "$@"`)
+and commit the PNGs. A page picks its card
 with `Layout`'s `image` and `imageAlt` props. The default card repeats the home
 page's headline: change `og/home.html` and `Layout`'s default `imageAlt` with
 it.

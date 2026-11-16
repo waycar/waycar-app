@@ -197,6 +197,14 @@ When a coordinator splits one change across workers:
 - Run formatters once, early, and tell everyone: `cargo fmt` on a shared
   target reformats files the other branches edit.
 - Check `docs/adr/` and the open branches before taking the next ADR number.
+- `subagent land` refuses a child once the parent merged `main` after
+  starting it ("Target moved or diverged"): merge the child's branch with
+  `git merge ultimate/<id>`, or merge `main` only after landing the
+  children, then rerun the checks on the merged tree.
+- Check every product claim a brief fixes as verbatim copy against the
+  release tag (`git show v<version>:<file>`), and read how a page calls a
+  component before pinning a count on it: a worker told to copy exactly
+  ships a wrong claim exactly.
 
 ## Proving a change
 
