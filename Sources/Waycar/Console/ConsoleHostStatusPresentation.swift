@@ -22,7 +22,8 @@ import Foundation
 /// A runtime installed but stopped (`TransportError.startableRuntime`,
 /// #389: every Host restart stops herdr) is a normal state, not an outage:
 /// its row is quiet, says what is stopped, and offers Start Herdr TUI or
-/// Start Herdr Core in place, so it does not navigate either.
+/// Start Herdr Core in place, so it does not navigate either. Hide keeps it
+/// off the Console for good (`StoppedRuntimeNoticeDismissals`).
 struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     enum Severity: Equatable {
         case informational
@@ -78,12 +79,15 @@ struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     /// A Host's rows, most urgent first: its connection or snapshot
     /// condition, then any failed backend's, and
     /// the plugin row only while none shows. A plugin nag must never stand
-    /// in for, or sit beside, a failure the user has to act on.
+    /// in for, or sit beside, a failure the user has to act on. A stopped
+    /// runtime's row the user hid (`hiddenRuntimes`) is not one of them.
     static func hostRows(
-        condition: Self?, backendFailures: [Self],
+        condition: Self?, backendFailures: [Self], hiddenRuntimes: Set<HostBackend> = [],
         pluginNotice: @autoclosure () -> Self?
     ) -> [Self] {
-        let rows = (condition.map { [$0] } ?? []) + backendFailures
+        let rows = ((condition.map { [$0] } ?? []) + backendFailures).filter { row in
+            row.startsRuntime.map { !hiddenRuntimes.contains($0) } ?? true
+        }
         guard rows.isEmpty else { return rows }
         return pluginNotice().map { [$0] } ?? []
     }

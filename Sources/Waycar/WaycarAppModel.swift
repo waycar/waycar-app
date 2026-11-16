@@ -42,6 +42,8 @@ final class WaycarAppModel {
     /// dismissal or an update in one iPad window shows in all of them.
     let pluginNoticeDismissals: WaycarPluginNoticeDismissals
     let hostToolsOffer: HostToolsOffer
+    /// The stopped-runtime Console rows the user hid, for every window.
+    let stoppedRuntimeNotices: StoppedRuntimeNoticeDismissals
     let pluginUpdateActivity: WaycarPluginUpdateActivity
     /// The "Install herdr / tmux" runs, one for every window, so a hidden
     /// install keeps its progress for the Console banner and a reopened New
@@ -163,6 +165,8 @@ final class WaycarAppModel {
         self.pluginNoticeDismissals = pluginNoticeDismissals
         let hostToolsOffer = HostToolsOffer()
         self.hostToolsOffer = hostToolsOffer
+        let stoppedRuntimeNotices = StoppedRuntimeNoticeDismissals()
+        self.stoppedRuntimeNotices = stoppedRuntimeNotices
         pluginUpdateActivity = WaycarPluginUpdateActivity()
         self.backendInstall = backendInstall
         // A Host an install found reconnects whether or not the sheet that
@@ -246,6 +250,11 @@ final class WaycarAppModel {
                 WaycarPluginNoticeDismissals.defaultsKey: SyncedPreference(
                     reload: { pluginNoticeDismissals.reload() },
                     canRead: { $0 is [String: String] }),
+                // Per Host: the stopped-runtime rows hidden with Hide, so a
+                // hide reaches the other devices and survives a reinstall.
+                StoppedRuntimeNoticeDismissals.defaultsKey: SyncedPreference(
+                    reload: { stoppedRuntimeNotices.reload() },
+                    canRead: { StoppedRuntimeNoticeDismissals.canRead($0) }),
             ].merging(
                 ChatModeSettings.syncedKeys.map { key in
                     (key, SyncedPreference(reload: { chatModeSettings.reload() }))

@@ -237,6 +237,11 @@ When a coordinator splits one change across workers:
   resumed Codex thread sends no `thread/started`, an Ultimate endpoint is
   POST-only. Run the real-binary suite or contract check before you trust
   them, and feed fakes recorded payloads.
+- **Inject randomness as a closure** (`randomIndex: { $0.lowerBound }`), not
+  a stored `any RandomNumberGenerator`: Swift does not open an existential
+  for an `inout` generic argument (Xcode 27). A constant-0 test generator
+  hangs `Int.random(in:using:)` on any range that isn't a power of two; a
+  constant 1 always draws the first index.
 - **Run the exec strings.** A Host command the app builds can be exported by
   a throwaway test and run under `dash` and the Mac's `/bin/sh`, against a
   scratch HOME or a container, before a Mac run.
