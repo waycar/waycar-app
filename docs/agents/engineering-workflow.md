@@ -345,6 +345,18 @@ When a coordinator splits one change across workers:
   `refreshSidebarMetadata()` barrier can return before that resubscribe;
   wait for the live pane set and the revision read before the drop plus
   two. Hosted iPad and iPhone runs hit this six times.
+- A fake's call counter moves when the call starts, before the call reads
+  what it answers and before the store handles that answer. Before you
+  change what a later call sees (a server starting), wait for the state the
+  answer leaves, not for the count. A stopped-server probe's count let the
+  test start the server while the probe was still out, so the probe saw it
+  (flake hunt, `stoppedOpenCodeUsesOnlyAPortProbeUntilAnExternalStart`). A
+  probe-only detection shows nothing, so wait for the Host's
+  `backendDetections` machine to leave `.detecting`. A counter bumped at the
+  end of an awaited `@MainActor` closure is different: the caller resumes
+  without another hop, so it proves the code right after that await ran.
+  Red proof: hold the call behind a gate after it is counted, and open the
+  gate after the change.
 - The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the full app
   lane 4 times on two hosted runners, one with busy loops beside it
   (weeknights until 2026-11-30, then Mondays; by hand,

@@ -318,8 +318,11 @@ struct ConsoleStoreConnectFlowTests {
         defer { store.setHosts([]) }
         store.setHosts([host])
         await store.resume()
+        // The counter moves when the probe starts, before it reads the
+        // socket. Wait for its detection to end: the start below then
+        // reaches only a later probe, and no request waits behind a flight.
         try await waitUntil("stopped Codex should get one socket probe after connect") {
-            calls.codexProbeCount == 1
+            calls.codexProbeCount == 1 && !isDetecting(store, on: host.id)
         }
         #expect(calls.detections == 0)
         #expect(calls.connects(.codex) == 0)
@@ -359,8 +362,11 @@ struct ConsoleStoreConnectFlowTests {
         defer { store.setHosts([]) }
         store.setHosts([host])
         await store.resume()
+        // The counter moves when the probe starts, before it reads the
+        // port. Wait for its detection to end: the start below then reaches
+        // only a later probe, and no request waits behind a flight.
         try await waitUntil("stopped OpenCode should get one port probe after connect") {
-            calls.openCodeProbeCount == 1
+            calls.openCodeProbeCount == 1 && !isDetecting(store, on: host.id)
         }
         #expect(calls.detections == 0)
         #expect(calls.connects(.opencode) == 0)
@@ -590,6 +596,13 @@ struct ConsoleStoreConnectFlowTests {
     }
 
     // MARK: Helpers
+
+    /// Whether the Host's backend detection, or the server probe ahead of
+    /// it, is still in flight.
+    private func isDetecting(_ store: ConsoleStore, on hostID: Host.ID) -> Bool {
+        guard case .detecting = store.backendDetections[hostID]?.state else { return false }
+        return true
+    }
 
     private final class Flag: Sendable {
         private let state = Mutex(false)

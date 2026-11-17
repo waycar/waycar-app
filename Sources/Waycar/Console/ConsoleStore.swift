@@ -87,7 +87,7 @@ final class ConsoleStore {
     private(set) var scopesAwaitingSnapshot: Set<ConsoleScope> = []
     /// Each Host's backends as last detected, or as the last detection left
     /// them in the inventory cache. Absent until either says.
-    private var backendDetections: [Host.ID: BackendDetectionMachine] = [:]
+    private(set) var backendDetections: [Host.ID: BackendDetectionMachine] = [:]
     var backendPresences: [Host.ID: HostBackendPresence] {
         backendDetections.compactMapValues(\.presence)
     }
