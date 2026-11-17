@@ -3,7 +3,7 @@ title: What connection messages mean
 description: What each Host connection message in the Console and over an open agent means, from Connecting and Paused to Host Unavailable and Detached.
 category: troubleshooting
 order: 15
-keywords: [paused, disabled, unavailable, connecting, reconnecting, detached, session ended, not running, start herdr core, hide]
+keywords: [paused, disabled, unavailable, connecting, reconnecting, detached, session ended, not running, start herdr core, not now]
 related: [cant-connect, reconnecting, hosts, host-page]
 ---
 
@@ -31,7 +31,8 @@ The Console shows one row for each Host that isn't simply connected. Rows marked
 | "Waiting for you to trust <Host>'s host key" | The Host answered, and Waycar needs you to confirm its key. | Tap the row and confirm the fingerprint. |
 | "Waiting for you to trust the Jump Host's host key for <Host>" | Same, for the [Jump Host](/help/jump-host). | Tap the row and confirm the Jump Host's fingerprint. |
 | "<Host>: Could not sync this Host's Agents. Retrying…" | Waycar is connected but couldn't load this Host's agent list. It retries on its own. | Wait. If the row stays, tap it to open the Host's page. |
-| "<Host>: Herdr Core is not running on this Host." (or Herdr TUI) | It's installed but stopped. A Host restart stops it, and Waycar never starts it on its own. | Tap **Start Herdr Core** or **Start Herdr TUI**. Don't need it? Swipe left and tap **Hide**. It stays hidden on that Host until you start it from the Host's page. |
+| "<Host>: Herdr Core is not running on this Host." (or Herdr TUI) | It's installed but stopped. A Host restart stops it, and Waycar never starts it on its own. | Tap **Start Herdr Core** or **Start Herdr TUI**. Don't need it? Tap **Not now**. It stays hidden on that Host until you start it from the Host's page. |
+| "Install Waycar Host Tools on <Host>", or "<Host>: Waycar plugin … is out of date" | The Host has no Waycar plugin, or one that's too old. | Tap **Install** or **Update**, or **Not now** to hide it. See [Update Waycar on your Host](/help/update-host-tools). |
 
 On a Host that runs both herdr and tmux, a row for one Backend (for example "herdr on <Host>: …") has its own **Retry** button.
 
