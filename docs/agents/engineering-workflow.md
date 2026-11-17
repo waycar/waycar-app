@@ -311,6 +311,10 @@ When a coordinator splits one change across workers:
 - `ScrollViewReader.scrollTo` while an opening animates goes nowhere (from
   `onChange` or the next main-queue turn alike): scroll from
   `withAnimation { … } completion:`.
+- A view keyed with `.id(…)` is rebuilt when that id changes, and so is
+  every sheet it presents: a sheet that updates the record behind the id
+  (the Host page's `.id(host.recordForm)`) must be presented above that
+  view, as HostListView's `HostAdditionSheet` is.
 
 **Xcode and the project**
 
@@ -389,6 +393,13 @@ When a coordinator splits one change across workers:
   hosted-runner question in one run.
 - A new `node --test` file under `plugin/` needs its own step in
   `ci-node.yml`.
+- A real-sshd test that closes a PTY must first read something the remote
+  command printed (`openPTYRunningCat` in the WaycarSSH package tests):
+  reading back what it typed proves nothing, since the PTY echoes input
+  before any process reads it. On a macOS Host, a PTY closed before sshd's
+  forked child has made it its terminal never closes: the child misses the
+  hangup, then waits forever opening a PTY whose master is gone, so sshd
+  never reaps it (hosted CI, OpenSSH 10.3, load 20 on 3 cores).
 - A scratch Codex config sets `check_for_update_on_startup = false`: once a
   newer Codex ships, a pinned TUI opens on an "Update available" menu and
   never shows the reply.

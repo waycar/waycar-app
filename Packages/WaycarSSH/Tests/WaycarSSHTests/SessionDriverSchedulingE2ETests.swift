@@ -27,10 +27,8 @@ extension SessionDriverE2ETests {
     @Test("a ping completes while a PTY request waits for its answer")
     func pingCompletesWhileAPTYRequestIsPending() async throws {
         try await exercisePingWhileParked(atStep: "PTY request") { connection in
-            let opened = try await connection.openPTY(
-                command: "cat",
-                columns: 80,
-                rows: 24,
+            let opened = try await self.openPTYRunningCat(
+                on: connection,
                 timeout: .sshdBudget(10))
             try await opened.write(Data("opened\n".utf8), timeout: .sshdBudget(5))
             try await self.readPTY(
@@ -342,11 +340,7 @@ extension SessionDriverE2ETests {
         // exists only while a sink is installed; the fixture installs one.
         try #require(SSHDiagnostics.isEnabled)
         let connection = try await environment.connect()
-        let pinger = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
+        let pinger = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
         let parked = SessionWaitHold()
         await holdSessionWait(atStep: step, on: connection, parked)
         let opened = ReleaseCounter()

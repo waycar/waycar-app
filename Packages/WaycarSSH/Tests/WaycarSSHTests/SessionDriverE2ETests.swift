@@ -1140,16 +1140,8 @@ struct SessionDriverE2ETests {
     func blockedReadSurvivesAConcurrentDrain() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)
         let connection = try await environment.connect()
-        let blocked = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
-        let draining = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
+        let blocked = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
+        let draining = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
         let hold = SessionWaitHold()
 
         await connection.holdNextSessionWaitForTesting { await hold.waitUntilReleased() }
@@ -1184,11 +1176,7 @@ struct SessionDriverE2ETests {
                 proxy: proxy)
             await connection.startSamplingTransportSendOwnerForTesting()
             try await connection.shrinkSendBufferForTesting(bytes: 2_048)
-            let pty = try await connection.openPTY(
-                command: "cat",
-                columns: 80,
-                rows: 24,
-                timeout: .sshdBudget(15))
+            let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(15))
             let hold = SessionWaitHold()
             await connection.holdNextOutboundWriteParkForTesting {
                 await hold.waitUntilReleased()
@@ -1276,11 +1264,7 @@ struct SessionDriverE2ETests {
         let environment = try #require(SessionDriverTestEnvironment.current)
         let socketPath = try #require(SessionDriverTestEnvironment.streamLocalSocketPath)
         let connection = try await environment.connect()
-        let pty = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
+        let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
 
         for site in OneShotYieldSite.allCases {
             let hold = SessionWaitHold()
@@ -1387,11 +1371,7 @@ struct SessionDriverE2ETests {
         let diagnosticToken = SSHDiagnostics.addSink(recorder.record)
         defer { SSHDiagnostics.removeSink(diagnosticToken) }
 
-        let pty = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
+        let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
         let ptyTeardown = SessionWaitHold()
         await connection.holdNextChannelTeardownForTesting {
             await ptyTeardown.waitUntilReleased()
@@ -1723,11 +1703,7 @@ struct SessionDriverE2ETests {
     func measureAttachThroughputWithConcurrentRPCs() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)
         let connection = try await environment.connect()
-        let pty = try await connection.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(5))
+        let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(5))
         let payload = Data("probe-bytes-0123456789\n".utf8)
         let rounds = 20
 
@@ -1786,11 +1762,7 @@ struct SessionDriverE2ETests {
             let home = try await remoteHome(of: connection)
             let missingPath = "\(home)/.waycar-missing-\(UUID().uuidString)"
             let sftp = try await connection.openSFTP(timeout: .sshdBudget(15))
-            let pty = try await connection.openPTY(
-                command: "cat",
-                columns: 80,
-                rows: 24,
-                timeout: .sshdBudget(15))
+            let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(15))
             let park = SessionWaitHold()
             await connection.holdNextOutboundWriteParkForTesting {
                 await park.waitUntilReleased()
@@ -1908,11 +1880,7 @@ struct SessionDriverE2ETests {
             try await connection.shrinkSendBufferForTesting(bytes: 2_048)
             // One open in flight at a time, so later opens queue for the slot.
             await connection.setChannelOpenLimitForTesting(1)
-            let pty = try await connection.openPTY(
-                command: "cat",
-                columns: 80,
-                rows: 24,
-                timeout: .sshdBudget(15))
+            let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(15))
             let park = SessionWaitHold()
             await connection.holdNextOutboundWriteParkForTesting {
                 await park.waitUntilReleased()
@@ -2096,6 +2064,37 @@ struct SessionDriverE2ETests {
             "\(comment); output \(String(reflecting: decoded)) did not contain \(marker)")
     }
 
+    /// Opens a PTY running `cat` and returns once that command has printed.
+    ///
+    /// A PTY closed before its command starts can hang on a macOS Host, so a
+    /// test that closes one must wait for this. sshd's forked child makes the
+    /// PTY its controlling terminal only once it gets the CPU; when the
+    /// channel's close shuts the PTY master first, the child misses the
+    /// hangup and its `open` of the PTY then waits forever for a master that
+    /// is gone, so sshd never reaps it and never closes the channel (seen in
+    /// hosted CI, OpenSSH 10.3: the child logged `Setting controlling tty`
+    /// only after sshd had released the PTY). Reading back what the test
+    /// typed proves nothing: the PTY echoes input before anything reads it.
+    func openPTYRunningCat(
+        on connection: SSHConnection,
+        timeout: Duration
+    ) async throws -> SSHPTYChannel {
+        let pty = try await connection.openPTY(
+            command: "printf \(Self.ptyCommandStarted); exec cat",
+            columns: 80,
+            rows: 24,
+            timeout: timeout)
+        try await readPTY(
+            pty,
+            untilContaining: Self.ptyCommandStarted,
+            timeout: timeout,
+            comment: "the PTY's command never started")
+        return pty
+    }
+
+    /// Printed without a newline, so nothing of it is left for a later read.
+    static let ptyCommandStarted = "waycar-pty-command-started"
+
     /// Reads stdout until `byteCount` bytes arrived, EOF, or the budget ends.
     private func readExecStream(
         _ stream: SSHExecStreamChannel,
@@ -2178,11 +2177,7 @@ struct SessionDriverE2ETests {
                 proxy: proxy)
             await connection.startSamplingTransportSendOwnerForTesting()
             try await connection.shrinkSendBufferForTesting(bytes: 2_048)
-            let pty = try await connection.openPTY(
-                command: "cat",
-                columns: 80,
-                rows: 24,
-                timeout: .sshdBudget(15))
+            let pty = try await openPTYRunningCat(on: connection, timeout: .sshdBudget(15))
             let gates = OwnedWriteGates(
                 park: SessionWaitHold(),
                 wait: SessionWaitHold(),

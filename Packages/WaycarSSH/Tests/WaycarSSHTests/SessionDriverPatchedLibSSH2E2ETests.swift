@@ -66,7 +66,8 @@ extension SessionDriverE2ETests {
     /// while a key that may have a PTY still attaches one. The command the
     /// server starts anyway is `cat`, which ends at the end of its input, so
     /// the close completes; one that outlived it would cost the session
-    /// (`SSHError.ptyDenied`).
+    /// (`SSHError.ptyDenied`). The permitted PTY is closed only once its
+    /// command has started (`openPTYRunningCat`).
     @Test("a refused PTY fails the open cleanly and a permitted one attaches")
     func refusedPTYFailsCleanlyAndAPermittedOneAttaches() async throws {
         let environment = try #require(SessionDriverTestEnvironment.current)
@@ -93,11 +94,7 @@ extension SessionDriverE2ETests {
         try await refused.close(timeout: .sshdBudget(2))
 
         let permitted = try await environment.connect()
-        let pty = try await permitted.openPTY(
-            command: "cat",
-            columns: 80,
-            rows: 24,
-            timeout: .sshdBudget(10))
+        let pty = try await openPTYRunningCat(on: permitted, timeout: .sshdBudget(10))
         try await pty.write(Data("attached\n".utf8), timeout: .sshdBudget(5))
         try await readPTY(
             pty,
