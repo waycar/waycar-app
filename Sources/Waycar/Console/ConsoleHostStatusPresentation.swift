@@ -70,6 +70,10 @@ struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     /// empty states ignore it.
     var isPluginRow: Bool { pluginOffer != nil }
 
+    /// Whether the row offers Not now beside its action: a stopped runtime's
+    /// row and the plugin rows. The Console draws all of them alike.
+    var offersNotNow: Bool { startsRuntime != nil || isPluginRow }
+
     var id: String {
         hostID.uuidString + (retryScope.map { "/\($0.backend.rawValue)" } ?? "")
             + (isPluginRow ? "/waycar-plugin" : "")

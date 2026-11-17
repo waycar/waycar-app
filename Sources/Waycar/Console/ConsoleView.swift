@@ -2273,9 +2273,13 @@ struct ConsoleView: View {
         _ issue: ConsoleHostStatusPresentation, showsChevron: Bool
     ) -> some View {
         // At accessibility sizes the buttons move under the text, which then
-        // wraps in full rather than truncating beside them.
-        let stacksActions = dynamicTypeSize.isAccessibilitySize
-        let lineLimit = stacksActions ? nil : 2
+        // wraps in full rather than truncating beside them. A row with Not
+        // now keeps its two buttons there at every size, so each such row
+        // looks the same and its words keep the row's width (an iPad
+        // sidebar truncated them beside "Start Herdr Core" and Not now).
+        let isAccessibilitySize = dynamicTypeSize.isAccessibilitySize
+        let stacksActions = isAccessibilitySize || issue.offersNotNow
+        let lineLimit = isAccessibilitySize ? nil : 2
         return HStack(alignment: stacksActions ? .firstTextBaseline : .center, spacing: 10) {
             Image(systemName: issue.systemImage)
                 .foregroundStyle(hostIssueTint(issue))
