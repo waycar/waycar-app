@@ -10,10 +10,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Entries reference the issue that motivated them.
 
 ## [Unreleased]
-
-### Changed
-
-- Every Console row you can hide now has the same Not now button. It replaces
-  swipe to hide on the "Herdr Core is not running" row, and the ✕ on the
-  "plugin is out of date" row. A "not running" row stays hidden on that Host
-  until you start it from the Host's page.
