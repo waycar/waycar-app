@@ -353,8 +353,9 @@ When a coordinator splits one change across workers:
   (flake hunt, `stoppedOpenCodeUsesOnlyAPortProbeUntilAnExternalStart`). A
   probe-only detection shows nothing, so wait for the Host's
   `backendDetections` machine to leave `.detecting`. A counter bumped at the
-  end of an awaited `@MainActor` closure is different: the caller resumes
-  without another hop, so it proves the code right after that await ran.
+  end of a `@MainActor` closure that a main-actor caller awaits is
+  different: that caller resumes without another hop, so a main-actor test
+  that sees the count knows the code right after the await ran.
   Red proof: hold the call behind a gate after it is counted, and open the
   gate after the change.
 - The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the full app
