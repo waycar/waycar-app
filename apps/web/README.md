@@ -729,10 +729,11 @@ does not infer it from request headers.
 ## Release content switch
 
 `main` runs ahead of the App Store build, and the site deploys from `main`, so
-the site never promises what a visitor cannot get. The App Store has 1.3.0
-(`APP_STORE_RELEASE` in `src/data/unreleased.ts`), and `main` adds Zellij, the
-Codex and OpenCode 2 server runtimes and queueing messages to a Waiting launch.
-The **help gate** handles the difference:
+the site never promises what a visitor cannot get. The **help gate** handles
+the difference. It last held for 1.3.0 (`APP_STORE_RELEASE` in
+`src/data/unreleased.ts`), while `main` added Zellij, the Codex and OpenCode 2
+server runtimes and queueing messages to a Waiting launch, until 1.4.0's
+release file lifted it. While it holds:
 
 - **Help**: `src/content/help/` is bundled whole into the iOS app and holds
   the pages `main` ships, so no page is moved, renamed or edited for this.
@@ -763,10 +764,11 @@ beyond it to gate again.
 
 Not gated: the landing pages, `/index.md` (`src/llms/index.md`), `/support`,
 and `src/data/compare-waycar.ts` with the pages in `src/content/compare/` and
-`src/content/solutions/`. They describe `main`, naming Zellij, Codex and
-OpenCode 2 beside herdr, Herdr Core and tmux, and say "in the next update"
-wherever a 1.3.0 user would otherwise be misled (a requirement, a setup step, a
-comparison cell); drop those words once the next release ships. Also
+`src/content/solutions/`. They describe `main`, and say "in the next update"
+wherever a user of the App Store build would otherwise be misled (a
+requirement, a setup step, a comparison cell; a runtime in
+`src/data/supported.ts` gets `next: true`); drop those words once that release
+is live on the App Store, not when `make publish` lifts the gate. Also
 `/privacy` (the policy describes the app as built from `main`).
 
 ## Home page
@@ -849,7 +851,7 @@ same script and adds `internal: true` to the event; use it for our own fetches.
 | `src/content/compare/`, `src/content/solutions/` | Comparisons and solution pages, one Markdown file each (see [Compare and solutions](#compare-and-solutions)); schemas in `src/content.config.ts` |
 | `src/data/help.ts` | Help categories (ids, labels, order) from `src/content/help/categories.json`, and help URLs (`help-paths.ts` holds the URL helpers the help search script imports) |
 | `src/data/links.ts`, `src/data/unreleased.ts` | The App Store URL; the help gate, what it hides and the release it holds for (see [Release content switch](#release-content-switch)) |
-| `src/data/compare-waycar.ts` | Waycar's column of every comparison table, as `main` behaves, with what 1.3.0 lacks marked as the next update |
+| `src/data/compare-waycar.ts` | Waycar's column of every comparison table, as `main` behaves, with what the App Store build lacks marked as the next update |
 | `src/lib/` | `help.ts` (the help collection in order, cross-page checks, Markdown twins, search entries), `help-loader.ts` (the help collection and the Unreleased changelog section through the help gate), `help-search.mjs` (search ranking), `changelog.mjs` (changelog order, reference stripping, paging), `changelog-loader.ts` (the changelog's content loaders), `changelog-entries.ts` (the changelog pages from the collections), `compare.ts` and `solutions.ts` (the comparison and solution collections, their checks and Markdown twins), `compare-rows.mjs` (the table rows and the checks, plain JavaScript so the tests import it), and `landing.ts` (what both share: twins, JSON-LD, the paths a body may link to) |
 | `src/layouts/` | `Layout` (every page's head, header, footer, analytics) and `HelpLayout` (a help page) |
 | `src/llms/index.md` | Full landing-page content for AI agents, served at `/index.md` |

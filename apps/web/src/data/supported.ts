@@ -20,9 +20,9 @@ export const runtimes: readonly Runtime[] = [
   { name: 'herdr', min: '0.7.5' },
   { name: 'tmux', min: '3.2' },
   { name: 'Herdr Core', min: '0.1.10' },
-  { name: 'Zellij', min: '0.46', next: true },
-  { name: 'Codex server', min: '0.167', next: true },
-  { name: 'OpenCode', min: '2.2', next: true },
+  { name: 'Zellij', min: '0.46' },
+  { name: 'Codex server', min: '0.167' },
+  { name: 'OpenCode', min: '2.2' },
 ];
 
 /** The commands most visitors run, shown first. */

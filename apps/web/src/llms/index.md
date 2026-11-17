@@ -106,7 +106,7 @@ Waycar works with tmux 3.2 or later too. Same app, same install command. Run bot
 
 ## How it works: phone to machine, nothing in between
 
-Waycar talks to herdr, tmux or Herdr Core (and, from the next update, Zellij, Codex or OpenCode) over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later or Herdr Core, you're set. Codex and OpenCode servers start only when you tap Start. On tmux, run the install command for live status and alerts.
+Waycar talks to herdr, tmux, Herdr Core, Zellij, Codex or OpenCode over a plain SSH connection to your computer. There's no account to make and no extra port to open. If you can SSH in and herdr is running, or you have tmux 3.2 or later, Herdr Core, Zellij 0.46 or later, Codex 0.167 or later or OpenCode 2.2 or later, you're set. Codex and OpenCode servers start only when you tap Start. On tmux, run the install command for live status and alerts.
 
 The diagram:
 
@@ -203,7 +203,9 @@ Requirements:
 - herdr ≥ 0.7.5
 - or tmux ≥ 3.2
 - or Herdr Core ≥ 0.1.10
-- Next update: Zellij ≥ 0.46, Codex ≥ 0.167, OpenCode ≥ 2.2
+- or Zellij ≥ 0.46
+- or Codex server ≥ 0.167
+- or OpenCode ≥ 2.2
 - No Node needed on the Host
 - OpenSSH · streamlocal on, for herdr
 - macOS: Remote Login on
@@ -234,7 +236,7 @@ Claude Code, Codex, omp, pi, opencode, GitHub Copilot CLI, Qwen Code, Gemini CLI
 
 ### Do I need herdr?
 
-No. Waycar also works with tmux 3.2 or later and Herdr Core, and the same install command sets them up. Zellij 0.46 or later, Codex 0.167 or later and OpenCode 2.2 or later come in the next update: Codex and OpenCode run as chats, with approvals in the app. herdr still gets you the most: it knows the status of more agents, and for now only herdr puts Chat Mode replies in your notifications.
+No. Waycar also works with tmux 3.2 or later and Herdr Core, and the same install command sets them up. It also works with Zellij 0.46 or later, Codex 0.167 or later and OpenCode 2.2 or later: Codex and OpenCode run as chats, with approvals in the app. herdr still gets you the most: it knows the status of more agents, and for now only herdr puts Chat Mode replies in your notifications.
 
 ### What does the install command change on my machine?
 

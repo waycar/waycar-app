@@ -337,7 +337,7 @@ bump: ## Increment CURRENT_PROJECT_VERSION in project.yml (app + extension stay 
 # Bump it once a release is live (docs/guides/releasing.md); empty installs
 # fresh only. REVIEW_SMOKE_REPO is a clone holding that tag when this one
 # does not (default: this checkout).
-REVIEW_SMOKE_PREVIOUS ?= v1.3.0
+REVIEW_SMOKE_PREVIOUS ?= v1.4.2
 REVIEW_SMOKE_REPO ?=
 review-smoke: generate ## Release build on reviewer-shaped simulators: update over REVIEW_SMOKE_PREVIOUS (from REVIEW_SMOKE_REPO), walkthrough, videos
 	REVIEW_SMOKE_PREVIOUS='$(REVIEW_SMOKE_PREVIOUS)' REVIEW_SMOKE_REPO='$(REVIEW_SMOKE_REPO)' scripts/review-smoke.sh

@@ -71,7 +71,7 @@ for (const [pick, list] of Object.entries({ generalSsh, desktopOrWeb })) {
       <section class="fit" aria-labelledby="fit-title">
         <h2 id="fit-title">When Waycar is not the right pick</h2>
         <ul>
-          <li>You want a general SSH client with SFTP and port forwarding, for any server. Waycar needs herdr, tmux or Herdr Core on the machine (Zellij, Codex and OpenCode 2 from the next update). Try <ComparisonLinks entries={generalSsh} join="or" />.</li>
+          <li>You want a general SSH client with SFTP and port forwarding, for any server. Waycar needs herdr, tmux, Herdr Core, Zellij, Codex or OpenCode 2 on the machine. Try <ComparisonLinks entries={generalSsh} join="or" />.</li>
           <li>You want a desktop or web client beside the phone app. Waycar is an iPhone and iPad app with no native desktop or web client. Try <ComparisonLinks entries={desktopOrWeb} join="or" />.</li>
           <li>You only use Claude Code and already pay for a Claude plan. <a href={comparePath(remoteControl.id)}>Remote Control</a> is built in and needs no SSH setup.</li>
           <li>You need agents to keep working with your computer off. Waycar reaches your own machine, so that machine has to be on and awake.</li>

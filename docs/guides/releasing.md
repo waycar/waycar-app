@@ -177,7 +177,9 @@ Store Connect (the build, What's New, the review information) and
 submitting it are the maintainers' steps, kept with the App Store material
 in ops. What's New covers everything since the last release that reached
 users, at most 4,000 characters, written for users like the changelog.
-Once the version is live, merge any site copy held for it and set
+Once the version is live, merge any site copy held for it, drop the site's
+"next update" wording for what it ships (`apps/web/README.md`, "Release
+content switch": `make publish` lifts only the help gate), and set
 `REVIEW_SMOKE_PREVIOUS` in the `Makefile` to its tag.
 
 ## Reviewer-device smoke run
