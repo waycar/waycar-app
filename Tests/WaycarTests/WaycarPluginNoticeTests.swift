@@ -263,7 +263,7 @@ struct WaycarPluginNoticeTests {
 
     // MARK: Hidden stopped-runtime rows
 
-    @Test func hideHoldsPerHostAndRuntimeUntilTheHostPageStartsIt() throws {
+    @Test func notNowHoldsPerHostAndRuntimeUntilTheHostPageStartsIt() throws {
         let suiteName = "waycar-stopped-runtime-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -272,14 +272,14 @@ struct WaycarPluginNoticeTests {
         let notices = StoppedRuntimeNoticeDismissals(defaults: defaults)
         #expect(notices.hiddenRuntimes(on: host.id).isEmpty, "shown by default")
 
-        notices.hide(.core, on: host.id)
+        notices.notNow(.core, on: host.id)
 
         #expect(notices.hiddenRuntimes(on: host.id) == [.core])
         #expect(notices.hiddenRuntimes(on: other.id).isEmpty, "per Host")
         let relaunched = StoppedRuntimeNoticeDismissals(defaults: defaults)
         #expect(relaunched.hiddenRuntimes(on: host.id) == [.core], "for good")
 
-        relaunched.hide(.herdr, on: host.id)
+        relaunched.notNow(.herdr, on: host.id)
         relaunched.show(.core, on: host.id)
         #expect(relaunched.hiddenRuntimes(on: host.id) == [.herdr], "per runtime")
         notices.reload()
@@ -316,7 +316,7 @@ struct WaycarPluginNoticeTests {
             "only the runtime hidden")
     }
 
-    /// A hide reaches the user's other devices, and a reinstall, through
+    /// A Not now reaches the user's other devices, and a reinstall, through
     /// iCloud Sync, like the plugin rows' answers.
     @Test func hiddenStoppedRowsComeBackThroughICloudSync() throws {
         let firstSuite = "waycar-stopped-runtime-\(UUID().uuidString)"
@@ -331,7 +331,7 @@ struct WaycarPluginNoticeTests {
             StoppedRuntimeNoticeDismissals.canRead(value)
         }
         let host = Host.fixture()
-        StoppedRuntimeNoticeDismissals(defaults: first).hide(.core, on: host.id)
+        StoppedRuntimeNoticeDismissals(defaults: first).notNow(.core, on: host.id)
         _ = PreferenceSync(defaults: first, keys: keys)
             .reconcile(items: try iCloud.readAll(), shared: iCloud, canRead: canRead)
 

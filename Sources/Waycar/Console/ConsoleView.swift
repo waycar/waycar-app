@@ -1199,47 +1199,11 @@ struct ConsoleView: View {
                 .accessibilityHint(
                     issue.opensBackendInstall
                         ? "Opens setup for this Host." : "Opens this Host's settings.")
-            } else if issue.startsRuntime != nil {
-                // A stopped runtime's row: Hide keeps it off the Console
-                // until the Host page starts that runtime.
-                hostIssueRow(issue, showsChevron: false)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if let runtime = hidableRuntime(issue) {
-                            Button("Hide", systemImage: "eye.slash") {
-                                hideStoppedRuntime(runtime, on: issue.hostID)
-                            }
-                        }
-                    }
-                    .contextMenu {
-                        if let runtime = hidableRuntime(issue) {
-                            Button(runtime.startActionTitle, systemImage: "power") {
-                                Task { await console.startRuntime(runtime, on: issue.hostID) }
-                            }
-                            Button("Hide", systemImage: "eye.slash") {
-                                hideStoppedRuntime(runtime, on: issue.hostID)
-                            }
-                        }
-                    }
             } else {
                 hostIssueRow(issue, showsChevron: false)
             }
         }
         .modifier(ConsoleCardRow())
-    }
-
-    /// The stopped runtime a row can hide: none while its start runs, in
-    /// Selection Mode, or with no record to keep the hide (previews).
-    private func hidableRuntime(_ issue: ConsoleHostStatusPresentation) -> HostBackend? {
-        guard let runtime = issue.startsRuntime, stoppedRuntimeNotices != nil,
-            multiSelection == nil, !console.isStarting(runtime, on: issue.hostID)
-        else { return nil }
-        return runtime
-    }
-
-    private func hideStoppedRuntime(_ runtime: HostBackend, on hostID: Host.ID) {
-        withAnimation(reduceMotion ? nil : .snappy) {
-            stoppedRuntimeNotices?.hide(runtime, on: hostID)
-        }
     }
 
     private func noAgentsOnHostState(_ hostName: String) -> some View {
@@ -2309,9 +2273,13 @@ struct ConsoleView: View {
         _ issue: ConsoleHostStatusPresentation, showsChevron: Bool
     ) -> some View {
         // At accessibility sizes the buttons move under the text, which then
-        // wraps in full rather than truncating beside them.
-        let stacksActions = dynamicTypeSize.isAccessibilitySize
-        let lineLimit = stacksActions ? nil : 2
+        // wraps in full rather than truncating beside them. A row with Not
+        // now keeps its two buttons there at every size, so each such row
+        // looks the same and its words keep the row's width (an iPad
+        // sidebar truncated them beside "Start Herdr Core" and Not now).
+        let isAccessibilitySize = dynamicTypeSize.isAccessibilitySize
+        let stacksActions = isAccessibilitySize || issue.offersNotNow
+        let lineLimit = isAccessibilitySize ? nil : 2
         return HStack(alignment: stacksActions ? .firstTextBaseline : .center, spacing: 10) {
             Image(systemName: issue.systemImage)
                 .foregroundStyle(hostIssueTint(issue))
@@ -2320,12 +2288,6 @@ struct ConsoleView: View {
                     .font(.footnote)
                     .foregroundStyle(issue.isCritical ? Color.red : Color.secondary)
                     .lineLimit(lineLimit)
-                    // The swipe's Hide, on the words VoiceOver reads.
-                    .accessibilityActions {
-                        if let runtime = hidableRuntime(issue) {
-                            Button("Hide") { hideStoppedRuntime(runtime, on: issue.hostID) }
-                        }
-                    }
                 if let detail = issue.detail {
                     // A failed start's words are what the user tapped for:
                     // a step brighter than a plain hint, and room for
@@ -2357,14 +2319,23 @@ struct ConsoleView: View {
             Color(uiColor: .secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// A Host row's Retry or Start, or the plugin row's Update and Not now.
+    /// A Host row's Retry, a stopped runtime's Start and Not now, or the
+    /// plugin row's Install or Update and Not now.
     @ViewBuilder
     private func hostIssueActions(_ issue: ConsoleHostStatusPresentation) -> some View {
         if let runtime = issue.startsRuntime {
             startRuntimeButton(runtime, on: issue.hostID, hostName: issue.hostName)
+            // Kept off the Console until the Host page starts it again;
+            // with no record to keep that (previews), never offered.
+            if let stoppedRuntimeNotices {
+                notNowButton(hint: "Hides this until you start it from the Host's page.") {
+                    stoppedRuntimeNotices.notNow(runtime, on: issue.hostID)
+                }
+                // Its start's progress and outcome show on this row.
+                .disabled(console.isStarting(runtime, on: issue.hostID))
+            }
         } else if let scope = issue.retryScope {
             Button("Retry") {
                 Task { await console.retry(scope) }
@@ -2383,19 +2354,9 @@ struct ConsoleView: View {
                 .accessibilityHint(isUpdatingPlugin(on: issue.hostID)
                     ? "An update is already running on this Host"
                     : "Updates the Waycar plugin on \(issue.hostName).")
-            Button {
+            notNowButton(hint: "Hides this until the app needs a newer plugin.") {
                 pluginNoticeDismissals.dismiss(issue.hostID)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
-            .hoverEffect(.highlight)
-            .accessibilityLabel("Not now")
-            .accessibilityHint("Hides this until the app needs a newer plugin.")
         case .install:
             Button("Install") { presentPluginUpdate(issue.hostID) }
                 .font(.footnote.weight(.semibold))
@@ -2405,12 +2366,9 @@ struct ConsoleView: View {
                 .accessibilityHint(isUpdatingPlugin(on: issue.hostID)
                     ? "An install is already running on this Host"
                     : "Installs Waycar Host Tools on \(issue.hostName).")
-            Button("Not now") { hostToolsOffer?.notNow(issue.hostID) }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.borderless)
-                .hoverEffect(.highlight)
-                .accessibilityHint("Hides this for 14 days.")
+            notNowButton(hint: "Hides this for 14 days.") {
+                hostToolsOffer?.notNow(issue.hostID)
+            }
         case .moveToNative:
             Button("Update") { presentPluginUpdate(issue.hostID) }
                 .font(.footnote.weight(.semibold))
@@ -2420,15 +2378,25 @@ struct ConsoleView: View {
                 .accessibilityHint(isUpdatingPlugin(on: issue.hostID)
                     ? "An update is already running on this Host"
                     : "Updates Waycar on \(issue.hostName) so it no longer needs Node.")
-            Button("Not now") { hostToolsOffer?.nativeToolsNotNow(issue.hostID) }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.borderless)
-                .hoverEffect(.highlight)
-                .accessibilityHint("Hides this for 14 days.")
+            notNowButton(hint: "Hides this for 14 days.") {
+                hostToolsOffer?.nativeToolsNotNow(issue.hostID)
+            }
         case nil:
             EmptyView()
         }
+    }
+
+    /// Every Host row's **Not now**: one look, beside the row's action,
+    /// and the row leaves the list the same way whichever row it is.
+    private func notNowButton(hint: String, action: @escaping () -> Void) -> some View {
+        Button("Not now") {
+            withAnimation(reduceMotion ? nil : .snappy, action)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .buttonStyle(.borderless)
+        .hoverEffect(.highlight)
+        .accessibilityHint(hint)
     }
 
     /// Start Herdr TUI or Start Herdr Core on a stopped runtime's row

@@ -268,6 +268,15 @@ When a coordinator splits one change across workers:
   programmatic edit before tapping it, and fire native toolbar `UIButton`s
   with `sendActions`, not `accessibilityActivate`. A desk Codex TUI driven
   through tmux needs about 1 s between the text and Enter.
+  SwiftUI's nodes in a hosted window have an empty
+  `accessibilityIdentifier`: find them by label. For a Console row the demo
+  never shows, a throwaway commit in a scratch worktree adds a demo launch
+  flag (a Host's connect throws the failure, `detectBackends` returns the
+  plugin version you need), injects any store the demo leaves nil, adds one
+  XCUITest to `ReadmeScreenshots`, and points `capture-screenshots.sh` at it
+  with `exit 0` after the run; then `mac_run target: screenshots` with that
+  `repo` and `deliverables`. One run can capture two layouts behind a second
+  throwaway flag.
 
 ## Known traps
 
@@ -299,6 +308,9 @@ When a coordinator splits one change across workers:
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
 - `Process` is not in the iOS SDK; `posix_spawn` works in the simulator.
+- `ScrollViewReader.scrollTo` while an opening animates goes nowhere (from
+  `onChange` or the next main-queue turn alike): scroll from
+  `withAnimation { … } completion:`.
 
 **Xcode and the project**
 

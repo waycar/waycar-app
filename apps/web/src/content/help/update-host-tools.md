@@ -13,7 +13,7 @@ Waycar tells you when the Waycar plugin on a Host is too old for this version of
 
 Waycar reads the plugin version on each Host when it connects. If the Host's plugin is older than the app needs, you see it where you already are:
 
-- **In the Console**, a row that names the Host, such as "<Host>: Waycar plugin 1.3.1 is out of date". Tap **Update**, or tap **✕** to hide the row for that Host. It comes back only when a later app needs a newer plugin.
+- **In the Console**, a row that names the Host, such as "<Host>: Waycar plugin 1.3.1 is out of date". Tap **Update**, or **Not now** to hide the row for that Host. It comes back only when a later app needs a newer plugin.
 - **In the Console, on a Host with no Waycar plugin**, a row that says "Install Waycar Host Tools on <Host>". Tap **Install** to open the same screen, or **Not now** to hide the row for that Host for 14 days. It comes back once; a second **Not now** stops it. To never see it for a Host, turn off **Remind me to install Host Tools** under **Waycar plugin** on the Host's page.
 - **On an agent's card**, when AI Summaries is on but the agent shows no [Agent Progress](/help/agent-progress) because the plugin is too old: **Update plugin for progress**.
 - **In Chat Mode**, when a chat needs a newer plugin to show replies: **Update Waycar on <Host>…**. The chat reloads by itself after the update.
@@ -73,7 +73,7 @@ waycar hooks status
 ## Good to know
 
 - Updating doesn't unpair anything. The plugin's config, with the pairing and notification keys, is kept.
-- With [iCloud Sync](/help/icloud-sync) on, **Not now**, **✕** and **Remind me to install Host Tools** apply on all your devices, and they stay as you left them after you delete and reinstall Waycar.
+- With [iCloud Sync](/help/icloud-sync) on, **Not now** and **Remind me to install Host Tools** apply on all your devices, and they stay as you left them after you delete and reinstall Waycar.
 - The app can also install Waycar on a Host that has none (see above). To install it from a terminal instead, see [Install Waycar on a Host](/help/install).
 - Running the command again is also how you [pair another device](/help/pairing).
 - herdr updates don't need a Waycar update. Waycar only checks for herdr 0.7.5 or later.

@@ -212,14 +212,15 @@ final class HostToolsOffer {
 }
 
 /// The Console's stopped-runtime rows ("Herdr Core is not running on this
-/// Host." with Start; #389) the user hid with **Hide**, per Host and runtime.
+/// Host." with Start; #389) the user answered with **Not now**, per Host and
+/// runtime.
 ///
-/// A hide holds for good. Only the user's Start of that runtime on the Host
-/// page (`show`) brings the row back, for the next time the runtime stops.
-/// The Host page and the Hosts sheet still say it is stopped either way.
+/// A Not now holds for good. Only the user's Start of that runtime on the
+/// Host page (`show`) brings the row back, for the next time the runtime
+/// stops. The Host page and the Hosts sheet still say it is stopped either way.
 ///
 /// A synced preference (ADR 0019, `PreferenceSync`), like the plugin rows'
-/// answers: a hide reaches the user's other devices and survives a
+/// answers: a Not now reaches the user's other devices and survives a
 /// reinstall; `reload()` re-reads it after iCloud Sync replaced it. One
 /// instance lives on the app model and reaches every window through
 /// `\.stoppedRuntimeNotices`, so every window agrees.
@@ -254,8 +255,8 @@ final class StoppedRuntimeNoticeDismissals {
         Set((hidden[hostID.uuidString] ?? []).compactMap(HostBackend.init(rawValue:)))
     }
 
-    /// **Hide** on the stopped row of `runtime` on `hostID`.
-    func hide(_ runtime: HostBackend, on hostID: Host.ID) {
+    /// **Not now** on the stopped row of `runtime` on `hostID`.
+    func notNow(_ runtime: HostBackend, on hostID: Host.ID) {
         update(hostID) { $0.insert(runtime.rawValue) }
     }
 
@@ -332,6 +333,6 @@ extension EnvironmentValues {
     @Entry var hostToolsOffer: HostToolsOffer? = nil
     /// The app's one record of hidden stopped-runtime rows, injected at each
     /// window's root; nil in previews, the sample and the demo, where no row
-    /// offers Hide.
+    /// offers Not now.
     @Entry var stoppedRuntimeNotices: StoppedRuntimeNoticeDismissals? = nil
 }

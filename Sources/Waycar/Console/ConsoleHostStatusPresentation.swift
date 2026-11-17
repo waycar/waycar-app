@@ -22,8 +22,8 @@ import Foundation
 /// A runtime installed but stopped (`TransportError.startableRuntime`,
 /// #389: every Host restart stops herdr) is a normal state, not an outage:
 /// its row is quiet, says what is stopped, and offers Start Herdr TUI or
-/// Start Herdr Core in place, so it does not navigate either. Hide keeps it
-/// off the Console for good (`StoppedRuntimeNoticeDismissals`).
+/// Start Herdr Core in place, so it does not navigate either, and Not now,
+/// which keeps it off the Console for good (`StoppedRuntimeNoticeDismissals`).
 struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     enum Severity: Equatable {
         case informational
@@ -70,6 +70,10 @@ struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     /// empty states ignore it.
     var isPluginRow: Bool { pluginOffer != nil }
 
+    /// Whether the row offers Not now beside its action: a stopped runtime's
+    /// row and the plugin rows. The Console draws all of them alike.
+    var offersNotNow: Bool { startsRuntime != nil || isPluginRow }
+
     var id: String {
         hostID.uuidString + (retryScope.map { "/\($0.backend.rawValue)" } ?? "")
             + (isPluginRow ? "/waycar-plugin" : "")
@@ -80,7 +84,8 @@ struct ConsoleHostStatusPresentation: Equatable, Identifiable {
     /// condition, then any failed backend's, and
     /// the plugin row only while none shows. A plugin nag must never stand
     /// in for, or sit beside, a failure the user has to act on. A stopped
-    /// runtime's row the user hid (`hiddenRuntimes`) is not one of them.
+    /// runtime's row the user answered with Not now (`hiddenRuntimes`) is
+    /// not one of them.
     static func hostRows(
         condition: Self?, backendFailures: [Self], hiddenRuntimes: Set<HostBackend> = [],
         pluginNotice: @autoclosure () -> Self?

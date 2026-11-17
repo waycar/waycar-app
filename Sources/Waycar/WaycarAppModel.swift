@@ -250,8 +250,8 @@ final class WaycarAppModel {
                 WaycarPluginNoticeDismissals.defaultsKey: SyncedPreference(
                     reload: { pluginNoticeDismissals.reload() },
                     canRead: { $0 is [String: String] }),
-                // Per Host: the stopped-runtime rows hidden with Hide, so a
-                // hide reaches the other devices and survives a reinstall.
+                // Per Host: the stopped-runtime rows hidden with Not now, so
+                // an answer reaches the other devices and survives a reinstall.
                 StoppedRuntimeNoticeDismissals.defaultsKey: SyncedPreference(
                     reload: { stoppedRuntimeNotices.reload() },
                     canRead: { StoppedRuntimeNoticeDismissals.canRead($0) }),
