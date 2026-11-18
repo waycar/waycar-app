@@ -374,10 +374,11 @@ When a coordinator splits one change across workers:
   that sees the count knows the code right after the await ran.
   Red proof: hold the call behind a gate after it is counted, and open the
   gate after the change.
-- The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the full app
-  lane 4 times on two hosted runners, one with busy loops beside it
-  (weeknights until 2026-11-30, then Mondays; by hand,
-  `gh workflow run flake-hunt.yml --ref main -f passes=N`). Each job's
+- The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the WaycarSSH
+  package E2E lane and the full app lane 4 times each on two hosted runners,
+  one with busy loops beside them (weeknights until 2026-11-30, then
+  Mondays; by hand, `gh workflow run flake-hunt.yml --ref main -f passes=N
+  -f package_passes=N`). Each job's
   summary lists every failing test and how many passes it failed in; the
   run itself never fails. Treat a test it names like a hosted CI failure:
   fix it at its cause, red-first. `scripts/ci/flake-hunt-report.py <folder>…`

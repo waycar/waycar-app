@@ -160,6 +160,37 @@ class FlakeHuntReportTests(unittest.TestCase):
         self.assertIn("| loaded | build | exit 65: /x/Foo.swift:3:1: error: cannot find 'bar' in scope |", text)
         self.assertIn("| gone | — | no results (the job did not upload any) |", text)
 
+    def test_reports_package_lane_passes_apart_from_full_lane_passes(self) -> None:
+        # Hosted CI, main 7af249e: a display-named test whose suite extension
+        # lives in another file, the one failing test of its pass.
+        refused_pty = (
+            '✘ Test "a refused PTY fails the open cleanly and a permitted one attaches" '
+            "recorded an issue at SessionDriverPatchedLibSSH2E2ETests.swift:70:6: "
+            "Caught error: .timedOut\n"
+            "✘ Test run with 138 tests in 10 suites failed after 121.150 seconds with 1 issue.\n"
+            "Failing tests:\n"
+            "\tSessionDriverE2ETests.refusedPTYFailsCleanlyAndAPermittedOneAttaches()\n"
+            "\n** TEST EXECUTE FAILED **\n")
+        loaded = write_job(self.root, "loaded", {
+            "label": "loaded\n", "passes": "1\n", "package-passes": "3\n",
+            "package-pass-1.status": "65\n", "package-pass-1.log": refused_pty,
+            "package-pass-2.status": "0\n",
+            "package-pass-2.log": "✔ Test run with 138 tests in 10 suites passed after 113.8 seconds.\n",
+            "pass-1.status": "0\n",
+            "pass-1.log": "✔ Test run with 7560 tests in 659 suites passed after 400.0 seconds.\n",
+        })
+        text = fhr.report([loaded])
+        self.assertIn("## Flake hunt: 1 failing test(s) in 3 pass(es)", text)
+        self.assertEqual(self.rows(text), [
+            "| `SessionDriverE2ETests.refusedPTYFailsCleanlyAndAPermittedOneAttaches()` "
+            "| 1 of 3 (loaded package #1) "
+            "| SessionDriverPatchedLibSSH2E2ETests.swift:70: Caught error: .timedOut |"])
+        self.assertIn("| loaded | package 1 | 138 tests, 1 failing |", text)
+        self.assertIn("| loaded | package 2 | 138 tests |", text)
+        self.assertIn("| loaded | package 3 | did not run |", text)
+        self.assertIn("| loaded | 1 | 7560 tests |", text)
+        self.assertLess(text.index("| loaded | package 3 |"), text.index("| loaded | 1 |"))
+
     def test_a_failed_exit_without_any_failing_test_says_so(self) -> None:
         quiet = write_job(self.root, "quiet", {
             "label": "quiet\n", "passes": "1\n",

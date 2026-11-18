@@ -1,9 +1,10 @@
-# Flake hunt: the full app test lane, run several times on hosted runners, to
-# find timing-sensitive tests before they turn a main run red. Every hosted
-# CI run on the small `xcode-27` runners turned up a different one; this
-# repeats the lane (scripts/ci/flake-hunt.sh) on one job as CI runs it and on
-# one with busy loops beside it, and lists every failing test with how often
-# it failed (scripts/ci/flake-hunt-report.py) in each job's summary.
+# Flake hunt: the full app test lane and the WaycarSSH package E2E lane, each
+# run several times on hosted runners, to find timing-sensitive tests before
+# they turn a main run red. Every hosted CI run on the small `xcode-27` runners
+# turned up a different one; this repeats both lanes
+# (scripts/ci/flake-hunt.sh) on one job as CI runs them and on one with busy
+# loops beside them, and lists every failing test with how often it failed
+# (scripts/ci/flake-hunt-report.py) in each job's summary.
 #
 # It reports and never fails: a failing scheduled or dispatched run on main
 # would show as a red check on main's latest commit, so the scripts exit 0
@@ -11,7 +12,8 @@
 #
 # Nightly on weekdays until the open-source launch (2026-11-30), weekly on
 # Mondays after it, and by hand with
-# `gh workflow run flake-hunt.yml --ref main [-f passes=N]`. Two macOS jobs at
+# `gh workflow run flake-hunt.yml --ref main [-f passes=N] [-f package_passes=N]`.
+# Two macOS jobs at
 # most, so a push's three CI jobs still fit in the org's five, and its own
 # concurrency group, so it never cancels a pending CI run.
 
@@ -24,6 +26,9 @@ on:
     inputs:
       passes:
         description: Full app lane passes per job
+        default: "4"
+      package_passes:
+        description: WaycarSSH package E2E lane passes per job (0 skips them)
         default: "4"
 
 concurrency:
@@ -60,8 +65,8 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: xcode-27
-    # A cold build (~17 min), the first-boot settle (~15), and four passes of
-    # 13-20 min each.
+    # A cold build (~17 min), the first-boot settle (~15), four package passes
+    # of about 4 min, and four full-lane passes of 13-20 min each.
     timeout-minutes: 150
     strategy:
       fail-fast: false
@@ -100,6 +105,7 @@ jobs:
           FLAKE_HUNT_LABEL: ${{ matrix.label }}
           FLAKE_HUNT_CPU_HOGS: ${{ matrix.hogs }}
           FLAKE_HUNT_PASSES: ${{ inputs.passes || '4' }}
+          FLAKE_HUNT_PACKAGE_PASSES: ${{ inputs.package_passes || '4' }}
           FLAKE_HUNT_OUT: ${{ runner.temp }}/flake-hunt-${{ matrix.label }}
         run: scripts/ci/flake-hunt.sh || echo "::warning title=Flake hunt::flake-hunt.sh exited $?"
 

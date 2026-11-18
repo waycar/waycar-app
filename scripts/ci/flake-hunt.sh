@@ -1,12 +1,15 @@
 #!/bin/bash
 #
-# Flake hunt (.github/workflows/flake-hunt.yml): the full app test lane, run
-# several times on one hosted runner, to find timing-sensitive tests before
-# they turn a main run red. Like scripts/run-ci-ios-tests.sh it builds once on
-# a simulator of its own, boots it after the build and waits out its
-# first-boot work, then it runs the full lane FLAKE_HUNT_PASSES times with
-# that lane's flags. FLAKE_HUNT_CPU_HOGS busy loops at normal priority stand in
-# for the stalls of a loaded runner, which is when these races show.
+# Flake hunt (.github/workflows/flake-hunt.yml): the full app test lane and the
+# WaycarSSH package E2E lane, each run several times on one hosted runner, to
+# find timing-sensitive tests before they turn a main run red. Like
+# scripts/run-ci-ios-tests.sh it builds once on a simulator of its own, boots it
+# after the build and waits out its first-boot work. Then it runs CI's package
+# lane FLAKE_HUNT_PACKAGE_PASSES times on that simulator, through
+# run-ci-ios-tests.sh with that lane's settings, and the full lane
+# FLAKE_HUNT_PASSES times with that lane's flags. FLAKE_HUNT_CPU_HOGS busy
+# loops at normal priority stand in for the stalls of a loaded runner, which is
+# when these races show.
 #
 # It reports and never fails: every outcome, a failed build included, lands in
 # FLAKE_HUNT_OUT for scripts/ci/flake-hunt-report.py, every step runs under a
@@ -32,6 +35,11 @@ if [[ ! "$passes" =~ ^[1-9]$|^1[0-9]$ ]]; then
     echo "::warning::FLAKE_HUNT_PASSES must be 1 to 19, got '$passes'; running 4"
     passes=4
 fi
+package_passes="${FLAKE_HUNT_PACKAGE_PASSES:-4}"
+if [[ ! "$package_passes" =~ ^[0-9]$|^1[0-9]$ ]]; then
+    echo "::warning::FLAKE_HUNT_PACKAGE_PASSES must be 0 to 19, got '$package_passes'; running 4"
+    package_passes=4
+fi
 hogs="${FLAKE_HUNT_CPU_HOGS:-0}"
 # Every step's deadline is capped by this budget, which ends inside the job's
 # 150 minutes with room left to report and upload.
@@ -42,6 +50,7 @@ hog_pids=()
 mkdir -p "$out"
 printf '%s\n' "${FLAKE_HUNT_LABEL:-hunt}" > "$out/label"
 printf '%s\n' "$passes" > "$out/passes"
+printf '%s\n' "$package_passes" > "$out/package-passes"
 
 # shellcheck disable=SC2329 # run by the EXIT trap
 stop_hogs() {
@@ -123,6 +132,24 @@ done
 for ((hog = 0; hog < hogs; hog += 1)); do
     /bin/sh -c 'while :; do :; done' &
     hog_pids+=($!)
+done
+
+# CI's package lane, first: its passes are short (about 4 minutes, a fresh
+# fixture and package build each time) and the full lane's skip these suites.
+# Settings as in ci.yml's package job; the simulator is this one, already
+# booted and settled. Each pass's failure diagnostics go beside its log.
+for ((pass = 1; pass <= package_passes; pass += 1)); do
+    if ((deadline - SECONDS < 600)); then
+        echo "==> out of time: package passes $pass to $package_passes do not run"
+        break
+    fi
+    run_step "package-pass-$pass" "$(within 1500)" \
+        env WAYCAR_CI_LANE=package \
+        WAYCAR_CI_MANDATORY=1 \
+        WAYCAR_SSH_E2E_TIMEOUT_SCALE=4 \
+        WAYCAR_CI_SIMULATOR_UDID="$udid" \
+        RUNNER_TEMP="$out/package-pass-$pass" \
+        scripts/run-ci-ios-tests.sh
 done
 
 # The harness lab is left out by name, as in the CI lane. The CI lane allows

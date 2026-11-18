@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """One Markdown report for a flake hunt (.github/workflows/flake-hunt.yml).
 
-Each argument is one job's folder from scripts/ci/flake-hunt.sh: `label` and
-`passes`, a `<step>.status` and `<step>.log` per step (`pass-N` for each pass
-of the full lane), and `stopped`, naming the setup step that ended the hunt
-early. The report lists every failing test, grouped by test (the xcodebuild
+Each argument is one job's folder from scripts/ci/flake-hunt.sh: `label`,
+`passes` and `package-passes`, a `<step>.status` and `<step>.log` per step
+(`package-pass-N` for each pass of the WaycarSSH package E2E lane, `pass-N`
+for each pass of the full lane), and `stopped`, naming the setup step that
+ended the hunt early. The report lists every failing test, grouped by test (the xcodebuild
 `Failing tests:` list, so a test a crash ended counts too), with how many
 passes it failed in and its first recorded issue, then what each pass ended
 with. Missing folders and files are reported, never raised: the hunt never
@@ -43,21 +44,30 @@ class Issue:
     message: str
 
 
+# A pass's lane as the report names it: the full lane's passes go unnamed.
+PACKAGE_LANE = "package"
+
+
 @dataclass
 class Failure:
     test: str
     first_issue: str | None
-    passes: set[tuple[str, int]] = field(default_factory=set)
+    # (job, lane, pass number)
+    passes: set[tuple[str, str, int]] = field(default_factory=set)
 
 
 @dataclass
 class Pass:
     number: int
     status: int | None
+    lane: str = ""
     tests: int | None = None
     failing: int = 0
     relaunches: int = 0
     crash_reports: int = 0
+
+    def name(self) -> str:
+        return f"{self.lane} {self.number}".strip()
 
     def outcome(self) -> str:
         if self.status is None:
@@ -112,12 +122,17 @@ NO_ISSUE = "no issue recorded (a crash or a timeout ended it)"
 UNMATCHED = "its suite recorded an issue no test name matched; see the pass log"
 
 
-def attribute(failing: list[str], issues: list[Issue]) -> dict[str, str]:
+def attribute(failing: list[str], issues: list[Issue],
+              one_launch: bool = True) -> dict[str, str]:
     """Each failing test's first issue. An issue names its test's function,
     and its file the suite: both match first, then the function alone when
     only one failing test has it. A display-named test's issue names neither;
     it goes to the one failing test of its suite left without an issue, and
-    to none when several are left: never a guess."""
+    to none when several are left: never a guess. Last, since every issue
+    is a failing test's, the issues nothing matched belong to the one test
+    still without any, if one is: a display-named test whose suite extension
+    lives in a file of another name (the WaycarSSH package suites). Not after
+    a test host relaunch, whose failing list covers only the last launch."""
     def detail(issue: Issue) -> str:
         return f"{issue.where}: {issue.message}"
 
@@ -139,14 +154,19 @@ def attribute(failing: list[str], issues: list[Issue]) -> dict[str, str]:
         alone = sum(1 for other in left if split[other][0] == suite) == 1
         if loose and alone:
             found[test] = detail(issues[loose[0]])
+            claimed.update(loose)
         else:
             found[test] = UNMATCHED if loose else NO_ISSUE
+    without = [test for test in left if found[test] in (NO_ISSUE, UNMATCHED)]
+    spare = [index for index in range(len(issues)) if index not in claimed]
+    if one_launch and len(without) == 1 and spare:
+        found[without[0]] = detail(issues[spare[0]])
     return found
 
 
 def parse_pass(job: str, number: int, status: int | None, log: str,
-               failures: dict[str, Failure]) -> Pass:
-    result = Pass(number=number, status=status)
+               failures: dict[str, Failure], lane: str = "") -> Pass:
+    result = Pass(number=number, status=status, lane=lane)
     issues: list[Issue] = []
     failing: list[str] = []
     in_failing = False
@@ -171,7 +191,7 @@ def parse_pass(job: str, number: int, status: int | None, log: str,
             result.relaunches += 1
         elif match := CRASH_REPORTS.search(line):
             result.crash_reports += int(match["count"])
-    found = list(attribute(failing, issues).items())
+    found = list(attribute(failing, issues, result.relaunches == 0).items())
     if not failing:
         # A pass xcodebuild never finished (a timeout) lists no failing tests:
         # name each from its issue, `Suite.test` after the suite's file.
@@ -183,7 +203,7 @@ def parse_pass(job: str, number: int, status: int | None, log: str,
         failure = failures.setdefault(test, Failure(test=test, first_issue=detail))
         if failure.first_issue in (NO_ISSUE, UNMATCHED) and detail not in (NO_ISSUE, UNMATCHED):
             failure.first_issue = detail
-        failure.passes.add((job, number))
+        failure.passes.add((job, lane, number))
     result.failing = len(found)
     return result
 
@@ -196,10 +216,12 @@ def read_job(folder: Path, failures: dict[str, Failure]) -> Job:
         tail = [line for line in log if "error" in line.lower()][-3:] or log[-3:]
         return Job(label, stopped, read_int(folder / f"{stopped}.status"), tail, [])
     passes = []
-    for number in range(1, (read_int(folder / "passes") or 0) + 1):
-        status = read_int(folder / f"pass-{number}.status")
-        log = read_text(folder / f"pass-{number}.log") or ""
-        passes.append(parse_pass(label, number, status, log, failures))
+    for lane, prefix, count in (
+            (PACKAGE_LANE, "package-pass", "package-passes"), ("", "pass", "passes")):
+        for number in range(1, (read_int(folder / count) or 0) + 1):
+            status = read_int(folder / f"{prefix}-{number}.status")
+            log = read_text(folder / f"{prefix}-{number}.log") or ""
+            passes.append(parse_pass(label, number, status, log, failures, lane))
     return Job(label, None, None, [], passes)
 
 
@@ -217,7 +239,9 @@ def report(folders: list[Path]) -> str:
     if failures:
         lines += ["| Test | Failed in | First issue |", "|---|---|---|"]
         for failure in sorted(failures.values(), key=lambda item: (-len(item.passes), item.test)):
-            spots = ", ".join(f"{job} #{number}" for job, number in sorted(failure.passes))
+            spots = ", ".join(
+                f"{job} {lane + ' ' if lane else ''}#{number}"
+                for job, lane, number in sorted(failure.passes))
             issue = failure.first_issue or NO_ISSUE
             lines.append(
                 f"| `{cell(failure.test)}` | {len(failure.passes)} of {ran} ({spots}) | {cell(issue)} |")
@@ -230,7 +254,7 @@ def report(folders: list[Path]) -> str:
             lines.append(f"| {job.label} | {job.stopped} | {state}: {detail} |")
             continue
         for item in job.passes:
-            lines.append(f"| {job.label} | {item.number} | {item.outcome()} |")
+            lines.append(f"| {job.label} | {item.name()} | {item.outcome()} |")
     for folder in missing:
         lines.append(f"| {folder.name} | — | no results (the job did not upload any) |")
     if not jobs and not missing:
