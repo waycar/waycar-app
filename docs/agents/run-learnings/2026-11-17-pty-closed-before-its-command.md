@@ -12,8 +12,12 @@
 - **Worked:** the sshd log in the lane's diagnostics artifact
   (`13-sshd-modern.log`) settled it: the child logged `Setting controlling
   tty using TIOCSCTTY` after sshd had released the PTY, and then nothing.
-- **Worked:** a red proof without load: a command that ignores SIGHUP and
-  opens its tty a second late recreates the stuck child every time.
+- **Broke:** the red proof never ran: the Mac sat at load ~300 for hours
+  (Mike's apps), and `mac_run` waits for load under 1.5 per core. A command
+  that ignores SIGHUP and opens its tty a second late should recreate the
+  stuck child on demand; it is still unproven.
+- **Worked:** with the Mac out, a `ci.yml` dispatch on a temporary branch
+  (pushed by @ultimate) proved the change on hosted runners.
 - **Watch out:** every package test that closes a `cat` PTY expecting a
   clean close now opens it through `openPTYRunningCat`, which waits for the
   command's own output (Known trap).
