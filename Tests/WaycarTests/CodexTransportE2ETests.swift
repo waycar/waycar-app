@@ -214,6 +214,15 @@ struct CodexTransportE2ETests {
                 let agent = try await launch(transport, host)
                 _ = try await transport.promptAgent(AgentPromptParams(target: agent.paneID, text: "WAYCAR_SLOW"))
                 try await feed.wait(for: agent.paneID, status: .working)
+                // Stop as a user does, once the prompt shows in Chat: Working
+                // arrives before Codex stores the prompt, and an interrupt in
+                // that gap drops it for good (X26). A refused read retries, as
+                // the Chat refresh does.
+                let request = transcriptRequest(agent.paneID)
+                try #require(try await codexEventually {
+                    let transcript = try? await transport.readChatTranscript(request)
+                    return transcript?.messages.contains { $0.role == .user && $0.text == "WAYCAR_SLOW" } == true
+                }, "the prompt never showed in the transcript")
                 try await transport.abortAgentRun(target: agent.paneID)
                 try await feed.wait(for: agent.paneID, status: .done)
                 // X12 pins the wire status; a transcript need not have an error
@@ -224,7 +233,7 @@ struct CodexTransportE2ETests {
                     ]))
                     #expect(turns["data"]?.codexArray?.first?["status"]?.stringValue == "interrupted")
                 }
-                let transcript = try await transport.readChatTranscript(transcriptRequest(agent.paneID))
+                let transcript = try await transport.readChatTranscript(request)
                 #expect(!transcript.header.turnOpen)
                 #expect(transcript.messages.contains { $0.role == .user && $0.text == "WAYCAR_SLOW" })
                 #expect(!transcript.messages.contains { $0.role == .assistant && !$0.text.isEmpty })

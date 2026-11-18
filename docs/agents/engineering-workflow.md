@@ -404,6 +404,10 @@ When a coordinator splits one change across workers:
 - A scratch Codex config sets `check_for_update_on_startup = false`: once a
   newer Codex ships, a pinned TUI opens on an "Update available" menu and
   never shows the reply.
+- A Codex test that stops a turn must first wait until the transcript shows
+  the prompt, not just Working: Codex announces the turn 7–20 ms before it
+  stores the prompt, and an interrupt in that gap drops the prompt for good
+  (X26 in `docs/design/codex-backend.md`, hosted CI).
 
 **Shell**
 

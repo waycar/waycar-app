@@ -624,15 +624,21 @@ def steer(s):
 
 
 def interrupt(s):
-    """Interrupt by thread/turn id ends the turn as interrupted."""
+    """Interrupt by thread/turn id ends the turn as interrupted; a stored prompt stays."""
     s.start()
     c = s.connect()
     thread = s.thread(c)
     turn = s.turn(c, thread, 'WAYCAR_SLOW')
     c.event('turn/started', thread)
+    # An interrupt before Codex stores the prompt can drop it (X26), so wait for it.
+    c.wait(lambda msg: msg.get('method') == 'item/completed' and msg['params'].get('threadId') == thread
+           and msg['params']['item']['type'] == 'userMessage', 'stored prompt')
     c.call('turn/interrupt', {'threadId': thread, 'turnId': turn})
     result = c.event('turn/completed', thread)['params']['turn']
     require(result['id'] == turn and result['status'] == 'interrupted', 'interrupt: ' + json.dumps(result))
+    items = c.call('thread/turns/list', {'threadId': thread, 'limit': 1})['data'][0]['items']
+    require([item['content'][0]['text'] for item in items if item['type'] == 'userMessage'] == ['WAYCAR_SLOW'],
+            'interrupted turn lost its prompt: ' + json.dumps(items))
 
 
 def disconnect_mid_turn(s):

@@ -6,6 +6,18 @@ endpoint talks to a deterministic mock model server instead. It runs on the
 Colima Docker context `colima-waycar-harness` (compose project
 `waycar-harness-lab`) and never touches the `default` context.
 
+Colima traps (colima 0.10.3 source review): `colima start` makes its own
+Docker context current unless it gets `--activate=false` (which still creates
+the context), and saves its flags into `colima.yaml` unless it gets
+`--save-config=false`. `colima list` reports the memory the VM had when it
+last ran; the next start reads `colima.yaml`. `lab.sh` uses
+`HARNESS_LAB_CONTEXT` when it is set, so pin it. A fresh clone has no Linux
+`plugin/bin/waycar`, so `make test-harness-lab` downloads the release binary of
+the commit's plugin version and checks it against the sha256 that version's
+`install.sh` pins: an unreleased plugin version fails there. On the Mac,
+`mac_run {target: "test-harness-lab", vars: {DRY_RUN: "1"}}` checks all this
+without starting the VM.
+
 ```sh
 make harness-lab-up      # build and start mock + host, then print herdr/tmux/waycar versions
 make harness-lab-shell   # ssh in as waycar
