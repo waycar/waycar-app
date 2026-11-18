@@ -191,6 +191,23 @@ class FlakeHuntReportTests(unittest.TestCase):
         self.assertIn("| loaded | 1 | 7560 tests |", text)
         self.assertLess(text.index("| loaded | package 3 |"), text.index("| loaded | 1 |"))
 
+    def test_never_gives_a_left_over_issue_to_one_of_several_failing_tests(self) -> None:
+        # A's second issue sits in a helper's file, which names no suite; B,
+        # the other failing test, recorded none the log shows.
+        loaded = write_job(self.root, "loaded", {
+            "label": "loaded\n", "passes": "0\n", "package-passes": "1\n",
+            "package-pass-1.status": "65\n",
+            "package-pass-1.log": (
+                '✘ Test "a" recorded an issue at A.swift:10:3: A first failure\n'
+                '✘ Test "a" recorded an issue at Helper.swift:20:3: A helper failure\n'
+                "Failing tests:\n\tA.testA()\n\tB.testB()\n"),
+        })
+        rows = self.rows(fhr.report([loaded]))
+        self.assertIn("A.swift:10: A first failure", next(row for row in rows if "A.testA" in row))
+        b_row = next(row for row in rows if "B.testB" in row)
+        self.assertNotIn("Helper.swift", b_row)
+        self.assertIn("no issue recorded", b_row)
+
     def test_a_failed_exit_without_any_failing_test_says_so(self) -> None:
         quiet = write_job(self.root, "quiet", {
             "label": "quiet\n", "passes": "1\n",

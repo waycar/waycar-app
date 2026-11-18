@@ -128,11 +128,11 @@ def attribute(failing: list[str], issues: list[Issue],
     and its file the suite: both match first, then the function alone when
     only one failing test has it. A display-named test's issue names neither;
     it goes to the one failing test of its suite left without an issue, and
-    to none when several are left: never a guess. Last, since every issue
-    is a failing test's, the issues nothing matched belong to the one test
-    still without any, if one is: a display-named test whose suite extension
-    lives in a file of another name (the WaycarSSH package suites). Not after
-    a test host relaunch, whose failing list covers only the last launch."""
+    to none when several are left: never a guess. Last, every issue of a pass
+    with one failing test is that test's: a display-named test whose suite
+    extension lives in a file of another name (the WaycarSSH package suites)
+    gets the first. Not after a test host relaunch, whose failing list covers
+    only the last launch."""
     def detail(issue: Issue) -> str:
         return f"{issue.where}: {issue.message}"
 
@@ -154,13 +154,11 @@ def attribute(failing: list[str], issues: list[Issue],
         alone = sum(1 for other in left if split[other][0] == suite) == 1
         if loose and alone:
             found[test] = detail(issues[loose[0]])
-            claimed.update(loose)
         else:
             found[test] = UNMATCHED if loose else NO_ISSUE
-    without = [test for test in left if found[test] in (NO_ISSUE, UNMATCHED)]
-    spare = [index for index in range(len(issues)) if index not in claimed]
-    if one_launch and len(without) == 1 and spare:
-        found[without[0]] = detail(issues[spare[0]])
+    if one_launch and len(failing) == 1 and issues \
+            and found[failing[0]] in (NO_ISSUE, UNMATCHED):
+        found[failing[0]] = detail(issues[0])
     return found
 
 
