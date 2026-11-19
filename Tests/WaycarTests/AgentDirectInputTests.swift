@@ -398,22 +398,30 @@ struct AgentDirectInputTests {
         // language in both the draft and the terminal.
         #expect(composerInput.autocorrectionType == terminal.autocorrectionType)
         #expect(composerInput.autocapitalizationType == terminal.autocapitalizationType)
-        composerInput.becomeFirstResponder()
-        try #require(await Self.eventually { composerInput.isFirstResponder })
-        try #require(await Self.eventually { composerInput.inputView == nil })
-        try #require(await Self.eventually {
-            inset.height > 0
-                && (keyboardTransitions.willShowCount > 0
-                    || keyboardTransitions.willChangeFrameCount > 0)
-        })
-        let keyboardHeight = inset.height
-        #expect(window.isKeyWindow)
-        #expect(composerInput.window === window)
         keyboardTransitions.setChromeSample {
             Self.keyboardChromeSample(in: controller.view, window: window, inset: inset)
         }
         keyboardTransitions.reset()
-        try #require(await Self.eventually { keyboardTransitions.hasStableTail() })
+        composerInput.becomeFirstResponder()
+        // The handoff starts from Message Agent's settled system keyboard:
+        // the Composer holds it and one positive inset stands across display
+        // frames; its height is read there, not at the first landing. On a
+        // loaded simulator the keyboard process (InputUI) can die, taking
+        // the keyboard and the Composer's focus with it (killing it by hand
+        // reproduced the flake hunt's failure), so the Composer raises its
+        // keyboard again.
+        try #require(await Self.eventually {
+            if !composerInput.isFirstResponder {
+                composerInput.becomeFirstResponder()
+            }
+            return composerInput.isFirstResponder
+                && composerInput.inputView == nil
+                && inset.height > 0
+                && keyboardTransitions.hasStableTail(at: inset.height)
+        }, "Message Agent's keyboard never settled")
+        let keyboardHeight = inset.height
+        #expect(window.isKeyWindow)
+        #expect(composerInput.window === window)
         keyboardTransitions.reset()
 
         try #require(try await Self.activateControl(
@@ -1917,10 +1925,14 @@ struct AgentDirectInputTests {
             captureChromeSample()
         }
 
-        func hasStableTail(frameCount: Int = 4) -> Bool {
+        /// Whether the last `frameCount` samples agree, and agree with
+        /// `insetHeight` when given: a live inset that just changed has no
+        /// samples of its own yet, so stable older ones say nothing about it.
+        func hasStableTail(frameCount: Int = 4, at insetHeight: CGFloat? = nil) -> Bool {
             guard chromeSamples.count >= frameCount,
                   let baseline = chromeSamples.last,
-                  baseline.toolbarBottom != nil
+                  baseline.toolbarBottom != nil,
+                  insetHeight.map({ abs(baseline.insetHeight - $0) <= 1 }) ?? true
             else { return false }
             return chromeSamples.suffix(frameCount).allSatisfy { sample in
                 abs(sample.insetHeight - baseline.insetHeight) <= 1
