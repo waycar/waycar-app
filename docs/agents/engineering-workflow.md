@@ -221,17 +221,27 @@ When a coordinator splits one change across workers:
 - **Red first.** A new test counts once it fails on the base: run it there,
   or as a mutant (take the fix back out in a scratch copy, run only that
   suite, expect the new test to fail). A fixture set the code passes proves
-  little until a broken version fails it.
+  little until a broken version fails it. One `mac_run` session does both:
+  a throwaway commit of the base plus the new tests (a scratch
+  `GIT_INDEX_FILE` and `git commit-tree` keep it off the branch) fails, then
+  the tip runs incrementally. A fix that adds the fact it decides on leaves
+  no new test that compiles on the base: prove red with the same flow test
+  minus that one fact line.
 - **Reproduce a flake where its cause sits**, not by loading the Mac: queue
   a `Thread.sleep` on the main thread before the step, delay a fake's reply,
   hold a fake on a continuation, or pause the test process
   (`kill -STOP`/`kill -CONT` in a loop). Then fix it where the shared piece
-  is made: a repro of one call site does not clear its siblings.
+  is made: a repro of one call site does not clear its siblings. To pin a
+  main-actor race, release the awaited answer and ask for the competing
+  step in the same main-actor job (`Task { gate.release(); await leave() }`):
+  the released continuation is queued first. A gate whose `wait()` is
+  nonisolated resumes off the main actor, so its order is not fixed.
 - **Loop in fresh processes.** For a flaky suite, run it again and again with
   `scripts/run-app-simulator-tests.py … test-without-building`.
-  `-test-iterations` is no substitute: through `make test-app` it ran each
-  Swift Testing test once (Xcode 27.2), and elsewhere it starts every
-  repetition at the same time.
+  `-test-iterations N` through `make test-app` repeats each Swift Testing
+  test N times in a row in one test host (Xcode 27.2, a `.serialized`
+  suite, 2026-11-19): a quick repeat, but every repetition shares the
+  process, and elsewhere it has started every repetition at the same time.
 - **Read the counts.** A Swift Testing selector without its `()` runs zero
   tests and passes. Check the `Test run with N tests` line and the
   crash-report line of every run.
@@ -241,7 +251,10 @@ When a coordinator splits one change across workers:
   while the real program differed: herdr-core's replies carry no newline, a
   resumed Codex thread sends no `thread/started`, an Ultimate endpoint is
   POST-only. Run the real-binary suite or contract check before you trust
-  them, and feed fakes recorded payloads.
+  them, and feed fakes recorded payloads. A live OpenCode 2 check needs no
+  Mac or testbox: `opencode-contract.py --fetch` gives the pinned binary on
+  this agent host, and the harness-lab mock runs as a plain
+  `node server.js`.
 - **Inject randomness as a closure** (`randomIndex: { $0.lowerBound }`), not
   a stored `any RandomNumberGenerator`: Swift does not open an existential
   for an `inout` generic argument (Xcode 27). A constant-0 test generator
@@ -408,6 +421,18 @@ When a coordinator splits one change across workers:
   the prompt, not just Working: Codex announces the turn 7–20 ms before it
   stores the prompt, and an interrupt in that gap drops the prompt for good
   (X26 in `docs/design/codex-backend.md`, hosted CI).
+- The simulator's keyboard runs in its own process, InputUI, which a loaded
+  hosted runner can lose mid-test. The pass log then shows
+  `[Client] XPC connection invalidated` (or `interrupted`) and
+  `-[_UIRemoteKeyboards proxy] … Failed to access remote service`; the
+  keyboard leaves, its text view resigns first responder, and an inset test
+  reads 0 (flake hunt, `terminalKeyboardTakesMessageAgentsVisibleKeyboardWithoutReloading`).
+  Wait for the settled keyboard right before the step under test, raise it
+  again when focus went, and read heights only there. A settled check must
+  compare samples with the live value too: samples stable at 0 say nothing
+  about an inset published since. To reproduce it, a throwaway test lists
+  its simulator's processes (`sysctl` `KERN_PROC_ALL`, parent `getppid()`,
+  the test host's own `launchd_sim`) and `SIGKILL`s `InputUI`.
 
 **Shell**
 
