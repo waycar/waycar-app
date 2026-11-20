@@ -500,6 +500,21 @@ When a coordinator splits one change across workers:
 - A product claim lives in more than `content/help`: grep all of
   `apps/web/src` and the root docs.
 
+**Public history**
+
+- A tree scan misses text one commit adds and a later one removes, which the
+  push still publishes: `scan.py --commits <rev>` checks what each
+  unpublished commit adds, and its message.
+- GitHub keeps serving commits force-pushed away or left on deleted
+  branches (by SHA), and the edit history of issue and PR bodies and
+  comments: editing text out removes nothing. A leak sweep scans every blob
+  reachable from any ref of a mirror clone (`refs/pull/*` included), plus
+  the commits the repository activity API lists as force-pushed or on
+  deleted branches, fetched by SHA.
+- A public repository's Actions logs and artifacts are public too. The
+  `.xcresult` data files in the CI diagnostics artifacts are
+  zstd-compressed, so a plain grep finds nothing in them.
+
 ## Each run makes the skill better
 
 This skill is load-bearing only if it absorbs what runs learn. Every run that

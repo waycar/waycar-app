@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Synchronization
 import Testing
 import UIKit
 
@@ -397,10 +398,12 @@ struct AgentComposerStoreTests {
             HerdrAPIError(
                 code: "agent_not_ready",
                 message: "agent w15:p1 is not an active named agent"))
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(20)
+            agentNotReadyRetryBudget: .milliseconds(20),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -413,7 +416,9 @@ struct AgentComposerStoreTests {
             store.messages.map(\.state)
                 == [.failed("herdr rejected the message: agent w15:p1 is not an active named agent")]
         )
-        #expect(await transport.agentPromptParams.count > 1)
+        // Attempts at 0, 5, 10 and 15 ms: a fifth would start past the budget.
+        let attempts = await transport.agentPromptParams.count
+        #expect(attempts == 4)
         #expect(store.messages.first?.text == "Stuck launch")
     }
 
@@ -426,10 +431,12 @@ struct AgentComposerStoreTests {
         let transport = ScriptedTransport()
         await transport.setAgentPromptFailure(
             HerdrAPIError(code: "agent_not_found", message: "agent target w15:p1 not found"))
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(20)
+            agentNotReadyRetryBudget: .milliseconds(20),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -458,10 +465,12 @@ struct AgentComposerStoreTests {
         var writes: [Data] = []
         let input = TerminalInputController()
         _ = input.beginSession { writes.append($0) }
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(40)
+            agentNotReadyRetryBudget: .milliseconds(40),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -488,10 +497,12 @@ struct AgentComposerStoreTests {
         var writes: [Data] = []
         let input = TerminalInputController()
         _ = input.beginSession { writes.append($0) }
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(40)
+            agentNotReadyRetryBudget: .milliseconds(40),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -521,10 +532,12 @@ struct AgentComposerStoreTests {
         var writes: [Data] = []
         let input = TerminalInputController()
         _ = input.beginSession { writes.append($0) }
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(40)
+            agentNotReadyRetryBudget: .milliseconds(40),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -628,10 +641,12 @@ struct AgentComposerStoreTests {
             HerdrAPIError(
                 code: "agent_not_ready",
                 message: "agent w15:p1 is not an active named agent"))
+        let clock = SleepAdvancedClock()
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(20)
+            agentNotReadyRetryBudget: .milliseconds(20),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -675,7 +690,8 @@ struct AgentComposerStoreTests {
     /// be lost there the same way.
     @Test func inputGateExhaustionFailsWithoutTypingIntoTheAttach() async throws {
         let transport = ScriptedTransport()
-        let opensAt = ContinuousClock.now + .milliseconds(30)
+        let clock = SleepAdvancedClock()
+        let opensAt = clock.now + .milliseconds(30)
         await transport.setAgentPromptFailure(
             AgentInputNotReadyError(kind: "opencode", target: "w15:p1", opensAt: opensAt))
         var writes: [Data] = []
@@ -684,7 +700,8 @@ struct AgentComposerStoreTests {
         let store = AgentComposerStore(
             target: "w15:p1",
             agentNotReadyRetryDelay: .milliseconds(5),
-            agentNotReadyRetryBudget: .milliseconds(1)
+            agentNotReadyRetryBudget: .milliseconds(1),
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) }
         ) { params in
             try await transport.promptAgent(params)
         }
@@ -697,7 +714,7 @@ struct AgentComposerStoreTests {
         #expect(
             store.messages.map(\.state)
                 == [.failed("OpenCode is still starting. Try again in a moment.")])
-        #expect(ContinuousClock.now >= opensAt)
+        #expect(clock.now >= opensAt)
         #expect(await transport.agentPromptParams.count > 1)
         #expect(writes.isEmpty)
         let failed = try #require(store.messages.first)
@@ -2120,6 +2137,24 @@ private final class ComposerStatusFlip {
 
     func block() {
         store?.agentStatusDidChange(.blocked)
+    }
+}
+
+/// The Composer's launch-wait clock for tests that count retries: it moves
+/// only when the wait sleeps, by the whole delay at once, so a budget of
+/// milliseconds fits the same attempts however long the test host stalls
+/// (flake hunt run 44767106767 stalled one attempt for 0.4 s).
+private final class SleepAdvancedClock: Sendable {
+    private let instant = Mutex(ContinuousClock.now)
+
+    var now: ContinuousClock.Instant {
+        instant.withLock { $0 }
+    }
+
+    func sleep(for duration: Duration) async throws {
+        try Task.checkCancellation()
+        instant.withLock { $0 = $0.advanced(by: duration) }
+        await Task.yield()
     }
 }
 

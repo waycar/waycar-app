@@ -198,6 +198,13 @@ final class AgentComposerStore: ComposerTrayLifecycle {
     /// smaller values so the wait itself stays under test.
     private let agentNotReadyRetryDelay: Duration
     private let agentNotReadyRetryBudget: Duration
+    /// The clock that budget is measured on (a send's wait and a launch's
+    /// first-message window) and that a send's retry delay sleeps on. Tests
+    /// inject one that moves only when the wait sleeps, so a stalled test
+    /// host cannot spend a budget of milliseconds before the retries it
+    /// counts.
+    private let now: @MainActor () -> ContinuousClock.Instant
+    private let sleep: @Sendable (Duration) async throws -> Void
     private let delivery: Delivery
     /// The Transport's sign-in and folder-trust screen check
     /// (`Transport.checkAgentInputScreen`), asked before a Blocked send
@@ -251,6 +258,8 @@ final class AgentComposerStore: ComposerTrayLifecycle {
         statusUpdates: AsyncStream<ConsoleStore.AgentStatusUpdate>? = nil,
         agentNotReadyRetryDelay: Duration = AgentComposerStore.defaultAgentNotReadyRetryDelay,
         agentNotReadyRetryBudget: Duration = AgentComposerStore.defaultAgentNotReadyRetryBudget,
+        now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         outbox: ComposerOutbox? = nil,
         holdingForLaunch: QueuedMessage.AgentIdentity? = nil,
         checkInputScreen: (@Sendable (String) async throws -> Void)? = nil,
@@ -261,6 +270,8 @@ final class AgentComposerStore: ComposerTrayLifecycle {
         self.statusUpdates = statusUpdates
         self.agentNotReadyRetryDelay = agentNotReadyRetryDelay
         self.agentNotReadyRetryBudget = agentNotReadyRetryBudget
+        self.now = now
+        self.sleep = sleep
         self.outbox = outbox
         self.holdingForLaunch = holdingForLaunch
         isHostReachable = holdingForLaunch == nil
@@ -282,6 +293,8 @@ final class AgentComposerStore: ComposerTrayLifecycle {
         statusUpdates = nil
         agentNotReadyRetryDelay = Self.defaultAgentNotReadyRetryDelay
         agentNotReadyRetryBudget = Self.defaultAgentNotReadyRetryBudget
+        now = { .now }
+        sleep = { try await Task.sleep(for: $0) }
         delivery = .paneInput(sendInput)
         checkInputScreen = nil
         outbox = nil
@@ -543,7 +556,7 @@ final class AgentComposerStore: ComposerTrayLifecycle {
             tracksAgentProgress: true,
             state: .sending,
             agentAtSend: agent,
-            launchWaitEnds: ContinuousClock.now + agentNotReadyRetryBudget)
+            launchWaitEnds: now() + agentNotReadyRetryBudget)
         messages.append(message)
         messages.sort { $0.sentAt < $1.sentAt }
         return enqueue(
@@ -708,7 +721,7 @@ final class AgentComposerStore: ComposerTrayLifecycle {
             for index in messages.indices
             where ids.contains(messages[index].id) && messages[index].state == .queued {
                 messages[index].agentAtSend = messages[index].queued?.agent
-                messages[index].launchWaitEnds = ContinuousClock.now + agentNotReadyRetryBudget
+                messages[index].launchWaitEnds = now() + agentNotReadyRetryBudget
             }
         }
         let known = Set(messages.map(\.id))
@@ -734,7 +747,7 @@ final class AgentComposerStore: ComposerTrayLifecycle {
                     queued: interrupted ? nil : record,
                     agentAtSend: awaitingLaunch ? record.agent : nil,
                     launchWaitEnds: awaitingLaunch
-                        ? ContinuousClock.now + agentNotReadyRetryBudget : nil))
+                        ? now() + agentNotReadyRetryBudget : nil))
         }
         messages.sort { $0.sentAt < $1.sentAt }
         noteQueueChange()
@@ -897,7 +910,7 @@ final class AgentComposerStore: ComposerTrayLifecycle {
         // herdr would refuse it, and typing into a question is the user's call.
         guard agentStatus != .blocked else { return .waitsForAgent }
         let current = outbox.identity()
-        if Self.awaitsLaunch(messages[index], current: current) { return .waitsForLaunch }
+        if awaitsLaunch(messages[index], current: current) { return .waitsForLaunch }
         guard let current else {
             messages[index].state = .held(Self.agentGoneMessage)
             return .settled
@@ -974,10 +987,10 @@ final class AgentComposerStore: ComposerTrayLifecycle {
             // A launch still coming up: herdr 0.9.1 answers a fresh pane
             // `agent_not_found` for a moment, and its row may not name the
             // Agent yet.
-            if let waiting = messages.first(where: { $0.id == id }), Self.isInLaunchWindow(waiting),
+            if let waiting = messages.first(where: { $0.id == id }), isInLaunchWindow(waiting),
                 Self.errorCode(error) == "agent_not_found"
                     || (error is QueuedAgentChangedError
-                        && Self.awaitsLaunch(waiting, current: outbox.identity()))
+                        && awaitsLaunch(waiting, current: outbox.identity()))
             {
                 requeue(id, record: record)
                 return .waitsForLaunch
@@ -1168,20 +1181,20 @@ final class AgentComposerStore: ComposerTrayLifecycle {
     private func identityAtSend() -> QueuedMessage.AgentIdentity? {
         if let holdingForLaunch { return holdingForLaunch }
         let current = outbox?.identity()
-        let launch = messages.last { $0.isQueueRow && Self.awaitsLaunch($0, current: current) }
+        let launch = messages.last { $0.isQueueRow && awaitsLaunch($0, current: current) }
         return launch?.agentAtSend ?? current
     }
 
     /// Whether `message` is a launch's first message within its launch
     /// window (`queueLaunchMessage`).
-    private static func isInLaunchWindow(_ message: Message) -> Bool {
-        message.launchWaitEnds.map { ContinuousClock.now < $0 } ?? false
+    private func isInLaunchWindow(_ message: Message) -> Bool {
+        message.launchWaitEnds.map { now() < $0 } ?? false
     }
 
     /// Whether `message` is a launch's first message whose pane lists no
     /// identified Agent yet (`current`): no row, herdr's pending launch
     /// (`Agent.unidentifiedKind`), or the shell before the Agent starts.
-    private static func awaitsLaunch(
+    private func awaitsLaunch(
         _ message: Message, current: QueuedMessage.AgentIdentity?
     ) -> Bool {
         guard isInLaunchWindow(message) else { return false }
@@ -1502,11 +1515,11 @@ final class AgentComposerStore: ComposerTrayLifecycle {
     ) async throws -> Agent {
         var admission = ComposerPromptAdmissionMachine(
             retryDelay: agentNotReadyRetryDelay, queued: stillAddressed != nil)
-        var effects = admission.handle(.begin(now: ContinuousClock.now, budget: agentNotReadyRetryBudget))
+        var effects = admission.handle(.begin(now: now(), budget: agentNotReadyRetryBudget))
         while case .attempt(let token) = effects.first {
             do {
                 let agent = try await prompt(params)
-                _ = admission.handle(.response(token, .accepted, now: ContinuousClock.now, blocked: agentStatus == .blocked))
+                _ = admission.handle(.response(token, .accepted, now: now(), blocked: agentStatus == .blocked))
                 return agent
             } catch {
                 if error is CancellationError {
@@ -1521,10 +1534,10 @@ final class AgentComposerStore: ComposerTrayLifecycle {
                 } else {
                     response = .refusal
                 }
-                let waiting = admission.handle(.response(token, response, now: ContinuousClock.now, blocked: agentStatus == .blocked))
+                let waiting = admission.handle(.response(token, response, now: now(), blocked: agentStatus == .blocked))
                 guard case .wait(let timer, let delay) = waiting.first else { throw error }
                 do {
-                    try await Task.sleep(for: delay)
+                    try await sleep(delay)
                 } catch {
                     _ = admission.handle(.cancelled(timer))
                     throw error
