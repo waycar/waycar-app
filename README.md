@@ -171,36 +171,10 @@ Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 Please report security problems privately ([SECURITY.md](SECURITY.md)), and
 follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Built on Heeler
-
-Waycar started from [Heeler](https://github.com/ZingerLittleBee/Heeler),
-ZingerLittleBee's open-source herdr client for iPhone (Apache 2.0). It forked
-Heeler at commit
-[`46dabe12`](https://github.com/ZingerLittleBee/Heeler/commit/46dabe124ed5c853497779164ac2036a9a187cbc)
-on 2026-09-20, then went its own way. Heeler's 1,418 commits (July 18 to
-September 20, 2026) and their authors live in Heeler's repository: this
-repository's history starts from a single commit, so they don't show in its
-git log.
-
-At the fork Heeler already had the SwiftUI agent console for herdr, live
-terminals through libghostty-spm, the Composer, QR pairing, encrypted
-notifications with Live Activities, the SSH package on libssh2 and OpenSSL
-(then `HeelerSSH`), a Node plugin for the Host and the Push Relay. Much of it
-is still here: about a quarter of the app's Swift and a third of its tests,
-77% of `Packages/WaycarSSH`, 86% of `relay/`, and three scripts
-(`scripts/run-with-timeout.py`, `scripts/fixtures/weak-network-proxy.py`,
-most of `scripts/generate-wire-types.py`). The Rust Host Tools in `plugin/`
-are a port of Heeler's Node plugin. No Heeler commit has been merged since the
-fork. Thank you to ZingerLittleBee and Heeler's contributors; see
-[NOTICE](NOTICE), and [docs/heeler-derived-files.md](docs/heeler-derived-files.md)
-for every file that came from Heeler.
-
 ## License
 
-Waycar is licensed under the [Apache License 2.0](LICENSE). It is built on
-[Heeler](https://github.com/ZingerLittleBee/Heeler) by ZingerLittleBee
-(Apache 2.0); see [NOTICE](NOTICE) and [Built on Heeler](#built-on-heeler).
-Third-party components carry their own licenses, listed in the app under
-Settings › About › Acknowledgements. Waycar is not affiliated with the herdr
-project. The license covers the code, not the Waycar name or logo: see
-[TRADEMARKS](TRADEMARKS.md).
+Waycar is licensed under the [Apache License 2.0](LICENSE); see
+[NOTICE](NOTICE). Third-party components carry their own licenses, listed in
+the app under Settings › About › Acknowledgements. Waycar is not affiliated
+with the herdr project. The license covers the code, not the Waycar name or
+logo: see [TRADEMARKS](TRADEMARKS.md).
