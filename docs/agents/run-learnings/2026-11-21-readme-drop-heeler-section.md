@@ -1,4 +1,4 @@
-# 2026-11-21 — README: drop the Built on Heeler section
+# 2026-11-21 — README attribution cleanup
 
 - **Worked:** `rg -n -i --hidden "heeler|zingerlittlebee" apps/` before
   editing: the site (pages, help, `src/llms`) never mentions Heeler, so a
