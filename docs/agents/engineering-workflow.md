@@ -289,7 +289,11 @@ When a coordinator splits one change across workers:
   XCUITest to `ReadmeScreenshots`, and points `capture-screenshots.sh` at it
   with `exit 0` after the run; then `mac_run target: screenshots` with that
   `repo` and `deliverables`. One run can capture two layouts behind a second
-  throwaway flag.
+  throwaway flag. For a design choice, render "before" and each variant side
+  by side (a static knob in the throwaway commit, one `mac_run` step per
+  device) so the owner picks from one sheet; `AgentCardChrome` pads every
+  card (Console, Hosts sheet, AI Usage, closed sessions), and the summary's
+  loading skeleton has a fixed height to change with its font.
 
 ## Known traps
 
