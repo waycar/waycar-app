@@ -518,7 +518,9 @@ twin and the link list), and the same four under `src/pages/solutions/` and
 `src/pages/solutions.md.ts`. `src/lib/compare.ts`, `src/lib/solutions.ts` and
 `src/lib/landing.ts` read the collections and build the twins and JSON-LD.
 `SiteFooter`'s Compare and Solutions columns list a few picked pages by id (a
-missing id fails the build), then the index.
+missing id fails the build), then the index. Below 800 px the header shows no
+page links and has no menu, so the footer is a phone's only path to CarPlay,
+Help and Articles: keep them there when trimming it.
 
 
 ## App Store switch

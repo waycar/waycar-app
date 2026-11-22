@@ -516,6 +516,14 @@ When a coordinator splits one change across workers:
   off-site link there but the App Store and the repository's GitHub page. A
   new site analytics event also changes the "This website" sentence and date
   in `PRIVACY.md`.
+- A green deploy is not a live site. Prove a deploy on the live URL with what
+  that run built (for `install.sh`, its hash-named tarballs, as
+  `scripts/ci/check-live-installer.sh` does), not with a version you expect,
+  and check again before you report: one check passed at 20:14, and another
+  deploy put an old snapshot back at 20:57. When the live file is wrong, read
+  which Worker version serves (`npx wrangler deployments list` in
+  `apps/web`) before you blame caches. `cf-cache-status: HIT` on a Workers
+  asset does not mean stale across deploys.
 
 **Public history**
 

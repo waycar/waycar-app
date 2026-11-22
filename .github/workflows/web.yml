@@ -14,7 +14,11 @@
 # four native binaries itself and installs its own toolchain on a cold
 # runner). The plugin version guard (scripts/check-plugin-version.sh,
 # see ci-node.yml) gates the deploy too, so a shipped-file change under an
-# already released version never reaches install.sh.
+# already released version never reaches install.sh. After deploying, the job
+# fails unless waycar.dev serves the install.sh it built and the packages that
+# names (scripts/ci/check-live-installer.sh): this Worker must be deployed only
+# from here, and once another repository's copy of this workflow put an old
+# plugin back over main's while every run here stayed green.
 #
 # The daily schedule (14:17 UTC, 10:17 EDT or 09:17 EST) is for dated articles:
 # src/lib/articles-list.mjs holds a post back until its `date` (read in
@@ -70,6 +74,7 @@ on:
       - scripts/build-plugin-binaries.sh
       - scripts/ci/provision-plugin-build.sh
       - scripts/ci/package-clean-check.sh
+      - scripts/ci/check-live-installer.sh
       - .github/workflows/web.yml
   push:
     branches: [main]
@@ -82,6 +87,7 @@ on:
       - scripts/build-plugin-binaries.sh
       - scripts/ci/provision-plugin-build.sh
       - scripts/ci/package-clean-check.sh
+      - scripts/ci/check-live-installer.sh
       - .github/workflows/web.yml
   # Daily, so an article dated for a later day goes live that day (see above).
   schedule:
@@ -241,8 +247,10 @@ jobs:
           LLMS_REUSE_RUN_ID: ${{ steps.llms.outputs.reuse_run_id }}
           LLMS_REUSE_SHA: ${{ steps.llms.outputs.reuse_sha }}
 
+      # The message names this run on the Worker version, so a version from
+      # anywhere else stands out in `npx wrangler versions list`.
       - name: Deploy to Cloudflare
-        run: npx wrangler deploy --var POSTHOG_ENV:release
+        run: npx wrangler deploy --var POSTHOG_ENV:release --message "web.yml run $GITHUB_RUN_ID, $GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -257,3 +265,10 @@ jobs:
           path: apps/web/dist/llms.txt
           retention-days: 90
           if-no-files-found: error
+
+      # wrangler's success means the upload landed, not that waycar.dev serves
+      # it: fail unless the live install.sh is this build's (so plugin/'s
+      # version) and its four packages match their checksums. It retries for
+      # edge propagation.
+      - name: waycar.dev serves this deploy's installer
+        run: sh ../../scripts/ci/check-live-installer.sh dist/install.sh

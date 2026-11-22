@@ -30,7 +30,8 @@ fail() { echo "check-deployed-installer: $*" >&2; exit 1; }
 
 requirement=Sources/Waycar/Transport/WaycarPlugin.swift
 [ -f "$requirement" ] || fail "$requirement not found"
-url=${INSTALL_SCRIPT_URL:-https://waycar.dev/install.sh}
+# internal=1 keeps this fetch out of the customer install counts.
+url=${INSTALL_SCRIPT_URL:-https://waycar.dev/install.sh?internal=1}
 
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT

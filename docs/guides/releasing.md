@@ -422,4 +422,9 @@ follows (`cargo update -p waycar --offline` in `plugin/`).
   `scripts/build-plugin-binaries.sh` inside `scripts/package-plugin.sh`), their
   checksums and the rendered installer when the version is
   new (a no-op otherwise), and `web.yml` redeploys waycar.dev, whose
-  `install.sh` always serves `main`'s plugin.
+  `install.sh` always serves `main`'s plugin. The deploy job then fails
+  unless waycar.dev serves the `install.sh` it built and that file's four
+  packages (`scripts/ci/check-live-installer.sh`). Deploy the `waycar-web`
+  Worker only from this repository's `web.yml`: any other deploy serves
+  until the next one, as the retired private repository's daily `web.yml`
+  did with plugin 2.6.0 (2026-11-20 to 11-22).
