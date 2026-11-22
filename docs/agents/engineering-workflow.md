@@ -487,11 +487,15 @@ When a coordinator splits one change across workers:
   instead of a format it could break.
 - A Dependabot cargo PR changes `Cargo.lock` but never regenerates
   `plugin/THIRD-PARTY-LICENSES` or bumps the plugin version, so it fails
-  `plugin-licenses.py --check`. Land it as its own branch: cherry-pick
-  Dependabot's commit, bump the plugin patch version, run
-  `python3 scripts/plugin-licenses.py`, then the Before submit plugin checks.
-  Other Dependabot PRs merge one at a time, oldest first, with
-  `gh pr merge <n> --squash --match-head-commit <full 40-char sha>`.
+  the Plugin version guard and `plugin-licenses.py --check`. Push the fix
+  onto Dependabot's branch: bump the plugin patch version (both tomls,
+  `cargo update -p waycar --offline`, `currentVersion`), run
+  `python3 scripts/plugin-licenses.py`, then the Before submit plugin checks;
+  review, wait for green and squash-merge the PR. Keep that branch to the
+  bump and what it needs: the run-learnings entry and any doc edits land
+  through `workspace submit`, or the PR sweeper treats it as a human PR and
+  asks for an issue. Other Dependabot PRs merge one at a time, oldest first,
+  with `gh pr merge <n> --squash --match-head-commit <full 40-char sha>`.
 
 **Site (`apps/web`)**
 
@@ -503,6 +507,15 @@ When a coordinator splits one change across workers:
   copy change gets a commit of its own, so it can be timed with the release.
 - A product claim lives in more than `content/help`: grep all of
   `apps/web/src` and the root docs.
+- A component that must look the same everywhere takes no caller
+  attributes: Astro hands every child the parent's `data-astro-cid-*`, so a
+  spread inherits the caller's scoped styles. Underline a span inside an
+  `inline-flex` link, not the link, or its `inline-block` children get it too.
+- A new line in an article-rail module also changes `MODULE_HEIGHTS`
+  (`src/data/article-rail.ts`), and `scripts/articles.test.mjs` allows no
+  off-site link there but the App Store and the repository's GitHub page. A
+  new site analytics event also changes the "This website" sentence and date
+  in `PRIVACY.md`.
 
 **Public history**
 
@@ -540,10 +553,12 @@ is still worth keeping from the oldest and deletes them. Folding and pruning
 are the only permitted edits to other runs' entries.
 
 The entry rides the same PR (or Ultimate branch) as the run's work — never a
-PR of its own. If a lesson surfaces after that PR has merged (during review, or
-at cleanup), carry it into the next run's PR or branch. A reviewer treats a
-missing run-learnings entry as a blocking finding: it is the only thing that
-enforces this loop.
+PR of its own. A fixed Dependabot PR is the exception: its entry lands
+through `workspace submit`, so a reviewer of that PR does not ask for one. If
+a lesson surfaces after that PR has merged (during review, or at cleanup),
+carry it into the next run's PR or branch. A reviewer treats a missing
+run-learnings entry as a blocking finding: it is the only thing that enforces
+this loop.
 
 ## Run learnings
 

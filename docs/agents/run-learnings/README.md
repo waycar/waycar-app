@@ -8,7 +8,8 @@ One file each, so branches that land in parallel never edit the same lines.
 ## Adding an entry
 
 Add `<YYYY-MM-DD>-<slug>.md` to this folder in the same branch or PR as the
-run's work. The date is the day the run ends; the slug names the run in a few
+run's work; for a fixed Dependabot PR, which carries only the bump, it lands
+through `workspace submit` instead. The date is the day the run ends; the slug names the run in a few
 words, with its issue number when it has one (`2026-11-12-ipad-test-run`,
 `2026-11-14-mosh-stall-400`). Keep it short:
 
