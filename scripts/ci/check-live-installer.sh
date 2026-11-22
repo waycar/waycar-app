@@ -16,8 +16,10 @@
 # and whichever deploy finished last served; on 11-22 that put 2.6.0 back
 # over main's 2.6.4 while every web.yml run here stayed green. This check fails
 # a deploy that does not take effect, whatever serves instead. A deploy from
-# elsewhere that lands after this check has passed is caught by the next deploy
-# or by `scripts/check-deployed-installer.sh`, not here.
+# elsewhere that lands after this check has passed is not watched here: the
+# next deploy puts main's build back before it checks, and
+# `scripts/check-deployed-installer.sh` (release gates) only catches a plugin
+# older than the app's versions, if one still serves when it runs.
 #
 # Edge propagation takes seconds: the install.sh fetch is retried up to
 # LIVE_CHECK_ATTEMPTS times (default 12), LIVE_CHECK_DELAY seconds apart
