@@ -1,6 +1,6 @@
 [package]
 name = "waycar"
-version = "2.6.3"
+version = "2.6.4"
 edition = "2024"
 rust-version = "1.99"
 license = "Apache-2.0"
@@ -31,7 +31,7 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 # uses, so the crypto code is linked once.
 ring = "0.17"
 # The Pairing Code QR (the `qrcode` package's counterpart).
-qrcode = { version = "0.14", default-features = false }
+qrcode = { version = "0.15", default-features = false }
 # Reading TOML (agent config files); writing is hand-made text edits.
 toml = { version = "1.2", default-features = false, features = ["parse", "std", "serde"] }
 # JS regex features (lookaround) that the `regex` crate lacks.
