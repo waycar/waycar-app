@@ -23,6 +23,13 @@ updates:
       npm-development:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 can't run Astro's type check (`astro check`) yet:
+      # https://github.com/withastro/astro/issues/17268. Remove this once
+      # TypeScript 7.1 is stable and the check moves to `tsc` with
+      # @astrojs/ts-content-mapper.
+      - dependency-name: typescript
+        versions: [">= 7.0.0"]
 
   # Monthly: every merged update changes plugin/Cargo.lock, a file the plugin
   # package ships, so it needs the plugin version bump (AGENTS.md,
