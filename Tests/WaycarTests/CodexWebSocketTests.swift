@@ -48,6 +48,23 @@ struct CodexWebSocketTests {
         await socket.close()
     }
 
+    /// A sender cancelled before its frame's turn never sends it, even on an
+    /// idle queue, where that turn begins at once.
+    @Test func sendersCancelledBeforeTheirTurnNeverWrite() async throws {
+        let channel = CodexMemoryChannel()
+        let socket = try await CodexWebSocket.connect(channel: channel)
+        for _ in 0..<1000 {
+            let sender = Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                try await socket.send(text: "cancelled")
+            }
+            await #expect(throws: CancellationError.self) { try await sender.value }
+        }
+        try await socket.send(text: "after")
+        #expect(try await channel.clientFrames().map { String(decoding: $0.payload, as: UTF8.self) } == ["after"])
+        await socket.close()
+    }
+
     @Test func fragmentedTextWithControlAndBinary() async throws {
         let bytes = Data("hello 👁".utf8)
         let channel = CodexMemoryChannel(afterHead:

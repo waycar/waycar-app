@@ -200,20 +200,26 @@ actor CodexWebSocket {
     ) -> Task<Void, any Error> {
         let previous = writeTail
         let bytes = Self.frame(opcode: opcode, payload: payload)
-        let channel = channel
-        let timeout = writeTimeout
-        let task = Task {
-            if let previous {
-                do { try await previous.value }
-                catch is CancellationError { /* A skipped frame does not break the queue. */ }
-            }
-            try Task.checkCancellation()
-            guard await shouldSend() else { throw CancellationError() }
-            try Task.checkCancellation()
-            try await channel.write(bytes, timeout: timeout)
-        }
+        let task = Task { try await self.turn(after: previous, bytes: bytes, shouldSend: shouldSend) }
         writeTail = task
         return task
+    }
+
+    /// One frame's turn in the write queue. It runs on this actor, so it
+    /// cannot begin before `write` has installed its sender's cancellation
+    /// handler: a sender cancelled before its turn never sends the frame.
+    /// (Run on the global pool, a turn on an idle queue could begin first.)
+    private func turn(
+        after previous: Task<Void, any Error>?, bytes: Data, shouldSend: @Sendable () async -> Bool
+    ) async throws {
+        if let previous {
+            do { try await previous.value }
+            catch is CancellationError { /* A skipped frame does not break the queue. */ }
+        }
+        try Task.checkCancellation()
+        guard await shouldSend() else { throw CancellationError() }
+        try Task.checkCancellation()
+        try await channel.write(bytes, timeout: writeTimeout)
     }
 
     private static func frame(opcode: UInt8, payload: Data) -> Data {

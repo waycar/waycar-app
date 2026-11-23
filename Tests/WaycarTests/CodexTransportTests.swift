@@ -189,6 +189,8 @@ struct CodexTransportTests {
         await server.channel.blockNextWrite()
         let blocker = Task { try await transport.ping() }
         let ping = try await server.call("thread/loaded/list")
+        // The cancel lands before the answer reaches the write queue or while
+        // it waits there behind the ping; neither may send it.
         let answer = Task {
             try await transport.answerAgentRequest(target: "codex:t", requestID: "1", answer: .allow)
         }
