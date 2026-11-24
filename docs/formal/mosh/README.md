@@ -117,11 +117,15 @@ client does see that case: `trackState` finds no screen for the base, and
 re-acks only a base above the latest state it received. A base below that with
 no screen is treated like an evicted one: the diff is applied on top of the
 shown screen. Extending the drop to that case is a possible fix. It is not
-modelled or tested. Nothing in the repo says the server never
-picks such a base. `PROVENANCE.md` patch 16 records only what was seen: states on
-the newest sent state, and on the last acknowledged one when acks trail. The
+modelled or tested. `PROVENANCE.md` patch 16 records only what was seen: states
+on the newest sent state, and on the last acknowledged one when acks trail. The
 real-server suite (63 to 73 older-base states per run, terminal exact at the end)
-exercises that behaviour at scale. A1 is observed, not proven.
+exercises that behaviour at scale. A source review of mosh 1.4.0 (2026-11-24,
+`src/network/transportsender-impl.h`) backs A1 for that release: its sent
+states carry nondecreasing timestamps, so `update_assumed_receiver_state` picks
+the last acknowledged state or the newest sent one, and
+`attempt_prospective_resend_optimization` can only switch to the acknowledged
+one. A later mosh release could change this.
 
 **3. The repeated-state drop in patch 2 is not needed for the shown screen.**
 `downlink-stale-state-applied` applies a repeated state instead of dropping it

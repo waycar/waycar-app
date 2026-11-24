@@ -275,6 +275,22 @@ final class RealMoshServerE2ETests: XCTestCase {
     /// 1 column each by the Host's `wcwidth`, and 🌳) scrolling between
     /// numbered lines. A model that counts 👁 as 2 columns autowraps each
     /// such row and drifts. (Waycar patch 16, #148.)
+    ///
+    /// The uplink also stalls: for the last 1.5 s of every 3 s it holds the
+    /// client's datagrams, then sends them on. mosh-server 1.4.0
+    /// (`transportsender-impl.h`, source review) builds on the client's last
+    /// acknowledged state, not the newest it sent, in two cases:
+    /// - the diff from it is no longer, or under 1000 bytes and less than
+    ///   100 bytes longer (`attempt_prospective_resend_optimization`);
+    /// - its oldest unacknowledged state is older than its RTO (at most 1 s)
+    ///   plus 100 ms (`update_assumed_receiver_state`).
+    /// The plain lines above hit the first case nearly every time. A status
+    /// row is 226 bytes, so here it almost never applies: with a steady delay
+    /// CI saw 0 to 6 such states a run, and 0 in 2 of 50 runs. A steady delay
+    /// never gives the second case: the server's RTO includes the delay, and
+    /// SwiftMosh acks each state as soon as it arrives. A stalled ack arrives
+    /// up to 1.65 s after its state, so for 300 ms or more at the end of every
+    /// stall, whatever the RTO, each new state builds on the older base.
     func testRealMoshServerOlderBasesWithFullWidthSymbolRows() async throws {
         let status = MoshTestScreens.ompStatusRow(cols: 80)
         let lineCount = 300
@@ -286,13 +302,18 @@ final class RealMoshServerE2ETests: XCTestCase {
             label: "status-row E2E",
             command: "read go; i=1; while [ $i -le \(lineCount) ]; do printf '%s\\n' '\(status)'; "
                 + "echo \"line $i\"; i=$((i+1)); sleep 0.01; done; exec cat",
-            expected: expected)
+            expected: expected,
+            uplinkStall: (periodMs: 3_000, holdMs: 1_500))
     }
 
-    /// Runs `command` behind a 150 ms delayed uplink at 80×24 and checks the
-    /// terminal fed the session's host ops ends showing `expected`, and that
-    /// the server built states on older bases meanwhile.
-    private func runOlderBaseWorkload(label: String, command: String, expected: [String]) async throws {
+    /// Runs `command` behind a 150 ms delayed uplink (stalling as
+    /// `uplinkStall` says) at 80×24. Checks that the terminal fed the
+    /// session's host ops ends showing `expected`, and that the server built
+    /// states on older bases meanwhile.
+    private func runOlderBaseWorkload(
+        label: String, command: String, expected: [String],
+        uplinkStall: (periodMs: UInt64, holdMs: UInt64)? = nil
+    ) async throws {
         let env = ProcessInfo.processInfo.environment
         guard env["SWIFTMOSH_REAL_E2E"] == "1" else {
             throw XCTSkip("Set SWIFTMOSH_REAL_E2E=1 to run real mosh-server integration tests.")
@@ -316,7 +337,8 @@ final class RealMoshServerE2ETests: XCTestCase {
                     inner: NetworkDatagramEndpoint(
                         remote: UDPTransportEndpointAddress(host: endpoint.host, port: endpoint.port),
                         localPort: config.localPort),
-                    delayMs: 150)
+                    delayMs: 150,
+                    stall: uplinkStall)
             },
             snapshotEncoder: { blob in try JSONEncoder().encode(blob) }
         )
@@ -446,14 +468,20 @@ private enum RealE2EError: Error {
 
 /// Sends each datagram `delayMs` late, in order, without holding up the
 /// caller: a slow uplink, so the client's acks trail the server's states.
+/// With `stall`, it also holds what is sent in the last `holdMs` of every
+/// `periodMs` (counted from its creation) until that window ends, then
+/// sends it on, still `delayMs` late, as a congested link does.
 private actor DelayedSendDatagramEndpoint: DatagramEndpoint {
     private let inner: any DatagramEndpoint
     private let delayNs: UInt64
+    private let stallNs: (period: UInt64, hold: UInt64)?
+    private let createdAtNs = DispatchTime.now().uptimeNanoseconds
     private var tail: Task<Void, Never>?
 
-    init(inner: any DatagramEndpoint, delayMs: UInt64) {
+    init(inner: any DatagramEndpoint, delayMs: UInt64, stall: (periodMs: UInt64, holdMs: UInt64)? = nil) {
         self.inner = inner
         delayNs = delayMs * 1_000_000
+        stallNs = stall.map { (period: $0.periodMs * 1_000_000, hold: $0.holdMs * 1_000_000) }
     }
 
     func start() async throws {
@@ -467,8 +495,13 @@ private actor DelayedSendDatagramEndpoint: DatagramEndpoint {
 
     func send(_ data: Data) async throws {
         let previous = tail
-        let due = DispatchTime.now().uptimeNanoseconds + delayNs
-        tail = Task { [inner] in
+        let sentAt = DispatchTime.now().uptimeNanoseconds
+        var due = sentAt + delayNs
+        if let stallNs {
+            let phase = (sentAt - createdAtNs) % stallNs.period
+            if phase >= stallNs.period - stallNs.hold { due += stallNs.period - phase }
+        }
+        tail = Task { [inner, due] in
             await previous?.value
             let now = DispatchTime.now().uptimeNanoseconds
             if due > now { try? await Task.sleep(nanoseconds: due - now) }
