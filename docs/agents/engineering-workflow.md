@@ -320,7 +320,9 @@ When a coordinator splits one change across workers:
 - A stream made inside `Task {}` subscribes only when the task first runs,
   and a stream that reports changes only (an activity's state) loses what
   came before: make it before the `Task` and iterate it inside. A test's
-  poll can resume first on a busy main thread (hosted CI did).
+  poll can resume first on a busy main thread (hosted CI did). For a red
+  without load, start a main-actor task inside the fake's call: it runs
+  ahead of every task the caller starts after it.
 - `#expect` on an `await` prints `<not evaluated>`, and a failed `waitUntil`
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
