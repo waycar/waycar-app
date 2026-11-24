@@ -325,6 +325,13 @@ When a coordinator splits one change across workers:
   prints no values: read the value into a local, or compute the difference,
   and `#expect` that.
 - `Process` is not in the iOS SDK; `posix_spawn` works in the simulator.
+- One Core Animation call off the main thread, even `setNeedsDisplay`,
+  opens an implicit transaction that commits only when that thread exits,
+  and the commit can lay out UIKit there (GhosttyTerminal patch 7).
+  `CA_DEBUG_TRANSACTIONS=1` in the scheme's test environment (a throwaway
+  commit) names who opened it. A red test for a logged symptom reads
+  `OSLogStore(scope: .currentProcessIdentifier)` up to a marker it logs
+  itself, so the read is known to be complete.
 - `ScrollViewReader.scrollTo` while an opening animates goes nowhere (from
   `onChange` or the next main-queue turn alike): scroll from
   `withAnimation { … } completion:`.
@@ -356,7 +363,10 @@ When a coordinator splits one change across workers:
   2.103 refuses a body with terminal escapes, and CI logs have them). A
   pinned lane prints `==> <lane>: ran all N pinned tests, S skipped (A
   allowed)`, which `ci-evidence.py`'s `PINNED` pattern reads: change them
-  together (`scripts/test-ci-evidence.py` runs the shipped echo).
+  together (`scripts/test-ci-evidence.py` runs the shipped echo). A test
+  host that crashed relaunches, and Swift Testing's summary counts only its
+  last launch: `ci-evidence.py` reports the launches and crash reports, and
+  the app lanes upload `Waycar*.ips` when they fail.
 - In one concurrency group a newly queued run cancels the run already
   pending, even with `cancel-in-progress: false`; check for queued `main`
   runs before a `workflow_dispatch`. A dispatch needs the workflow on the
@@ -377,7 +387,11 @@ When a coordinator splits one change across workers:
   panes, snapshots, then resubscribes and snapshots again, and a
   `refreshSidebarMetadata()` barrier can return before that resubscribe;
   wait for the live pane set and the revision read before the drop plus
-  two. Hosted iPad and iPhone runs hit this six times.
+  two. Hosted iPad and iPhone runs hit this six times. The gap also has no
+  live channel: `revalidate()` (`reactivate()`, a foreground return) pings
+  nothing there, and a `ScriptedTransport` closed there still accepts the
+  replacement subscribe, so its Host stays connected. Wait for the sync
+  before a gated ping or a `close()` too (flake hunt, twice).
 - A fake's call counter moves when the call starts, before the call reads
   what it answers and before the store handles that answer. Before you
   change what a later call sees (a server starting), wait for the state the

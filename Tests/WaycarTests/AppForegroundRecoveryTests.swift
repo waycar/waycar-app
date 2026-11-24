@@ -526,6 +526,10 @@ struct AppForegroundRecoveryTests {
         try await waitUntil("the Host should come up connected") {
             store.hostStatuses[host.id] == .connected
         }
+        // A close inside the pane resubscribe can land after its connection
+        // check, and this fixture still accepts the subscribe that follows (a
+        // real closed link refuses it): the Host would stay connected.
+        try await waitUntilPaneResubscribeSettles(on: stopped)
 
         // The link goes away while the app is out, and the re-dial that
         // follows is refused for a reason no reconnect can repair.

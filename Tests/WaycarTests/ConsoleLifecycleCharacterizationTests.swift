@@ -39,7 +39,11 @@ struct ConsoleLifecycleCharacterizationTests {
         defer { console.setHosts([]) }
         console.setHosts([host])
         await console.resume()
-        try await waitUntil { console.verifiedAgents.count == 1 }
+        // The row shows before the Console swaps in its pane subscription, and
+        // revalidation pings only a live channel: wait for the swap first.
+        try await waitForInitialConsoleSync(
+            console, transport: transport, hostID: host.id, backend: .herdr,
+            paneIDs: ["w1:p1"])
 
         // Hold reactivate in its revalidation, then enqueue suspend/resume
         // behind it. Neither may overtake the held activation.
