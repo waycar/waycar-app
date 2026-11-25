@@ -925,8 +925,13 @@ struct CoreTransportTests {
         #expect(try await ended.next() == nil)
 
         // An event that lands while nobody consumes still moves the inventory.
+        // Wait for the inventory, not the credit: the client credits a frame
+        // when it reads it, before the pump applies it, and an event applied
+        // after the second stream attaches is that stream's first event.
         channel.pushEvent(seq: 11, type: "status", terminal: "t1", data: Self.statusData("working"))
-        await channel.waitForCredits(1)
+        try await waitUntil("the pump applied the working event with no stream attached") {
+            Self.statuses(try await transport.sessionSnapshot()) == ["hc:t1": .working]
+        }
 
         let secondStream = try await transport.subscribeToEvents([])
         #expect(await session.coreCommands.count == 1, "the connection is reused")
