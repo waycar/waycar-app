@@ -121,7 +121,9 @@ where your agent host has it ([Mac workflow](mac-workflow.md)).
   as a red Secret scan after the push: example LAN addresses in the Find
   Computers tests failed every push to `main` for a day. A made-up address
   gets a scoped line in `scripts/secret-scan/scan-allow.tsv` (that file, the
-  exact values, a reason); a real one comes out of the change.
+  exact values, a reason); a real one comes out of the change. It walks
+  untracked files too, a built `plugin/target` included: scan a
+  `git archive HEAD` export when the worktree has build output.
 - **Launch arguments, the `agent.start` wire, or any Transport:** run the
   full CI app lane, `make test-ci-app`, not only the suites you changed. The
   real-SSH suites pin exact wire payloads: a change to herdr launch
@@ -406,7 +408,11 @@ When a coordinator splits one change across workers:
   different: that caller resumes without another hop, so a main-actor test
   that sees the count knows the code right after the await ran.
   Red proof: hold the call behind a gate after it is counted, and open the
-  gate after the change.
+  gate after the change. `FakeCoreChannel.waitForCredits` is such a counter:
+  the client credits an events frame when it reads it, before
+  `CoreTransport`'s pump applies it. Wait for the inventory (a
+  `sessionSnapshot()` status) instead (CI, `resubscribingReusesTheConnection`;
+  red proof: a `doc` event whose `doc.get` the fake holds parks the pump).
 - The [flake hunt](../../.github/workflows/flake-hunt.yml) runs the WaycarSSH
   package E2E lane and the full app lane 4 times each on two hosted runners,
   one with busy loops beside them (weeknights until 2026-11-30, then

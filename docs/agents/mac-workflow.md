@@ -59,7 +59,8 @@ For several targets or commits in a row, such as a compile, a full suite and
 base-vs-merged proofs, a flake repeated, or an iPhone and iPad pair, open a
 session: `mac_run {session: "open", sha}` takes one place in the same queue
 and keeps one clone. `mac_run {session: <id>, target, sha?}` runs one target
-in it, at any commit, with incremental builds, and
+in it, at any commit, with incremental builds (a step without `sha` runs the
+commit the session opened at, not your newest: pass `sha` on every step), and
 `mac_run {session: <id>, close: true}` keeps the deliverables, releases the
 simulators and removes the clone. Close it as soon as you are done, since
 everyone else waits meanwhile. A session is released after 15 idle minutes
