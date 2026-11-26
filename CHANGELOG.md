@@ -10,3 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Entries reference the issue that motivated them.
 
 ## [Unreleased]
+
+### Fixed
+
+- The keyboard button under an Agent now turns off when you tap it to stop
+  typing. On an iPad with a narrow window, it used to stay purple.

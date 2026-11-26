@@ -1721,9 +1721,12 @@ struct AgentTerminalView: View {
 
     /// ⌨ is lit: the terminal holds first responder or its tools dock is up.
     /// Never while Message Agent is open, whose keyboard is the Composer's.
+    /// Its tap reads the same, so it dismisses exactly when ⌨ is lit. The
+    /// measured keyboard inset is layout, not this: an iPad window shrunk to
+    /// phone width kept a footprint after the keyboard had left, and ⌨
+    /// stayed lit while its taps raised the keyboard.
     private var terminalKeyboardIsUp: Bool {
-        isDirectInput
-            && (keyboardControl.isKeyboardUp || usesDirectToolsKeyboard || keyboardInset.height > 0)
+        isDirectInput && (usesDirectToolsKeyboard || keyboardControl.isKeyboardUp)
     }
 
     /// Tools author into the active input surface without adding Enter or
@@ -2008,6 +2011,11 @@ struct AgentTerminalView: View {
 
     private func toggleDirectKeyboard() {
         guard isOnStage() else { return }
+        guard terminalKeyboardIsUp else {
+            directKeyboardIntent.setWantsKeyboard(true)
+            keyboardControl.requestKeyboard()
+            return
+        }
         if usesDirectToolsKeyboard {
             var transaction = Transaction()
             transaction.disablesAnimations = true
@@ -2019,13 +2027,10 @@ struct AgentTerminalView: View {
             }
             directKeyboardIntent.setWantsKeyboard(false)
             keyboardControl.dismissKeyboard()
-        } else if keyboardControl.isKeyboardUp {
+        } else {
             expectsDirectSystemKeyboard = false
             directKeyboardIntent.setWantsKeyboard(false)
             keyboardControl.dismissKeyboard()
-        } else {
-            directKeyboardIntent.setWantsKeyboard(true)
-            keyboardControl.requestKeyboard()
         }
     }
 
