@@ -278,7 +278,9 @@ When a coordinator splits one change across workers:
   keyboard window and draws Ghostty black, so terminal shots use
   `xcrun simctl io <udid> screenshot`. The first UI test after a simulator
   boots can fail with kAXError -25218: retry once, or run a warm-up test
-  first. `TEST_RUNNER_<NAME>=…` on the command line reaches the test process.
+  first. Pick light or dark per launch with `-app-appearance light|dark`:
+  `simctl ui` right before a UI test fails it the same way for about 20 s.
+  `TEST_RUNNER_<NAME>=…` on the command line reaches the test process.
   In a hosted test, wait for a control's enabled accessibility state after a
   programmatic edit before tapping it, and fire native toolbar `UIButton`s
   with `sendActions`, not `accessibilityActivate`. A desk Codex TUI driven
@@ -395,7 +397,14 @@ When a coordinator splits one change across workers:
   live channel: `revalidate()` (`reactivate()`, a foreground return) pings
   nothing there, and a `ScriptedTransport` closed there still accepts the
   replacement subscribe, so its Host stays connected. Wait for the sync
-  before a gated ping or a `close()` too (flake hunt, twice).
+  before a gated ping or a `close()` too (flake hunt, twice). Every
+  rebuild, that second snapshot's included, also reconciles mosh
+  availability, so a probe claim given back is probed again at once: gate
+  the next probe and await the discarded one's Task (`moshProbeTasks`)
+  instead of sleeping (flake hunt, `aDiscardedProbeLetsTheNextReconcileProbeAgain`).
+- A plain List gives every row at least 44 pt (`defaultMinListRowHeight`):
+  a caption-sized row needs it set to 0, and then a row that relied on the
+  List for its tap target keeps 44 pt itself.
 - A fake's call counter moves when the call starts, before the call reads
   what it answers and before the store handles that answer. Before you
   change what a later call sees (a server starting), wait for the state the

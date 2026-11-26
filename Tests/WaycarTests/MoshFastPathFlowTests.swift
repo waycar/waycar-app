@@ -939,7 +939,11 @@ struct MoshFastPathEdgeTests {
     /// A probe landing on another network's reading discards its answer.
     /// When that reading reverts inside the debounce no change is ever
     /// reported, so the generation's claim must be given back for the next
-    /// reconcile to probe again.
+    /// reconcile to probe again. The Console also reconciles on its own (a
+    /// resync snapshot landing late), so the next probe waits at a gate
+    /// until the discarded answer is checked; one it began before the
+    /// reading reverted is discarded in turn, and the last wait reconciles
+    /// past it.
     @Test func aDiscardedProbeLetsTheNextReconcileProbeAgain() async throws {
         let transport = await moshTransport()
         let probe = ScriptedTransportCallGate()
@@ -948,10 +952,13 @@ struct MoshFastPathEdgeTests {
         flow.path.read(ScriptedNetworkPathSource.home)
         try await flow.start()
         await probe.waitForEntry()
+        let discarded = try #require(flow.console.moshProbeTasks[flow.host.id])
+        let next = ScriptedTransportCallGate()
+        await transport.gateNextMoshProbe(on: next)
 
         flow.path.read(ScriptedNetworkPathSource.cafe)
         await probe.open()
-        try await Task.sleep(for: .milliseconds(100))
+        await discarded.value
         #expect(flow.console.moshProbe(for: flow.host.id) == nil, "the answer is discarded")
         flow.path.read(ScriptedNetworkPathSource.home)
 
@@ -959,8 +966,10 @@ struct MoshFastPathEdgeTests {
         try await pollUntil("the generation should be probed again") {
             await transport.moshProbeCount == 2
         }
-        try await pollUntil("the second answer should count") {
-            flow.console.moshProbe(for: flow.host.id)?.available == true
+        await next.open()
+        try await pollUntil("an answer on this network should count") {
+            flow.console.reconcileMoshAvailability()
+            return flow.console.moshProbe(for: flow.host.id)?.available == true
         }
         await flow.tearDown()
     }
