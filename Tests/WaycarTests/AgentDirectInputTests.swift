@@ -1320,6 +1320,67 @@ struct AgentDirectInputTests {
         await owner.leave().value
     }
 
+    /// iPad, window shrunk to phone width: ⌨'s second tap stopped typing but
+    /// the button stayed lit, because it also read the keyboard footprint
+    /// the window had measured, and no will-hide reached that window to
+    /// clear it. ⌨ shows what its tap acts on: whether the terminal has the
+    /// keyboard (or its tools dock is up), never a footprint left behind.
+    @Test func terminalKeyboardButtonFollowsTypingNotAStaleKeyboardFootprint() async throws {
+        let center = NotificationCenter()
+        let inset = TerminalKeyboardInset(notificationCenter: center) { _ in 336 }
+        let transport = ScriptedTransport()
+        let composer = AgentComposerStore(target: "w1:p1") { _ in
+            Agent(.fixture(paneID: "w1:p1"))
+        }
+        let owner = try await Self.makeLiveAttach(transport: transport, composer: composer)
+        let interactions = AgentTerminalInteractionProbe()
+        let controller = UIHostingController(
+            rootView: Self.makeDetailView(
+                attachStore: owner,
+                composer: composer,
+                keyboardInset: inset,
+                interactionProbe: interactions)
+            .environment(\.horizontalSizeClass, .compact))
+        let window = try await makeTestWindow(
+            frame: CGRect(x: 0, y: 0, width: 402, height: 874),
+            rootViewController: controller)
+        defer { window.isHidden = true }
+        controller.view.layoutIfNeeded()
+        try #require(await Self.eventually {
+            owner.terminalStatus == AttachTerminalStore.Status.live
+                && interactions.isConnected
+                && interactions.inputChromeMountCount == 1
+        })
+        let terminal = try #require(Self.terminals(in: controller.view).first)
+        #expect(interactions.isTerminalKeyboardUp == false)
+
+        // The first tap raises the keyboard: typing reaches the terminal.
+        #expect(interactions.tapTerminalKeyboard())
+        try #require(await Self.eventually { terminal.isFirstResponder })
+        center.post(
+            name: UIResponder.keyboardWillShowNotification, object: nil,
+            userInfo: [
+                UIResponder.keyboardFrameEndUserInfoKey: CGRect(
+                    x: 0, y: 500, width: 402, height: 370)
+            ])
+        try #require(await Self.eventually { inset.height == 336 })
+        #expect(interactions.isTerminalKeyboardUp == true)
+
+        // The second tap stops typing. Like the shrunk iPad window, this one
+        // never hears the keyboard leave, so its footprint stays measured.
+        #expect(interactions.tapTerminalKeyboard())
+        try #require(await Self.eventually { !terminal.isFirstResponder })
+        try #require(inset.height == 336)
+        #expect(interactions.isTerminalKeyboardUp == false)
+
+        // And the next tap raises the keyboard again, lighting ⌨ with it.
+        #expect(interactions.tapTerminalKeyboard())
+        try #require(await Self.eventually { terminal.isFirstResponder })
+        #expect(interactions.isTerminalKeyboardUp == true)
+
+        await owner.leave().value
+    }
+
     @Test func directPasteRoutesThroughAttachReview() async throws {
         let transport = ScriptedTransport()
         let composer = AgentComposerStore(target: "w1:p1") { _ in
