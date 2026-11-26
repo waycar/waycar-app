@@ -1722,9 +1722,9 @@ struct AgentTerminalView: View {
     /// ⌨ is lit: the terminal holds first responder or its tools dock is up.
     /// Never while Message Agent is open, whose keyboard is the Composer's.
     /// Its tap reads the same, so it dismisses exactly when ⌨ is lit. The
-    /// measured keyboard inset is layout, not this: an iPad window shrunk to
-    /// phone width kept a footprint after the keyboard had left, and ⌨
-    /// stayed lit while its taps raised the keyboard.
+    /// measured keyboard inset is layout, not this: a footprint that outlives
+    /// the keyboard kept ⌨ lit while its taps raised the keyboard (reported
+    /// in an iPad window shrunk to phone width).
     private var terminalKeyboardIsUp: Bool {
         isDirectInput && (usesDirectToolsKeyboard || keyboardControl.isKeyboardUp)
     }

@@ -1321,10 +1321,11 @@ struct AgentDirectInputTests {
     }
 
     /// iPad, window shrunk to phone width: ⌨'s second tap stopped typing but
-    /// the button stayed lit, because it also read the keyboard footprint
-    /// the window had measured, and no will-hide reached that window to
-    /// clear it. ⌨ shows what its tap acts on: whether the terminal has the
-    /// keyboard (or its tools dock is up), never a footprint left behind.
+    /// the button stayed lit. Its light also read the measured keyboard
+    /// footprint, the one input its tap ignores. The full-screen simulator
+    /// always clears that footprint with a will-hide, so this test simulates
+    /// the stale one by withholding it. ⌨ shows what its tap acts on: whether
+    /// the terminal has the keyboard (or its tools dock is up).
     @Test func terminalKeyboardButtonFollowsTypingNotAStaleKeyboardFootprint() async throws {
         let center = NotificationCenter()
         let inset = TerminalKeyboardInset(notificationCenter: center) { _ in 336 }
@@ -1346,36 +1347,44 @@ struct AgentDirectInputTests {
             rootViewController: controller)
         defer { window.isHidden = true }
         controller.view.layoutIfNeeded()
-        try #require(await Self.eventually {
+        try await waitUntil("the Agent view should mount on a live attach") {
             owner.terminalStatus == AttachTerminalStore.Status.live
                 && interactions.isConnected
                 && interactions.inputChromeMountCount == 1
-        })
+        }
         let terminal = try #require(Self.terminals(in: controller.view).first)
         #expect(interactions.isTerminalKeyboardUp == false)
 
         // The first tap raises the keyboard: typing reaches the terminal.
         #expect(interactions.tapTerminalKeyboard())
-        try #require(await Self.eventually { terminal.isFirstResponder })
+        try await waitUntil("the first tap should raise the keyboard") {
+            terminal.isFirstResponder
+        }
         center.post(
             name: UIResponder.keyboardWillShowNotification, object: nil,
             userInfo: [
                 UIResponder.keyboardFrameEndUserInfoKey: CGRect(
                     x: 0, y: 500, width: 402, height: 370)
             ])
-        try #require(await Self.eventually { inset.height == 336 })
+        try await waitUntil("the keyboard's footprint should be measured") {
+            inset.height == 336
+        }
         #expect(interactions.isTerminalKeyboardUp == true)
 
-        // The second tap stops typing. Like the shrunk iPad window, this one
-        // never hears the keyboard leave, so its footprint stays measured.
+        // The second tap stops typing. The test withholds the will-hide, so
+        // the footprint stays measured: the stale-inset condition.
         #expect(interactions.tapTerminalKeyboard())
-        try #require(await Self.eventually { !terminal.isFirstResponder })
+        try await waitUntil("the second tap should stop typing") {
+            !terminal.isFirstResponder
+        }
         try #require(inset.height == 336)
         #expect(interactions.isTerminalKeyboardUp == false)
 
         // And the next tap raises the keyboard again, lighting ⌨ with it.
         #expect(interactions.tapTerminalKeyboard())
-        try #require(await Self.eventually { terminal.isFirstResponder })
+        try await waitUntil("the third tap should raise the keyboard again") {
+            terminal.isFirstResponder
+        }
         #expect(interactions.isTerminalKeyboardUp == true)
 
         await owner.leave().value
