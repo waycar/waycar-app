@@ -30,6 +30,6 @@
     "wrangler": "^4.165.0"
   },
   "dependencies": {
-    "posthog-js": "^1.453.0"
+    "posthog-js": "^1.454.2"
   }
 }
